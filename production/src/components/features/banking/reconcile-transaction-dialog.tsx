@@ -19,6 +19,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import {
   Sheet,
@@ -46,10 +47,27 @@ import {
   type BankTransactionRow,
   type MatchSuggestion,
 } from "@/lib/queries/bank";
-import { EXPENSE_CATEGORIES, useUnreconciledExpenses } from "@/lib/queries/expenses";
-import { useUnreconciledSalaries } from "@/lib/queries/payroll";
+import { EXPENSE_CATEGORIES, useUnreconciledExpenses, suggestCategory } from "@/lib/queries/expenses";
+import { useTxnCategoryRules } from "@/lib/queries/txn-category-rules";
+import { suggestForLine, categoriseByRules } from "@/lib/banking/categorise";
+import { useUnreconciledSalaries, useEmployees } from "@/lib/queries/payroll";
 import { useCustomers } from "@/lib/queries/customers";
+import { useItems } from "@/lib/queries/items";
 import { rupee, formatDate } from "@/lib/utils";
+import { useBookBankTxnAsTax } from "@/lib/queries/tax-payments";
+import { fyLabel, fyStartYearOf } from "@/lib/accounting/tax-payments";
+import { previousPeriod, titleCaseName, parseSalaryNarration, matchEmployee } from "@/lib/banking/salary-lines";
+import { useBookSalaryLines } from "@/lib/queries/salary-from-bank";
+import { detectGovtPayment } from "@/lib/banking/govt-payment";
+import { payeeFromNarration, TEST_TRANSFER_MAX } from "@/lib/banking/narration";
+import { usePrepaidAdvances, useBookBankTxnAsPrepaid } from "@/lib/queries/prepaid-advances";
+import { AddCustomerForm } from "@/components/features/customers/add-customer-form";
+import { ProjectPaymentSection } from "@/components/features/banking/project-payment-section";
+
+/** Sentinel option value for "+ Naya customer banao" in the customer select. */
+const NEW_CUSTOMER = "__new_customer__";
+/** Sentinel option value for "Custom — type the name" in the product select. */
+const CUSTOM_ITEM = "__custom_item__";
 
 interface Props {
   open: boolean;
@@ -138,9 +156,81 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const [bookCategory, setBookCategory] = React.useState("");
   const [bookVendor, setBookVendor]     = React.useState("");
   const [bookGst, setBookGst]           = React.useState("");
+
+  /* What this line probably IS, from the same layers the import uses: the category
+     saved on the line at import, else the tenant's Category Rules, else the built-in
+     keywords. Only an expense category counts — Salaries belong to Payroll. It PREFILLS
+     the expense form and moves it to the top; nothing is booked until the click. */
+  const { data: categoryRules } = useTxnCategoryRules();
+  const expenseSuggestion = React.useMemo((): { category: string; reason: string } | null => {
+    if (!transaction || transaction.debit <= 0) return null;
+    const isExpenseCat = (c: string | null | undefined): c is string =>
+      !!c && c !== "Salaries" && (EXPENSE_CATEGORIES as readonly string[]).includes(c);
+    /* "SALARY TO DIRECTOR": booked as an expense, this is Director's Remuneration —
+       never plain Salaries (which belongs to Payroll) and never a guessed category. */
+    if (/\bDIRECTORS?\b/i.test(transaction.description ?? "")) {
+      return { category: "Director's Remuneration", reason: "the word \"director\" in the narration" };
+    }
+    if (isExpenseCat(transaction.category)) return { category: transaction.category, reason: "set when the statement was imported" };
+    const s = suggestForLine(transaction, categoryRules ?? [], suggestCategory);
+    if (s && isExpenseCat(s.category)) return { category: s.category, reason: s.reason };
+    /* Last layer: a ₹1–₹10 debit with nothing else to say about it is a test /
+       account-verification ("penny drop") transfer. Real money left the bank, so it is
+       booked — as a bank charge — rather than waved through as "reconciled". */
+    if (transaction.debit <= TEST_TRANSFER_MAX) {
+      return { category: "Bank Charges", reason: `a ₹${transaction.debit} debit — usually a test / account-verification transfer` };
+    }
+    return null;
+  }, [transaction, categoryRules]);
+
   React.useEffect(() => {
-    setBookCategory(""); setBookVendor(""); setBookGst("");
-  }, [transaction?.id]);
+    setBookCategory(expenseSuggestion?.category ?? ""); setBookGst("");
+  }, [transaction?.id, expenseSuggestion?.category]);
+
+  /* Prepaid advance to a vendor (money-out). */
+  const bookPrepaid = useBookBankTxnAsPrepaid();
+  const { data: prepaidAdvances } = usePrepaidAdvances();
+  const prepaidVendorNames = React.useMemo(
+    () => [...new Set((prepaidAdvances ?? []).map((a) => a.vendor_name.trim()))].sort(),
+    [prepaidAdvances],
+  );
+
+  /* Who was paid, for BOTH the expense and the advance forms: the Category Rule that
+     matches this line names them ("FACEBOOK" → "Facebook"). Looked up directly — not
+     parsed from the category's reason, which says "set at import" when the category
+     came from the statement. A name already used for advances wins ("FACEBK" →
+     the existing "Facebook"), so one vendor's top-ups stay one vendor. */
+  const suggestedVendor = React.useMemo(() => {
+    if (!transaction || transaction.debit <= 0) return "";
+    const pattern = categoriseByRules(transaction, categoryRules ?? [])?.rule.pattern.trim() ?? "";
+    /* No rule: the payee slot of an IMPS / NEFT / UPI narration, else blank. */
+    if (!pattern) return payeeFromNarration(transaction.description) ?? "";
+    const key = pattern.toUpperCase().slice(0, 5);
+    return prepaidVendorNames.find((v) => v.toUpperCase().startsWith(key)) ?? titleCaseName(pattern);
+  }, [transaction, categoryRules, prepaidVendorNames]);
+
+  const [showPrepaid, setShowPrepaid] = React.useState(false);
+  const [prepaidVendor, setPrepaidVendor] = React.useState("");
+  const [prepaidCategory, setPrepaidCategory] = React.useState("Advertising");
+  React.useEffect(() => {
+    setBookVendor(suggestedVendor);
+    setShowPrepaid(false);
+    setPrepaidVendor(suggestedVendor);
+    setPrepaidCategory(expenseSuggestion?.category ?? "Advertising");
+  }, [transaction?.id, suggestedVendor, expenseSuggestion?.category]);
+  const handleBookPrepaid = async () => {
+    if (!transaction || !prepaidVendor.trim()) return;
+    try {
+      await bookPrepaid.mutateAsync({
+        transactionId: transaction.id,
+        accountId:     transaction.bank_account_id,
+        vendorName:    prepaidVendor,
+        category:      prepaidCategory,
+        notes:         transaction.description,
+      });
+      onOpenChange(false);
+    } catch { /* hook toasts */ }
+  };
 
   const handleBookExpense = async () => {
     if (!transaction || !bookCategory) return;
@@ -163,20 +253,34 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const { data: customers } = useCustomers();
   const [showInvoice, setShowInvoice]   = React.useState(false);
   const [invCustomer, setInvCustomer]   = React.useState("");
+  /* New customer from here opens the SAME side-sheet form the quote builder uses
+     (components/features/customers — Billing's form, used as-is, not copied), and
+     picks the customer it creates. */
+  const [newCustomerOpen, setNewCustomerOpen] = React.useState(false);
+  /* "Project payment" — which project (existing or new) this money is for; booked here
+     instead of sending the operator off to the projects page. */
+  const [showProject, setShowProject]   = React.useState(false);
+  const [projCustomer, setProjCustomer] = React.useState("");
   const [invLineName, setInvLineName]   = React.useState("");
   const [invTaxable, setInvTaxable]     = React.useState("");
+  /* "" = not picked · CUSTOM_ITEM = typed name · else an items.id from the catalog. */
+  const [invItem, setInvItem]           = React.useState("");
+  const { data: items } = useItems();
+  const activeItems = (items ?? []).filter((i) => i.is_active);
   React.useEffect(() => {
-    setShowInvoice(false); setInvCustomer(""); setInvLineName(""); setInvTaxable("");
+    setShowInvoice(false); setInvCustomer(""); setInvLineName(""); setInvTaxable(""); setInvItem("");
+    setShowProject(false); setProjCustomer("");
   }, [transaction?.id]);
 
   const handleBookInvoice = async () => {
-    if (!transaction || !invCustomer || !(Number(invTaxable) > 0)) return;
+    if (!transaction || !invCustomer || !invLineName.trim() || !(Number(invTaxable) > 0)) return;
     try {
       await bookInvoice.mutateAsync({
         transactionId: transaction.id,
         bankAccountId: transaction.bank_account_id,
         customerId:    invCustomer,
-        lineName:      invLineName || transaction.description || "Sale",
+        lineName:      invLineName.trim(),
+        itemId:        invItem && invItem !== CUSTOM_ITEM ? invItem : null,
         taxableAmount: Math.round(Number(invTaxable)),
         reference:     transaction.reference,
       });
@@ -227,18 +331,98 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
 
   // Statutory (TDS/PF/ESI) challan — money-out. Records a statutory-dues
   // payment against THIS imported line (settles the payable) — no phantom line.
+  // GST and income tax go to tax_payments instead (migration 20260925140000), so
+  // they never mix into the TDS/PF/ESI "dues payable" total.
   const [showStatutory, setShowStatutory] = React.useState(false);
-  const [statutoryKind, setStatutoryKind] = React.useState<"esi" | "pf" | "tds" | "mixed">("esi");
-  React.useEffect(() => { setShowStatutory(false); setStatutoryKind("esi"); }, [transaction?.id]);
+  const [statutoryKind, setStatutoryKind] = React.useState<"esi" | "pf" | "tds" | "mixed" | "gst" | "income_tax">("esi");
+  const bookTax = useBookBankTxnAsTax();
+  const [gstPeriod, setGstPeriod] = React.useState("");
+  const [taxInterest, setTaxInterest] = React.useState("");
+  const [taxLateFee, setTaxLateFee] = React.useState("");
+  const [itKind, setItKind] = React.useState<"advance_tax" | "self_assessment_tax">("advance_tax");
+  const [itFy, setItFy] = React.useState("");
+  const txnFyStart = transaction ? fyStartYearOf(transaction.txn_date) : 0;
+  /* A money-out line whose narration names a government payment (ESIC, EPFO, TDS, GST,
+     income tax): the statutory section opens first, with that kind already picked. */
+  /* A salary transfer: employee + month read from the narration (lib/banking/salary-lines),
+     booked through the same Payroll path as Banking → Salary lines. */
+  const salaryHint = React.useMemo(
+    () => (transaction && transaction.debit > 0 ? parseSalaryNarration(transaction.description ?? "", transaction.txn_date) : null),
+    [transaction],
+  );
+  const { data: employees } = useEmployees();
+  const bookSalary = useBookSalaryLines();
+  const [salaryEmp, setSalaryEmp] = React.useState("");
+  const [salaryPeriod, setSalaryPeriod] = React.useState("");
+  React.useEffect(() => {
+    if (!salaryHint) { setSalaryEmp(""); setSalaryPeriod(""); return; }
+    const m = matchEmployee(salaryHint.name, employees ?? []);
+    setSalaryEmp(m.kind === "match" ? m.id : m.kind === "none" && salaryHint.name ? "create" : "");
+    setSalaryPeriod(salaryHint.period);
+  }, [transaction?.id, salaryHint, employees]);
+  const handleBookSalary = async () => {
+    if (!transaction || !salaryHint || !salaryEmp || !salaryPeriod) return;
+    try {
+      const [r] = await bookSalary.mutateAsync({
+        accountId: transaction.bank_account_id,
+        groups: [{
+          employee: salaryEmp === "create"
+            ? { createName: titleCaseName(salaryHint.name ?? ""), monthlyGross: transaction.debit }
+            : { id: salaryEmp },
+          period: salaryPeriod,
+          lines: [{ txnId: transaction.id, txnDate: transaction.txn_date, amount: transaction.debit, description: transaction.description ?? "" }],
+        }],
+      });
+      /* The hook's toast gives the count; a refusal (e.g. month already paid) carries
+         its own sentence — show it and keep the sheet open. */
+      if (r && !r.ok) { toast.error(r.message); return; }
+      onOpenChange(false);
+    } catch { /* hook toasts */ }
+  };
+
+  const govtHint = React.useMemo(
+    () => (transaction && transaction.debit > 0 ? detectGovtPayment(transaction.description) : null),
+    [transaction],
+  );
+  React.useEffect(() => {
+    setShowStatutory(govtHint !== null); setStatutoryKind(govtHint?.kind ?? "esi");
+    /* GST is normally paid by the 20th for the month before; advance tax is paid
+       during the year it is for. Both are only defaults — the operator can change them. */
+    setGstPeriod(transaction ? previousPeriod(transaction.txn_date) : "");
+    setTaxInterest(""); setTaxLateFee("");
+    setItKind("advance_tax");
+    setItFy(transaction ? fyLabel(fyStartYearOf(transaction.txn_date)) : "");
+  }, [transaction?.id, transaction, govtHint]);
+  /* Self-assessment tax is paid AFTER the year closes, for the year before. */
+  const pickItKind = (k: "advance_tax" | "self_assessment_tax") => {
+    setItKind(k);
+    setItFy(fyLabel(k === "advance_tax" ? txnFyStart : txnFyStart - 1));
+  };
+  const interestNum = Math.max(0, Math.round(Number(taxInterest) || 0));
+  const lateFeeNum  = Math.max(0, Math.round(Number(taxLateFee) || 0));
+  const taxPortion  = (transaction?.debit ?? 0) - interestNum - lateFeeNum;
   const handleBookStatutory = async () => {
     if (!transaction) return;
     try {
-      await bookStatutory.mutateAsync({
-        transactionId: transaction.id,
-        accountId:     transaction.bank_account_id,
-        kind:          statutoryKind,
-        notes:         transaction.description,
-      });
+      if (statutoryKind === "gst" || statutoryKind === "income_tax") {
+        await bookTax.mutateAsync({
+          transactionId: transaction.id,
+          accountId:     transaction.bank_account_id,
+          kind:          statutoryKind === "gst" ? "gst" : itKind,
+          period:        gstPeriod,
+          fy:            itFy,
+          interest:      interestNum,
+          lateFee:       lateFeeNum,
+          notes:         transaction.description,
+        });
+      } else {
+        await bookStatutory.mutateAsync({
+          transactionId: transaction.id,
+          accountId:     transaction.bank_account_id,
+          kind:          statutoryKind,
+          notes:         transaction.description,
+        });
+      }
       onOpenChange(false);
     } catch { /* hook toasts the error */ }
   };
@@ -279,6 +463,131 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const dirIcon  = isCredit ? "arrow_left" : "arrow_right";
   const dirLabel = isCredit ? "Money in"   : "Money out";
 
+
+  /* The statutory / tax section, defined once and placed either first (a detected
+     government payment) or in its usual spot. */
+  const statutorySection = (
+    <>
+    {/* Statutory challan (TDS/PF/ESI) — money-out. Settles the statutory
+        payable against THIS imported line; no duplicate line is made. */}
+    {!isCredit && (
+      <div className="rounded-md border border-hairline p-3">
+        <button
+          type="button"
+          onClick={() => setShowStatutory((v) => !v)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <span className="text-xs font-semibold text-ink-2">Statutory / tax payment (ESI / PF / TDS / GST / Income tax)?</span>
+          <Icon name={showStatutory ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
+        </button>
+        {showStatutory && (
+          <div className="mt-2 space-y-2">
+            <p className="text-2xs text-ink-3">
+              Records this {rupee(amount)} as a payment to the government. Pick what it is:
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+              {([
+                ["esi", "ESI"], ["pf", "PF"], ["tds", "TDS"], ["mixed", "Mixed"],
+                ["gst", "GST"], ["income_tax", "Income tax"],
+              ] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={statutoryKind === k}
+                  onClick={() => setStatutoryKind(k)}
+                  className={`rounded-md border px-2 py-1.5 text-xs font-medium ${statutoryKind === k ? "border-indigo bg-indigo/10 text-indigo" : "border-hairline text-ink-2"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* What each choice does to the books — said before the click. */}
+            {statutoryKind === "gst" ? (
+              <div className="space-y-2">
+                <p className="text-2xs text-ink-3">
+                  Reduces GST payable for the return month. Interest and late fee paid with it are booked as a
+                  <b> Rates &amp; Taxes</b> expense — they are a cost, the tax is not.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <label className="text-3xs text-ink-3 space-y-0.5">
+                    <span className="block">Return month</span>
+                    <Input type="month" value={gstPeriod} onChange={(e) => setGstPeriod(e.target.value)} aria-label="GST return month" />
+                  </label>
+                  <label className="text-3xs text-ink-3 space-y-0.5">
+                    <span className="block">Interest ₹ (if any)</span>
+                    <Input type="number" min={0} value={taxInterest} onChange={(e) => setTaxInterest(e.target.value)} placeholder="0" aria-label="Interest" />
+                  </label>
+                  <label className="text-3xs text-ink-3 space-y-0.5">
+                    <span className="block">Late fee ₹ (if any)</span>
+                    <Input type="number" min={0} value={taxLateFee} onChange={(e) => setTaxLateFee(e.target.value)} placeholder="0" aria-label="Late fee" />
+                  </label>
+                </div>
+                <p className={`text-2xs tabular-nums ${taxPortion > 0 ? "text-ink-2" : "text-rose-ink"}`}>
+                  {taxPortion > 0
+                    ? <>GST (tax) <b>{rupee(taxPortion)}</b>{interestNum + lateFeeNum > 0 && <> · expense <b>{rupee(interestNum + lateFeeNum)}</b></>}</>
+                    : "Interest + late fee cannot be the whole amount — there must be some tax in it."}
+                </p>
+              </div>
+            ) : statutoryKind === "income_tax" ? (
+              <div className="space-y-2">
+                <p className="text-2xs text-ink-3">
+                  Shows as <b>Advance tax paid</b> on the balance sheet for that year, and counts in the ITR pack. Not an expense.
+                </p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex gap-1.5" role="group" aria-label="Income tax type">
+                    {([["advance_tax", "Advance tax"], ["self_assessment_tax", "Self-assessment"]] as const).map(([k, label]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        aria-pressed={itKind === k}
+                        onClick={() => pickItKind(k)}
+                        className={`rounded-md border px-2 py-1 text-2xs font-medium ${itKind === k ? "border-indigo bg-indigo/10 text-indigo" : "border-hairline text-ink-2"}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="text-3xs text-ink-3 space-y-0.5">
+                    <span className="block">For financial year</span>
+                    <select
+                      value={itFy}
+                      onChange={(e) => setItFy(e.target.value)}
+                      aria-label="Financial year"
+                      className="rounded-md border border-hairline bg-paper px-2 py-1.5 text-xs text-ink"
+                    >
+                      {[txnFyStart - 1, txnFyStart, txnFyStart + 1].map((y) => (
+                        <option key={y} value={fyLabel(y)}>FY {fyLabel(y)}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <p className="text-2xs text-ink-3">Clears it from your TDS / PF / ESI “dues payable”.</p>
+            )}
+
+            <Button
+              size="sm"
+              variant="primary"
+              icon="check"
+              disabled={bookStatutory.isPending || bookTax.isPending || (statutoryKind === "gst" && (taxPortion <= 0 || !gstPeriod))}
+              loading={bookStatutory.isPending || bookTax.isPending}
+              onClick={handleBookStatutory}
+            >
+              {statutoryKind === "gst"
+                ? `Book ${rupee(amount)} as GST paid${gstPeriod ? ` (${gstPeriod})` : ""}`
+                : statutoryKind === "income_tax"
+                  ? `Book ${rupee(amount)} as ${itKind === "advance_tax" ? "advance tax" : "self-assessment tax"} · FY ${itFy}`
+                  : `Book ${rupee(amount)} as ${statutoryKind.toUpperCase()} paid`}
+            </Button>
+          </div>
+        )}
+      </div>
+    )}
+
+    </>
+  );
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -393,7 +702,18 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
                   Income aksar invoice se aati hai. Is {rupee(amount)} ki invoice abhi nahi bani? Yahan se invoice (ya project payment) banao — uska payment record karte hi ye line neeche <b>suggested match</b> me aa jayegi, phir ek click me reconcile.
                 </p>
-                {!showInvoice ? (
+                {showProject && transaction ? (
+                  <ProjectPaymentSection
+                    txn={transaction}
+                    amount={amount}
+                    customers={customers ?? []}
+                    customerId={projCustomer}
+                    onCustomerChange={setProjCustomer}
+                    onNewCustomer={() => setNewCustomerOpen(true)}
+                    onCancel={() => setShowProject(false)}
+                    onDone={() => { setShowProject(false); onOpenChange(false); }}
+                  />
+                ) : !showInvoice ? (
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
@@ -401,7 +721,10 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                       icon="file"
                       onClick={() => {
                         setShowInvoice(true);
-                        setInvLineName(transaction?.description ?? "");
+                        /* No prefill from the bank narration: "50200008254523-TPT-PO 00038-…"
+                           is a transfer reference, not what was sold, and it would print on
+                           the customer's tax invoice. The operator picks the product. */
+                        setInvItem(""); setInvLineName("");
                         setInvTaxable(String(Math.round(amount / 1.18)));
                       }}
                     >
@@ -410,26 +733,60 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                     <Button
                       size="sm"
                       variant="default"
-                      icon="external"
-                      onClick={() => {
-                        onOpenChange(false);
-                        router.push(`/projects?amount=${Math.round(amount)}&reconcile=${transaction?.id ?? ""}` as never);
-                      }}
+                      icon="briefcase"
+                      onClick={() => setShowProject(true)}
                     >
                       Project payment
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <select
+                        value={invCustomer}
+                        onChange={(e) => {
+                          /* "+ Naya customer" is an action, not a value: open the form and
+                             keep the current pick until a customer is actually created. */
+                          if (e.target.value === NEW_CUSTOMER) { setNewCustomerOpen(true); return; }
+                          setInvCustomer(e.target.value);
+                        }}
+                        aria-label="Customer"
+                        className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                      >
+                        <option value="" disabled>Customer chuno…</option>
+                        <option value={NEW_CUSTOMER}>＋ Naya customer banao</option>
+                        {(customers ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <Button type="button" size="sm" variant="default" icon="plus" onClick={() => setNewCustomerOpen(true)} className="shrink-0">
+                        New
+                      </Button>
+                    </div>
                     <select
-                      value={invCustomer}
-                      onChange={(e) => setInvCustomer(e.target.value)}
+                      value={invItem}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setInvItem(v);
+                        const it = activeItems.find((i) => i.id === v);
+                        setInvLineName(it ? it.name : "");
+                      }}
+                      aria-label="Product"
                       className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
                     >
-                      <option value="" disabled>Customer chuno…</option>
-                      {(customers ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      <option value="" disabled>Kya becha? Product chuno…</option>
+                      <option value={CUSTOM_ITEM}>✎ Custom — naam khud likho</option>
+                      {activeItems.map((i) => (
+                        <option key={i.id} value={i.id}>{i.name}{i.vendor ? ` · ${i.vendor}` : ""}</option>
+                      ))}
                     </select>
-                    <Input value={invLineName} onChange={(e) => setInvLineName(e.target.value)} placeholder="Kya becha? (e.g. Website / Setup fee)" />
+                    {invItem === CUSTOM_ITEM && (
+                      <Input
+                        value={invLineName}
+                        onChange={(e) => setInvLineName(e.target.value)}
+                        placeholder="Kya becha? (e.g. Website / Setup fee)"
+                        aria-label="Custom product name"
+                        autoFocus
+                      />
+                    )}
                     <Input value={invTaxable} onChange={(e) => setInvTaxable(e.target.value)} type="number" min={0} placeholder="Taxable amount ₹ (ex-GST)" />
                     <p className="text-3xs text-ink-3">GST customer ke place-of-supply se apne-aap lagega. {rupee(amount)} received ka taxable (÷1.18) prefill kiya — theek kar lena.</p>
                     <div className="flex gap-2 pt-1">
@@ -438,7 +795,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                         variant="primary"
                         icon="check"
                         loading={bookInvoice.isPending}
-                        disabled={!invCustomer || !(Number(invTaxable) > 0)}
+                        disabled={!invCustomer || !invLineName.trim() || !(Number(invTaxable) > 0)}
                         onClick={handleBookInvoice}
                       >
                         Invoice banao &amp; reconcile
@@ -491,6 +848,181 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 >
                   Book {rupee(amount)} as {creditKind === "capital" ? "capital" : "director's loan"}
                 </Button>
+              </div>
+            )}
+
+            {/* A salary transfer ("…-TPT-SALARY APR 2026-PAWAN", "NEFT DR-…-PRATIK-…-JULY
+                SALARY"): lead with booking it as that employee's salary for that month —
+                the same Payroll path as Banking → Salary lines — not as a plain expense. */}
+            {salaryHint && (
+              <div className="rounded-md border border-emerald/40 bg-emerald-soft/25 p-3 space-y-2">
+                <p className="text-xs font-semibold text-ink-2">
+                  Looks like salary{salaryHint.name ? <> for <b>{titleCaseName(salaryHint.name)}</b></> : ""}
+                </p>
+                <p className="text-2xs text-ink-3 leading-relaxed">
+                  Books this {rupee(amount)} as the employee&apos;s salary for the month — the salary record is created in
+                  Payroll (or the existing one is used) and this line is reconciled to it.
+                </p>
+                {salaryHint.director && (
+                  <p className="text-2xs text-amber-ink bg-amber-soft/40 rounded px-2 py-1">
+                    The narration says <b>director</b>. If the director is on the payroll (salary, TDS u/s 192), book it here.
+                    Otherwise book it below as a <b>Director&apos;s Remuneration</b> expense — check with your CA which applies.
+                  </p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={salaryEmp}
+                    onChange={(e) => setSalaryEmp(e.target.value)}
+                    aria-label="Employee"
+                    className="rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-emerald/40"
+                  >
+                    <option value="" disabled>Pick employee…</option>
+                    {salaryHint.name && <option value="create">＋ New employee “{titleCaseName(salaryHint.name)}”</option>}
+                    {(employees ?? []).filter((e) => e.is_active).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select>
+                  <Input type="month" value={salaryPeriod} onChange={(e) => setSalaryPeriod(e.target.value)} aria-label="Salary month" />
+                </div>
+                {!salaryHint.periodFromNarration && (
+                  <p className="text-3xs text-amber-ink">No month in the narration — assumed the month before payment. Change it if needed.</p>
+                )}
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon="check"
+                  disabled={!salaryEmp || !salaryPeriod || bookSalary.isPending}
+                  loading={bookSalary.isPending}
+                  onClick={handleBookSalary}
+                >
+                  Book {rupee(amount)} as salary{salaryPeriod ? ` · ${salaryPeriod}` : ""}
+                </Button>
+              </div>
+            )}
+
+            {/* A challan to the government is not an expense: when the narration says
+                so (ESIC, EPFO, ITNS 281, GST CIN…), lead with the statutory / tax booking. */}
+            {govtHint && (
+              <div className="space-y-1.5">
+                <p className="text-2xs text-indigo-ink bg-indigo-soft/40 border border-indigo/20 rounded-md px-3 py-2">
+                  Looks like a <b>{govtHint.label}</b> — a payment to the government, not an expense. Book it below.
+                </p>
+                {statutorySection}
+              </div>
+            )}
+
+            {/* Book directly as an expense — money-out lines only. Creates the
+                expense (P&L) and reconciles this line, with NO extra cash leg.
+                FIRST among the money-out choices: most money out is an expense, and
+                when a rule or the import already named the category it is prefilled. */}
+            {!isCredit && (
+              <div className={`rounded-md border p-3 ${expenseSuggestion ? "border-amber bg-amber-soft/40" : "border-amber/40 bg-amber-soft/25"}`}>
+                <p className="text-xs font-semibold text-ink-2 mb-1">
+                  {expenseSuggestion ? <>Looks like a <b>{expenseSuggestion.category}</b> expense</> : "Book as a new expense"}
+                </p>
+                <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
+                  {expenseSuggestion
+                    ? <>Category filled from <b>{expenseSuggestion.reason}</b> — change it if that&apos;s wrong. </>
+                    : "Not in your books yet? "}
+                  Record this {rupee(amount)} as an expense and reconcile it in one step. No double entry — this bank line is the cash-out.
+                </p>
+                <div className="space-y-2">
+                  <select
+                    value={bookCategory}
+                    onChange={(e) => setBookCategory(e.target.value)}
+                    aria-label="Expense category"
+                    className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                  >
+                    <option value="" disabled>Choose category…</option>
+                    {/* Salaries are NOT a plain expense — they're booked in Payroll
+                        (payslip + statutory + paid-status), so they're excluded here. */}
+                    {EXPENSE_CATEGORIES.filter((c) => c !== "Salaries").map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input value={bookVendor} onChange={(e) => setBookVendor(e.target.value)} placeholder="Vendor / payee (optional)" />
+                    <Input value={bookGst} onChange={(e) => setBookGst(e.target.value)} type="number" min={0} placeholder="GST paid ₹ (optional)" />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon="check"
+                  className="mt-3"
+                  disabled={!bookCategory || bookExpense.isPending}
+                  loading={bookExpense.isPending}
+                  onClick={handleBookExpense}
+                >
+                  {bookCategory ? `Book ${rupee(amount)} as ${bookCategory}` : `Book ${rupee(amount)} expense`}
+                </Button>
+                <p className="mt-2.5 text-2xs text-ink-3 leading-relaxed">
+                  Paying a salary?{" "}
+                  <button
+                    type="button"
+                    onClick={() => { onOpenChange(false); router.push("/accounting/payroll" as never); }}
+                    className="text-amber-ink font-medium underline hover:no-underline"
+                  >
+                    Open Payroll &amp; Leave →
+                  </button>{" "}
+                  run it there (payslip + statutory), then reconcile this line to it under “Combine multiple expenses”.
+                </p>
+              </div>
+            )}
+
+            {/* Paid a VENDOR in advance (Facebook / Google ads top-up, a retainer) —
+                money-out. Not an expense yet: a prepaid asset, expensed when the
+                vendor's invoice arrives (Prepaid page → Book invoice, oldest top-up first). */}
+            {!isCredit && (
+              <div className="rounded-md border border-hairline p-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPrepaid((v) => !v)}
+                  aria-expanded={showPrepaid}
+                  className="w-full flex items-center justify-between text-left"
+                >
+                  <span className="text-xs font-semibold text-ink-2">Paid in advance to a vendor? (e.g. Facebook ads top-up)</span>
+                  <Icon name={showPrepaid ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
+                </button>
+                {!showPrepaid ? (
+                  <p className="text-2xs text-ink-3 mt-1 leading-relaxed">
+                    Ad platforms take money first and invoice what was used later. Book the top-up as an <b>advance</b>;
+                    the monthly invoice then becomes the expense.
+                  </p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-2xs text-ink-3 leading-relaxed">
+                      Holds this {rupee(amount)} as a <b>prepaid asset</b> — no expense today. When the invoice comes, book it on
+                      Prepaid / Advances: it is drawn from the oldest top-ups first.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Input
+                        value={prepaidVendor}
+                        onChange={(e) => setPrepaidVendor(e.target.value)}
+                        placeholder="Paid to (e.g. Facebook)"
+                        aria-label="Vendor"
+                        list="prepaid-vendors"
+                      />
+                      <datalist id="prepaid-vendors">
+                        {prepaidVendorNames.map((v) => <option key={v} value={v} />)}
+                      </datalist>
+                      <select
+                        value={prepaidCategory}
+                        onChange={(e) => setPrepaidCategory(e.target.value)}
+                        aria-label="Category the advance will be used for"
+                        className="rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                      >
+                        {EXPENSE_CATEGORIES.filter((c) => c !== "Salaries").map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon="check"
+                      disabled={!prepaidVendor.trim() || bookPrepaid.isPending}
+                      loading={bookPrepaid.isPending}
+                      onClick={handleBookPrepaid}
+                    >
+                      Book {rupee(amount)} as {prepaidVendor.trim() || "vendor"} advance
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -582,98 +1114,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
               </div>
             )}
 
-            {/* Book directly as an expense — money-out lines only. Creates the
-                expense (P&L) and reconciles this line, with NO extra cash leg. */}
-            {!isCredit && (
-              <div className="rounded-md border border-amber/40 bg-amber-soft/25 p-3">
-                <p className="text-xs font-semibold text-ink-2 mb-1">Book as a new expense</p>
-                <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
-                  Not in your books yet? Record this {rupee(amount)} as an expense and reconcile it in one step. No double entry — this bank line is the cash-out.
-                </p>
-                <div className="space-y-2">
-                  <select
-                    value={bookCategory}
-                    onChange={(e) => setBookCategory(e.target.value)}
-                    className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
-                  >
-                    <option value="" disabled>Choose category…</option>
-                    {/* Salaries are NOT a plain expense — they're booked in Payroll
-                        (payslip + statutory + paid-status), so they're excluded here. */}
-                    {EXPENSE_CATEGORIES.filter((c) => c !== "Salaries").map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input value={bookVendor} onChange={(e) => setBookVendor(e.target.value)} placeholder="Vendor / payee (optional)" />
-                    <Input value={bookGst} onChange={(e) => setBookGst(e.target.value)} type="number" min={0} placeholder="GST paid ₹ (optional)" />
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  icon="check"
-                  className="mt-3"
-                  disabled={!bookCategory || bookExpense.isPending}
-                  loading={bookExpense.isPending}
-                  onClick={handleBookExpense}
-                >
-                  Book {rupee(amount)} expense
-                </Button>
-                <p className="mt-2.5 text-2xs text-ink-3 leading-relaxed">
-                  Paying a salary?{" "}
-                  <button
-                    type="button"
-                    onClick={() => { onOpenChange(false); router.push("/accounting/payroll" as never); }}
-                    className="text-amber-ink font-medium underline hover:no-underline"
-                  >
-                    Open Payroll &amp; Leave →
-                  </button>{" "}
-                  run it there (payslip + statutory), then reconcile this line to it under “Combine multiple expenses”.
-                </p>
-              </div>
-            )}
 
-            {/* Statutory challan (TDS/PF/ESI) — money-out. Settles the statutory
-                payable against THIS imported line; no duplicate line is made. */}
-            {!isCredit && (
-              <div className="rounded-md border border-hairline p-3">
-                <button
-                  type="button"
-                  onClick={() => setShowStatutory((v) => !v)}
-                  className="w-full flex items-center justify-between text-left"
-                >
-                  <span className="text-xs font-semibold text-ink-2">Statutory payment (ESI / PF / TDS challan)?</span>
-                  <Icon name={showStatutory ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
-                </button>
-                {showStatutory && (
-                  <div className="mt-2 space-y-2">
-                    <p className="text-2xs text-ink-3">
-                      Records this {rupee(amount)} as a statutory payment to the government and clears it from your “dues payable”. Pick which challan this is:
-                    </p>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {(["esi", "pf", "tds", "mixed"] as const).map((k) => (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => setStatutoryKind(k)}
-                          className={`rounded-md border px-2 py-1.5 text-xs font-medium uppercase ${statutoryKind === k ? "border-indigo bg-indigo/10 text-indigo" : "border-hairline text-ink-2"}`}
-                        >
-                          {k}
-                        </button>
-                      ))}
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      icon="check"
-                      disabled={bookStatutory.isPending}
-                      loading={bookStatutory.isPending}
-                      onClick={handleBookStatutory}
-                    >
-                      Book {rupee(amount)} as {statutoryKind.toUpperCase()} paid
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
+            {!govtHint && statutorySection}
 
             {/* Pay (part of) a salary — money-out lines. Applies THIS line's
                 amount to a chosen salary. If it's less than the full salary,
@@ -822,6 +1264,14 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
           </Button>
         </SheetFooter>
       </SheetContent>
+
+      {/* Nested inside the reconcile sheet so closing the form returns here with the
+          new customer already picked. */}
+      <AddCustomerForm
+        open={newCustomerOpen}
+        onOpenChange={setNewCustomerOpen}
+        onCreated={(id) => { setInvCustomer(id); setProjCustomer(id); setNewCustomerOpen(false); }}
+      />
     </Sheet>
   );
 }

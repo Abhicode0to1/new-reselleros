@@ -26,9 +26,11 @@ import { Icon } from "@/components/ui/icon";
 import { toast } from "sonner";
 import {
   usePrepaidAdvances, useCreatePrepaidAdvance, useConsumePrepaidAdvance, useDeletePrepaidAdvance,
-  useAdvanceExpenses,
+  useAdvanceExpenses, useConsumePrepaidFifo,
   type PrepaidAdvance,
 } from "@/lib/queries/prepaid-advances";
+import { planFifo, openBalancesByVendor } from "@/lib/accounting/prepaid-fifo";
+import { localDateISO } from "@/lib/leads/outcomes";
 
 const CATEGORIES = ["Marketing", "Advertising", "Software / SaaS", "Hosting", "Subscriptions", "Other"];
 const METHODS = ["bank_transfer", "upi", "card", "cheque", "cash"];
@@ -40,8 +42,10 @@ export default function PrepaidAdvancesPage() {
   const [addOpen, setAddOpen] = React.useState(false);
   const [consume, setConsume] = React.useState<PrepaidAdvance | null>(null);
 
-  const rows = q.data ?? [];
+  const rows = React.useMemo(() => q.data ?? [], [q.data]);
   const totalBalance = rows.reduce((s, r) => s + r.balance, 0);
+  const [invoiceOpen, setInvoiceOpen] = React.useState(false);
+  const vendorBalances = React.useMemo(() => openBalancesByVendor(rows), [rows]);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
@@ -54,8 +58,17 @@ export default function PrepaidAdvancesPage() {
             asset; <b>Consume</b> it as the service runs to book the real expense in your P&amp;L.
           </p>
         </div>
-        <Button variant="primary" icon="plus" className="hidden md:inline-flex shrink-0" onClick={() => setAddOpen(true)}>Add advance</Button>
+        <div className="hidden md:flex gap-2 shrink-0">
+          {/* One vendor invoice → drawn from that vendor's oldest top-ups first. */}
+          {vendorBalances.length > 0 && (
+            <Button icon="file" onClick={() => setInvoiceOpen(true)}>Book vendor invoice</Button>
+          )}
+          <Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>Add advance</Button>
+        </div>
       </div>
+      {vendorBalances.length > 0 && (
+        <Button icon="file" className="md:hidden mb-3 w-full" onClick={() => setInvoiceOpen(true)}>Book vendor invoice</Button>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
         <KPI label="Open advances" value={String(rows.filter((r) => r.balance > 0).length)} />
@@ -88,6 +101,7 @@ export default function PrepaidAdvancesPage() {
       <FAB icon="plus" label="Advance" onClick={() => setAddOpen(true)} ariaLabel="Add advance" />
       {addOpen && <AddAdvanceDialog onClose={() => setAddOpen(false)} />}
       {consume && <ConsumeDialog advance={consume} onClose={() => setConsume(null)} />}
+      {invoiceOpen && <BookInvoiceDialog advances={rows} onClose={() => setInvoiceOpen(false)} />}
     </div>
   );
 }
@@ -115,6 +129,11 @@ function AdvanceCard({ r, onConsume, onDelete }: { r: PrepaidAdvance; onConsume:
             <span className="font-medium text-ink">{r.vendor_name}</span>
             <span className="text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo/10 text-indigo">{r.category}</span>
             {done && <span className="text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald/10 text-emerald">Fully used</span>}
+            {r.bank_txn_id && (
+              <span className="text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper-2 text-ink-3" title="Created from a reconciled bank line — un-reconcile that line to remove it">
+                From bank line
+              </span>
+            )}
           </div>
           <div className="text-2xs text-ink-3 mt-0.5">
             Paid {formatDate(r.paid_date)}{r.payment_method ? ` · ${r.payment_method.replace(/_/g, " ")}` : ""}
@@ -439,5 +458,111 @@ function KPI({ label, value, tone, sub }: { label: string; value: string; tone?:
       <div className={`font-serif text-lg md:text-xl ${c} leading-tight truncate`}>{value}</div>
       {sub && <div className="text-3xs text-ink-3 truncate">{sub}</div>}
     </Card>
+  );
+}
+
+/**
+ * One vendor invoice (e.g. Facebook's monthly bill) booked against that vendor's
+ * top-ups, oldest first — so an invoice that spans three top-ups is one entry for the
+ * operator. The split is previewed here (planFifo) and done by consume_prepaid_fifo,
+ * which re-checks and locks the balances.
+ */
+function BookInvoiceDialog({ advances, onClose }: { advances: PrepaidAdvance[]; onClose: () => void }) {
+  const book = useConsumePrepaidFifo();
+  const vendors = openBalancesByVendor(advances);
+  const [vendor, setVendor] = React.useState(vendors[0]?.vendor ?? "");
+  const [amount, setAmount] = React.useState("");
+  const [gst, setGst] = React.useState("");
+  const [date, setDate] = React.useState(localDateISO(new Date()));
+  const [note, setNote] = React.useState("");
+
+  const amt = Math.round(Number(amount) || 0);
+  const gstAmt = Math.round(Number(gst) || 0);
+  const plan = vendor && amt > 0 ? planFifo(advances, vendor, amt, gstAmt) : null;
+  const balance = vendors.find((v) => v.vendor === vendor)?.balance ?? 0;
+
+  async function submit() {
+    if (!plan?.ok) return;
+    try {
+      await book.mutateAsync({ vendorName: vendor, amount: amt, gst: gstAmt, date, note: note.trim() || null });
+      onClose();
+    } catch { /* hook toasts */ }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="md:!max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Book vendor invoice</DialogTitle>
+          <DialogDescription>
+            The vendor&apos;s invoice for what was actually used (e.g. Facebook&apos;s monthly bill). It is booked as an
+            expense and drawn from that vendor&apos;s oldest top-ups first.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <FormField label="Vendor" required htmlFor="inv_vendor">
+            <select
+              id="inv_vendor"
+              value={vendor}
+              onChange={(e) => setVendor(e.target.value)}
+              className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+            >
+              {vendors.map((v) => (
+                <option key={v.vendor} value={v.vendor}>{v.vendor} — {rupee(v.balance)} left in {v.count} top-up{v.count === 1 ? "" : "s"}</option>
+              ))}
+            </select>
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Invoice total (₹, incl. GST)" required htmlFor="inv_amt">
+              <Input id="inv_amt" type="number" min={1} prefix="₹" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <button type="button" className="text-2xs text-amber-ink hover:underline mt-1" onClick={() => setAmount(String(balance))}>
+                All that&apos;s left ({rupee(balance)})
+              </button>
+            </FormField>
+            <FormField label="of which GST (ITC)" htmlFor="inv_gst">
+              <Input id="inv_gst" type="number" min={0} prefix="₹" value={gst} onChange={(e) => setGst(e.target.value)} />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Invoice date" required htmlFor="inv_date">
+              <Input id="inv_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </FormField>
+            <FormField label="Invoice no. / note" htmlFor="inv_note">
+              <Input id="inv_note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. FBADS-2026-07" />
+            </FormField>
+          </div>
+
+          {/* The split, before booking. */}
+          {plan && (
+            plan.ok ? (
+              <div className="rounded-md border border-hairline bg-paper-2/30 p-3 text-2xs">
+                <p className="font-semibold text-ink-2 mb-1.5">
+                  Drawn from {plan.slices.length} top-up{plan.slices.length === 1 ? "" : "s"}, oldest first
+                </p>
+                <ul className="space-y-0.5 tabular-nums">
+                  {plan.slices.map((s) => (
+                    <li key={s.advanceId} className="flex justify-between text-ink-2">
+                      <span>Top-up of {formatDate(s.paidDate)}</span>
+                      <span>{rupee(s.amount)}{s.gst > 0 ? ` (GST ${rupee(s.gst)})` : ""}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-ink-3">{vendor} advance left after this: <b className="text-ink">{rupee(plan.leftAfter)}</b></p>
+              </div>
+            ) : (
+              <p className="text-2xs text-rose-ink">{plan.reason}</p>
+            )
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="default" onClick={onClose}>Cancel</Button>
+          <Button type="button" variant="primary" loading={book.isPending} disabled={!plan?.ok} onClick={submit}>
+            {amt > 0 ? `Book ${rupee(amt)} invoice` : "Book invoice"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

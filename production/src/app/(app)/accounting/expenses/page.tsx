@@ -35,6 +35,7 @@ import { useBankAccounts } from "@/lib/queries/bank";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { groupExpenses, type GroupBy } from "@/lib/accounting/expense-groups";
 
 type DateRange = { from: string; to: string };
 
@@ -161,6 +162,16 @@ export default function ExpensesPage() {
   const [payeeFilter, setPayeeFilter] = React.useState("");
   const [unpaidOnly, setUnpaidOnly] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  /* Group the list by vendor or category, each with a subtotal. Collapsed groups are
+     remembered per key while the view is open. */
+  const [groupBy, setGroupBy] = React.useState<GroupBy>("none");
+  const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   // Deep-link from Purchase Report ("Open" on a vendor line) → pre-fill search.
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -262,6 +273,11 @@ export default function ExpensesPage() {
       .some((f) => (f ?? "").toString().toLowerCase().includes(q_))),
   );
 
+  const groups = React.useMemo(
+    () => (groupBy === "none" ? [] : groupExpenses(rows, groupBy)),
+    [rows, groupBy],
+  );
+
   // Totals for whatever is currently filtered — count, amount, and input GST.
   const filtered = React.useMemo(() => rows.reduce(
     (acc, e) => { acc.amount += e.amount ?? 0; acc.gst += e.gst_paid ?? 0; return acc; },
@@ -355,6 +371,136 @@ export default function ExpensesPage() {
     if (missingPan) msg += ` ⚠ ${missingPan} row(s) missing PAN — add the vendor's GSTIN.`;
     toast.success(msg);
   }
+
+  /* One desktop row — rendered flat or under a vendor / category group header. */
+  const renderDesktopRow = (e: Expense) => {
+    const noBill = e.bill_type === "none" && !isPayrollExpense(e);
+    return (
+          <tr key={e.id}
+            className={`hover:bg-paper-2/40 cursor-pointer align-top ${selectedIds.has(e.id) ? "bg-amber-soft/40" : ""}`}
+            onClick={() => openRow(e)}>
+            {/* Bulk-select checkbox — only for settle-able payables */}
+            <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+              {bulkEligible(e) && (
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${e.category}`}
+                  className="align-middle accent-amber cursor-pointer"
+                  checked={selectedIds.has(e.id)}
+                  onChange={() => toggleOne(e.id)}
+                />
+              )}
+            </td>
+            {/* Expense: category + status + bill chip, then a muted meta line */}
+            <td className="px-3 py-2.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-medium text-ink truncate">{e.category}</span>
+                {isPayrollExpense(e)
+                  ? (() => { const t = reconcileTag(e, salByExpense.get(e.id)); return t ? <ReconcileTag {...t} /> : null; })()
+                  : <PayBadge e={e} today={today} />}
+                {e.bill_type === "kaccha" && <BillChip tone="amber" label="Kaccha" title="Non-GST (kaccha) bill" />}
+                {e.bill_type === "none" && !isPayrollExpense(e) && <BillChip tone="rose" label="No bill" title="No bill/receipt attached yet" />}
+              </div>
+              <div className="text-2xs text-ink-3 truncate mt-0.5" title={e.description ?? undefined}>
+                {formatDate(e.expense_date)}
+                {e.payment_method ? ` · ${e.payment_method}` : ""}
+                {e.description ? ` · ${e.description}` : ""}
+              </div>
+            </td>
+            {/* Vendor */}
+            <td className="px-3 py-2.5 text-ink-2 truncate" title={e.vendor_name ?? undefined}>{e.vendor_name ?? "—"}</td>
+            {/* Amount (+ GST + FX as sub-lines) */}
+            <td className="px-3 py-2.5 text-right">
+              <div className="font-semibold text-ink font-mono">{rupee(e.amount)}</div>
+              {e.gst_paid > 0 && <div className="text-3xs text-emerald">+{rupee(e.gst_paid)} GST</div>}
+              {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-3xs text-ink-3">{fx}</div> : null; })()}
+            </td>
+            {/* Actions — icon-first, wrap instead of overflowing */}
+            <td className="px-3 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+              <div className="flex items-center justify-end gap-0.5 flex-wrap">
+                {noBill && (
+                  <IconButton icon="upload" size="sm" variant="ghost" aria-label="Upload receipt"
+                    title="Upload receipt / bill" onClick={() => setEditing(e)} />
+                )}
+                {!e.paid && !isPayrollExpense(e) && (
+                  <Button variant="default" className="h-7 px-2 py-0 text-2xs"
+                    onClick={() => setPayingExpense(e)}>Mark paid</Button>
+                )}
+                {canReconcile(e) && (
+                  <Button variant="default" className="h-7 px-2 py-0 text-2xs"
+                    onClick={() => startReconcile(e)}>Reconcile</Button>
+                )}
+                <IconButton icon="edit" size="sm" variant="ghost" aria-label="Edit expense" onClick={() => setEditing(e)} />
+                <IconButton icon="trash" size="sm" variant="ghost" aria-label="Delete expense"
+                  onClick={async () => { if (await confirm({ title: `Delete this expense?`, danger: true, confirmLabel: "Delete" })) del.mutate(e.id); }} />
+              </div>
+            </td>
+          </tr>
+    );
+  };
+
+  /* One mobile card — flat or under a group header. */
+  const renderMobileRow = (e: Expense) => (
+      <li key={e.id}>
+        <Card className={`p-4 cursor-pointer ${selectedIds.has(e.id) ? "ring-1 ring-amber/50 bg-amber-soft/30" : ""}`} onClick={() => openRow(e)}>
+          <div className="flex items-start justify-between gap-2 mb-1">
+            {bulkEligible(e) && (
+              <input
+                type="checkbox"
+                aria-label={`Select ${e.category}`}
+                className="mt-1 accent-amber cursor-pointer shrink-0"
+                checked={selectedIds.has(e.id)}
+                onClick={(ev) => ev.stopPropagation()}
+                onChange={() => toggleOne(e.id)}
+              />
+            )}
+            <div className="font-medium text-ink leading-tight flex-1">
+              {e.category}
+              {e.bill_type === "kaccha" && <span className="ml-1.5 text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-soft/60 text-amber-ink align-middle">Kaccha bill</span>}
+              {e.bill_type === "none" && <span className="ml-1.5 text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper-2 text-ink-3 align-middle">No bill</span>}
+              {isPayrollExpense(e)
+                ? (() => { const t = reconcileTag(e, salByExpense.get(e.id)); return t ? <ReconcileTag {...t} /> : null; })()
+                : <PayBadge e={e} today={today} />}
+            </div>
+            <div className="font-serif text-xl text-ink leading-none">{rupee(e.amount)}</div>
+            {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-2xs text-ink-3">{fx} @ ₹{e.fx_rate}/{e.currency}</div> : null; })()}
+          </div>
+          <div className="text-2xs text-ink-3 mb-1.5">
+            {formatDate(e.expense_date)} · {e.payment_method ?? "—"}
+          </div>
+          {e.vendor_name && <div className="text-xs text-ink-2 mb-1">{e.vendor_name}</div>}
+          {e.description && <div className="text-xs text-ink-3 mb-2">{e.description}</div>}
+          <div className="flex items-center justify-between">
+            {e.gst_paid > 0 && (
+              <span className="text-2xs text-emerald">+{foreignAmount(e.currency, e.gst_paid, e.fx_rate) ?? rupee(e.gst_paid)} input GST</span>
+            )}
+            <div className="ml-auto flex items-center gap-1">
+              {!e.paid && !isPayrollExpense(e) && (
+                <Button variant="default" className="h-7 px-2 py-0 text-2xs mr-1"
+                  onClick={(ev) => { ev.stopPropagation(); setPayingExpense(e); }}>
+                  Mark paid
+                </Button>
+              )}
+              {canReconcile(e) && (
+                <Button variant="default" className="h-7 px-2 py-0 text-2xs mr-1"
+                  onClick={(ev) => { ev.stopPropagation(); startReconcile(e); }}>
+                  Reconcile
+                </Button>
+              )}
+              <IconButton icon="edit" aria-label="Edit expense" onClick={(ev) => { ev.stopPropagation(); setEditing(e); }} />
+              <IconButton
+                icon="trash"
+                aria-label="Delete expense"
+                onClick={async (ev) => {
+                  ev.stopPropagation();
+                  if (await confirm({ title: `Delete this expense?`, danger: true, confirmLabel: "Delete" })) del.mutate(e.id);
+                }}
+              />
+            </div>
+          </div>
+        </Card>
+      </li>
+  );
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
@@ -497,6 +643,23 @@ export default function ExpensesPage() {
             <button type="button" onClick={() => { setCatFilter(""); setPayeeFilter(""); setUnpaidOnly(false); setSearch(""); }}
               className="text-2xs text-amber-ink hover:underline">Clear</button>
           )}
+          {/* Group the list — subtotal per vendor / category. */}
+          <div className="ml-auto flex items-center gap-1" role="group" aria-label="Group expenses by">
+            <span className="text-2xs text-ink-3 mr-0.5">Group by</span>
+            {([["none", "None"], ["vendor", "Vendor"], ["category", "Category"]] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={groupBy === k}
+                onClick={() => { setGroupBy(k); setCollapsed(new Set()); }}
+                className={`text-2xs px-2 py-1 rounded-md border transition-colors ${
+                  groupBy === k ? "border-amber bg-amber-soft text-amber-ink font-semibold" : "border-hairline text-ink-3 hover:text-ink hover:bg-paper-2"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         {/* Filtered summary — total paid + input GST for the current filter. */}
         {isFiltered && rows.length > 0 && (
@@ -583,71 +746,30 @@ export default function ExpensesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
-                {rows.map((e) => {
-                  const noBill = e.bill_type === "none" && !isPayrollExpense(e);
-                  return (
-                  <tr key={e.id}
-                    className={`hover:bg-paper-2/40 cursor-pointer align-top ${selectedIds.has(e.id) ? "bg-amber-soft/40" : ""}`}
-                    onClick={() => openRow(e)}>
-                    {/* Bulk-select checkbox — only for settle-able payables */}
-                    <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
-                      {bulkEligible(e) && (
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${e.category}`}
-                          className="align-middle accent-amber cursor-pointer"
-                          checked={selectedIds.has(e.id)}
-                          onChange={() => toggleOne(e.id)}
-                        />
-                      )}
-                    </td>
-                    {/* Expense: category + status + bill chip, then a muted meta line */}
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-medium text-ink truncate">{e.category}</span>
-                        {isPayrollExpense(e)
-                          ? (() => { const t = reconcileTag(e, salByExpense.get(e.id)); return t ? <ReconcileTag {...t} /> : null; })()
-                          : <PayBadge e={e} today={today} />}
-                        {e.bill_type === "kaccha" && <BillChip tone="amber" label="Kaccha" title="Non-GST (kaccha) bill" />}
-                        {e.bill_type === "none" && !isPayrollExpense(e) && <BillChip tone="rose" label="No bill" title="No bill/receipt attached yet" />}
-                      </div>
-                      <div className="text-2xs text-ink-3 truncate mt-0.5" title={e.description ?? undefined}>
-                        {formatDate(e.expense_date)}
-                        {e.payment_method ? ` · ${e.payment_method}` : ""}
-                        {e.description ? ` · ${e.description}` : ""}
-                      </div>
-                    </td>
-                    {/* Vendor */}
-                    <td className="px-3 py-2.5 text-ink-2 truncate" title={e.vendor_name ?? undefined}>{e.vendor_name ?? "—"}</td>
-                    {/* Amount (+ GST + FX as sub-lines) */}
-                    <td className="px-3 py-2.5 text-right">
-                      <div className="font-semibold text-ink font-mono">{rupee(e.amount)}</div>
-                      {e.gst_paid > 0 && <div className="text-3xs text-emerald">+{rupee(e.gst_paid)} GST</div>}
-                      {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-3xs text-ink-3">{fx}</div> : null; })()}
-                    </td>
-                    {/* Actions — icon-first, wrap instead of overflowing */}
-                    <td className="px-3 py-2.5" onClick={(ev) => ev.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-0.5 flex-wrap">
-                        {noBill && (
-                          <IconButton icon="upload" size="sm" variant="ghost" aria-label="Upload receipt"
-                            title="Upload receipt / bill" onClick={() => setEditing(e)} />
-                        )}
-                        {!e.paid && !isPayrollExpense(e) && (
-                          <Button variant="default" className="h-7 px-2 py-0 text-2xs"
-                            onClick={() => setPayingExpense(e)}>Mark paid</Button>
-                        )}
-                        {canReconcile(e) && (
-                          <Button variant="default" className="h-7 px-2 py-0 text-2xs"
-                            onClick={() => startReconcile(e)}>Reconcile</Button>
-                        )}
-                        <IconButton icon="edit" size="sm" variant="ghost" aria-label="Edit expense" onClick={() => setEditing(e)} />
-                        <IconButton icon="trash" size="sm" variant="ghost" aria-label="Delete expense"
-                          onClick={async () => { if (await confirm({ title: `Delete this expense?`, danger: true, confirmLabel: "Delete" })) del.mutate(e.id); }} />
-                      </div>
-                    </td>
-                  </tr>
-                  );
-                })}
+                {groupBy === "none" ? rows.map(renderDesktopRow) : groups.map((g) => (
+                  <React.Fragment key={g.key}>
+                    <tr className="bg-paper-2/70">
+                      <td colSpan={3} className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(g.key)}
+                          aria-expanded={!collapsed.has(g.key)}
+                          className="flex items-center gap-1.5 text-left font-semibold text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+                        >
+                          <Icon name={collapsed.has(g.key) ? "chevron_right" : "chevron_down"} size={14} className="text-ink-3" />
+                          {g.label}
+                          <span className="text-2xs font-normal text-ink-3">· {g.count} {g.count === 1 ? "entry" : "entries"}</span>
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="font-semibold text-ink font-mono">{rupee(g.total)}</div>
+                        {g.gst > 0 && <div className="text-3xs text-emerald">+{rupee(g.gst)} GST</div>}
+                      </td>
+                      <td />
+                    </tr>
+                    {!collapsed.has(g.key) && g.rows.map(renderDesktopRow)}
+                  </React.Fragment>
+                ))}
               </tbody>
             </table>
             </div>
@@ -655,66 +777,24 @@ export default function ExpensesPage() {
 
           {/* Mobile cards */}
           <ul className="md:hidden space-y-2.5">
-            {rows.map((e) => (
-              <li key={e.id}>
-                <Card className={`p-4 cursor-pointer ${selectedIds.has(e.id) ? "ring-1 ring-amber/50 bg-amber-soft/30" : ""}`} onClick={() => openRow(e)}>
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    {bulkEligible(e) && (
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${e.category}`}
-                        className="mt-1 accent-amber cursor-pointer shrink-0"
-                        checked={selectedIds.has(e.id)}
-                        onClick={(ev) => ev.stopPropagation()}
-                        onChange={() => toggleOne(e.id)}
-                      />
-                    )}
-                    <div className="font-medium text-ink leading-tight flex-1">
-                      {e.category}
-                      {e.bill_type === "kaccha" && <span className="ml-1.5 text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-soft/60 text-amber-ink align-middle">Kaccha bill</span>}
-                      {e.bill_type === "none" && <span className="ml-1.5 text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper-2 text-ink-3 align-middle">No bill</span>}
-                      {isPayrollExpense(e)
-                        ? (() => { const t = reconcileTag(e, salByExpense.get(e.id)); return t ? <ReconcileTag {...t} /> : null; })()
-                        : <PayBadge e={e} today={today} />}
-                    </div>
-                    <div className="font-serif text-xl text-ink leading-none">{rupee(e.amount)}</div>
-                    {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-2xs text-ink-3">{fx} @ ₹{e.fx_rate}/{e.currency}</div> : null; })()}
-                  </div>
-                  <div className="text-2xs text-ink-3 mb-1.5">
-                    {formatDate(e.expense_date)} · {e.payment_method ?? "—"}
-                  </div>
-                  {e.vendor_name && <div className="text-xs text-ink-2 mb-1">{e.vendor_name}</div>}
-                  {e.description && <div className="text-xs text-ink-3 mb-2">{e.description}</div>}
-                  <div className="flex items-center justify-between">
-                    {e.gst_paid > 0 && (
-                      <span className="text-2xs text-emerald">+{foreignAmount(e.currency, e.gst_paid, e.fx_rate) ?? rupee(e.gst_paid)} input GST</span>
-                    )}
-                    <div className="ml-auto flex items-center gap-1">
-                      {!e.paid && !isPayrollExpense(e) && (
-                        <Button variant="default" className="h-7 px-2 py-0 text-2xs mr-1"
-                          onClick={(ev) => { ev.stopPropagation(); setPayingExpense(e); }}>
-                          Mark paid
-                        </Button>
-                      )}
-                      {canReconcile(e) && (
-                        <Button variant="default" className="h-7 px-2 py-0 text-2xs mr-1"
-                          onClick={(ev) => { ev.stopPropagation(); startReconcile(e); }}>
-                          Reconcile
-                        </Button>
-                      )}
-                      <IconButton icon="edit" aria-label="Edit expense" onClick={(ev) => { ev.stopPropagation(); setEditing(e); }} />
-                      <IconButton
-                        icon="trash"
-                        aria-label="Delete expense"
-                        onClick={async (ev) => {
-                          ev.stopPropagation();
-                          if (await confirm({ title: `Delete this expense?`, danger: true, confirmLabel: "Delete" })) del.mutate(e.id);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </Card>
-              </li>
+            {groupBy === "none" ? rows.map(renderMobileRow) : groups.map((g) => (
+              <React.Fragment key={g.key}>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(g.key)}
+                    aria-expanded={!collapsed.has(g.key)}
+                    className="w-full flex items-center justify-between gap-2 rounded-md bg-paper-2/70 px-3 py-2 text-left"
+                  >
+                    <span className="flex items-center gap-1.5 font-semibold text-ink">
+                      <Icon name={collapsed.has(g.key) ? "chevron_right" : "chevron_down"} size={14} className="text-ink-3" />
+                      {g.label} <span className="text-2xs font-normal text-ink-3">· {g.count}</span>
+                    </span>
+                    <span className="font-mono font-semibold text-ink">{rupee(g.total)}</span>
+                  </button>
+                </li>
+                {!collapsed.has(g.key) && g.rows.map(renderMobileRow)}
+              </React.Fragment>
             ))}
           </ul>
         </>

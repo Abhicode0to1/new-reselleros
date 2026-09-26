@@ -14,6 +14,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
+import { fixStatementDates } from "@/lib/banking/statement-dates";
+import { localDateISO } from "@/lib/leads/outcomes";
 
 const bodySchema = z.object({
   fileBase64: z.string().min(20, "Empty file"),
@@ -74,7 +76,31 @@ function sanitizeRows(rows: AiRow[]) {
   return { rows: out, skipped };
 }
 
-async function extractWithGemini(apiKey: string, model: string, mimeType: string, base64: string): Promise<AiRow[] | null> {
+/* When the configured model is busy (503) or does not answer in time, one attempt on a
+   lighter model. Measured 25 Sep 2026: gemini-3.5-flash returned 503 "high demand" twice
+   and then timed out, while gemini-flash-lite-latest answered in ~1.5s. Not used for a
+   4xx — a file Gemini cannot open stays unopenable on any model. */
+const FALLBACK_MODEL = "gemini-flash-lite-latest";
+const isBusyOrSlow = (reason: string) =>
+  /\b503\b|high demand|unavailable|overload|jawab nahi diya|timed out|paused/i.test(reason);
+
+async function extractWithFallback(
+  apiKey: string, model: string, mimeType: string, base64: string,
+): Promise<{ rows: AiRow[] | null; reason: string }> {
+  let reason = "";
+  const first = await extractWithGemini(apiKey, model, mimeType, base64, (r) => { reason = r; });
+  if (first) return { rows: first, reason: "" };
+  if (model !== FALLBACK_MODEL && isBusyOrSlow(reason)) {
+    console.warn(`[ai/extract-statement] ${model} failed (${reason}) — trying ${FALLBACK_MODEL}`);
+    const second = await extractWithGemini(apiKey, FALLBACK_MODEL, mimeType, base64, (r) => { reason = r; });
+    if (second) return { rows: second, reason: "" };
+  }
+  return { rows: null, reason };
+}
+
+async function extractWithGemini(
+  apiKey: string, model: string, mimeType: string, base64: string, onFailure?: (reason: string) => void,
+): Promise<AiRow[] | null> {
   /* Pehle yahan apna `fetch` tha — aur iske paas timeout bhi nahi tha. Ye bank statement
      padhta hai, yaani seedha paise ka data, aur ek atki hui call operator ko spinner par
      baithaye rakhti.
@@ -83,14 +109,17 @@ async function extractWithGemini(apiKey: string, model: string, mimeType: string
      prompt column-order aur date-format ke bahut se niyam rakhta hai, aur use doosri jagah
      sarkane se nateeja badal sakta tha. Isliye geminiJson ka `system` optional hai.
 
-     Timeout 30s: pehle KOI nahi tha, aur PDF ka jawab text se dheema aata hai. */
+     Timeout 60s: pehle KOI nahi tha, phir 30s — par 25 Sep 2026 ko ek poore mahine ki
+     statement 30s me do baar time out hui. PDF ka jawab text se dheema aata hai, aur
+     operator ke saamne progress spinner chalta rehta hai. */
   const json = await geminiJson<{ rows?: AiRow[] }>({
     apiKey, model,
     user: PROMPT,
     attachment: { mimeType, base64 },
     temperature: 0,
-    timeoutMs: 30_000,
+    timeoutMs: 60_000,
     label: "ai/extract-statement",
+    onFailure,
   });
   if (!json) return null;
   return Array.isArray(json.rows) ? json.rows : [];
@@ -121,11 +150,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const ai = await extractWithGemini(gemini.apiKey, gemini.model, parsed.mimeType, parsed.fileBase64);
+  const { rows: ai, reason } = await extractWithFallback(gemini.apiKey, gemini.model, parsed.mimeType, parsed.fileBase64);
   if (!ai) {
-    return NextResponse.json({ error: "Couldn't read this statement. Try the CSV download from net banking instead." }, { status: 502 });
+    /* Say WHICH failure it was. "Couldn't read this statement" used to cover a busy
+       Google, a timeout and an unopenable file alike — three different next steps. */
+    const why = isBusyOrSlow(reason)
+      ? "Google's AI is busy or slow right now. Try again in a minute"
+      : /\b400\b|invalid argument/i.test(reason)
+        ? "The AI couldn't open this file (a password-protected or damaged PDF does this)"
+        : reason
+          ? `The AI reader failed — ${reason.replace(/\.$/, "")}`
+          : "The AI reader failed";
+    return NextResponse.json(
+      { error: `${why}. The CSV / "Delimited" download from net banking always works and needs no AI.` },
+      { status: 502 },
+    );
   }
 
-  const { rows, skipped } = sanitizeRows(ai);
-  return NextResponse.json({ rows, skipped, mode: "gemini" });
+  const clean = sanitizeRows(ai);
+  /* Real calendar dates only (the reader has returned "2026-21-08" for 21 Aug). Swaps are
+     decided for the whole statement; a date impossible either way is dropped and counted. */
+  const fix = fixStatementDates(clean.rows.map((r) => r.txn_date), localDateISO(new Date(Date.now() + 86_400_000)));   // +1 day: server clock may be UTC
+  const rows = clean.rows.flatMap((r, i) => (fix.dates[i] ? [{ ...r, txn_date: fix.dates[i]! }] : []));
+  const skipped = clean.skipped + (clean.rows.length - rows.length);
+  return NextResponse.json({ rows, skipped, mode: "gemini", datesSwapped: fix.swapped, datesSwappedAll: fix.swappedAll });
 }

@@ -62,7 +62,8 @@ export default function BalanceSheetPage() {
 
   const autoAssets =
     (auto?.cashAndBank ?? 0) + (auto?.receivables ?? 0) + (auto?.projectReceivable ?? 0) + (auto?.tdsReceivable ?? 0)
-    + (auto?.employeeLoans ?? 0) + (auto?.prepaidAdvances ?? 0) + (auto?.fixedAssets ?? 0) + gstCredit;
+    + (auto?.employeeLoans ?? 0) + (auto?.prepaidAdvances ?? 0) + (auto?.fixedAssets ?? 0) + gstCredit
+    + (auto?.advanceTaxPaid ?? 0);
   const autoLiab = (auto?.payables ?? 0) + (auto?.advancesFromCustomers ?? 0) + (auto?.salaryPayable ?? 0) + (auto?.salaryDuesPayable ?? 0) + (auto?.reimbursementsPayable ?? 0) + (auto?.creditCardPayable ?? 0) + (auto?.emiLoansPayable ?? 0) + (auto?.businessLoansPayable ?? 0) + gstPayable;
 
   const manualAssetRows = manual("asset");
@@ -79,7 +80,7 @@ export default function BalanceSheetPage() {
   // EMI / business loans) are EXCLUDED from the current buckets.
   const currentAssets =
     (auto?.cashAndBank ?? 0) + (auto?.receivables ?? 0) + (auto?.projectReceivable ?? 0)
-    + (auto?.tdsReceivable ?? 0) + gstCredit + sum(manualAssetRows);
+    + (auto?.tdsReceivable ?? 0) + gstCredit + (auto?.advanceTaxPaid ?? 0) + sum(manualAssetRows);
   const currentLiab =
     (auto?.payables ?? 0) + (auto?.advancesFromCustomers ?? 0) + (auto?.salaryPayable ?? 0) + (auto?.salaryDuesPayable ?? 0)
     + (auto?.reimbursementsPayable ?? 0) + (auto?.creditCardPayable ?? 0) + gstPayable + sum(manualLiabRows);
@@ -104,6 +105,7 @@ export default function BalanceSheetPage() {
         ["Prepaid / vendor advances", auto.prepaidAdvances ?? 0],
         ["Fixed assets", auto.fixedAssets ?? 0],
         ["GST input credit (ITC)", gstCredit],
+        [`Advance tax paid (${auto.fyLabel})`, auto.advanceTaxPaid ?? 0],
         ...manualAssetRows.map((r): [string, number] => [r.label, r.amount]),
         ["Total assets", totalAssets],
         ["", ""],
@@ -241,6 +243,9 @@ export default function BalanceSheetPage() {
                   <BSLine label="Fixed assets (EMI purchases)" hint="vehicles, equipment at cost" amount={auto?.fixedAssets ?? 0} kind="auto" source="Assets & EMIs" href="/accounting/assets" />
                 )}
                 {gstCredit > 0 && <BSLine label="GST input credit (ITC)" amount={gstCredit} kind="auto" source="GST Reports" href="/accounting/gst" />}
+                {(auto?.advanceTaxPaid ?? 0) > 0 && (
+                  <BSLine label="Advance tax paid" hint={`advance + self-assessment income tax, ${auto?.fyLabel ?? "this FY"}`} amount={auto?.advanceTaxPaid ?? 0} kind="auto" source="Banking (tax payments)" href="/accounting/banking" />
+                )}
                 <ManualLines
                   rows={manualAssetRows}
                   onEdit={setEditItem}
@@ -277,7 +282,13 @@ export default function BalanceSheetPage() {
                   <BSLine label="Bank / business loans" hint="outstanding principal on borrowings" amount={auto?.businessLoansPayable ?? 0} kind="auto" source="Business Loans" href="/accounting/business-loans" />
                 )}
                 {gstPayable > 0 && (
-                  <BSLine label="GST payable" hint={`net, ${auto?.fyLabel ?? "this FY"} — before filing`} amount={gstPayable} kind="auto" source="GST Reports" href="/accounting/gst" />
+                  <BSLine
+                    label="GST payable"
+                    hint={(auto?.gstPaid ?? 0) > 0
+                      ? `net, ${auto?.fyLabel ?? "this FY"} — after ${rupee(auto?.gstPaid ?? 0)} already paid`
+                      : `net, ${auto?.fyLabel ?? "this FY"} — before filing`}
+                    amount={gstPayable} kind="auto" source="GST Reports" href="/accounting/gst"
+                  />
                 )}
                 <ManualLines
                   rows={manualLiabRows}

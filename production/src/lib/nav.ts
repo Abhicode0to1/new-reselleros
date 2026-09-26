@@ -456,6 +456,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/ledger":        ["Accounting", "Ledger"],
   "/accounting/banking":       ["Accounting", "Banking"],
   "/accounting/banking/[id]":  ["Accounting", "Banking", "Account"],
+  "/accounting/banking/rules": ["Accounting", "Banking", "Category Rules"],
   "/accounting/business-loans": ["Accounting", "Business Loans"],
   "/accounting/pnl":           ["Accounting", "P&L Report"],
   "/accounting/balance-sheet": ["Accounting", "Balance Sheet"],

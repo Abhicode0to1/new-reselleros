@@ -48,6 +48,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/accounting/balance-sheet", file: "src/app/(app)/accounting/balance-sheet/page.tsx" },
   { route: "/accounting/banking", file: "src/app/(app)/accounting/banking/page.tsx" },
   { route: "/accounting/banking/[id]", file: "src/app/(app)/accounting/banking/[id]/page.tsx" },
+  { route: "/accounting/banking/rules", file: "src/app/(app)/accounting/banking/rules/page.tsx" },
   { route: "/accounting/bill-payments", file: "src/app/(app)/accounting/bill-payments/page.tsx" },
   { route: "/accounting/bills", file: "src/app/(app)/accounting/bills/page.tsx" },
   { route: "/accounting/business-loans", file: "src/app/(app)/accounting/business-loans/page.tsx" },

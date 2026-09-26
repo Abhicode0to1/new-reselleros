@@ -72,10 +72,17 @@ export interface VendorLine {
 
 export interface PnlPeriod {
   revenue: number;
-  /** ₹, on whichever basis `cogsBasis` names. */
+  /** ₹, on whichever basis `cogsBasis` names — licence cost + project delivery cost. */
   cogs: number;
+  /** The basis of the LICENCE part. Project delivery cost is always a booked figure. */
   cogsBasis: CogsBasis;
-  /** Operating expenses — salaries, hosting, office. NOT cost of goods. */
+  /** Licence / resale cost (0 when the basis is `unknown`). */
+  licenceCogs: number;
+  /** Salary on customer projects + project-tagged expenses (lib/accounting/project-cost.ts). */
+  projectCost: number;
+  /** Revenue invoiced against project milestones — not costed like a licence. */
+  projectRevenue: number;
+  /** Operating expenses — salaries, hosting, office. NOT cost of goods, so net of projectCost. */
   expenses: number;
   /** revenue − cogs. Null when the basis is `unknown`. */
   grossMargin: number | null;
@@ -145,7 +152,15 @@ export function vendorLine(v: VendorInput): VendorLine {
 
 export interface PnlInput {
   revenue: number;
+  /** Every operating cost booked in the period, INCLUDING the part that is project cost. */
   expenses: number;
+  /**
+   * The part of `expenses` that is project delivery cost (project-cost.ts). It is moved,
+   * not added: cost of goods goes up and operating expenses go down by the same rupees.
+   */
+  projectCost?: number;
+  /** Part of `revenue` invoiced against projects — the licence ratio is not applied to it. */
+  projectRevenue?: number;
   /** Total ₹ of vendor bills in the period. Null when the table holds none. */
   billedCogs: number | null;
   vendors: VendorInput[];
@@ -182,8 +197,14 @@ export function buildPnl(input: PnlInput): PnlPeriod {
      costed like a licence, which is why the fix is a vendor bill, not a better guess. */
   const bookRevenue = byVendor.reduce((s, v) => s + v.revenue, 0);
   const bookCost = byVendor.reduce((s, v) => s + v.cost, 0);
+  /* Project revenue is software the team built, not a licence bought — costing it at the
+     licence ratio is the "one-off consulting job costed like a licence" error above. Its
+     cost is the project delivery cost, which is booked, so only the rest is estimated. */
+  const projectRevenue = Math.min(Math.max(0, input.projectRevenue ?? 0), input.revenue);
+  const projectCost = Math.max(0, input.projectCost ?? 0);
+  const licenceRevenue = input.revenue - projectRevenue;
   const estimated = bookRevenue > 0
-    ? Math.round(input.revenue * (bookCost / bookRevenue))
+    ? Math.round(licenceRevenue * (bookCost / bookRevenue))
     : bookCost;
 
   /* `unknown` only when there is genuinely nothing to go on: no bills, no estimate, and
@@ -208,21 +229,27 @@ export function buildPnl(input: PnlInput): PnlPeriod {
     cogsBasis = "estimated";
   } else {
     cogs = 0;
-    cogsBasis = input.revenue > 0 && anyResoldWithoutCost ? "unknown" : "billed";
+    cogsBasis = licenceRevenue > 0 && anyResoldWithoutCost ? "unknown" : "billed";
   }
 
+  const licenceCogs = cogs;
+  cogs = licenceCogs + projectCost;
+  const expenses = input.expenses - projectCost;
   const grossMargin = cogsBasis === "unknown" ? null : input.revenue - cogs;
   const grossMarginPct =
     grossMargin === null || input.revenue <= 0
       ? null
       : Math.round((grossMargin / input.revenue) * 100);
-  const netProfit = grossMargin === null ? null : grossMargin - input.expenses;
+  const netProfit = grossMargin === null ? null : grossMargin - expenses;
 
   return {
     revenue: input.revenue,
     cogs,
     cogsBasis,
-    expenses: input.expenses,
+    licenceCogs,
+    projectCost,
+    projectRevenue,
+    expenses,
     grossMargin,
     grossMarginPct,
     netProfit,
@@ -323,12 +350,14 @@ export function vendorsFromSubscriptions(
 export function cogsBasisNote(p: PnlPeriod): string {
   switch (p.cogsBasis) {
     case "billed":
+      if (p.projectCost > 0 && p.licenceCogs === 0) return "Project delivery cost only — salary on customer projects and project-tagged expenses. No licence cost in this period.";
       return p.cogs > 0
         ? "From vendor bills recorded for this period."
         : "No cost of goods for this period — nothing bought to resell.";
     case "estimated":
       return "Estimated: no vendor bills are recorded, so your subscription book's wholesale-to-price ratio has been applied to what you invoiced. It holds while what you bill looks like what you sell — enter the vendor's invoices to make it exact.";
     case "unknown":
+      if (p.projectCost > 0) return "The licence cost is not recorded, so the margin cannot be shown — only the project delivery cost (salary on customer projects) is. A licence you buy and resell is never 100% profit.";
       return "Cost of goods is not recorded, so the margin cannot be shown. A licence you buy and resell is never 100% profit.";
   }
 }

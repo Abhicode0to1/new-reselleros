@@ -95,3 +95,12 @@ describe("suggestCategory — PAKKE shabd lambe naam me bhi chalte hain", () => 
     )).toBe("Hosting");
   });
 });
+
+describe("suggestCategory — director's pay", () => {
+  it.each(["Director remuneration July", "directors salary", "sitting fee for board meeting", "Managerial remuneration Q1"])(
+    "%s → Director's Remuneration", (note) => expect(suggestCategory(note)).toBe("Director's Remuneration"),
+  );
+  it("plain salary is still never guessed (it belongs to Payroll)", () => {
+    expect(suggestCategory("salary for July")).not.toBe("Salaries");
+  });
+});

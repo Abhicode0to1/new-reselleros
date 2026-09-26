@@ -52,6 +52,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useCreateLead, useUpdateLead, useLeads } from "@/lib/queries/leads";
 import { normPhone, normCompany } from "@/lib/leads/duplicates";
+import { PROJECT_PLAN_LABEL } from "@/lib/leads/enquiry";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -128,12 +129,24 @@ const PLAN_PRICE_PER_SEAT_PM: Record<string, number> = {
  * red-flag a field two steps ahead that nobody has reached — the same "shouting at an
  * untouched field" that the validation pills exist to prevent.
  */
-const STEP_LABELS = ["Contact", "Product & seats", "Review"] as const;
+const STEP_LABELS = ["Contact", "Enquiry", "Review"] as const;
 const STEP_FIELDS = [
   ["company", "contact_name", "contact_email", "contact_phone", "gstin"],
-  ["plan", "seats", "value", "stage", "source", "priority", "subscription_type",
-   "follow_up_date", "owner_id", "notes"],
+  ["enquiry_type", "plan", "seats", "value", "requirement", "project_timeline", "stage", "source", "priority",
+   "subscription_type", "follow_up_date", "owner_id", "notes"],
 ] as const;
+
+/* ── Two kinds of enquiry ─────────────────────────────────────────────────────
+   A licence enquiry is a plan × seats; a custom-software enquiry is a requirement, a
+   budget and a timeline — seats mean nothing to it. The form used to force the second
+   into "Custom / Mixed" with a seat count, and "Send quote" could only build a licence
+   quote. The enquiry type decides which fields show and which quote it gets
+   (migration 20260926110000). */
+const ENQUIRY_TYPES = [
+  { value: "subscription", label: "Subscription", hint: "Google / Microsoft / Zoho seats" },
+  { value: "project",      label: "Custom software / project", hint: "Kuch banwana hai — app, ERP, website…" },
+] as const;
+
 
 /** A step's fields, or nothing. Kept as a component so the wrapper div is consistent. */
 function Step({ show, children }: { show: boolean; children: React.ReactNode }) {
@@ -212,6 +225,9 @@ const schema = z.object({
   contact_email: z.string().email("Invalid email").optional().or(z.literal("")),
   contact_phone: z.string().optional(),
   gstin:         z.string().optional().or(z.literal("")),
+  enquiry_type:  z.enum(["subscription", "project"]),
+  requirement:   z.string().optional().or(z.literal("")),
+  project_timeline: z.string().optional().or(z.literal("")),
   plan:          z.string().optional().or(z.literal("")),
   seats:         optionalIntField(10000),
   value:         optionalIntField(100_000_000),
@@ -268,6 +284,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
   const [plan, setPlan]         = React.useState<string>(editingLead?.plan ?? "");
   const [priority, setPriority] = React.useState<LeadPriority>((editingLead?.priority as LeadPriority) ?? "medium");
   const [ownerId, setOwnerId]   = React.useState<string>(editingLead?.owner_id ?? "");
+  const [enquiry, setEnquiry]   = React.useState<FormData["enquiry_type"]>(editingLead?.enquiry_type ?? "subscription");
+  const isProject = enquiry === "project";
 
   // Contacts Picker API support detection. Currently Android Chrome / Edge
   // mobile only; iOS Safari + Firefox + desktop all fall back to manual.
@@ -299,6 +317,9 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           contact_email:  editingLead.contact_email ?? "",
           contact_phone:  editingLead.contact_phone ?? "",
           gstin:          editingLead.gstin         ?? "",
+          enquiry_type:   editingLead.enquiry_type  ?? "subscription",
+          requirement:    editingLead.requirement   ?? "",
+          project_timeline: editingLead.project_timeline ?? "",
           plan:           editingLead.plan          ?? "",
           // Display null seats/value as blank (not 1/0) so raw leads being
           // edited don't suddenly look like real deals with phantom numbers.
@@ -313,6 +334,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           notes:          editingLead.notes         ?? "",
         }
       : {
+          enquiry_type: "subscription",
           stage:    defaultStage ?? "new",
           source:   "manual",
           priority: "medium",
@@ -451,7 +473,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
   // Editing existing leads is unaffected — the reset() block above carries
   // whatever values the lead was saved with.
   React.useEffect(() => {
-    if (editingLead) return;
+    if (editingLead || isProject) return;
     if (plan) {
       const currentSeats = getValues("seats");
       if (!currentSeats || Number.isNaN(currentSeats) || currentSeats < 1) {
@@ -463,7 +485,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       setValue("seats", undefined as unknown as number, { shouldDirty: true });
       setValue("value", undefined as unknown as number, { shouldDirty: true });
     }
-  }, [plan, editingLead, getValues, setValue]);
+  }, [plan, editingLead, isProject, getValues, setValue]);
 
   // Reset form when modal closes OR when editingLead changes (re-fills defaults).
   React.useEffect(() => {
@@ -473,6 +495,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       setSource("manual");
       setPlan("");
       setPriority("medium");
+      setEnquiry("subscription");
       // For a fresh "Add lead" the owner defaults to the currently logged-in
       // user — sales reps own their own intake by default. They can re-assign.
       setOwnerId(me?.userId ?? "");
@@ -485,6 +508,9 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         contact_email:  editingLead.contact_email ?? "",
         contact_phone:  editingLead.contact_phone ?? "",
         gstin:          editingLead.gstin         ?? "",
+        enquiry_type:   editingLead.enquiry_type  ?? "subscription",
+        requirement:    editingLead.requirement   ?? "",
+        project_timeline: editingLead.project_timeline ?? "",
         plan:           editingLead.plan          ?? "",
         seats:          editingLead.seats         ?? undefined,
         value:          editingLead.value         ?? undefined,
@@ -501,6 +527,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       setPlan(editingLead.plan ?? "");
       setPriority((editingLead.priority as LeadPriority) ?? "medium");
       setOwnerId(editingLead.owner_id ?? "");
+      setEnquiry(editingLead.enquiry_type ?? "subscription");
     } else {
       // New-lead default: owner = current user.
       setOwnerId(me?.userId ?? "");
@@ -543,8 +570,13 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       // Normalize empties → null so the DB row honors "not qualified yet".
       // A raw lead (no plan/seats/value) lives in Inbox; once these get set,
       // it transitions into the Deal Pipeline.
-      const planVal  = data.plan?.trim()  ? data.plan  : null;
-      const seatsVal = (data.seats !== undefined && data.seats !== null && !Number.isNaN(data.seats) && data.seats > 0) ? data.seats : null;
+      /* A project enquiry is "qualified" once there is a requirement — it carries a fixed
+         plan label so every pipeline view that keys on `plan` treats it the same way. It
+         never carries seats or a licence subscription type. */
+      const project  = data.enquiry_type === "project";
+      const requirementVal = project && data.requirement?.trim() ? data.requirement.trim() : null;
+      const planVal  = project ? (requirementVal ? PROJECT_PLAN_LABEL : null) : (data.plan?.trim() ? data.plan : null);
+      const seatsVal = !project && (data.seats !== undefined && data.seats !== null && !Number.isNaN(data.seats) && data.seats > 0) ? data.seats : null;
       const valueVal = (data.value !== undefined && data.value !== null && !Number.isNaN(data.value) && data.value > 0) ? data.value : null;
 
       const sharedPatch = {
@@ -556,6 +588,9 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         contact_email:  data.contact_email || null,
         contact_phone:  data.contact_phone || null,
         gstin:          data.gstin?.trim().toUpperCase() || null,
+        enquiry_type:   data.enquiry_type,
+        requirement:    requirementVal,
+        project_timeline: project ? (data.project_timeline?.trim() || null) : null,
         plan:           planVal,
         seats:          seatsVal,
         value:          valueVal,
@@ -564,7 +599,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         priority:       data.priority,
         follow_up_date: data.follow_up_date || null,
         owner_id:       data.owner_id       || null,
-        subscription_type: data.subscription_type || null,
+        subscription_type: project ? null : (data.subscription_type || null),
         notes:          data.notes          || null,
       };
 
@@ -829,6 +864,73 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
 
           <Step show={!useSteps || step === 2}>
 
+          {/* What the enquiry is FOR decides every field below it. */}
+          <FormField label="Enquiry kis cheez ki hai?" htmlFor="enquiry_type">
+            <div id="enquiry_type" role="radiogroup" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {ENQUIRY_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={enquiry === t.value}
+                  onClick={() => {
+                    setEnquiry(t.value);
+                    setValue("enquiry_type", t.value, { shouldDirty: true });
+                  }}
+                  className={cn(
+                    "rounded-md border px-3 py-2 text-left transition-colors",
+                    enquiry === t.value ? "border-amber bg-amber-soft/40" : "border-hairline hover:bg-paper-2",
+                  )}
+                >
+                  <div className="text-sm font-medium text-ink">{t.label}</div>
+                  <div className="text-2xs text-ink-3">{t.hint}</div>
+                </button>
+              ))}
+            </div>
+            <input type="hidden" {...register("enquiry_type")} value={enquiry} />
+          </FormField>
+
+          {isProject ? (
+            <>
+              <FormField label="Kya banwana hai?" htmlFor="requirement">
+                <textarea
+                  id="requirement"
+                  rows={3}
+                  placeholder="e.g. School ERP — fees, attendance, parent app; ya inventory + billing software"
+                  className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-amber resize-y"
+                  {...register("requirement")}
+                />
+                <p className="text-2xs text-ink-3 mt-1">
+                  {(watch("requirement") ?? "").trim()
+                    ? "Requirement hai — Deal Pipeline mein qualified project opportunity ki tarah jaayegi."
+                    : "Khaali chhodo to Lead Inbox mein jaayegi — baad mein requirement likh sakte ho."}
+                </p>
+              </FormField>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="Anumaanit budget (₹, GST se pehle)" htmlFor="value">
+                  <Input
+                    id="value"
+                    type="text"
+                    inputMode="numeric"
+                    prefix="₹"
+                    error={errors.value?.message}
+                    value={valueText}
+                    onChange={(e) => {
+                      const next = liveMoney(e.target.value);
+                      setValueText(next);
+                      setValue("value", parseMoney(next) ?? undefined, { shouldDirty: true });
+                    }}
+                    onBlur={() => setValueText((t) => commitMoney(t))}
+                  />
+                  <FieldPill check={checkMoney(valueText)} />
+                </FormField>
+                <FormField label="Kab tak chahiye?" htmlFor="project_timeline">
+                  <Input id="project_timeline" placeholder="e.g. 3 months, Diwali se pehle" {...register("project_timeline")} />
+                </FormField>
+              </div>
+            </>
+          ) : (
+          <>
           {/* Plan — optional. If empty → lead lands in Inbox (raw, awaiting
               qualification). If picked → lead enters Pipeline as a deal. */}
           <FormField label="Interested plan" htmlFor="plan">
@@ -910,6 +1012,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               )}
             </FormField>
           </div>
+          </>
+          )}
 
           {/* Stage + Source + Priority — 3 status fields together */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -933,7 +1037,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 </SelectContent>
               </Select>
               <input type="hidden" {...register("stage")} value={stage} />
-              {!plan && (
+              {!isProject && !plan && (
                 <p className="mt-1 text-3xs text-ink-3 leading-snug">
                   Pick a plan to unlock Demo / Trial / Quote / Won.
                 </p>
@@ -986,7 +1090,9 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
             </FormField>
           </div>
 
-          {/* New vs switching — is the prospect already subscribed elsewhere? */}
+          {/* New vs switching — is the prospect already subscribed elsewhere? A licence
+              question only; a custom-software project has nothing to switch from. */}
+          {!isProject && (
           <FormField label="New or switching?" htmlFor="subscription_type">
             <select
               id="subscription_type"
@@ -1001,6 +1107,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               &ldquo;Switching&rdquo; = they already use this product, just moving billing/reseller to you (migration).
             </p>
           </FormField>
+          )}
 
           {/* Follow-up date + Owner — sales workflow row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1072,9 +1179,20 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 <Review label="Phone"       value={watch("contact_phone")} />
                 <Review label="GSTIN"       value={watch("gstin")} mono
                         note={gstinState(watch("gstin") ?? "")?.name} />
-                <Review label="Plan"        value={plan} />
-                <Review label="Seats"       value={watchedSeats == null ? "" : String(watchedSeats)} />
-                <Review label="Deal value"  value={valueText ? `₹${valueText}` : ""} />
+                <Review label="Enquiry"     value={ENQUIRY_TYPES.find((t) => t.value === enquiry)?.label} />
+                {isProject ? (
+                  <>
+                    <Review label="Requirement" value={watch("requirement")} />
+                    <Review label="Budget (pre-GST)" value={valueText ? `₹${valueText}` : ""} />
+                    <Review label="Timeline"    value={watch("project_timeline")} />
+                  </>
+                ) : (
+                  <>
+                    <Review label="Plan"        value={plan} />
+                    <Review label="Seats"       value={watchedSeats == null ? "" : String(watchedSeats)} />
+                    <Review label="Deal value"  value={valueText ? `₹${valueText}` : ""} />
+                  </>
+                )}
                 <Review label="Stage"       value={STAGES.find((s) => s.value === stage)?.label} />
                 <Review label="Priority"    value={PRIORITY_OPTIONS.find((p) => p.value === priority)?.label} />
               </dl>

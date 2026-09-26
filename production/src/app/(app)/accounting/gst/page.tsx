@@ -26,6 +26,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
 import { expenseGstHeads } from "@/lib/accounting/gst-heads";
+import { gstPaidForPeriods } from "@/lib/accounting/tax-payments";
+import { useTaxPayments } from "@/lib/queries/tax-payments";
 import { rupee, formatDate, GST_STATE_BY_CODE } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Term } from "@/components/shared/term";
@@ -479,6 +481,8 @@ const QUICK_RANGES = [thisMonth, lastMonth, thisQuarter];
 export default function GstReportPage() {
   const [range, setRange] = React.useState<DateRange>(thisMonth());
   const { data, isLoading } = useGstReport(range);
+  const { data: taxPayments } = useTaxPayments();
+  const gstPaidInRange = gstPaidForPeriods(taxPayments ?? [], range.from.slice(0, 7), range.to.slice(0, 7));
 
   function exportOutput() {
     if (!data) return;
@@ -670,6 +674,19 @@ export default function GstReportPage() {
                   ? "Payable to government via GSTR-3B"
                   : "Refundable / carry-forward input tax credit"}
               </div>
+              {/* GST already paid for these return months (booked from the bank). Shown
+                  only when some was paid, so an unpaid month still reads as plain "payable". */}
+              {data && gstPaidInRange > 0 && (
+                <div className="mt-2 pt-2 border-t border-amber/20 text-2xs space-y-0.5 tabular-nums">
+                  <div className="flex justify-between text-ink-2">
+                    <span>Paid for these months</span><span>− {rupee(gstPaidInRange)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-ink">
+                    <span>{data.netLiability - gstPaidInRange >= 0 ? "Still to pay" : "Paid more than due"}</span>
+                    <span>{rupee(Math.abs(data.netLiability - gstPaidInRange))}</span>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </Card>

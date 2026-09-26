@@ -181,3 +181,21 @@ describe("the Waiting on you view", () => {
     expect(screen.getByText(/stopped and asked for a person/i)).toBeTruthy();
   });
 });
+
+describe("the page opens on every lead — won and lost included", () => {
+  /* 26 Sep 2026: the only lead moved to Won and the pipeline opened on "No leads match".
+     Nothing was wrong with the data; the default view was "All open". The default is now
+     "All leads", and its count is every non-junk lead, closed ones too. */
+  it('the default view reads "All leads" with the full count', () => {
+    render(<LeadsSmartViews leads={[]} everythingCount={3} active="everything" onChange={() => {}} />);
+    expect(screen.getByText("All leads")).toBeTruthy();
+    expect(screen.getByText("3")).toBeTruthy();
+  });
+
+  it("All open is still offered, and choosing it counts as narrowing the list", () => {
+    render(<LeadsSmartViews leads={[lead()]} everythingCount={2} active="everything" onChange={() => {}} />);
+    fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
+    expect(screen.getByText("All open")).toBeTruthy();
+    expect(screen.getByText(/open, won aur lost/)).toBeTruthy();
+  });
+});

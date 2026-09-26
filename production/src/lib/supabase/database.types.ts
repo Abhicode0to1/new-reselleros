@@ -457,7 +457,8 @@ export type BankTransactionSource =
   | "manual" | "csv_upload" | "api_fetch";
 
 export type BankMatchToType =
-  | "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | "statutory";
+  | "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | "statutory"
+  | "prepaid";   // migration 20260925160000 — line funded a prepaid advance
 
 export type BankMatchConfidence =
   | "exact" | "high" | "low" | "manual";
@@ -909,6 +910,14 @@ type LeadRow = {
   id: string;
   tenant_id: string;
   company: string;
+  /** Migration 20260926110000 — what the enquiry is for. 'project' = custom software. */
+  enquiry_type: "subscription" | "project";
+  /** Project enquiry: what the client wants built. */
+  requirement: string | null;
+  /** Project enquiry: when they want it, free text. */
+  project_timeline: string | null;
+  /** The project quotation raised for this lead (project_sales.id). */
+  project_id: string | null;
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
@@ -1060,6 +1069,10 @@ type LeadInsert = {
   id: string;
   tenant_id: string;
   company: string;
+  enquiry_type?: "subscription" | "project";
+  requirement?: string | null;
+  project_timeline?: string | null;
+  project_id?: string | null;
   contact_name?: string | null;
   contact_email?: string | null;
   contact_phone?: string | null;
@@ -2674,6 +2687,42 @@ type StatutoryDuesPaymentInsert = {
 };
 type StatutoryDuesPaymentUpdate = Partial<Omit<StatutoryDuesPaymentInsert, "tenant_id">>;
 
+// GST + income-tax payments booked from bank lines (migration 20260925140000).
+// Separate from statutory_dues_payments so TDS/PF/ESI totals never include GST.
+export type TaxPaymentKind = "gst" | "advance_tax" | "self_assessment_tax";
+type TaxPaymentRow = {
+  id:              string;
+  tenant_id:       string;
+  kind:            TaxPaymentKind;
+  amount:          number;          // tax only, whole rupees
+  interest:        number;
+  late_fee:        number;
+  period:          string | null;   // gst: YYYY-MM return month
+  fy:              string | null;   // income tax: YYYY-YY
+  paid_on:         string;
+  bank_account_id: string | null;
+  bank_txn_id:     string | null;
+  expense_id:      string | null;   // interest + late fee expense
+  notes:           string | null;
+  created_at:      string;
+};
+type TaxPaymentInsert = {
+  id?:              string;
+  tenant_id:        string;
+  kind:             TaxPaymentKind;
+  amount:           number;
+  interest?:        number;
+  late_fee?:        number;
+  period?:          string | null;
+  fy?:              string | null;
+  paid_on:          string;
+  bank_account_id?: string | null;
+  bank_txn_id?:     string | null;
+  expense_id?:      string | null;
+  notes?:           string | null;
+};
+type TaxPaymentUpdate = Partial<Omit<TaxPaymentInsert, "tenant_id">>;
+
 // Customer advance credit — money received over the expected amount (migration 0141).
 export type CustomerCreditRow = {
   id:                string;
@@ -3838,6 +3887,8 @@ export type PrepaidAdvanceRow = {
   created_by:      string | null;
   created_at:      string;
   updated_at:      string;
+  /** The bank line that funded it (migration 20260925160000); null when entered by hand. */
+  bank_txn_id?:    string | null;
 };
 type PrepaidAdvanceInsert = {
   id?:              string;
@@ -4176,6 +4227,7 @@ export type Database = {
       project_payments:  { Row: ProjectPaymentRow;   Insert: ProjectPaymentInsert;   Update: ProjectPaymentUpdate;   Relationships: [] };
       documents:         { Row: DocumentRow;         Insert: DocumentInsert;         Update: DocumentUpdate;         Relationships: [] };
       statutory_dues_payments:{ Row: StatutoryDuesPaymentRow; Insert: StatutoryDuesPaymentInsert; Update: StatutoryDuesPaymentUpdate; Relationships: [] };
+      tax_payments:           { Row: TaxPaymentRow; Insert: TaxPaymentInsert; Update: TaxPaymentUpdate; Relationships: [] };
       customer_credits:{ Row: CustomerCreditRow; Insert: CustomerCreditInsert; Update: CustomerCreditUpdate; Relationships: [] };
       credit_notes:    { Row: CreditNoteRow;      Insert: CreditNoteInsert;      Update: CreditNoteUpdate;      Relationships: [] };
       debit_notes:     { Row: DebitNoteRow;       Insert: DebitNoteInsert;       Update: DebitNoteUpdate;       Relationships: [] };
@@ -4330,6 +4382,16 @@ export type Database = {
       consume_prepaid_advance: {
         Args: { p_advance_id: string; p_amount: number; p_date?: string; p_note?: string | null; p_gst?: number; p_attachment?: string | null };
         Returns: number;
+      };
+      /** Migration 20260925160000 — one vendor invoice, oldest open advances first. */
+      consume_prepaid_fifo: {
+        Args: { p_vendor_name: string; p_amount: number; p_gst?: number; p_date?: string; p_note?: string | null; p_attachment?: string | null };
+        Returns: number;
+      };
+      /** Migration 20260925160000 — money-out bank line → prepaid advance, reconciled. */
+      book_bank_txn_as_prepaid: {
+        Args: { p_txn_id: string; p_vendor_name: string; p_category?: string; p_notes?: string | null };
+        Returns: string;
       };
       /** In-app backup (migration 0211) — owner-only, tenant-scoped snapshot of the caller's own data. */
       create_tenant_backup: {
@@ -5163,6 +5225,26 @@ export type Database = {
       book_bank_txn_as_statutory: {
         Args: { p_txn_id: string; p_kind: string; p_notes?: string | null };
         Returns: undefined;
+      };
+      add_project_receipt_milestone: {
+        Args: { p_project_id: string; p_amount: number; p_label?: string | null };
+        Returns: string;
+      };
+      unreconcile_bank_receipt: {
+        Args: { p_txn_id: string; p_undo_sale?: boolean };
+        Returns: Json;
+      };
+      record_project_receipt_with_tds: {
+        Args: { p_milestone_id: string; p_net: number; p_tds: number; p_section: string; p_rate_pct: number; p_tds_base: number; p_received_at: string; p_bank_txn_id: string | null; p_reference: string | null; p_raise_invoice?: boolean };
+        Returns: Json;
+      };
+      create_project_quote_from_lead: {
+        Args: { p_lead_id: string; p_title: string; p_description: string | null; p_line_items: Json; p_gst_rate: number; p_inter_state: boolean; p_milestones: Json };
+        Returns: string;
+      };
+      book_bank_txn_as_tax: {
+        Args: { p_txn_id: string; p_kind: string; p_period?: string | null; p_fy?: string | null; p_interest?: number; p_late_fee?: number; p_notes?: string | null };
+        Returns: string;
       };
       redeem_customer_credits: {
         Args: { p_customer_id: string; p_amount: number; p_note?: string | null };

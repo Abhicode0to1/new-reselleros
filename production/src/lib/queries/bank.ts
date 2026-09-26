@@ -51,11 +51,13 @@ export type BankTransactionRow = {
   balance_after:    number | null;
   reference:        string | null;
   source:           "manual" | "csv_upload" | "api_fetch";
-  matched_to_type:  "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | null;
+  matched_to_type:  "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | "statutory" | "prepaid" | null;
   matched_to_id:    string | null;
   matched_at:       string | null;
   matched_by:       string | null;
   match_confidence: "exact" | "high" | "low" | "manual" | null;
+  /** Category given at import (rule / keyword / operator) — a suggestion, not a booking. */
+  category?:        string | null;
   imported_at:      string;
   created_at:       string;
   updated_at:       string;
@@ -436,6 +438,21 @@ export function bankTxnKey(r: { txn_date?: string | null; debit?: number | null;
   return `${d}|${Math.round(r.debit ?? 0)}|${Math.round(r.credit ?? 0)}|${desc}`;
 }
 
+/**
+ * Every identity a bank line has: the description key above, plus — when the statement
+ * printed a running balance — date + amount + balance. The balance changes after every
+ * line, so two different lines never share all three; the same line read twice (CSV once,
+ * the AI from a PDF once) always does, however differently its narration came out.
+ * A line is a duplicate when ANY of its keys is already known.
+ */
+export function bankTxnKeys(r: { txn_date?: string | null; debit?: number | null; credit?: number | null; description?: string | null; balance_after?: number | null }): string[] {
+  const keys = [bankTxnKey(r)];
+  if (r.balance_after != null) {
+    keys.push(`bal|${(r.txn_date ?? "").slice(0, 10)}|${Math.round(r.debit ?? 0)}|${Math.round(r.credit ?? 0)}|${Math.round(r.balance_after)}`);
+  }
+  return keys;
+}
+
 /** Existing bank-line keys for an account — to flag/skip duplicate imports. */
 export function useExistingTxnKeys(accountId: string | null) {
   return useQuery({
@@ -445,11 +462,11 @@ export function useExistingTxnKeys(accountId: string | null) {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("bank_transactions")
-        .select("txn_date, debit, credit, description, reference")
+        .select("txn_date, debit, credit, description, reference, balance_after")
         .eq("bank_account_id", accountId as string)
         .limit(5000);
       if (error) throw error;
-      return new Set((data ?? []).map((r) => bankTxnKey(r as never)));
+      return new Set((data ?? []).flatMap((r) => bankTxnKeys(r as never)));
     },
     staleTime: 15_000,
   });
@@ -493,16 +510,16 @@ export function useImportBankTransactions() {
       // Skip lines already in this account (re-uploaded / overlapping statement).
       const { data: existing } = await supabase
         .from("bank_transactions")
-        .select("txn_date, debit, credit, description, reference")
+        .select("txn_date, debit, credit, description, reference, balance_after")
         .eq("bank_account_id", input.accountId)
         .limit(5000);
-      const seen = new Set((existing ?? []).map((r) => bankTxnKey(r as never)));
+      const seen = new Set((existing ?? []).flatMap((r) => bankTxnKeys(r as never)));
       const fresh: typeof cleaned = [];
       let duplicates = 0;
       for (const r of cleaned) {
-        const k = bankTxnKey(r as never);
-        if (seen.has(k)) { duplicates++; continue; }
-        seen.add(k);   // also dedup within the same batch
+        const keys = bankTxnKeys(r as never);
+        if (keys.some((k) => seen.has(k))) { duplicates++; continue; }
+        keys.forEach((k) => seen.add(k));   // also dedup within the same batch
         fresh.push(r);
       }
 
@@ -562,14 +579,23 @@ export function useBookCreditAsInvoice() {
       bankAccountId: string;
       customerId: string;
       lineName: string;
+      /** Catalog product the line is for, when picked from the catalog. */
+      itemId?: string | null;
       taxableAmount: number;   // ex-GST ₹
       reference?: string | null;
     }) => {
       const supabase = createClient();
-      // 1. Invoice + one-off quote (atomic).
+      // 1. Invoice + one-off quote (atomic). A one-off quote never creates a
+      //    subscription on payment (record_payment's is_one_off guard), so linking a
+      //    catalog product here cannot start a recurring bill. Cost stays 0: the
+      //    receipt tells us the price, not what the sale cost us.
+      const line = {
+        id: "line-1", name: input.lineName.trim() || "Sale", qty: 1, rate: Math.round(input.taxableAmount), cost: 0,
+        ...(input.itemId ? { item_id: input.itemId } : {}),
+      };
       const { data: invData, error: e1 } = await supabase.rpc("create_direct_invoice", {
         p_customer_id: input.customerId,
-        p_line_items:  [{ id: "line-1", name: input.lineName.trim() || "Sale", qty: 1, rate: Math.round(input.taxableAmount), cost: 0 }],
+        p_line_items:  [line],
         p_notes:       "Raised from a bank receipt (reconcile)",
         p_recurring:   false,
       });
@@ -773,6 +799,10 @@ export function useReconcileTransaction() {
       qc.invalidateQueries({ queryKey: ["salary-payments"] });
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
+      // Un-reconciling a tax line deletes its tax payment (reconcile_bank_txn).
+      qc.invalidateQueries({ queryKey: ["tax-payments"] });
+      qc.invalidateQueries({ queryKey: ["accounting", "gst"] });
+      qc.invalidateQueries({ queryKey: ["itr-pack"] });
       toast.success(row.matched_to_type ? "Reconciled" : "Un-reconciled");
     },
     onError: (err) => {

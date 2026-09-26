@@ -20,7 +20,7 @@
  *     one number that must survive being collapsed.
  *
  * Views:
- *   All · Mine · Today (arrived today) · Overdue · Hot · New
+ *   All leads (default) · All open · Mine · Today (arrived today) · Overdue · Hot · New
  *   Duplicates and Junk appear only when they have something in them.
  *
  * @example
@@ -45,7 +45,7 @@ import { localDateISO } from "@/lib/leads/outcomes";
 import { staleDeals, STAGE_SLA_DAYS } from "@/lib/leads/velocity";
 import type { Lead } from "@/lib/supabase/database.types";
 
-export type SmartView = "all" | "mine" | "waiting" | "today" | "overdue" | "hot" | "new" | "closing" | "stalled" | "won-mtd" | "duplicates" | "junk";
+export type SmartView = "everything" | "all" | "mine" | "waiting" | "today" | "overdue" | "hot" | "new" | "closing" | "stalled" | "won-mtd" | "duplicates" | "junk";
 
 interface LeadsSmartViewsProps {
   leads: Lead[];
@@ -54,6 +54,8 @@ interface LeadsSmartViewsProps {
   /** Count of leads flagged as likely duplicates (computed on the page). The
    *  Duplicates entry only appears when this is > 0 — no noise when clean. */
   duplicateCount?: number;
+  /** Every non-junk lead, won and lost included — the "All leads" count. */
+  everythingCount?: number;
   /** Count of leads marked junk. Junk shows when > 0 (or suspects exist). */
   junkCount?: number;
   /** Count of NON-junk leads the heuristic suspects as junk — nudges review. */
@@ -94,7 +96,7 @@ interface ViewDef {
 }
 
 export function LeadsSmartViews({
-  leads, currentUserId, duplicateCount = 0, junkCount = 0, junkSuspectCount = 0, active, onChange,
+  leads, currentUserId, everythingCount, duplicateCount = 0, junkCount = 0, junkSuspectCount = 0, active, onChange,
   folders = [], activeFolder = "all", onFolder,
 }: LeadsSmartViewsProps) {
   const today = new Date().toISOString().slice(0, 10);
@@ -145,6 +147,11 @@ export function LeadsSmartViews({
        read 17, and the owner reasonably concluded two had disappeared. They were the two
        `won` deals, sitting in the Won folder, which the chip strip had scrolled out of
        view. The data was right and the word was wrong, which is the harder bug to see. */
+    /* The page opens here (26 Sep 2026, Pardeep: "by default saari leads show honi
+       chahiye"). With one deal just moved to Won, "All open" showed an empty page with
+       "No leads match" — every lead existed, the default view simply hid it. */
+    { id: "everything", label: "All leads", count: everythingCount ?? all, tone: "default",
+      hint: "Har lead — open, won aur lost. Junk alag hai." },
     { id: "all",   label: "All open", count: all,     tone: "default",
       hint: "Every open lead. Won and lost are not open — they have their own folders." },
     ...(currentUserId
@@ -195,7 +202,7 @@ export function LeadsSmartViews({
   const activeFolderRow = folders.find((f) => f.id === activeFolder);
   const triggerLabel = activeFolderRow?.label ?? activeLabel;
   const triggerCount = activeFolderRow?.count ?? activeDef?.count;
-  const narrowed = active !== "all" || activeFolder !== "all";
+  const narrowed = active !== "everything" || activeFolder !== "all";
 
   // The signal that must not be lost to the collapse. Suppressed while the user
   // is already in Overdue — telling someone what they are looking at is noise.

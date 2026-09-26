@@ -31,7 +31,7 @@ import { PnLDrilldownDialog, type PnLDrillKind } from "@/components/features/acc
 import { PnlWaterfall, HundredRupeeBar } from "@/components/features/accounting/pnl-waterfall";
 import { MoneyFlow } from "@/components/features/accounting/money-flow";
 import {
-  buildPnl, vendorsFromSubscriptions, cogsBasisNote, compareFigures, isPartialPeriod,
+  buildPnl, vendorsFromSubscriptions, compareFigures, isPartialPeriod,
   type PnlPeriod,
 } from "@/lib/accounting/pnl";
 import { pnlWaterfall, hundredRupeeSplit } from "@/lib/accounting/waterfall";
@@ -41,6 +41,13 @@ import {
 } from "@/lib/accounting/pnl-charts";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { buildExpenseReport, type ExpenseReport } from "@/lib/accounting/expense-report";
+import { PnlHeadline } from "@/components/features/accounting/pnl-headline";
+import { netProfitView } from "@/lib/accounting/pnl-bound";
+import { projectCostForPeriod, type ProjectCostResult } from "@/lib/accounting/project-cost";
+import { ProjectMarginCard } from "@/components/features/accounting/project-margin-card";
+import { ProjectCostDialog } from "@/components/features/accounting/project-cost-dialog";
+import { ExpenseReportCard } from "@/components/features/accounting/expense-report-card";
 
 // ────────────────────────────────────────────────────────────────
 // Range helpers — all IST-safe (Indian FY runs Apr 1 → Mar 31)
@@ -110,6 +117,8 @@ interface PnLNumbers {
   expenses:       number;
   expensesCount:  number;
   expensesByCategory: { category: string; total: number; count: number }[];
+  /** The same expense rows as a report — category, vendor, month (lib/accounting/expense-report). */
+  expenseReport: ExpenseReport;
   commissions:      number;   // referral / channel-partner commissions (gross)
   commissionsCount: number;
   netProfit:      number;
@@ -132,6 +141,10 @@ interface PnLNumbers {
    * they do, because `cogs` reads an empty table — **`model` is the one to trust.**
    */
   model: PnlPeriod;
+  /** Salary on customer projects + project-tagged expenses — lib/accounting/project-cost.ts. */
+  projectCost: ProjectCostResult;
+  /** employee id → name, for the project-cost drill-down. */
+  employeeNames: Map<string, string>;
 }
 
 function usePnL(range: DateRange, enabled = true) {
@@ -149,7 +162,7 @@ function usePnL(range: DateRange, enabled = true) {
       // revenue recognition point is invoice issue, not payment receipt.
       const { data: invoices, error: invErr } = await supabase
         .from("invoices")
-        .select("amount, status, invoice_date, net_payable, taxable_value, tax_amount, tax_rate")
+        .select("id, amount, status, invoice_date, net_payable, taxable_value, tax_amount, tax_rate")
         .gte("invoice_date", range.from)
         .lte("invoice_date", range.to)
         .in("status", ["pending", "paid", "overdue"]);
@@ -166,8 +179,8 @@ function usePnL(range: DateRange, enabled = true) {
       // Credit / debit notes net revenue + output GST for the period (a credit
       // note reduces recognised revenue, a debit note increases it).
       const [{ data: cnP }, { data: dnP }] = await Promise.all([
-        supabase.from("credit_notes").select("taxable_value, tax_amount, credit_date").gte("credit_date", range.from).lte("credit_date", range.to),
-        supabase.from("debit_notes").select("taxable_value, tax_amount, debit_date").gte("debit_date", range.from).lte("debit_date", range.to),
+        supabase.from("credit_notes").select("invoice_id, taxable_value, tax_amount, credit_date").gte("credit_date", range.from).lte("credit_date", range.to),
+        supabase.from("debit_notes").select("invoice_id, taxable_value, tax_amount, debit_date").gte("debit_date", range.from).lte("debit_date", range.to),
       ]);
       const cnTaxable = (cnP ?? []).reduce((s, n) => s + (n.taxable_value ?? 0), 0);
       const cnTax     = (cnP ?? []).reduce((s, n) => s + (n.tax_amount ?? 0), 0);
@@ -194,10 +207,11 @@ function usePnL(range: DateRange, enabled = true) {
       // ── Expenses: non-COGS ─────────────────────────────────────────
       const { data: expenses, error: eErr } = await supabase
         .from("expenses")
-        .select("amount, gst_paid, category")
+        .select("amount, gst_paid, category, vendor_name, expense_date, project_id, description")
         .gte("expense_date", range.from)
         .lte("expense_date", range.to);
       if (eErr) throw eErr;
+      const expenseReport = buildExpenseReport(expenses ?? []);
 
       const expensesTotal = (expenses ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
       const expensesCount = (expenses ?? []).length;
@@ -260,6 +274,56 @@ function usePnL(range: DateRange, enabled = true) {
         range.from, range.to,
       );
 
+      /* ── PROJECT DELIVERY COST — salary spent building customers' software ──
+         The project page records who worked on which project (project_labour). That
+         salary is the cost of the project sale, so it moves from operating expenses into
+         cost of goods — moved, never added, and never more than the salary booked in the
+         period (lib/accounting/project-cost.ts). Revenue invoiced against a project's
+         milestones is marked as project revenue so the licence ratio is not applied to it. */
+      const [
+        { data: labourRows, error: lErr },
+        { data: emps, error: empErr },
+        { data: projects, error: prErr },
+        { data: milestones, error: msErr },
+      ] = await Promise.all([
+        supabase.from("project_labour").select("project_id, employee_id, percent, months, start_date, end_date"),
+        supabase.from("employees").select("id, name, monthly_gross"),
+        supabase.from("project_sales").select("id, title, customer_name, start_date"),
+        supabase.from("project_milestones").select("project_id, invoice_id").not("invoice_id", "is", null),
+      ]);
+      if (lErr) throw lErr;
+      if (empErr) throw empErr;
+      if (prErr) throw prErr;
+      if (msErr) throw msErr;
+
+      const projectByInvoice = new Map((milestones ?? []).map((m) => [String(m.invoice_id), m.project_id]));
+      const revenueByProjectMap = new Map<string, number>();
+      for (const i of invoices ?? []) {
+        const pid = projectByInvoice.get(String(i.id));
+        if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) + invTaxable(i));
+      }
+      /* A credit / debit note on a project invoice moves that project's revenue too — the
+         same notes already net the statement's Revenue above, so the two stay equal. */
+      for (const n of dnP ?? []) {
+        const pid = n.invoice_id ? projectByInvoice.get(String(n.invoice_id)) : undefined;
+        if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) + (n.taxable_value ?? 0));
+      }
+      for (const n of cnP ?? []) {
+        const pid = n.invoice_id ? projectByInvoice.get(String(n.invoice_id)) : undefined;
+        if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) - (n.taxable_value ?? 0));
+      }
+      const revenueByProject = [...revenueByProjectMap.entries()].map(([project_id, rev]) => ({ project_id, revenue: rev }));
+      const projectRevenue = revenueByProject.reduce((s, r) => s + r.revenue, 0);
+
+      const projectCost = projectCostForPeriod({
+        from: range.from, to: range.to,
+        allocations: (labourRows ?? []).map((l) => ({ ...l, percent: Number(l.percent), months: Number(l.months) })),
+        monthlyGross: new Map((emps ?? []).map((e) => [e.id, e.monthly_gross ?? 0])),
+        projects: projects ?? [],
+        expenses: expenses ?? [],
+        revenueByProject,
+      });
+
       /* Commissions are an operating cost, not a cost of goods — they are paid on a sale
          that already happened, so they sit below the gross margin exactly as netProfit
          has always treated them. */
@@ -268,6 +332,8 @@ function usePnL(range: DateRange, enabled = true) {
         expenses: expensesTotal + commissions,
         billedCogs: cogs > 0 ? cogs : null,
         vendors,
+        projectCost: projectCost.total,
+        projectRevenue,
       });
 
       // ── Compute derived numbers ─────────────────────────────────────
@@ -283,12 +349,14 @@ function usePnL(range: DateRange, enabled = true) {
         revenue, revenueCount,
         cogs, cogsCount,
         grossMargin,
-        expenses: expensesTotal, expensesCount, expensesByCategory,
+        expenses: expensesTotal, expensesCount, expensesByCategory, expenseReport,
         commissions, commissionsCount,
         netProfit,
         outputGST, inputGST, netGST,
         marginPct, profitPct,
         model,
+        projectCost,
+        employeeNames: new Map((emps ?? []).map((e) => [e.id, e.name])),
       };
     },
   });
@@ -364,6 +432,7 @@ export default function PnLPage() {
   const { data, isLoading } = usePnL(range);
   const [drill, setDrill] = React.useState<PnLDrillKind | null>(null);
   const [drillExpenseCat, setDrillExpenseCat] = React.useState<string | null>(null);
+  const [projectCostOpen, setProjectCostOpen] = React.useState(false);
 
   /* ── Comparison ──────────────────────────────────────────────────────────
      Off by default. A second full aggregation on every page load, for a number the
@@ -386,7 +455,9 @@ export default function PnLPage() {
   const cogsRatio = React.useMemo(() => {
     const m = data?.model;
     if (!m || m.revenue <= 0) return 0;
-    return m.cogs / m.revenue;
+    /* Licence part only: the trend subtracts every booked expense month by month, and
+       project salary is already inside those — adding it again as cost would count it twice. */
+    return m.licenceCogs / m.revenue;
   }, [data?.model]);
   const fyStart = React.useMemo(() => fiscalYearStart(istToday()).getUTCFullYear(), []);
   const { data: trend } = useMonthlyTrend(fyStart, cogsRatio, !!data);
@@ -399,13 +470,17 @@ export default function PnLPage() {
       `pnl-${range.from}-to-${range.to}.csv`,
       ["Line", "Amount (INR)"],
       [
+        /* Same figures as the screen (`model`): a missing cost of goods exports as
+           "not recorded", not as ₹0 with a profit computed on top of it. */
         ["Period", `${range.from} to ${range.to}`],
-        ["Revenue", data.revenue],
-        ["Cost of goods sold", -data.cogs],
-        ["Gross margin", data.grossMargin],
-        ["Operating expenses", -data.expenses],
+        ["Revenue", data.model.revenue],
+        ["Cost of goods — project delivery (salary on projects)", -data.model.projectCost],
+        ["Cost of goods — licence cost", data.model.cogsBasis === "unknown" ? "not recorded" : -data.model.licenceCogs],
+        ["Licence cost basis", data.model.cogsBasis],
+        ["Gross margin", data.model.grossMargin ?? "unknown"],
+        ["Operating expenses", -(data.expenses - data.model.projectCost)],
         ["Commissions", -data.commissions],
-        ["Net profit", data.netProfit],
+        ["Net profit", data.model.netProfit ?? "unknown (cost of goods not recorded)"],
         ["", ""],
         ["Output GST (on sales)", data.outputGST],
         ["Input GST (ITC)", data.inputGST],
@@ -473,6 +548,254 @@ export default function PnLPage() {
         </div>
       </Card>
 
+      {/* ── THE ANSWER FIRST ────────────────────────────────────────────────
+          Revenue · cost of goods · expenses · net profit, before any chart. The page used
+          to open on a "per ₹100" bar that refused to draw when the licence cost was
+          missing, with the statement itself at the bottom. */}
+      {!isLoading && data && (
+        <PnlHeadline
+          model={data.model}
+          revenueCount={data.revenueCount}
+          expensesCount={data.expensesCount}
+          outputGst={data.outputGST}
+          onOpen={(k) => { if (k === "expenses") setDrillExpenseCat(null); setDrill(k); }}
+        />
+      )}
+
+      {/* P&L waterfall */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-6">
+        {/* Left: waterfall */}
+        <Card className="p-5 md:p-6">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
+            Profit &amp; Loss statement · {range.from} to {range.to}
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : data ? (
+            <div className="space-y-2.5">
+              {/* These rows read `model`, not the flat fields. The flat `cogs` comes from
+                  `vendor_bills`, which is empty here — it is what printed "₹0 · 100.0%
+                  margin" directly under a chart saying 37%. One page cannot hold two
+                  answers to the same question. */}
+              {/* Revenue is the invoiced amount less the GST on it — GST is collected for
+                  the government, not earned — and the hint says so in numbers. */}
+              <Row label="Revenue"        amount={data.model.revenue}
+                   hint={`${rupee(data.model.revenue + data.outputGST)} invoiced − ${rupee(data.outputGST)} GST · ${data.revenueCount} invoice${data.revenueCount === 1 ? "" : "s"}`}
+                   onHint={() => setDrill("revenue")} tone="ink" />
+              {/* Unknown is written as unknown. "₹0" under an unrecorded cost of goods — and a
+                  "₹0" gross margin under it — read as facts; they are gaps. */}
+              {/* Salary spent building customers' software is the cost of those sales —
+                  moved here from operating expenses (lib/accounting/project-cost.ts). */}
+              {data.model.projectCost > 0 && (
+                <Row label={<>− <Term k="cogs">Cost of goods</Term> (project delivery)</>}
+                     amount={-data.model.projectCost}
+                     hint={[
+                       data.projectCost.labour > 0 ? `${rupee(data.projectCost.labour)} salary on projects` : null,
+                       data.projectCost.direct > 0 ? `${rupee(data.projectCost.direct)} project expenses` : null,
+                       data.projectCost.capped ? "capped to salary booked" : null,
+                     ].filter(Boolean).join(" · ")}
+                     onHint={() => setProjectCostOpen(true)}
+                     tone="rose" />
+              )}
+              {data.model.cogsBasis === "unknown" ? (
+                <UnknownRow label={<>− <Term k="cogs">Cost of goods</Term> (licence cost)</>} value="Not recorded" note="enter the vendor bills" />
+              ) : data.model.licenceCogs === 0 && data.model.projectCost > 0 ? null : (
+                <Row label={<>− <Term k="cogs">Cost of goods</Term> (licence cost)</>}
+                     amount={-data.model.licenceCogs}
+                     hint={data.model.cogsBasis === "estimated"
+                       ? "estimated from your wholesale rates"
+                       : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`}
+                     onHint={() => setDrill("cogs")}
+                     tone="rose" />
+              )}
+
+              <Divider />
+              {data.model.grossMargin === null ? (
+                <UnknownRow label={<Term k="gross_margin">Gross Margin</Term>} value="Unknown" note="needs the cost of goods" />
+              ) : (
+                <Row label={<Term k="gross_margin">Gross Margin</Term>}
+                     amount={data.model.grossMargin}
+                     hint={data.model.grossMarginPct === null ? "no revenue this period" : `${data.model.grossMarginPct}% margin`}
+                     tone={data.model.grossMargin >= 0 ? "emerald" : "rose"}
+                     emphasis />
+              )}
+
+              <Row label={<>− <Term k="opex">Operating expenses</Term></>}
+                   amount={-(data.expenses - data.model.projectCost)}
+                   hint={`${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"}${data.model.projectCost > 0 ? ` · ${rupee(data.model.projectCost)} moved to project cost` : ""}`}
+                   onHint={() => { setDrillExpenseCat(null); setDrill("expenses"); }}
+                   tone="rose" />
+
+              {/* The per-category breakdown lives in the Expense report card below — listing
+                  it here as well was a third copy of the same numbers on one page. */}
+
+              {data.commissions > 0 && (
+                <Row label="− Referral commissions"
+                     amount={-data.commissions}
+                     hint={`${data.commissionsCount} ${data.commissionsCount === 1 ? "payout" : "payouts"}`}
+                     tone="rose" />
+              )}
+
+              <Divider thick />
+              {/* From `model`, like every other line of this statement. The flat
+                  `data.netProfit` subtracts vendor-bill COGS, which is ₹0 when no bills are
+                  entered — so the statement said "margin unknown" on one line and printed a
+                  confident net profit two lines later. */}
+              {data.model.netProfit === null ? (
+                /* Without the licence cost the exact figure is unknown — but when expenses
+                   alone exceed revenue it is certainly a loss of at least the gap. */
+                (() => {
+                  const v = netProfitView(data.model);
+                  return v.kind === "loss-at-least" ? (
+                    <div className="flex items-baseline justify-between gap-3">
+                      <div className="text-base font-semibold text-ink leading-tight">Net Loss</div>
+                      <div className="text-right">
+                        <div className="font-serif text-2xl text-rose">at least {rupee(v.value)}</div>
+                        <div className="text-2xs text-amber-ink">the licence cost, once recorded, only adds to it</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <UnknownRow label="Net Profit" value="Unknown" note={`cost of goods not recorded · at most ${rupee(v.value)}`} large />
+                  );
+                })()
+              ) : (
+                <Row label={data.model.netProfit < 0 ? "Net Loss" : "Net Profit"}
+                     amount={data.model.netProfit}
+                     hint={data.model.revenue > 0
+                       ? `${((data.model.netProfit / data.model.revenue) * 100).toFixed(1)}% of revenue`
+                       : "no revenue this period"}
+                     tone={data.model.netProfit >= 0 ? "emerald" : "rose"}
+                     emphasis
+                     xl />
+              )}
+            </div>
+          ) : null}
+        </Card>
+
+        {/* Right: GST snapshot */}
+        <Card className="p-5 md:p-6">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
+            GST snapshot (same period)
+          </div>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : data ? (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between items-baseline">
+                <span className="text-ink-3"><Term k="output_gst">Output GST</Term> (on sales)</span>
+                <span className="font-mono text-ink font-semibold">{rupee(data.outputGST)}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-ink-3">− <Term k="input_gst">Input GST</Term> paid</span>
+                <span className="font-mono text-emerald">−{rupee(data.inputGST)}</span>
+              </div>
+              <div className="border-t-2 border-ink pt-3 flex justify-between items-baseline">
+                <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold"><Term k="net_liability">Net liability</Term></span>
+                <span className={`font-serif text-2xl ${data.netGST >= 0 ? "text-rose" : "text-emerald"}`}>
+                  {rupee(data.netGST)}
+                </span>
+              </div>
+              <p className="text-2xs text-ink-3 leading-relaxed mt-3">
+                Net positive = payable to govt. Negative = refund / carryforward credit.
+                File via GSTR-3B by the 20th of next month.
+              </p>
+            </div>
+          ) : null}
+        </Card>
+      </div>
+
+      {/* Quick insights */}
+      {data && data.revenue > 0 && (
+        <Card className="p-5 bg-paper-2/30 mb-6">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
+            What this means
+          </div>
+          <ul className="text-sm text-ink-2 space-y-1.5 list-disc pl-5">
+            {/* Every line reads `model`. These used to run off the flat fields, so the
+                page could congratulate the owner on a 100% margin in the same breath as
+                telling them no COGS was recorded — two conclusions from one gap. */}
+            {data.model.netProfit === null ? (
+              netProfitView(data.model).kind === "loss-at-least" ? (
+                <li className="text-rose">
+                  Is period mein <b>kam se kam {rupee(netProfitView(data.model).value)} ka loss</b> hai —
+                  {data.model.projectCost > 0 ? " project cost aur kharche hi" : " sirf kharche hi"} revenue se zyada hain. Licence cost darj hone par loss aur badhega.
+                </li>
+              ) : (
+                <li className="text-amber-ink">
+                  Net profit can&apos;t be stated for this period — no licence cost is recorded, and
+                  a licence you buy and resell is never 100% profit.
+                </li>
+              )
+            ) : data.model.netProfit >= 0 ? (
+              <li>
+                Aapne is period mein <b className="text-emerald">{rupee(data.model.netProfit)}</b> net
+                profit kamaya
+                {data.model.revenue > 0 && ` — ${Math.round((data.model.netProfit / data.model.revenue) * 100)}% margin`}.
+              </li>
+            ) : (
+              <li className="text-rose">
+                Is period mein <b>{rupee(Math.abs(data.model.netProfit))} ka loss</b> hai.{" "}
+                {/* Name the cost this business actually has — a project-only period has no licence cost. */}
+                {data.model.projectCost > 0 && data.model.licenceCogs === 0
+                  ? <>Projects par salary ({rupee(data.model.projectCost)}) aur running costs ({rupee(data.model.expenses)}) milkar revenue se zyada hain.</>
+                  : data.model.projectCost > 0
+                    ? <>Licence cost, projects par salary aur running costs milkar revenue se zyada hain.</>
+                    : <>Licence cost ya running costs zyada hain.</>}
+              </li>
+            )}
+            {data.model.grossMarginPct !== null && data.model.grossMarginPct < 20 && data.model.revenue > 0 && (
+              <li className="text-amber-ink">Gross margin is only {data.model.grossMarginPct}% — a healthy reseller range is 25–35%. Check your vendor bills or review your pricing.</li>
+            )}
+            {data.projectCost.capped && (
+              <li className="text-amber-ink">
+                Projects par allocate ki gayi salary ({rupee(data.projectCost.labourAllocated)}) is period mein book hui salary
+                ({rupee(data.projectCost.salaryPool)}) se zyada hai — isliye project cost utni hi li gayi hai jitni salary book hui.
+                Is period ki salary entries book karein.
+              </li>
+            )}
+            {data.projectCost.undated > 0 && (
+              <li className="text-amber-ink">
+                {data.projectCost.undated} project labour allocation{data.projectCost.undated === 1 ? "" : "s"} ki koi date nahi hai
+                (na allocation par, na project par) — isliye wo kisi period mein nahi gini gayi. Project page par start date daalein.
+              </li>
+            )}
+            {data.model.cogsBasis === "estimated" && (
+              <li className="text-amber-ink">
+                The licence cost above is estimated from your own wholesale rates — no vendor bills
+                are recorded. Enter the Google CSP / Microsoft / Zoho invoices to make this exact.
+              </li>
+            )}
+          </ul>
+        </Card>
+      )}
+
+
+      {/* ── EXPENSE REPORT ─────────────────────────────────────────────────────
+          The operating expenses behind the waterfall, as a report: category (share of
+          the total), vendor, month. Same rows as the "Operating expenses" line, so the
+          totals match; a category opens the same drill-down the line uses. */}
+      {!isLoading && data && (
+        <ExpenseReportCard
+          report={data.expenseReport}
+          periodLabel={`${range.from} to ${range.to}`}
+          fileStem={`${range.from}-to-${range.to}`}
+          onCategory={(c) => { setDrillExpenseCat(c); setDrill("expenses"); }}
+          movedToCogs={data.model.projectCost}
+        />
+      )}
+
+      {/* ── PROJECT MARGIN ─────────────────────────────────────────────────────
+          Software built for customers: what each project brought in this period against
+          the salary and expenses spent delivering it. */}
+      {!isLoading && data && (data.projectCost.byProject.length > 0 || data.projectCost.undated > 0) && (
+        <ProjectMarginCard result={data.projectCost} periodLabel={`${range.from} to ${range.to}`} />
+      )}
+
       {/* ── THE MONEY FLOW ───────────────────────────────────────────────────
           The chart the page always claimed to have: "P&L waterfall" was a comment over a
           list of rows. Bars are clickable into the same drill-down the rows use, so it is
@@ -511,7 +834,11 @@ export default function PnLPage() {
               });
               return split ? (
                 <div className="mb-4 border-b border-hairline pb-4">
-                  <HundredRupeeBar split={split} />
+                  <HundredRupeeBar
+                    split={split}
+                    costLabel={m.projectCost > 0 ? (m.licenceCogs > 0 ? "Licences + project salary" : "Project salary") : "Vendor licences"}
+                    costTo={m.projectCost > 0 ? (m.licenceCogs > 0 ? "licences and project salary" : "salary on projects") : "the vendor"}
+                  />
                 </div>
               ) : null;
             })()}
@@ -537,11 +864,15 @@ export default function PnLPage() {
                       onOpen: () => setDrill("revenue"),
                     },
                     {
-                      key: "cogs", group: "out", label: "Vendor licences",
+                      key: "cogs", group: "out",
+                      label: m.projectCost > 0 ? "Cost of goods (licences + project salary)" : "Cost of goods (licence cost)",
                       amount: m.cogs,
-                      hint: m.cogsBasis === "estimated"
-                        ? "from your wholesale rates"
-                        : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`,
+                      hint: [
+                        m.projectCost > 0 ? `${rupee(m.projectCost)} project delivery` : null,
+                        m.licenceCogs > 0
+                          ? (m.cogsBasis === "estimated" ? "licences from your wholesale rates" : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`)
+                          : null,
+                      ].filter(Boolean).join(" · ") || "nothing bought to resell",
                       ofSalesPct: m.revenue > 0 ? Math.round((m.cogs / m.revenue) * 100) : null,
                       estimated: m.cogsBasis === "estimated",
                       onOpen: () => setDrill("cogs"),
@@ -549,7 +880,7 @@ export default function PnLPage() {
                     {
                       key: "opex", group: "out", label: "Running the business",
                       amount: m.expenses,
-                      hint: `${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"} — salaries, hosting, office`,
+                      hint: `${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"} — salaries, hosting, office${m.projectCost > 0 ? " (project salary moved to cost of goods)" : ""}`,
                       ofSalesPct: m.revenue > 0 ? Math.round((m.expenses / m.revenue) * 100) : null,
                       onOpen: () => { setDrillExpenseCat(null); setDrill("expenses"); },
                     },
@@ -598,15 +929,15 @@ export default function PnLPage() {
                  is wrong and where to fix it. */
               <div className="rounded-md border border-amber/40 bg-amber-soft/30 px-3 py-2.5">
                 <p className="text-[12px] font-medium text-ink">
-                  Can&apos;t chart this period — the licence cost is missing.
+                  The step chart needs the cost of goods (licence cost), which isn&apos;t recorded for this period.
                 </p>
-                <p className="mt-0.5 text-2xs leading-snug text-ink-2">{cogsBasisNote(m)}</p>
+                <p className="mt-0.5 text-2xs leading-snug text-ink-2">
+                  Enter the vendor bills (Google / Microsoft / Zoho invoices) and it draws itself.
+                </p>
               </div>
             )}
-
-            <p className="mt-3 border-t border-hairline pt-2 text-2xs leading-snug text-ink-3">
-              {cogsBasisNote(m)}
-            </p>
+            {/* The cost-basis note is said once, in the headline at the top of the page —
+                it used to appear here twice more. */}
 
             {/* Comparison — deltas that refuse to lie. See compareFigures. */}
             {compare && (
@@ -753,160 +1084,15 @@ export default function PnLPage() {
         </Card>
       )}
 
-      {/* P&L waterfall */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-6">
-        {/* Left: waterfall */}
-        <Card className="p-5 md:p-6">
-          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
-            For period · {range.from} to {range.to}
-          </div>
-
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
-            </div>
-          ) : data ? (
-            <div className="space-y-2.5">
-              {/* These rows read `model`, not the flat fields. The flat `cogs` comes from
-                  `vendor_bills`, which is empty here — it is what printed "₹0 · 100.0%
-                  margin" directly under a chart saying 37%. One page cannot hold two
-                  answers to the same question. */}
-              <Row label="Revenue"        amount={data.model.revenue}     hint={`${data.revenueCount} invoice${data.revenueCount === 1 ? "" : "s"}`} onHint={() => setDrill("revenue")} tone="ink" />
-              <Row label={<>− <Term k="cogs">COGS</Term></>}
-                   amount={-data.model.cogs}
-                   hint={data.model.cogsBasis === "estimated"
-                     ? "estimated from your wholesale rates"
-                     : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`}
-                   onHint={() => setDrill("cogs")}
-                   tone="rose" />
-
-              <Divider />
-              <Row label={<Term k="gross_margin">Gross Margin</Term>}
-                   amount={data.model.grossMargin ?? 0}
-                   hint={data.model.grossMarginPct === null
-                     ? "margin unknown — no licence cost recorded"
-                     : `${data.model.grossMarginPct}% margin`}
-                   tone={(data.model.grossMargin ?? 0) >= 0 ? "emerald" : "rose"}
-                   emphasis />
-
-              <Row label={<>− <Term k="opex">Operating expenses</Term></>}
-                   amount={-data.expenses}
-                   hint={`${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"}`}
-                   onHint={() => { setDrillExpenseCat(null); setDrill("expenses"); }}
-                   tone="rose" />
-
-              {/* Category breakdown — click a group to see its entries. */}
-              {data.expensesByCategory.length > 0 && (
-                <div className="mt-1 mb-1 space-y-0.5">
-                  {data.expensesByCategory.map((c) => (
-                    <button
-                      key={c.category}
-                      type="button"
-                      onClick={() => { setDrillExpenseCat(c.category); setDrill("expenses"); }}
-                      title={`See ${c.category} entries`}
-                      className="w-full flex items-center justify-between gap-3 rounded pl-6 pr-1 py-1 text-left transition-colors hover:bg-paper-2/60"
-                    >
-                      <span className="text-[13px] text-ink-2">
-                        {c.category} <span className="text-2xs text-ink-3">· {c.count}</span>
-                      </span>
-                      <span className="font-mono text-[13px] tabular-nums text-rose">-{rupee(c.total)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {data.commissions > 0 && (
-                <Row label="− Referral commissions"
-                     amount={-data.commissions}
-                     hint={`${data.commissionsCount} ${data.commissionsCount === 1 ? "payout" : "payouts"}`}
-                     tone="rose" />
-              )}
-
-              <Divider thick />
-              <Row label="Net Profit"
-                   amount={data.netProfit}
-                   hint={`${data.profitPct.toFixed(1)}% net margin`}
-                   tone={data.netProfit >= 0 ? "emerald" : "rose"}
-                   emphasis
-                   xl />
-            </div>
-          ) : null}
-        </Card>
-
-        {/* Right: GST snapshot */}
-        <Card className="p-5 md:p-6">
-          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
-            GST snapshot (same period)
-          </div>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
-          ) : data ? (
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between items-baseline">
-                <span className="text-ink-3"><Term k="output_gst">Output GST</Term> (on sales)</span>
-                <span className="font-mono text-ink font-semibold">{rupee(data.outputGST)}</span>
-              </div>
-              <div className="flex justify-between items-baseline">
-                <span className="text-ink-3">− <Term k="input_gst">Input GST</Term> paid</span>
-                <span className="font-mono text-emerald">−{rupee(data.inputGST)}</span>
-              </div>
-              <div className="border-t-2 border-ink pt-3 flex justify-between items-baseline">
-                <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold"><Term k="net_liability">Net liability</Term></span>
-                <span className={`font-serif text-2xl ${data.netGST >= 0 ? "text-rose" : "text-emerald"}`}>
-                  {rupee(data.netGST)}
-                </span>
-              </div>
-              <p className="text-2xs text-ink-3 leading-relaxed mt-3">
-                Net positive = payable to govt. Negative = refund / carryforward credit.
-                File via GSTR-3B by the 20th of next month.
-              </p>
-            </div>
-          ) : null}
-        </Card>
-      </div>
-
-      {/* Quick insights */}
-      {data && data.revenue > 0 && (
-        <Card className="p-5 bg-paper-2/30">
-          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
-            What this means
-          </div>
-          <ul className="text-sm text-ink-2 space-y-1.5 list-disc pl-5">
-            {/* Every line reads `model`. These used to run off the flat fields, so the
-                page could congratulate the owner on a 100% margin in the same breath as
-                telling them no COGS was recorded — two conclusions from one gap. */}
-            {data.model.netProfit === null ? (
-              <li className="text-amber-ink">
-                Net profit can&apos;t be stated for this period — no licence cost is recorded, and
-                a licence you buy and resell is never 100% profit.
-              </li>
-            ) : data.model.netProfit >= 0 ? (
-              <li>
-                Aapne is period mein <b className="text-emerald">{rupee(data.model.netProfit)}</b> net
-                profit kamaya
-                {data.model.revenue > 0 && ` — ${Math.round((data.model.netProfit / data.model.revenue) * 100)}% margin`}.
-              </li>
-            ) : (
-              <li className="text-rose">
-                Is period mein <b>{rupee(Math.abs(data.model.netProfit))} ka loss</b> hai. Licence cost ya
-                running costs zyada hain.
-              </li>
-            )}
-            {data.model.grossMarginPct !== null && data.model.grossMarginPct < 20 && data.model.revenue > 0 && (
-              <li className="text-amber-ink">Gross margin is only {data.model.grossMarginPct}% — a healthy reseller range is 25–35%. Check your vendor bills or review your pricing.</li>
-            )}
-            {data.model.cogsBasis === "estimated" && (
-              <li className="text-amber-ink">
-                The licence cost above is estimated from your own wholesale rates — no vendor bills
-                are recorded. Enter the Google CSP / Microsoft / Zoho invoices to make this exact.
-              </li>
-            )}
-          </ul>
-        </Card>
+      {data && (
+        <ProjectCostDialog
+          open={projectCostOpen}
+          onClose={() => setProjectCostOpen(false)}
+          result={data.projectCost}
+          employeeNames={data.employeeNames}
+          periodLabel={`${range.from} to ${range.to}`}
+        />
       )}
-
       <PnLDrilldownDialog
         open={drill !== null}
         onOpenChange={(o) => { if (!o) { setDrill(null); setDrillExpenseCat(null); } }}
@@ -951,6 +1137,21 @@ function Row({
       </div>
       <div className={`font-mono whitespace-nowrap ${xl ? "font-serif text-3xl" : emphasis ? "text-lg font-semibold" : "text-base"} ${colorClass}`}>
         {amount < 0 ? "−" : ""}{rupee(Math.abs(amount))}
+      </div>
+    </div>
+  );
+}
+
+/** A statement line whose figure is not known — shown as words, never as ₹0. */
+function UnknownRow({ label, value, note, large }: {
+  label: React.ReactNode; value: string; note: string; large?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <div className={`${large ? "text-base font-semibold" : "text-sm"} text-ink leading-tight`}>{label}</div>
+      <div className="text-right">
+        <div className={`${large ? "font-serif text-2xl" : "text-base"} text-ink-3 italic`}>{value}</div>
+        <div className="text-2xs text-amber-ink">{note}</div>
       </div>
     </div>
   );

@@ -14,6 +14,10 @@ export const EXPENSE_CATEGORIES = [
   "Hosting",
   "Software",
   "Salaries",
+  /* Paid to a director — shown apart from Salaries because the accounts disclose it
+     separately. An employee-director's salary still goes through Payroll (TDS u/s 192);
+     this is for remuneration / commission / sitting fees booked as an expense. */
+  "Director's Remuneration",
   "Office Rent",
   "Marketing",
   "Advertising",
@@ -28,5 +32,9 @@ export const EXPENSE_CATEGORIES = [
   "Equipment",
   "Repairs & Maintenance",
   "Insurance",
+  /* Taxes that ARE expenses — late fees, interest on late tax, penalties, professional /
+     property tax, ROC fees. NOT GST or income tax themselves: those settle a liability or
+     sit as an asset, and are booked from the bank line as a tax payment instead. */
+  "Rates & Taxes",
   "Other",
 ] as const;

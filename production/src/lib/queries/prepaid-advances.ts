@@ -128,3 +128,62 @@ export function useDeletePrepaidAdvance() {
     onError: (err) => toast.error((err as Error).message),
   });
 }
+
+/**
+ * A money-out bank line → a prepaid advance, reconciled to it, in one step
+ * (book_bank_txn_as_prepaid). Un-reconciling the line removes the advance, and is
+ * refused once any of it has been consumed.
+ */
+export function useBookBankTxnAsPrepaid() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { transactionId: string; accountId: string; vendorName: string; category: string; notes?: string | null }) => {
+      const supabase = createClient();
+      const { error } = await supabase.rpc("book_bank_txn_as_prepaid", {
+        p_txn_id: input.transactionId,
+        p_vendor_name: input.vendorName.trim(),
+        p_category: input.category,
+        p_notes: input.notes ?? null,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, input) => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ["bank_transactions", input.accountId] });
+      qc.invalidateQueries({ queryKey: ["balance-sheet"] });
+      toast.success(`Booked as a ${input.vendorName.trim()} advance (prepaid asset). Book its invoice on the Prepaid page when it arrives.`);
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+}
+
+/**
+ * One vendor invoice drawn from that vendor's open advances, oldest first
+ * (consume_prepaid_fifo). All-or-nothing: refused if the open balance is short.
+ */
+export function useConsumePrepaidFifo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { vendorName: string; amount: number; gst: number; date: string; note?: string | null; attachment?: string | null }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("consume_prepaid_fifo", {
+        p_vendor_name: input.vendorName.trim(),
+        p_amount: Math.round(input.amount),
+        p_gst: Math.round(input.gst),
+        p_date: input.date,
+        p_note: input.note ?? null,
+        p_attachment: input.attachment ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return data as number;
+    },
+    onSuccess: (left, input) => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["advance_expenses"] });
+      qc.invalidateQueries({ queryKey: ["balance-sheet"] });
+      toast.success(`Invoice booked to P&L. ${input.vendorName.trim()} advance left: ₹${left}.`);
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+}

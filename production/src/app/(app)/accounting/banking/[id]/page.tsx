@@ -36,7 +36,11 @@ import {
 } from "@/lib/queries/bank";
 import { rupee, formatDate } from "@/lib/utils";
 import { ImportStatementDialog } from "@/components/features/banking/import-statement-dialog";
+import { SalaryLinesDialog, salaryLinesOf } from "@/components/features/banking/salary-lines-dialog";
+import { StatementCheckCard } from "@/components/features/banking/statement-check-card";
+import { checkStatement } from "@/lib/banking/statement-check";
 import { ReconcileTransactionDialog } from "@/components/features/banking/reconcile-transaction-dialog";
+import { UnreconcileDialog } from "@/components/features/banking/unreconcile-dialog";
 import { ConnectAaDialog } from "@/components/features/banking/connect-aa-dialog";
 import { useBankAaConnection, useFetchAaNow } from "@/lib/queries/bank-aa";
 
@@ -65,8 +69,12 @@ export default function BankAccountDetailPage() {
   const [tab,           setTab]           = React.useState<FilterTab>("all");
   const [search,        setSearch]        = React.useState("");
   const [importOpen,    setImportOpen]    = React.useState(false);
+  const [salaryOpen,    setSalaryOpen]    = React.useState(false);
   const [aaConnectOpen, setAaConnectOpen] = React.useState(false);
   const [reconcileTxn,  setReconcileTxn]  = React.useState<BankTransactionRow | null>(null);
+  /* Un-reconcile goes through a confirm that says what the line leaves behind (and can
+     undo a sale raised from it) — components/features/banking/unreconcile-dialog.tsx. */
+  const [unreconcileTxn, setUnreconcileTxn] = React.useState<BankTransactionRow | null>(null);
 
   // Resizable columns — drag the full-height divider between any two columns.
   const { colW, startResize, totalWidth: bankTableW } = useResizableColumns("ros_bank_colw_v3", BANK_COL_DEFAULTS);
@@ -82,6 +90,7 @@ export default function BankAccountDetailPage() {
     const unmatched = all - matched;
     return { all, unmatched, matched };
   }, [transactions]);
+  const salaryLineCount = React.useMemo(() => salaryLinesOf(transactions ?? []).length, [transactions]);
 
   const tabs: TabBarItem[] = [
     { id: "all",       label: "All",        count: counts.all       },
@@ -155,6 +164,8 @@ export default function BankAccountDetailPage() {
   const bankBalance = openingBal + sumDelta(allTxns);
   const appBalance  = openingBal + sumDelta(allTxns.filter((t) => t.matched_to_type !== null));
   const toReconcile = bankBalance - appBalance;
+  /* Plain call, not a hook — this runs after the early returns above. Cheap: one pass. */
+  const statementCheck = checkStatement(allTxns, openingBal);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
@@ -228,7 +239,11 @@ export default function BankAccountDetailPage() {
             <p className={`font-serif text-2xl mt-1 ${bankBalance >= 0 ? "text-ink" : "text-rose"}`}>
               {rupee(bankBalance)}
             </p>
-            <p className="text-3xs text-ink-3 mt-0.5">Per imported statement</p>
+            <p className="text-3xs text-ink-3 mt-0.5">
+              {statementCheck && Math.abs(statementCheck.difference) > 1
+                ? <span className="text-rose">Statement says {rupee(statementCheck.statementBalance)}</span>
+                : "Per imported statement"}
+            </p>
           </div>
           <div>
             <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Balance in app</p>
@@ -254,19 +269,43 @@ export default function BankAccountDetailPage() {
         </div>
       </Card>
 
+      {/* Balance in bank vs the statement's own running balance. */}
+      {statementCheck && (
+        <StatementCheckCard
+          check={statementCheck}
+          openingBalance={openingBal}
+          openingDate={account.opening_balance_date}
+          onImport={() => setImportOpen(true)}
+        />
+      )}
+
       {/* Filter tabs + one-tap auto-reconcile */}
       <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
         <TabBar items={tabs} value={tab} onChange={(v) => setTab(v as FilterTab)} />
         {counts.unmatched > 0 && (
-          <Button
-            icon="sparkles"
-            variant="default"
-            loading={autoReconcile.isPending}
-            onClick={() => autoReconcile.mutate(account.id)}
-            title="Auto-match every unmatched line to its expense / salary / payment where the match is unambiguous"
-          >
-            {autoReconcile.isPending ? "Matching…" : `Auto-reconcile (${counts.unmatched})`}
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Salary lines Payroll never recorded — auto-reconcile has nothing to match
+                them to, so offer to create the records (every line previewed first). */}
+            {salaryLineCount > 0 && (
+              <Button
+                icon="users"
+                variant="default"
+                onClick={() => setSalaryOpen(true)}
+                title="Create salary records from this account's salary lines and reconcile them — you review every line first"
+              >
+                {`Salary lines (${salaryLineCount})`}
+              </Button>
+            )}
+            <Button
+              icon="sparkles"
+              variant="default"
+              loading={autoReconcile.isPending}
+              onClick={() => autoReconcile.mutate(account.id)}
+              title="Auto-match every unmatched line to its expense / salary / payment where the match is unambiguous"
+            >
+              {autoReconcile.isPending ? "Matching…" : `Auto-reconcile (${counts.unmatched})`}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -348,6 +387,7 @@ export default function BankAccountDetailPage() {
                       key={txn.id}
                       txn={txn}
                       onReconcile={() => setReconcileTxn(txn)}
+                      onUnreconcile={() => setUnreconcileTxn(txn)}
                     />
                   ))}
                 </tbody>
@@ -361,13 +401,14 @@ export default function BankAccountDetailPage() {
               show every column + the Reconcile button without clipping). */}
           <ul className="lg:hidden space-y-2.5">
             {visibleTxns.map((txn) => (
-              <TransactionCard key={txn.id} txn={txn} onReconcile={() => setReconcileTxn(txn)} />
+              <TransactionCard key={txn.id} txn={txn} onReconcile={() => setReconcileTxn(txn)} onUnreconcile={() => setUnreconcileTxn(txn)} />
             ))}
           </ul>
         </>
       )}
 
       <ImportStatementDialog open={importOpen} onOpenChange={setImportOpen} accountId={account.id} />
+      <SalaryLinesDialog open={salaryOpen} onOpenChange={setSalaryOpen} accountId={account.id} transactions={allTxns} />
       <ConnectAaDialog
         open={aaConnectOpen}
         onOpenChange={setAaConnectOpen}
@@ -379,6 +420,7 @@ export default function BankAccountDetailPage() {
         onOpenChange={(o) => !o && setReconcileTxn(null)}
         transaction={reconcileTxn}
       />
+      <UnreconcileDialog txn={unreconcileTxn} onClose={() => setUnreconcileTxn(null)} />
     </div>
   );
 }
@@ -413,9 +455,11 @@ function TxnStatusBadge({ txn }: { txn: BankTransactionRow }) {
 function TransactionRow({
   txn,
   onReconcile,
+  onUnreconcile,
 }: {
   txn: BankTransactionRow;
   onReconcile: () => void;
+  onUnreconcile: () => void;
 }) {
   const reconcile = useReconcileTransaction();
 
@@ -453,7 +497,7 @@ function TransactionRow({
             <Badge kind="success" size="sm" dot>{txnStatusLabel(txn.matched_to_type)}</Badge>
             <button
               type="button"
-              onClick={() => reconcile.mutate({ transactionId: txn.id, matchedToType: null, matchedToId: null })}
+              onClick={onUnreconcile}
               className="text-3xs text-ink-3 hover:text-rose"
               disabled={reconcile.isPending}
             >
@@ -474,7 +518,7 @@ function TransactionRow({
 // ============================================================
 // Card (mobile)
 // ============================================================
-function TransactionCard({ txn, onReconcile }: { txn: BankTransactionRow; onReconcile: () => void }) {
+function TransactionCard({ txn, onReconcile, onUnreconcile }: { txn: BankTransactionRow; onReconcile: () => void; onUnreconcile: () => void }) {
   const reconcile = useReconcileTransaction();
   return (
     <li>
@@ -498,7 +542,7 @@ function TransactionCard({ txn, onReconcile }: { txn: BankTransactionRow; onReco
           ) : txn.matched_to_type ? (
             <button
               type="button"
-              onClick={() => reconcile.mutate({ transactionId: txn.id, matchedToType: null, matchedToId: null })}
+              onClick={onUnreconcile}
               disabled={reconcile.isPending}
               className="text-xs text-ink-3 hover:text-rose"
             >

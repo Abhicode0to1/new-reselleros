@@ -45,13 +45,19 @@ const PLOT_H = 176;
  * shortfall in words. Clamping it to zero would draw a business breaking even while it
  * bleeds.
  */
-export function HundredRupeeBar({ split }: { split: HundredRupeeSplit }) {
+export function HundredRupeeBar({ split, costLabel = "Vendor licences", costTo = "the vendor" }: {
+  split: HundredRupeeSplit;
+  /** What the cost-of-goods share is, in this business — licences, project salary, or both. */
+  costLabel?: string;
+  /** "goes to ___" in the caption. */
+  costTo?: string;
+}) {
   const { licence, running, profit, isLoss } = split;
   /* Widths are of the SPENT portion when losing, so the bar still fills its track and the
      reader is not left wondering what the empty space means. */
   const denom = isLoss ? licence + running : 100;
   const parts = [
-    { key: "licence", label: "Vendor licences", value: licence, cls: "bg-rose/60" },
+    { key: "licence", label: costLabel, value: licence, cls: "bg-rose/60" },
     { key: "running", label: "Running the business", value: running, cls: "bg-amber/60" },
     ...(isLoss ? [] : [{ key: "profit", label: "Yours to keep", value: profit, cls: "bg-emerald/70" }]),
   ];
@@ -93,7 +99,7 @@ export function HundredRupeeBar({ split }: { split: HundredRupeeSplit }) {
           </>
         ) : (
           <>
-            Of every <b>₹100</b> you invoice, <b>₹{licence}</b> goes to the vendor, <b>₹{running}</b> to
+            Of every <b>₹100</b> you invoice, <b>₹{licence}</b> goes to {costTo}, <b>₹{running}</b> to
             running the business, and <b className="text-emerald">₹{profit} is yours</b>.
           </>
         )}
