@@ -165,7 +165,11 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
             {milestone && settled !== milestone.remaining && (
               <p className="text-3xs text-amber-ink">
                 Is milestone ka {rupee(milestone.remaining)} baaki hai, ye payment {rupee(settled)} chukata hai{tds ? " (bank + TDS)" : ""} —
-                {settled < milestone.remaining ? " ye part payment ki tarah record hoga." : " milestone se zyada hai, milestone check kar lo."}
+                {settled < milestone.remaining
+                  ? (raiseInvoice && milestone.paid === 0 && !milestone.invoiceId
+                      ? ` is payment ki alag milestone (${amountInIndianWords(settled)}) banegi aur invoice sirf utne ka; baaki ${amountInIndianWords(milestone.remaining - settled)} "${milestone.label}" mein rahega.`
+                      : " ye part payment ki tarah record hoga.")
+                  : " milestone se zyada hai, milestone check kar lo."}
                 {!tds && milestone.remaining > net && " Agar customer ne TDS kaata hai to neeche \"TDS kata hai?\" tick karo."}
               </p>
             )}
