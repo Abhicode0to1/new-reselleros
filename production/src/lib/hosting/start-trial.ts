@@ -54,33 +54,42 @@ export function quoteForOr(v: string): string {
   return `"${v.replace(/"/g, '\\"')}"`;
 }
 
-export async function startHostingTrial(
-  admin: ReturnType<typeof createAdminClient>,
-  input: StartTrialInput,
-  request: NextRequest,
-  utmBody: Record<string, unknown>,
-): Promise<StartTrialResult> {
-  const { fullName, companyName, email, phone, domain, cycle } = input;
-  const domainStatus: "have" | "need" = (domain ?? "").trim().length >= 3 ? "have" : "need";
-  const tierId = TRIAL_PLAN_ID;
-  const tierName = TRIAL_PLAN_NAME;
-  const leadId = "L-" + Date.now().toString(36).toUpperCase();
+/**
+ * One free trial per customer (owner, 24 Sep 2026), asked on its own.
+ *
+ * Moved out of startHostingTrial unchanged on 26 Sep 2026, so the DMS panel can ask the
+ * SAME question before it offers the trial (POST /api/dms/trial-eligibility), and the
+ * panel and the checkout can never give different answers. Read-only. Fails closed: an
+ * unreadable history is `ok: false`, never "eligible".
+ */
+export type TrialEligibility =
+  | { ok: true; eligible: true }
+  | { ok: true; eligible: false; error: string }
+  | { ok: false; error: string };
 
-  const cleanDomain = (domain || "")
+/** The domain as the trial stores it: lower-case, no scheme, no trailing slash. */
+export function normaliseTrialDomain(domain: string | undefined): string {
+  return (domain || "")
     .toLowerCase()
     .replace(/^https?:\/\//, "")
     .replace(/\/+$/, "")
     .trim();
+}
 
+export async function checkTrialEligibility(
+  admin: ReturnType<typeof createAdminClient>,
+  input: { email: string; phone: string; domain?: string },
+): Promise<TrialEligibility> {
+  const tierName = TRIAL_PLAN_NAME;
+  const cleanDomain = normaliseTrialDomain(input.domain);
 
-  // ── One free trial per customer (owner, 24 Sep 2026) ──────────────────────
   // The site has no customer login, so "the same customer" is judged on what we
   // hold: an earlier trial with the same email, the same phone number (last 10
   // digits, so +91 / spaces do not matter) or the same website domain. Read
   // BEFORE anything is written; an unreadable history refuses rather than lets a
   // second trial through (fail closed), and says so.
-  const emailKey = email.trim().toLowerCase();
-  const phoneKey = phone.replace(/\D/g, "").slice(-10);
+  const emailKey = input.email.trim().toLowerCase();
+  const phoneKey = input.phone.replace(/\D/g, "").slice(-10);
   const orParts = [`contact_email.ilike.${quoteForOr(likeEscape(emailKey))}`];
   if (phoneKey.length === 10) orParts.push(`contact_phone.ilike.${quoteForOr(`%${phoneKey}`)}`);
   if (cleanDomain.length >= 3) orParts.push(`domain.eq.${quoteForOr(cleanDomain)}`);
@@ -93,14 +102,14 @@ export async function startHostingTrial(
     .order("created_at", { ascending: true })
     .limit(1);
   if (priorErr) {
-    console.error("[startHostingTrial] could not read earlier trials:", priorErr);
+    console.error("[checkTrialEligibility] could not read earlier trials:", priorErr);
     return { ok: false, error: "We couldn't check whether you've had a trial before, so we haven't started one. Nothing was saved. Please try again in a minute." };
   }
   if (priorTrials && priorTrials.length > 0) {
     const when = new Date(priorTrials[0].created_at as string).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
     return {
-      ok: false,
-      alreadyTrialled: true,
+      ok: true,
+      eligible: false,
       error:
         `You've already had a free hosting trial with us (started ${when}), and it's one per customer — matched on this email, phone number or domain. ` +
         `Nothing was saved. You can buy ${tierName} from the hosting page, or reply to our earlier email if you need more time on the trial.`,
@@ -112,7 +121,7 @@ export async function startHostingTrial(
   // refuses the trial rather than reads as "no earlier trial".
   const dmsHistory = await checkTrialHistory({ email: emailKey, phone: phoneKey || undefined, domain: cleanDomain || undefined });
   if (!dmsHistory.ok) {
-    console.error(`[startHostingTrial] could not check DMS trial history: ${dmsHistory.reason}`);
+    console.error(`[checkTrialEligibility] could not check DMS trial history: ${dmsHistory.reason}`);
     return { ok: false, error: "We couldn't check whether you've had a trial before, so we haven't started one. Nothing was saved. Please try again in a minute." };
   }
   if (dmsHistory.trialled) {
@@ -120,13 +129,39 @@ export async function startHostingTrial(
       ? ` (started ${new Date(dmsHistory.startedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})`
       : "";
     return {
-      ok: false,
-      alreadyTrialled: true,
+      ok: true,
+      eligible: false,
       error:
         `You've already had a free hosting trial with us${when}, and it's one per customer — matched on this email, phone number or domain. ` +
         `Nothing was saved. You can buy ${tierName} from the hosting page, or reply to our earlier email if you need more time on the trial.`,
     };
   }
+  return { ok: true, eligible: true };
+}
+
+export async function startHostingTrial(
+  admin: ReturnType<typeof createAdminClient>,
+  input: StartTrialInput,
+  request: NextRequest,
+  utmBody: Record<string, unknown>,
+): Promise<StartTrialResult> {
+  const { fullName, companyName, email, phone, domain, cycle } = input;
+  const domainStatus: "have" | "need" = (domain ?? "").trim().length >= 3 ? "have" : "need";
+  const tierId = TRIAL_PLAN_ID;
+  const tierName = TRIAL_PLAN_NAME;
+  const leadId = "L-" + Date.now().toString(36).toUpperCase();
+
+  const cleanDomain = normaliseTrialDomain(domain);
+
+
+  // One free trial per customer — the same check the DMS panel asks beforehand
+  // (checkTrialEligibility above), so the two can never disagree.
+  const eligibility = await checkTrialEligibility(admin, { email, phone, domain });
+  if (!eligibility.ok) return { ok: false, error: eligibility.error };
+  if (!eligibility.eligible) return { ok: false, alreadyTrialled: true, error: eligibility.error };
+  // The same keys the check matched on, for DMS's shared trial record below.
+  const emailKey = email.trim().toLowerCase();
+  const phoneKey = phone.replace(/\D/g, "").slice(-10);
 
   const notes = [
     `HOSTING TRIAL REQUEST · ${TRIAL_DAYS}-day free trial (no card)`,
