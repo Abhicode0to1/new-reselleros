@@ -38,11 +38,15 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       `b4e7e95e`, `df026684`):** a refund of a DMS-invoiced order no longer flags `creditNotePending` (the
       setter is deleted, and a scan fails if anything sets it again). Rows flagged before are shown as
       historical: no credit note is needed, clear the flag.
-- [ ] **Left by round 7 (DMS):** the Razorpay card's stranded-order hint (~L162, entry text ~L775-776) still
-      says "finish the order (provision + issue the invoice)"; `components/admin/invoice-diagnostics/ConflictsTable.tsx:82`
-      shows a "GST engine" label; `app/admin/invoices/page.tsx:35` has a comment saying 'primary' = our GST
-      engine (historical labels on old invoices). The local `.env.docker` / `.env.local` still set
+- [x] **Round 9 (DMS `81aff19e`):** the stranded-order hint says finish by provisioning, and any bill is
+      raised in ResellerOS; old DMS invoices read "DMS (historical)"; a scan of the admin pages fails on
+      any instruction to issue an invoice from DMS. The local `.env.docker` / `.env.local` still set
       `COMPANY_STATE`; harmless, delete by hand.
+- [ ] **DMS integration test stale since `2598cc4f`** (not in the gate):
+      `tests/integration/services/orders.test.ts:1109` (`listInvoiceOrdersAdmin`) relied on the deleted
+      pre-save hook to mint an `invoiceNumber`. The function is right; the test is stale. Proposed fix:
+      give that order an explicit number. Other integration tests may be stale for the same reason; only
+      this one was checked.
 - [x] **DMS renewal reminders carry no DMS price** (DMS `812462ec`). They link to the one pending
       ResellerOS quote, or to the Invoices page when there are several, or say the bill is being
       prepared. A scan test fails if a price field returns.
