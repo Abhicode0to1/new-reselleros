@@ -190,6 +190,26 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
 - **Done when:** accepting a lead's project quotation turns the lead Won without a click, and the project
   page shows the lead it came from.
 
+### R-009 · Invoice list: show credit / debit notes, the invoice date, and no stray "0"
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-26
+- **Why accounting needs it:** on 26 Sep an invoice of ₹23,60,000 carried a ₹17,70,000 credit note (net
+  ₹5,90,000). The list showed only "₹23,60,000 · paid", which read as ₹23.6L received — the owner called it
+  "bada confusing". The note was visible only inside the invoice. Two display bugs sat next to it.
+- **What to change** — `production/src/app/(app)/invoices/page.tsx`:
+  1. **Notes on the row.** When an invoice has credit / debit notes, show them under the amount, e.g.
+     `CN −₹17,70,000 · net ₹5,90,000` (debit: `DN +₹50,000`). The detail view already loads them
+     (`Credit & debit notes (n)`, ~line 1600) — the list needs the same totals per invoice.
+  2. **Mobile / narrow card date (~line 855):** it prints `inv.created_at`; it should print
+     `inv.invoice_date` like the desktop row (~line 954). An invoice dated 7 Aug showed "26 Sept 2026"
+     because it was created on 26 Sep.
+  3. **Stray "0" (~line 848):** `{inv.net_payable && inv.net_payable !== inv.amount && (…)}` renders a
+     literal `0` when `net_payable` is 0 (React prints the falsy number). Use
+     `inv.net_payable != null && inv.net_payable !== inv.amount` and show "Net: ₹0 · settled" or nothing.
+- **Done when:** an invoice with a note shows the note and the net on its row; every row shows the
+  invoice date; no bare "0" appears under a settled invoice's amount.
+
 <!-- Template — copy for each new request:
 
 ### R-001 · <short title>
