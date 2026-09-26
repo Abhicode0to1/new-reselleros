@@ -29,9 +29,16 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
 - [x] **Round 6 (owner, 26 Sep 2026: "remove the unused ones"):** the packages page no longer shows
       Razorpay plan ids (DMS `7fc271d7`); `scripts/razorpay-regenerate-plans-live.js` is deleted and the
       DMS guard refuses `plans.create` everywhere, with no exception (DMS `9d812a37`).
-- [ ] **Left by round 6:** DMS's integration-health "Invoicing" card still has two hints that assume DMS
-      issues invoices (the credit-note hint around L128, "press Re-sync" around L136). The local
-      `.env.docker` / `.env.local` still set `COMPANY_STATE`; it is now harmless and can be deleted by hand.
+- [x] **Round 7 (owner, 26 Sep 2026: "Reword both"; DMS `a3eadfcc`):** the integration-health invoicing
+      hints now start "Historical:" and send the admin to ResellerOS (Invoices). The card is labelled
+      "Invoicing (historical — DMS issues no invoices)". The credit-note hint deliberately does not say
+      "cannot recur": a refund of an invoice DMS issued before 25 Sep 2026 still flags it
+      (`lib/services/orders.ts:644`).
+- [ ] **Left by round 7 (DMS):** the Razorpay card's stranded-order hint (~L162, entry text ~L775-776) still
+      says "finish the order (provision + issue the invoice)"; `components/admin/invoice-diagnostics/ConflictsTable.tsx:82`
+      shows a "GST engine" label; `app/admin/invoices/page.tsx:35` has a comment saying 'primary' = our GST
+      engine (historical labels on old invoices). The local `.env.docker` / `.env.local` still set
+      `COMPANY_STATE`; harmless, delete by hand.
 - [x] **DMS renewal reminders carry no DMS price** (DMS `812462ec`). They link to the one pending
       ResellerOS quote, or to the Invoices page when there are several, or say the bill is being
       prepared. A scan test fails if a price field returns.
