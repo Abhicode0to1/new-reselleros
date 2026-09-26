@@ -40,6 +40,7 @@ import { SalaryLinesDialog, salaryLinesOf } from "@/components/features/banking/
 import { StatementCheckCard } from "@/components/features/banking/statement-check-card";
 import { checkStatement } from "@/lib/banking/statement-check";
 import { ReconcileTransactionDialog } from "@/components/features/banking/reconcile-transaction-dialog";
+import { UnreconcileDialog } from "@/components/features/banking/unreconcile-dialog";
 import { ConnectAaDialog } from "@/components/features/banking/connect-aa-dialog";
 import { useBankAaConnection, useFetchAaNow } from "@/lib/queries/bank-aa";
 
@@ -71,6 +72,9 @@ export default function BankAccountDetailPage() {
   const [salaryOpen,    setSalaryOpen]    = React.useState(false);
   const [aaConnectOpen, setAaConnectOpen] = React.useState(false);
   const [reconcileTxn,  setReconcileTxn]  = React.useState<BankTransactionRow | null>(null);
+  /* Un-reconcile goes through a confirm that says what the line leaves behind (and can
+     undo a sale raised from it) — components/features/banking/unreconcile-dialog.tsx. */
+  const [unreconcileTxn, setUnreconcileTxn] = React.useState<BankTransactionRow | null>(null);
 
   // Resizable columns — drag the full-height divider between any two columns.
   const { colW, startResize, totalWidth: bankTableW } = useResizableColumns("ros_bank_colw_v3", BANK_COL_DEFAULTS);
@@ -383,6 +387,7 @@ export default function BankAccountDetailPage() {
                       key={txn.id}
                       txn={txn}
                       onReconcile={() => setReconcileTxn(txn)}
+                      onUnreconcile={() => setUnreconcileTxn(txn)}
                     />
                   ))}
                 </tbody>
@@ -396,7 +401,7 @@ export default function BankAccountDetailPage() {
               show every column + the Reconcile button without clipping). */}
           <ul className="lg:hidden space-y-2.5">
             {visibleTxns.map((txn) => (
-              <TransactionCard key={txn.id} txn={txn} onReconcile={() => setReconcileTxn(txn)} />
+              <TransactionCard key={txn.id} txn={txn} onReconcile={() => setReconcileTxn(txn)} onUnreconcile={() => setUnreconcileTxn(txn)} />
             ))}
           </ul>
         </>
@@ -415,6 +420,7 @@ export default function BankAccountDetailPage() {
         onOpenChange={(o) => !o && setReconcileTxn(null)}
         transaction={reconcileTxn}
       />
+      <UnreconcileDialog txn={unreconcileTxn} onClose={() => setUnreconcileTxn(null)} />
     </div>
   );
 }
@@ -449,9 +455,11 @@ function TxnStatusBadge({ txn }: { txn: BankTransactionRow }) {
 function TransactionRow({
   txn,
   onReconcile,
+  onUnreconcile,
 }: {
   txn: BankTransactionRow;
   onReconcile: () => void;
+  onUnreconcile: () => void;
 }) {
   const reconcile = useReconcileTransaction();
 
@@ -489,7 +497,7 @@ function TransactionRow({
             <Badge kind="success" size="sm" dot>{txnStatusLabel(txn.matched_to_type)}</Badge>
             <button
               type="button"
-              onClick={() => reconcile.mutate({ transactionId: txn.id, matchedToType: null, matchedToId: null })}
+              onClick={onUnreconcile}
               className="text-3xs text-ink-3 hover:text-rose"
               disabled={reconcile.isPending}
             >
@@ -510,7 +518,7 @@ function TransactionRow({
 // ============================================================
 // Card (mobile)
 // ============================================================
-function TransactionCard({ txn, onReconcile }: { txn: BankTransactionRow; onReconcile: () => void }) {
+function TransactionCard({ txn, onReconcile, onUnreconcile }: { txn: BankTransactionRow; onReconcile: () => void; onUnreconcile: () => void }) {
   const reconcile = useReconcileTransaction();
   return (
     <li>
@@ -534,7 +542,7 @@ function TransactionCard({ txn, onReconcile }: { txn: BankTransactionRow; onReco
           ) : txn.matched_to_type ? (
             <button
               type="button"
-              onClick={() => reconcile.mutate({ transactionId: txn.id, matchedToType: null, matchedToId: null })}
+              onClick={onUnreconcile}
               disabled={reconcile.isPending}
               className="text-xs text-ink-3 hover:text-rose"
             >
