@@ -54,20 +54,19 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
 - [x] **In-panel trial moves to ResellerOS** (owner, 26 Sep 2026). ResellerOS `POST /api/dms/start-trial`
       (`f514758b`) runs the site's `startHostingTrial`; DMS `9bc63716` calls it and no longer creates
       the trial locally.
-- [ ] **Dead code in DMS, kept for now:** `app/api/domains/renew` (nothing can reach it),
+- [x] **Dead code in DMS:** `app/api/domains/renew` (nothing can reach it),
       `createCompletedOrder` in `lib/services/payment/order-creator.ts`, and `createCustomer` /
       `createRecurringTokenOrder` in `lib/razorpay.ts` (only the gated Tokens live harness uses them).
       **Deleted** (DMS `0d787076`), with `verification.ts` and two order-creator helpers whose only
       callers went with them.
-- [ ] **Found in round 4, not done:**
+- [x] **Found in round 4** (all settled; the last line is owner-declined):
       - [x] DMS trial pre-check asks ResellerOS (owner, 26 Sep 2026): ResellerOS `acfc4512`
         (`/api/dms/trial-eligibility`), DMS `4d824494`. `userHasPriorTrialOrder` deleted.
       - [x] DMS `COMPANY_STATE` removed (DMS `22407836`): the unused `CompanyProfile.state` read, the
         deploy-script requirement, the seed script, the env examples and the docs. What remains is notes
         saying it was removed, and the matcher for old orders' failure text.
-      - The `/checkout` trial banner says "we'll remind you to pay … from your dashboard" (true in
-        effect, DMS-centric wording). `sendServiceExpiryTodayEmail` / `sendServiceGracePeriodEmail` have
-        no callers (no price in them).
+      - Owner declined on 26 Sep 2026 (left as is): the `/checkout` trial banner wording, and the two
+        uncalled emails `sendServiceExpiryTodayEmail` / `sendServiceGracePeriodEmail`.
 - [ ] **Colleague (blocked folder):** `src/lib/renewals/create-renewal-quote.ts` writes
       `extension_months: 12` for monthly subscriptions too, and guesses cost as 83% of price. Written up
       for Abhishek as **R-012 in `docs/CROSS-TEAM-REQUESTS.md`** (26 Sep). See §0A.
@@ -77,6 +76,12 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       `RESELLEROS_SERVER_URL` (ResellerOS's `https://` origin) and `RESELLEROS_BILLING_API_KEY` (a
       tenant key from ResellerOS Settings → Integrations → Support platform API). Unset = DMS refuses
       purchases and bills with a clear message.
+      **LOCAL is done (26 Sep 2026):** both gitignored env files set; DMS reaches ResellerOS at
+      `http://host.docker.internal:4320`; the billing key is `api_keys` row `040f1519…` for the local
+      tenant `2222…`, labelled "DMS panel billing (LOCAL dev only)". Probed from inside the DMS
+      container: trial check 200 (wrong key 401), a bad panel order 400 "Nothing was charged", bills
+      lookup 404 for an unknown email and 200 for the list. Not yet exercised: a full panel purchase
+      through Razorpay test mode, in a browser.
 - [ ] **ResellerOS production migrations:** `20260921100000_provisioning_facts_are_immutable` and
       `20260924120000_provisioning_one_per_product` (details under "Waiting on Pardeep" below).
 - [ ] **Deploy both apps**, ResellerOS first (DMS's panel calls it).
