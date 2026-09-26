@@ -361,9 +361,13 @@ before calling anything done.
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how
   4 unit tests sat broken for months.
-- The **54** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
-  means running them by hand, or it is not verified. (This line said 28 and L7 said 38;
-  both were stale — counted 23 Sep 2026.)
+- The **63** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
+  means running them by hand, or it is not verified. (This line said 54 on 23 Sep, 28 before
+  that, and L7 said 38; counted 26 Sep 2026.) **Measured 26 Sep 2026 against the LOCAL
+  Supabase, after applying `20260925140000`..`20260926120000` from the `pardeep-sir` merge:
+  62 pass / 1 not-applicable** (`sandbox_tenant_isolation`, below). Four files still MENTION
+  `TESTRESULT` in comments describing their old style; they are rollback tests now, so a
+  runner that keys on the word misreads them.
 
   Measured that day against the LOCAL Supabase: **53 pass / 1 not-applicable**. The one is
   `sandbox_tenant_isolation`, which measures the REAL sandbox tenant against the REAL live
