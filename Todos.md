@@ -1,17 +1,63 @@
 # Todos — ResellerOS ↔ DMS integration
 
-Recorded 2026-09-19. Last updated **2026-09-24 (evening)**, after enabling the ResellerOS site
-cart (ResellerOS `c49cd098`). Earlier the same day: the billing-architecture decisions 1–21
+Recorded 2026-09-19. Last updated **2026-09-26**, after DMS stopped taking payments on its own
+Razorpay keys (DMS `84b5ae33`) and the `/api/v1` lookup fix (ResellerOS `df82eff2`). Before that,
+2026-09-24 (evening): enabling the ResellerOS site cart (ResellerOS `c49cd098`). Earlier the same day: the billing-architecture decisions 1–21
 (§0A), DMS pricing moved to ResellerOS + GST (DMS `06a9546`), DMS's public pages removed (DMS
 `0fe6c95`), and the Billing & Subscriptions hands-off guard (AGENTS.md §13). Before that
 2026-09-23: engine Phases 6-8, the production apply of DMS migration 008, and merging
 `abhishek-pre-merge`.
 
-**Gates at the last update:** ResellerOS 6,668 tests / 362 files, typecheck clean, lint exit 0
-(warnings only). DMS 6,702 / 445, typecheck clean, lint 0 errors.
+**Gates at the last update (26 Sep 2026):** ResellerOS 6,884 tests / 378 files, typecheck clean,
+lint exit 0 (warnings only). DMS 6,497 / 444, typecheck clean (the count fell on purpose: tests
+were deleted with the invoice, renewal and payment code they covered).
 
 **Read §0A first.** It is the newest record and supersedes older entries below where they
 conflict; each superseded entry is marked in place.
+
+### OPEN — waiting on Pardeep (collected 26 Sep 2026)
+
+Everything below needs an owner decision or an owner action. Nothing here is being worked on.
+
+**Decisions**
+- [ ] **Multi-year domain registration and a cart with two hosting plans** can no longer be bought
+      inside DMS. `/api/dms/panel-order` takes one year per domain and one hosting `domain`, and
+      the DMS cart refuses both by name. Allowing them means widening that contract. Want them?
+- [ ] **Admin package price edits in DMS still create Razorpay PLANS on DMS's account**
+      (`app/api/admin/hosting/packages/route.ts:303,312`). Not a payment, but DMS writing to its own
+      Razorpay. Remove, or leave?
+- [ ] **DMS renewal reminders quote DMS's own price** (`process-service-expiry`, around L243,
+      `service.price`). ResellerOS sends the real renewal quote. Change the reminder to point at the
+      ResellerOS quote, or drop the DMS reminder?
+- [ ] **`cron/renewal-payment-dunning` in DMS still chases old DMS renewal orders** made before
+      25 Sep. Switch it off, or let it finish the old ones?
+- [ ] **A trial started inside the DMS panel has no ResellerOS renewal quote**, because ResellerOS
+      does not know about it, so its convert button says "contact support". Should DMS tell
+      ResellerOS about in-panel trials (like the site trial), or move the in-panel trial to ResellerOS?
+- [ ] **Dead code in DMS, kept for now:** `app/api/domains/renew` (nothing can reach it),
+      `createCompletedOrder` in `lib/services/payment/order-creator.ts`, and `createCustomer` /
+      `createRecurringTokenOrder` in `lib/razorpay.ts` (only the gated Tokens live harness uses them).
+      OK to delete?
+- [ ] **Colleague (blocked folder):** `src/lib/renewals/create-renewal-quote.ts` writes
+      `extension_months: 12` for monthly subscriptions too. Prompt handed over 25 Sep. See §0A.
+
+**Actions only you can take — before anything is switched on**
+- [ ] **Keys.** ResellerOS: `DMS_PANEL_API_KEY`. DMS: the same `DMS_PANEL_API_KEY`,
+      `RESELLEROS_SERVER_URL` (ResellerOS's `https://` origin) and `RESELLEROS_BILLING_API_KEY` (a
+      tenant key from ResellerOS Settings → Integrations → Support platform API). Unset = DMS refuses
+      purchases and bills with a clear message.
+- [ ] **ResellerOS production migrations:** `20260921100000_provisioning_facts_are_immutable` and
+      `20260924120000_provisioning_one_per_product` (details under "Waiting on Pardeep" below).
+- [ ] **Deploy both apps**, ResellerOS first (DMS's panel calls it).
+- [ ] **Cloud Scheduler jobs, each WITH a retry count (L1):** `/api/cron/provision-hosting`,
+      `/api/cron/register-domains`, `/api/cron/renew-domains`, `/api/cron/renew-hosting`.
+- [ ] **The switches, one at a time, each with its DMS twin:** `HOSTING_TRIAL_LIVE`,
+      `HOSTING_PROVISIONING_LIVE`, `DOMAIN_REGISTRATION_LIVE`, `DOMAIN_RENEWAL_LIVE`,
+      `HOSTING_RENEWAL_LIVE` here; `ENGINE_HOSTING_PROVISION_LIVE`, `ENGINE_DOMAIN_REGISTER_LIVE`,
+      `ENGINE_DOMAIN_RENEW_LIVE`, `ENGINE_HOSTING_RENEW_LIVE` on DMS. The steps before domain
+      registration are listed in §0A.
+- [ ] **Razorpay:** confirm `MAX_MANDATE_AMOUNT`, cancel leftover DMS test subscriptions, and run
+      one real payment on the ResellerOS cart (you said you would).
 
 Both repos now carry a branch named **`pawan-api-system`**, both pushed:
 - ResellerOS — `Abhicode0to1/new-reselleros` (this repo). **`abhishek-pre-merge` merged in on
@@ -310,7 +356,7 @@ registration queue picks up renewals.
 
   **Before switching on:** a Cloud Scheduler job for `/api/cron/renew-hosting`, with a retry count.
 
-### Decisions 29-30 — who bills an in-panel purchase (25 Sep 2026) — DECIDED, NOT BUILT
+### Decisions 29-30 — who bills an in-panel purchase (25 Sep 2026) — BUILT (DMS `15f52e9f`..`84b5ae33`)
 
 | # | Question | Pardeep's answer |
 |---|---|---|
@@ -561,13 +607,15 @@ with Razorpay before the first live mandate.
 
 ### Still to build (not started — each waits for a go-ahead)
 
-- [ ] **Stop DMS issuing invoices.** Gate `lib/services/billing/createPrimaryInvoice.ts` (the
+- [x] **DONE 25 Sep 2026 (DMS `2598cc4f`).** Stop DMS issuing invoices. Gate `lib/services/billing/createPrimaryInvoice.ts` (the
       only caller of `allocateInvoiceNumber()`; 10 flows reach it). **In the same commit**
       neutralise the legacy pre-save hook in `models/Order.ts` (~line 541) that mints
       `INV-${timestamp}-${random}` when `status === "completed" && !invoiceNumber &&
       invoiceProvider !== "primary"` — gating the first alone makes the second fire MORE
       (L112 shape). Needs a scan test that both are closed.
-- [ ] **New engine command `billing.record_external_invoice`.** DMS stores ResellerOS's invoice
+- [ ] ~~**New engine command `billing.record_external_invoice`.**~~ **SUPERSEDED 25 Sep 2026:** DMS
+      reads the customer's bills live from ResellerOS's `/api/v1` (DMS `08d8ec0c`), so it keeps no
+      copy. Original entry: DMS stores ResellerOS's invoice
       number and PDF link as a foreign reference. Touches no DMS `Counter`, idempotent on the
       ResellerOS invoice number.
 - [x] **Historical `TI/…` invoices — NOT NEEDED. USER DECISION, Pardeep, 24 Sep 2026:** every
@@ -596,7 +644,7 @@ with Razorpay before the first live mandate.
       still carry the old amounts. DMS no longer creates new ones, and there are no live
       customers (decision 6), but any test subscription left in the Razorpay dashboard should
       be cancelled there.
-- [ ] **Remove the dead Admin → Page management controls in DMS (decision 15).** Visibility
+- [x] **DONE 25 Sep 2026 (DMS `a6bab155`).** Remove the dead Admin → Page management controls in DMS (decision 15). Visibility
       toggles for the deleted pages and the homepage-design switch change nothing now.
 - ~~**Production DMS still has its old pages.**~~ Out of scope: the live / production DMS is a
       separate project (owner, 25 Sep 2026).
@@ -743,19 +791,21 @@ with Razorpay before the first live mandate.
       to LOCAL only. Must be live before the new webhook code deploys: the webhook now inserts
       one row per product, and under the old one-per-quote index the second row would fail
       (logged, not thrown — but the domain would again be queued for nobody).
-- [ ] **Two dead components hold SKU-less adds:** `DomainRateCard`, `HostingPlans` (replaced
+- [x] **DONE 25 Sep 2026 (ResellerOS `ae6010f6`, deleted).** Two dead components hold SKU-less adds: `DomainRateCard`, `HostingPlans` (replaced
       2-3 Sep, unmounted since). Pinned unmounted by `src/site/cart-lines-priceable.test.ts`;
       delete them when convenient.
 
-- [ ] **In-panel DMS purchases pay into ResellerOS's Razorpay account (decision 12).** DMS's
+- [x] **DONE 25 Sep 2026 (decision 30; ResellerOS `6c7b8afc`, DMS `15f52e9f` and `f575ce64`).** In-panel DMS purchases pay into ResellerOS's Razorpay account (decision 12). DMS's
       checkout currently uses DMS's own keys. Moving it means ResellerOS creates the Razorpay
       order and receives the webhook, or DMS is given ResellerOS's keys. Design this together
       with the bill hand-off below.
-- [ ] **Bill hand-off with an offline queue (decisions 13 and 16).** After payment DMS asks
+- [ ] ~~**Bill hand-off with an offline queue (decisions 13 and 16).**~~ **SUPERSEDED by decision 30
+      (25 Sep 2026):** ResellerOS creates every order, and DMS refuses a purchase when ResellerOS is
+      down, so there is nothing to queue. Original entry: After payment DMS asks
       ResellerOS for the bill; if ResellerOS is unreachable it queues and retries (L1: say what
       retries it, who is told, and how a stuck one is noticed a week later). The panel shows
       "bill being prepared" until the ResellerOS PDF arrives, then serves that PDF.
-- [ ] **Remove DMS's three admin invoice actions (decision 17)** in the same change that stops
+- [x] **DONE 25 Sep 2026 (DMS `2598cc4f`).** Remove DMS's three admin invoice actions (decision 17) in the same change that stops
       DMS issuing invoices: re-sync invoice (`api/admin/orders/[id]/re-sync-invoice`), invoice
       retry (`lib/invoice-retry.ts` + its pill), and the issue-invoice worker
       (`api/workers/issue-invoice`).
@@ -766,7 +816,8 @@ with Razorpay before the first live mandate.
 
 - [x] Which Razorpay account takes the money? **ResellerOS's (decision 12).**
 - [x] One bill or two? **DMS shows ResellerOS's own PDF (decision 13).**
-- [x] ResellerOS down during an in-panel purchase? **Take payment, bill later (decision 16).**
+- [x] ResellerOS down during an in-panel purchase? ~~Take payment, bill later (decision 16).~~
+      **Refuse the purchase (decision 30, 25 Sep 2026), which replaces decision 16.**
 - [x] DMS's three admin invoice actions? **Removed (decision 17).**
 - [x] **Is a hosting price GST-inclusive or not?** Answered 24 Sep: ResellerOS's reading —
       GST on top (decision 11). Built the same day, see above.
