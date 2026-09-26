@@ -23,6 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { CampaignTemplateRow } from "@/lib/supabase/database.types";
+import Link from "next/link";
+import { useSaveTemplate, unknownVariables } from "@/lib/queries/campaign-templates";
 
 interface Props {
   open: boolean;
@@ -59,6 +61,21 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
   const [subject, setSubject] = React.useState("");
   const [bodyText, setBodyText] = React.useState("");
   const [bodyHtml, setBodyHtml] = React.useState("");
+  const saveTemplate = useSaveTemplate();
+  /* Keep what was written here for next time (managed on /marketing/templates). */
+  async function saveAsTemplate() {
+    if (subject.trim().length < 2 || bodyHtml.trim().length < 10) {
+      toast.error("Pehle subject aur mail likho, phir template save karo.");
+      return;
+    }
+    const unknown = unknownVariables(subject, bodyHtml, bodyText);
+    if (unknown.length) { toast.error(`Ye variable bharenge nahi: ${unknown.map((u) => `{{${u}}}`).join(", ")}`); return; }
+    const id = await saveTemplate.mutateAsync({
+      name: name.trim() || subject.trim().slice(0, 80), category: offerEnabled ? "offer" : "custom",
+      subject: subject.trim(), body_html: bodyHtml, body_text: bodyText.trim() || null, description: null,
+    });
+    setSelectedTemplateId(id);
+  }
   const [bodyMode, setBodyMode] = React.useState<BodyMode>("preview");
 
   const [offerEnabled, setOfferEnabled]   = React.useState(false);
@@ -258,7 +275,13 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
         {/* Top row: Template picker + AI button */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-end">
           <div>
-            <Label>Start from a template</Label>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label>Start from a template</Label>
+              <span className="flex gap-3 text-2xs">
+                <button type="button" onClick={saveAsTemplate} disabled={saveTemplate.isPending} className="text-amber-ink hover:underline disabled:opacity-50">Save as template</button>
+                <Link href="/marketing/templates" className="text-ink-3 hover:text-ink hover:underline">Manage templates</Link>
+              </span>
+            </div>
             <select
               value={selectedTemplateId}
               onChange={(e) => {
