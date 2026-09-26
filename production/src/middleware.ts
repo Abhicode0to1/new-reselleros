@@ -49,6 +49,7 @@ const PROTECTED_PREFIXES = [
   "/partners",
   "/mobile",
   "/lead-gen",
+  "/marketing",       // Hub, Spend, ROAS & CAC, Tracking links — was missing, so the shells rendered signed-out
   /* Internal bug-report triage queue. The role gate is the nav-derived one further
      down (owner + manager); this list is only the "must be signed in" half. */
   "/admin",
