@@ -80,12 +80,20 @@ insert into public.quotes (id, tenant_id, customer_name, plan, seats, amount, st
 ('Q-2026-0038', '11111111-1111-1111-1111-111111111111', 'Sapphire Exports',   'Plus + Voice',           28, 410000, 'draft',    'L10', '2026-05-20', '2026-06-19');
 
 -- Invoices (sample 5)
-insert into public.invoices (id, tenant_id, customer_name, amount, status, invoice_date, due_date, overdue_days) values
-('INV-2026-0089', '11111111-1111-1111-1111-111111111111', 'Acme Corp',         490644, 'pending', '2026-05-15', '2026-06-15', 0),
-('INV-2026-0088', '11111111-1111-1111-1111-111111111111', 'Beta Industries',   132480, 'paid',    '2026-05-14', '2026-06-14', 0),
-('INV-2026-0087', '11111111-1111-1111-1111-111111111111', 'Cosmo Tech',        198720, 'pending', '2026-05-12', '2026-06-12', 0),
-('INV-2026-0086', '11111111-1111-1111-1111-111111111111', 'Delta Pvt Ltd',     828000, 'paid',    '2026-05-10', '2026-06-10', 0),
-('INV-2026-0085', '11111111-1111-1111-1111-111111111111', 'Echo Pharma',       215640, 'overdue', '2026-04-05', '2026-05-05', 14);
+--
+-- R-007, 26 Sep 2026: these used to carry only `customer_name`, and the names did not
+-- even match the customers seeded above ("Acme Corp" against "Acme Corp Pvt Ltd"). So a
+-- fresh local database opened with five invoices belonging to nobody — which is exactly
+-- the state R-007 exists to prevent, shipped as a fixture. Anyone reading the Ledger or
+-- Aging on a new machine saw the bug and could not tell it from real data.
+--
+-- `customer_id` is now set, and `customer_name` copies the customer's real name.
+insert into public.invoices (id, tenant_id, customer_id, customer_name, amount, status, invoice_date, due_date, overdue_days) values
+('INV-2026-0089', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Acme Corp Pvt Ltd', 490644, 'pending', '2026-05-15', '2026-06-15', 0),
+('INV-2026-0088', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'Beta Industries',   132480, 'paid',    '2026-05-14', '2026-06-14', 0),
+('INV-2026-0087', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Cosmo Tech',        198720, 'pending', '2026-05-12', '2026-06-12', 0),
+('INV-2026-0086', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Delta Pvt Ltd',     828000, 'paid',    '2026-05-10', '2026-06-10', 0),
+('INV-2026-0085', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'Echo Pharma',       215640, 'overdue', '2026-04-05', '2026-05-05', 14);
 
 -- Subscriptions (sample 5)
 insert into public.subscriptions (tenant_id, customer_name, domain, plan, vendor, seats, used, mrr, start_date, renewal_date, status, is_urgent) values

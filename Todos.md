@@ -1,7 +1,63 @@
 # Todos — ResellerOS ↔ DMS integration
 
-Recorded 2026-09-19. Last updated **2026-09-23**, after engine Phases 6-8, the production
-apply of DMS migration 008, and merging `abhishek-pre-merge`.
+Recorded 2026-09-19. Last updated **2026-09-26**, after DMS stopped taking payments on its own
+Razorpay keys (DMS `84b5ae33`) and the `/api/v1` lookup fix (ResellerOS `df82eff2`). Before that,
+2026-09-24 (evening): enabling the ResellerOS site cart (ResellerOS `c49cd098`). Earlier the same day: the billing-architecture decisions 1–21
+(§0A), DMS pricing moved to ResellerOS + GST (DMS `06a9546`), DMS's public pages removed (DMS
+`0fe6c95`), and the Billing & Subscriptions hands-off guard (AGENTS.md §13). Before that
+2026-09-23: engine Phases 6-8, the production apply of DMS migration 008, and merging
+`abhishek-pre-merge`.
+
+**Gates at the last update (26 Sep 2026):** ResellerOS 6,884 tests / 378 files, typecheck clean,
+lint exit 0 (warnings only). DMS 6,497 / 444, typecheck clean (the count fell on purpose: tests
+were deleted with the invoice, renewal and payment code they covered).
+
+**Read §0A first.** It is the newest record and supersedes older entries below where they
+conflict; each superseded entry is marked in place.
+
+### OPEN — waiting on Pardeep (collected 26 Sep 2026)
+
+Everything below needs an owner decision or an owner action. Nothing here is being worked on.
+
+**Decisions**
+- [ ] **Multi-year domain registration and a cart with two hosting plans** can no longer be bought
+      inside DMS. `/api/dms/panel-order` takes one year per domain and one hosting `domain`, and
+      the DMS cart refuses both by name. Allowing them means widening that contract. Want them?
+- [ ] **Admin package price edits in DMS still create Razorpay PLANS on DMS's account**
+      (`app/api/admin/hosting/packages/route.ts:303,312`). Not a payment, but DMS writing to its own
+      Razorpay. Remove, or leave?
+- [ ] **DMS renewal reminders quote DMS's own price** (`process-service-expiry`, around L243,
+      `service.price`). ResellerOS sends the real renewal quote. Change the reminder to point at the
+      ResellerOS quote, or drop the DMS reminder?
+- [ ] **`cron/renewal-payment-dunning` in DMS still chases old DMS renewal orders** made before
+      25 Sep. Switch it off, or let it finish the old ones?
+- [ ] **A trial started inside the DMS panel has no ResellerOS renewal quote**, because ResellerOS
+      does not know about it, so its convert button says "contact support". Should DMS tell
+      ResellerOS about in-panel trials (like the site trial), or move the in-panel trial to ResellerOS?
+- [ ] **Dead code in DMS, kept for now:** `app/api/domains/renew` (nothing can reach it),
+      `createCompletedOrder` in `lib/services/payment/order-creator.ts`, and `createCustomer` /
+      `createRecurringTokenOrder` in `lib/razorpay.ts` (only the gated Tokens live harness uses them).
+      OK to delete?
+- [ ] **Colleague (blocked folder):** `src/lib/renewals/create-renewal-quote.ts` writes
+      `extension_months: 12` for monthly subscriptions too. Prompt handed over 25 Sep. See §0A.
+
+**Actions only you can take — before anything is switched on**
+- [ ] **Keys.** ResellerOS: `DMS_PANEL_API_KEY`. DMS: the same `DMS_PANEL_API_KEY`,
+      `RESELLEROS_SERVER_URL` (ResellerOS's `https://` origin) and `RESELLEROS_BILLING_API_KEY` (a
+      tenant key from ResellerOS Settings → Integrations → Support platform API). Unset = DMS refuses
+      purchases and bills with a clear message.
+- [ ] **ResellerOS production migrations:** `20260921100000_provisioning_facts_are_immutable` and
+      `20260924120000_provisioning_one_per_product` (details under "Waiting on Pardeep" below).
+- [ ] **Deploy both apps**, ResellerOS first (DMS's panel calls it).
+- [ ] **Cloud Scheduler jobs, each WITH a retry count (L1):** `/api/cron/provision-hosting`,
+      `/api/cron/register-domains`, `/api/cron/renew-domains`, `/api/cron/renew-hosting`.
+- [ ] **The switches, one at a time, each with its DMS twin:** `HOSTING_TRIAL_LIVE`,
+      `HOSTING_PROVISIONING_LIVE`, `DOMAIN_REGISTRATION_LIVE`, `DOMAIN_RENEWAL_LIVE`,
+      `HOSTING_RENEWAL_LIVE` here; `ENGINE_HOSTING_PROVISION_LIVE`, `ENGINE_DOMAIN_REGISTER_LIVE`,
+      `ENGINE_DOMAIN_RENEW_LIVE`, `ENGINE_HOSTING_RENEW_LIVE` on DMS. The steps before domain
+      registration are listed in §0A.
+- [ ] **Razorpay:** confirm `MAX_MANDATE_AMOUNT`, cancel leftover DMS test subscriptions, and run
+      one real payment on the ResellerOS cart (you said you would).
 
 Both repos now carry a branch named **`pawan-api-system`**, both pushed:
 - ResellerOS — `Abhicode0to1/new-reselleros` (this repo). **`abhishek-pre-merge` merged in on
@@ -29,7 +85,753 @@ Verification key: **[verified]** = read end-to-end in the code and confirmed her
 
 ---
 
+## 0A. BILLING ARCHITECTURE — decided by Pardeep, 24 Sep 2026
+
+**This supersedes two older entries in this file**, which are corrected in place below:
+§D's Zoho entry ("DMS's own GST engine is the only invoice issuer" — true about Zoho,
+overtaken on billing) and the "purchase funnel is deliberately NOT taken over" entry.
+
+### Decisions (USER DECISIONS — do not re-litigate)
+
+| # | Decision | In Pardeep's words |
+|---|---|---|
+| 1 | ResellerOS cart + billing is PRIMARY for a customer's **first** purchase of domain and hosting | "cart and billing of ResellerOs will be as primary … when buying the domain and hosting" |
+| 2 | DMS keeps its cart for purchases made **from inside the customer panel** | "When customer buys something from inside the customer panel itself Then we will use the cart flow of DMS itself" |
+| 3 | **DMS issues no bills.** Every bill comes from ResellerOS; DMS holds a copy as reference | "DMS does not do its own billing anymore. Period. … no duplicate bills or different number series needed." |
+| 4 | **Renewals are ResellerOS's.** DMS only fetches and shows the renewal bill | "Renewals subscription will be handled by ResellerOS. Period. Our DMS will only fetch that renewal bill from ResellerOs and show it." |
+| 5 | DMS's token-based recurring charging is **disabled, not deleted** | "Use the ResellerOs system compelely. DMS token based system will be disable for now. Until we need it someday later" |
+| 6 | No migration of existing DMS customers/mandates is needed | "Everything was in testing mode. No live customers at DMS" |
+| 7 | **Hosting prices come from ResellerOS only.** DMS's hosting prices are disregarded | "Use the prices of hosting set in ResellerOS completely. Ignore and disregard the prices of DMS from now on" |
+| 8 | **DMS has no public pages.** ResellerOS's frontend is the one in use; in-panel buying is small dialogs inside the DMS panel | "Remove the frontend pages of DMS completely since we are using the frontend page of ResellerOS now" · "Build inner small models to be able for user to purchase hosting and domain when inside the customer panel. Then remove those full fledged pages." |
+| 9 | DMS's `/data-deletion` is removed too | answered "Remove it" when told ResellerOS has no equivalent and Facebook login may want one |
+| 10 | **Production DMS is not touched yet** — local only until a production ResellerOS address is given | answered "Local only for now" |
+| 11 | **Hosting prices exclude GST; 18% is added on top**, as ResellerOS does. A Starter year is ₹600 + ₹108 = ₹708 everywhere | "Reseller Os is correct price one. use that" |
+| 12 | **ResellerOS's Razorpay account takes all the money**, including purchases made inside the DMS panel | chose "ResellerOS's account" |
+| 13 | **DMS shows ResellerOS's own PDF** for a bill; it renders no bill of its own | chose "ResellerOS's own PDF" |
+| 14 | **Production ResellerOS address: `https://reselleros.anutech.in`** (DMS's `NEXT_PUBLIC_RESELLEROS_URL`) | chose it |
+| 15 | **Remove DMS's dead Admin → Page management controls** (deleted pages' visibility, homepage design) | chose "Remove them" |
+| 16 | **SUPERSEDED by decision 30 (25 Sep 2026).** ~~If ResellerOS is down during an in-panel purchase: take the payment, bill later.~~ DMS queues the bill request and retries; the panel shows "bill being prepared"; a stuck one alerts the owner | chose "Take payment, bill later" |
+| 17 | **Remove DMS's three admin invoice actions** (re-sync invoice, invoice retry, issue-invoice worker); bill problems are handled in ResellerOS | chose "Remove them" |
+| 18 | **Pause DMS's `tokens-charge-recurring` Cloud Scheduler job** in production | chose "Yes, pause it" |
+
+**The one price source (decision 7):** `LANDING_PLANS` in
+`production/src/site/lib/data/hosting-landing.ts` — Starter ₹49.99, Standard ₹125, Plus
+₹187.20 per month on yearly billing (yearly total = 12×, monthly billing = 2×). The public
+pages, the catalogue sync and the cart's server-side re-pricing all read it. DMS's
+`hostingplans` prices (monthly `renewalPrice`, no billing-period field) are not an input to
+anything any more. If the two ever disagree, ResellerOS is right by definition.
+
+Consequence of 2 + 3 together: an in-panel DMS cart purchase must still get its **bill from
+ResellerOS**. DMS's cart stays, DMS's invoice numbering does not.
+
+### Decisions 12–18 — the questions as asked, and Pardeep's answers (24 Sep 2026)
+
+Asked in two rounds. Recorded with the options that were offered, so a later reader can see
+what was chosen **against** what, not just the result. The recommendation marker is kept
+because it shows which answers followed advice and which overrode it.
+
+**Round 1**
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 12 | Which Razorpay account should take the money for hosting and domain sales, including purchases made inside the DMS panel? | ResellerOS's account *(recommended)* · DMS's account · Same account already | **ResellerOS's account** |
+| 13 | When a customer opens their bills inside the DMS panel, what should they see? | ResellerOS's own PDF *(recommended)* · DMS's own view of the same numbers | **ResellerOS's own PDF** |
+| 14 | Production DMS still serves its old public pages until it's deployed with the ResellerOS address. What is the production ResellerOS address? | `https://reselleros.anutech.in` · Not decided yet | **`https://reselleros.anutech.in`** |
+| 15 | DMS's Admin → Page management still has visibility switches for the deleted pages and a homepage-design switch. They do nothing now. What should happen to them? | Remove them *(recommended)* · Leave them | **Remove them** |
+
+**Round 2**
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 16 | When a customer buys inside the DMS panel, the bill now comes from ResellerOS. If ResellerOS is down at that moment, what should DMS do? | Take payment, bill later *(recommended)* · Block the purchase | **Take payment, bill later** |
+| 17 | DMS has three admin invoice actions: re-sync invoice, invoice retry, and the issue-invoice worker. Once DMS stops issuing bills, what should they do? | Become "fetch from ResellerOS" *(recommended)* · Remove them | **Remove them** — against the recommendation. Bill problems are handled in ResellerOS; DMS keeps no repair button of its own. |
+| 18 | DMS's nightly `tokens-charge-recurring` job in Cloud Scheduler is already a no-op. Should I also pause the job in production? | Yes, pause it *(recommended)* · Leave it running | **Yes, pause it** |
+
+**Earlier answers the same day, recorded here with their wording for completeness:**
+
+| # | Question / prompt | Pardeep's answer |
+|---|---|---|
+| 8 | (instruction) | *"Remove the frontend pages of DMS completely since we are using the frontend page of ResellerOS now"* |
+| 8 | DMS's shop pages are also how a signed-in customer buys from inside the panel — what should happen to them? (Remove and send to ResellerOS · Keep them for the panel) | *"Build inner small models to be able for user to purchase hosting and domain when inside the customer panel. Then remove those full fledged pages."* |
+| 9 | Facebook login needs a data-deletion page; ResellerOS has none. (Keep DMS's page · Remove it) | **Remove it** |
+| 10 | Which address should production DMS redirect to? (reselleros.anutech.in · Local only for now) | **Local only for now** — superseded by decision 14 above |
+| 11 | DMS reads ₹49.99/month as GST-inclusive, ResellerOS adds GST on top (₹599.88 vs ₹708). Which is right? | *"Reseller Os is correct price one. use that"* |
+| — | Protected area | *"This part of ResellerOs cannot be edited or touched by our any edits … being worked on by my collegue"* → AGENTS.md §13 |
+| — | Shared money logic behind it | *"block it for now. If need to edit, Ask me and i will ask my collegue"* → added to the guard |
+
+### Decisions 19–21 — enabling the ResellerOS cart (24 Sep 2026)
+
+Asked after finding that 6 of the site's add-to-cart buttons send no SKU (so checkout refuses
+them), that a domain line loses the actual domain name, that a paid domain is not queued for
+anyone, and that the domain search shows a live price while checkout charges a fixed table.
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 19 | The domain search shows the live ResellerClub price (via DMS), but checkout charges a fixed price table in ResellerOS's code. Which should checkout charge? | Live price, re-checked *(recommended)* · Fixed price table | **Live price, re-checked** — the server re-fetches the price the customer saw; if unreachable, checkout refuses with a clear message instead of guessing |
+| 20 | Google Workspace licences, Anutech Mail (monthly) and SSL certificates can be added to the cart but have no server-side price. What should those buttons do? | Send to a quote *(recommended)* · Make them payable in cart | **Send to a quote** — Workspace keeps its own direct-buy page |
+| 21 | After a customer pays for a domain, what should happen? (registration spends real money and cannot be undone) | Staff registers it *(recommended)* · Register automatically | **Register automatically** — against the recommendation |
+
+**How decision 21 is being built:** as its own change, AFTER the cart fixes, behind a switch that
+is OFF until the owner approves a first real registration. Two open items it depends on are
+still open: who is seller of record for an engine-sourced sale, and how a ResellerOS-only buyer
+gets a ResellerClub customer account (§D below). Until the switch is on, a paid domain is
+queued with its exact name, so nothing is lost.
+
+### Decisions 22–24 — how automatic registration works (24 Sep 2026)
+
+Asked while building decision 21, after finding that ResellerClub needs a registrant postal
+address (the ResellerOS checkout collected none), that a ResellerOS buyer has no DMS account
+to manage the domain from, and that nothing capped automatic spending.
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 22 | Whose details should the domain be registered under? | Customer's, add address *(recommended)* · ANUTECH's own details | **Customer's — checkout collects the address** |
+| 23 | Should a DMS account be created for the buyer? | Yes, create one *(recommended)* · No account | **Yes — found or created by email.** Corrected the same day: the option text said the customer "reaches it by the SSO hand-off", but ResellerOS has no customer portal to hand off FROM. So the engine sends a "set your password" email at creation, as DMS's guest checkout does (`engine-customer.ts`) |
+| 24 | What limit should automatic registration have? | Per-domain + daily cap *(recommended)* · Per-domain checks only · Human release every time | **Per-domain + daily cap** — live payment, paid ≥ ResellerClub cost, and under a daily count + ₹ cap; anything else waits for a person. No figures were given, so it ships at **5 per day / ₹10,000 per day**, set by env |
+
+### Decision 26 — only Starter has a free hosting trial (24 Sep 2026)
+
+Pardeep: *"we only offer free trial for Starter plan for both monthly and yearly … No other
+plans is eligible for free trial."* **Built.** One rule, `lib/hosting/trial-plan.ts`, read in four places:
+- **/hosting:** Starter keeps "Start free trial". Standard and Plus show "Buy" plus a "Try Starter
+  free" link.
+- ~~**The trial form:** the plan picker is gone. `?plan=plus` gets a note and a buy link.~~
+- ~~**The trial API:** refuses any other plan with a 400 that says what to do instead.~~
+  *Superseded the same day by decision 27:* the form and that API are deleted. The rule now sits
+  in the cart checkout, which refuses a `hosting-trial:` line on any plan but Starter.
+- **The confirm route:** never provisions a Standard/Plus trial from an older lead. The owner
+  is told to offer Starter or a paid plan. The unknown-plan fallback to Standard is removed.
+
+Verified:
+- test-verified by `trial-plan.test.ts`;
+- browser-verified on the dev server: page HTML, the `?plan=plus` form, and a POST with
+  `tierId:"plus"` refused.
+
+**DMS, same rule (DMS `19c1134a`):** the panel's Buy-hosting dialog already offered the trial on
+Starter alone, but no server check looked at the plan. The eligibility check and create-order now
+refuse any other plan.
+- [x] **Monthly Starter trial in the DMS panel — BUILT (Pardeep: "Yes add that too"), DMS `47f0a81a`.**
+  - **Dialog:** offers the Starter trial on both toggles.
+  - **Hosting record:** remembers its cycle in a new optional `Hosting.billingCycle`. When it is
+    absent the hosting renews yearly, so every existing row renews exactly as before.
+  - **`renew` and `renew-info`:** charge and quote one month for a monthly hosting. The renewal
+    dialog now says "1 Month Extension".
+  - **Checkout:** shows the post-trial price for the trial's own cycle. It also no longer claims
+    the card is "saved for automatic yearly billing". That was false for every trial: the only
+    trial path running takes no card.
+  - **Where it is refused:** a monthly trial is refused wherever a YEARLY mandate or subscription
+    would be set up (`HOSTING_MANDATE_FLOW=tokens` with DMS subscriptions on). It is never
+    silently billed for a year.
+
+  **test-verified only.** Not tried in the running panel: the container still runs the previous
+  build, and it needs a signed-in customer.
+
+### Site cart and checkout — tested end to end with Razorpay TEST mode (25 Sep 2026)
+
+Pardeep: *"our ResellerOS cart and checkout process works properly?"* He then gave Razorpay
+test keys, which are in local `.env.local` only.
+
+**Browser-verified**, headless Chromium against the local dev server:
+- /hosting "Buy" → cart → checkout details → payment step.
+- The real Razorpay checkout opened in Test Mode for ANUTECH DIGITAL at ₹708. Test netbanking
+  (Canara) → "Success" → `/done`.
+- Razorpay: payment `pay_Tg9f4Yp9hyzIoh` captured, order paid.
+
+**Webhook:** Razorpay cannot reach this machine, so that same payment's `payment.captured` was
+signed with the webhook secret and delivered locally.
+- The quote was marked paid (₹708, `received`) and one payment was recorded with the Razorpay id.
+- The hosting was queued with `test_mode_payment`, correctly held because it is a test payment.
+- Both emails were attempted; they logged `failed` because there is no email provider locally.
+- A wrong signature → 401. Both events replayed → `alreadyProcessed`, still one payment.
+
+**Prices:** Starter yearly ₹708; Standard monthly ₹295; Plus yearly with ANUTECH10 ₹2,385.
+
+**Refusals:** Workspace (no online price), hosting with no domain, and a domain whose live price
+cannot be read. Each says why, and nothing is charged.
+
+**BUG FIXED (Pardeep: "Fix the bug"):** a paid hosting order created NO subscription, so it never
+came up for renewal. `record_payment` makes a subscription only for a line carrying `commitment`,
+and the cart's hosting lines carried none. Fixed in the cart checkout route; `record_payment` is
+unchanged:
+- **`commitment`:** hosting lines now carry `annual_yearly` or `monthly`, the same values the
+  Workspace checkout uses.
+- **`item_id`:** hosting lines are linked to the tenant's `vendor = 'hosting'` catalogue item, so
+  the subscription is filed under `hosting` rather than a guessed `other`.
+
+Deliberately NOT changed:
+- **No `domain` on the hosting line.** Provisioning reads any line's `domain` as a domain to
+  REGISTER. The subscription takes its domain from the quote instead.
+- **No `commitment` on domain or mailbox lines.** They renew at their own price.
+
+Verified:
+- **Real Razorpay test payment** (Q-2222-2026-27-0014, `pay_Tg9m4ITt9J3ZUs`) → subscription
+  "Starter hosting (billed yearly)", vendor `hosting`, ₹50/month, 12 months, renews 25 Sep 2027,
+  on `subfix2509.in`. Only a hosting provisioning row, no stray domain registration.
+- **Monthly Standard**, checked inside a rolled-back transaction → ₹250/month, 1 month, renews
+  30 days later.
+- **Unit tests** in `checkout/cart/route.test.ts` fail if the commitment is removed.
+
+**Not testable here:** a real domain price. ResellerClub answers only the whitelisted IP.
+
+### Decision 28 — domain renewals (25 Sep 2026) — BUILT, SWITCHED OFF
+
+Pardeep: *"Handle the domain renewals too."*
+
+| Question | Pardeep's answer |
+|---|---|
+| What does a customer pay to renew a domain? | **Live price at renewal time** |
+| A domain free with yearly hosting — at renewal? | **Full price at renewal** |
+
+**How it works.** No file in the blocked Billing folders was edited.
+1. **Sale.** The payment webhook gives each paid domain its own yearly subscription: vendor
+   `domain`, renewing a year out. It is created there rather than through `record_payment`'s
+   `commitment` rule, because that rule keeps one subscription per (quote, domain), so hosting on
+   the same name would take it.
+2. **Renewal quote.** The renewals cron (same reminder schedule and emails) prices a vendor-`domain`
+   subscription with `lib/domains/renewal.ts` `createDomainRenewalQuote`. The price is ResellerClub's
+   CUSTOMER renewal price (`renewdomain`) for the extension, read then, + GST. It is never the stored
+   mrr, which is ₹0 for a bundled domain. If the price can't be read, that reminder is not sent
+   (never a priceless email), the error is reported, and it is retried next run. The quote line
+   names no domain, because provisioning reads a line's domain as a domain to register.
+3. **Renewal paid.** The webhook spots the renewal of a domain subscription BEFORE `record_payment`
+   and queues a RENEWAL row (`plan = "domain-renewal"`), never a registration.
+   `register-domains` skips those rows.
+4. **Renew.** `/api/cron/renew-domains` reads the domain's current expiry from DMS and sends DMS's
+   `domain.renew` with it as `expiryBefore`. DMS renews only if the registrar still agrees, so a
+   renewal made elsewhere is refused rather than bought twice.
+5. **DMS** (`e6c1406c`). `domain.renew` has its own gate `ENGINE_DOMAIN_RENEW_LIVE` and a spend
+   limit: live payment only, paid ≥ ResellerClub's renewal cost, 5 a day and ₹10,000 a day by
+   default (`ENGINE_DOMAIN_RENEW_MAX_PER_DAY` / `_MAX_RUPEES_PER_DAY`).
+
+**Switches:** off by default. `DOMAIN_RENEWAL_LIVE=1` on this app and `ENGINE_DOMAIN_RENEW_LIVE=1`
+on DMS. Both are needed.
+
+**Verified locally, end to end:** a paid domain sale, then a signed webhook →
+1. **Sale:** subscription "Domain domrenew2509.in", vendor `domain`, renewing a year out.
+2. **Cron, no live price here:** the reminder was held with the reason, and no quote was made.
+3. **Renewal quote** (real function, stand-in price ₹899): ₹1,061.
+4. **Renewal paid:** the subscription rolled 5 Oct 2026 → 5 Oct 2027, one `domain-renewal` row was
+   queued (held as a test payment), and no second subscription or registration was created.
+
+**Not verified:** a real renewal at ResellerClub, which does not answer this machine.
+
+**Tests:** 33 in `lib/domains`, plus 12 for the worker and a wiring scan that fails if the
+registration queue picks up renewals.
+
+**Before switching on:**
+- a Cloud Scheduler job for `/api/cron/renew-domains` (Bearer `CRON_SECRET`, WITH a retry count, L1);
+- `provisioning.activate` on auto;
+- the ResellerClub balance funded;
+- then both switches.
+
+**Found on the way** (Pardeep: "Fix those too"):
+- [ ] **`src/lib/renewals/create-renewal-quote.ts` — HANDED TO THE COLLEAGUE** (a blocked folder;
+  Pardeep asked for a prompt to pass on instead of an edit).
+  - **The bug:** it writes `extension_months: 12` on every renewal quote, including a MONTHLY
+    subscription's, and `record_payment` uses that to roll the subscription forward. **Measured**
+    in a rolled-back transaction: one ₹295 monthly renewal moved renewal_date 25 Oct 2026 →
+    **25 Oct 2027** (should be 25 Nov) and cut mrr **₹250 → ₹21**.
+  - **Same file:** cost is still guessed as `× 0.83`, the AGENTS.md §2 pattern.
+  - **Not affected:** domain renewals and the hosting renewal worker read the term elsewhere.
+- [x] **A paid HOSTING or Workspace renewal was set up again as a new sale — FIXED**
+  (ResellerOS `97e42743`, DMS `e80c7851`). The webhook now finds the subscription a quote renews
+  BEFORE `record_payment`:
+  - **domain:** a `domain-renewal` row;
+  - **hosting:** a `hosting-renewal` row, sent by `/api/cron/renew-hosting` to DMS's new
+    `hosting.renew`. That moves DMS's own expiry, so DMS no longer suspends an account the customer
+    paid for, and unsuspends one that already was. It sends the expiry DMS holds as `expiryBefore`
+    and the term from the quote line's `commitment`, never `extension_months`. A failed unsuspend
+    is reported to the owner.
+  - **anything else** (Workspace, M365, Zoho): nothing queued.
+  - **A renewal quote nothing points at:** queues nothing, loudly.
+
+  Switches: `HOSTING_RENEWAL_LIVE=1` here and `ENGINE_HOSTING_RENEW_LIVE=1` on DMS, both off.
+
+  **Verified locally with signed webhooks:**
+  - a Starter yearly renewal gave one `hosting-renewal` row and no new-account row, and the
+    subscription rolled a year;
+  - a Workspace renewal queued nothing, and the subscription rolled a year.
+
+  **Not verified:** a live DMS extension against DirectAdmin (DMS side is test-verified only).
+
+  **Before switching on:** a Cloud Scheduler job for `/api/cron/renew-hosting`, with a retry count.
+
+### Decisions 29-30 — who bills an in-panel purchase (25 Sep 2026) — BUILT (DMS `15f52e9f`..`84b5ae33`)
+
+| # | Question | Pardeep's answer |
+|---|---|---|
+| 29 | What is the customer's bill for a purchase? | **Quote now, invoice when issued** — the paid-order (quote) PDF straight away; the GST tax invoice when staff issue it in Invoices |
+| 30 | May DMS create its own Razorpay order when ResellerOS is down? | **No, ResellerOS creates every order.** An in-panel purchase is refused, with a clear message, while ResellerOS cannot be reached. This replaces decision 16 |
+
+**Round 2 — what this needs, in order:**
+- [x] **ResellerOS: `POST /api/dms/panel-order`** (25 Sep 2026). Body = the site cart's body plus
+  `dmsUserId`; `Authorization: Bearer <DMS_PANEL_API_KEY>`. The cart checkout moved into
+  `lib/checkout/cart-checkout.ts` so both callers are priced by the same code. It returns the
+  Razorpay `orderId` and `razorpayKeyId`. The lead's source is `dms-panel` and the lead and Razorpay
+  order name the DMS account. It refuses to simulate or start a trial. Tests: `panel-order/route.test.ts`.
+- [x] **ResellerOS bills-read API — ALREADY EXISTED, nothing built** (AGENTS §11).
+  `/api/v1/customers?email=` finds the customer, then `/api/v1/customers/{id}/quotes`,
+  `/invoices`, `/payments` and `/subscriptions` return them. Each quote carries `pdf_url` and
+  `payment_url` (the accept link); each invoice carries `pdf_url`. Auth is a tenant API key
+  (Settings → Integrations). Spec: `docs/dsp-integration-api.md`. One gap: a paid cart order has a
+  customer only after `record_payment`, so an unpaid order does not appear there, which is right
+  for a bills page.
+- [x] **DMS `15f52e9f`:** the `?buy=hosting` / `?buy=domain` dialogs order through
+  `/api/dms/panel-order` and open Razorpay with ResellerOS's key. Identity comes from the session.
+  Nothing is written in DMS. A timeout is never retried.
+- [x] **DMS `2598cc4f`:** DMS issues no bills. The invoice engine, the INV hook, all 8 callers and the
+  three admin invoice actions are removed, with a scan test. Existing invoices stay viewable.
+- [x] **DMS `08d8ec0c`:** the Invoices page shows ResellerOS's quotes, pending renewals (Pay link)
+  and invoice PDFs. "No bills yet" appears only on a 404 from the customer lookup.
+- [x] **DMS `abf8cb57`:** the Renew and trial-convert buttons show the pending ResellerOS quote. The
+  expiry worker still suspends but raises no DMS renewal order.
+- [ ] **DMS env to set:** `RESELLEROS_SERVER_URL`, `DMS_PANEL_API_KEY` (same as here) and
+  `RESELLEROS_BILLING_API_KEY` (a ResellerOS tenant API key). On this app: `DMS_PANEL_API_KEY`.
+- [x] **Round 3 — DMS takes no new payment on its own keys** (owner answers, 25 Sep 2026:
+  "Route through ResellerOS", "Request, billed by ResellerOS", "Remove both").
+  - DMS `0b41b2ff`: guest checkout and autopay (create/cancel-subscription) removed.
+  - DMS `71799b38`: the Upgrade dialog is "Request a plan upgrade". It calls ResellerOS
+    `POST /api/dms/upgrade-request` (ResellerOS `8757adb4`), which makes a lead with DMS's figure as an
+    estimate. Staff quote it and change the plan in DMS once it is paid.
+  - DMS `f575ce64`: `/cart` pays through `/api/dms/panel-order`. `create-order` and `verify` are
+    deleted, and the ₹0 trial moved to `api/user/hosting/start-trial`. The cart REFUSES by name
+    anything the contract cannot carry: multi-year domains, two hosting plans, TLDs needing registry
+    details.
+  - DMS `84b5ae33`: a scan test fails if anything outside a named allow-list can create a Razorpay
+    order, subscription or capture.
+- [ ] **Left open by rounds 2-3 (needs an owner go-ahead):**
+  - Multi-year domain registration and a cart with two hosting plans can no longer be bought in DMS,
+    because `panel-order` takes one year and one `domain`. Widen the contract if they are wanted.
+  - DMS `app/api/admin/hosting/packages/route.ts:303,312` still creates Razorpay PLANS when an admin
+    edits package prices. That is not a payment, but it writes to DMS's Razorpay account.
+  - Dead in DMS, kept for now: `app/api/domains/renew` (nothing can reach it), `createCompletedOrder`,
+    and `lib/razorpay.ts` `createCustomer` / `createRecurringTokenOrder` (used only by the gated Tokens
+    live harness).
+  - An in-panel TRIAL has no ResellerOS renewal quote, so its convert button says to contact support.
+  - `process-service-expiry` reminders quote `service.price`, a DMS figure (around L243).
+    `renewal-payment-dunning` still chases old DMS renewal orders.
+  - [x] ResellerOS `/api/v1` lookup fixed (26 Sep 2026): the email is matched literally
+    (`lib/api/v1-email-match.ts`; the pattern is escaped, then the email must be equal ignoring case),
+    and a database error answers 500 `server_error`, not 404, on customers, quotes, invoices, payments
+    and subscriptions.
+  - DMS integration e2e `purchase-to-invoice` / `verify-path-purchase` have been red since
+    `06a9546b` (a ₹999 Starter price gives 409). They are not in the gate.
+
+### Decision 27 — "Start free trial" goes straight to the cart (24 Sep 2026)
+
+Pardeep: *"when clicking Start Free trial button we should go to cart page? right — remove this
+in b/w app"*. **Built.**
+- **Every trial button on /hosting** adds a ₹0 `hosting-trial:starter` line and opens `/cart`.
+  That is the hero, the Starter card, the footer and the "Try Starter free" note. The line is on
+  the Monthly/Yearly cycle being viewed. Clicking again replaces the line, never "2 ×".
+- **Checkout** collects the same details the form did, with no payment step. The domain is
+  optional ("leave blank if you don't have one yet"). The trial is started by
+  `lib/hosting/start-trial.ts`: the old route's logic, moved verbatim. It creates the lead, sends
+  the owner alert and the confirm-your-email link, and schedules the tasks.
+- **The trial checks out on its own.** A cart with a trial plus paid items is refused whole, so
+  no ₹0 hosting line ever meets the coupon or the domain-bundle rule.
+- **The form and `POST /api/public/trial/hosting` are deleted.** `/hosting/trial` remains only as
+  the confirm link's landing page. Without `?confirmed=` it redirects to the plans.
+- **The done page shows "confirm your email" for a trial.** For a paid order it no longer invents
+  the order number `ORD-ADPL-2026-4107` when none was saved (AGENTS.md §2).
+
+Verified:
+- test-verified in the cart route and `trial-plan.test.ts`;
+- on the dev server: `/hosting` has no form links, the two refusals return their messages, and
+  `/hosting/trial` redirects.
+
+**Seen working end to end locally, 24 Sep 2026**, after fixing why it did not work.
+
+Why it failed: the buy page, cart and trial save to `BUY_PAGE_TENANT_ID`. Unset, that falls
+back to PRODUCTION's Anutech id `fbb976f1…`, which the local database does not have, so every
+site checkout and every trial died on `leads_tenant_id_fkey`. The customer was then told
+"nothing was saved, please try again", which could never help.
+
+Fixed:
+- **`.env.local`** now sets `BUY_PAGE_TENANT_ID=22222222-…` (the local Anutech). It also sets a
+  local `HOSTING_TRIAL_SECRET`. Without one there is no confirm-your-email link at all, and the
+  customer is emailed "we'll set it up by hand" instead.
+- **The message:** that tenant error now tells the customer the problem is on our side, and
+  logs which setting to correct.
+
+Measured run:
+- lead `L-MUFHHZNC` created on the right tenant, stage `trial`, trial ends 9 Oct;
+- all three follow-up tasks created;
+- both emails attempted and logged as `failed`, "No email provider is configured". That is
+  correct: this machine has no email provider;
+- a signed confirm link opened, landed on "Email confirmed — setting up your account", and
+  stamped the lead for the owner. The account is not created automatically because
+  `HOSTING_TRIAL_LIVE` is off.
+
+**One trial per customer, and a trial is always ×1** (Pardeep: *"this should be not possible?
+trial can be taken only 1 time per account"* — the cart had let the trial go to 5 ×). Built:
+- **Cart:** trial and domain lines are single-unit (`isSingleUnit` in `site/lib/money.ts`). They
+  show no stepper, adding again never bumps them, and a stored quantity is reset to 1. Domains
+  were included because the checkout already refused a domain quantity above one while the cart
+  offered a stepper.
+- **Server:** a trial quantity other than 1 is refused.
+- **One per customer:** the site has no customer login, so it matches on what we hold. A
+  `buy-hosting-trial` lead with the same email (case-insensitive), the same phone (last 10
+  digits) or the same domain means "already trialled". Refused before anything is written. An
+  unreadable history also refuses (fail closed).
+
+Measured on the dev server: repeats by the same email, the same phone under a different email,
+a capitalised email and the same domain were all refused; a new person was allowed; quantity
+5 was refused.
+
+**Across both apps — BUILT (Pardeep: "Fix the identified gap"), DMS `2315ae26`.** A customer
+who trialled in the DMS panel was not recognised on the site, and the reverse.
+
+DMS cannot reach ResellerOS, so DMS is the shared record. It holds its own trials plus an
+`ExternalTrial` row for every site trial.
+- **Before a site trial:** ResellerOS asks DMS (`lib/dms-engine/trials.ts` →
+  `GET /api/integrations/engine/trials`, read key). If DMS does not answer, the trial is
+  refused.
+- **After a site trial:** ResellerOS records it there (POST, command key, idempotent on the lead
+  id). If that record fails, the trial stands and the lead notes "NOT RECORDED IN DMS" instead of
+  the gap being silent.
+- **DMS's own gates:** eligibility and create-order read the same history.
+
+Measured locally across both apps:
+- a site trial appeared in DMS;
+- DMS recognised a different email with the same phone;
+- a DMS-only trial blocked a site trial on its domain;
+- with DMS stopped, the site refused.
+
+Needs on Cloud Run before production: `DMS_ENGINE_COMMAND_KEY` on ResellerOS; it was not set
+locally either.
+
+**Before production:**
+- confirm `HOSTING_TRIAL_SECRET` or `CRON_SECRET` is set on Cloud Run, or production trials send
+  no confirm link;
+- production also relies on the fallback tenant id rather than setting `BUY_PAGE_TENANT_ID`
+  (reasoned-only; not checked).
+
+### Decision 25 — hosting goes through the DMS engine (24 Sep 2026)
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 25 | Which app should create the hosting account after a customer pays on ResellerOS? | DMS engine *(recommended)* · ResellerOS worker (exists) | **DMS engine** — DMS stays the only app writing to DirectAdmin for a sale, and the hosting lands in the customer's DMS panel |
+| — | How should it be verified, with no DirectAdmin reachable locally? | Tests now, real run later *(recommended)* · A test DA server | **"Will use the live DA for testing. Don't worry, will delete those testing hostings later on."** Also: ResellerClub is out of scope locally ("needs a whitelisted static single IP") |
+
+### Waiting on Pardeep — actions only he can take
+
+- [ ] **Pause `tokens-charge-recurring` (decision 18).** The Google Cloud CLI is not installed on
+      the development machine, so it could not be done from here. Run where `gcloud` is logged in:
+      `gcloud scheduler jobs pause tokens-charge-recurring --location=asia-south1 --project=speedy-unison-453807-e9`
+      — undo with `resume`. Harmless until then: the code gate (DMS `8bf941e`) stops it charging.
+- [ ] **Confirm `MAX_MANDATE_AMOUNT` with Razorpay** before the first live UPI Autopay mandate. The
+      per-debit cap cannot be raised after a customer approves it.
+- [ ] **Cancel any leftover DMS test subscriptions** in the Razorpay dashboard. DMS no longer creates
+      them (DMS `06a9546`), but ones created before still carry the old ₹599.88 amounts.
+- [ ] **Say go for the ResellerOS production migrations.** Two are applied to LOCAL only:
+      `20260921100000_provisioning_facts_are_immutable` (deferred 23 Sep, §0.1) and
+      `20260924120000_provisioning_one_per_product` (24 Sep). Both must be live before the
+      matching code deploys — the second especially: the webhook now writes one provisioning
+      row per product, and under the old index a paid domain in a domain + hosting cart would
+      again be queued for nobody.
+- [ ] **Test a real payment** on the ResellerOS cart (you said you would do the payment part).
+      Not verifiable here: no Razorpay keys locally, and the domain registry does not answer
+      this machine, so a live domain price has never been observed by the new checkout.
+
+### Ready to build — each waits for a go-ahead
+
+1. **In-panel DMS payments onto ResellerOS's Razorpay account** (decision 12).
+2. **Bill hand-off with the "bill later" queue** (decisions 13, 16): after payment DMS asks
+   ResellerOS for the bill; if unreachable it queues and retries, the panel shows "bill being
+   prepared", a stuck one alerts the owner, and the panel then serves ResellerOS's PDF. Built in
+   the SAME change that stops DMS issuing invoices and removes the three admin invoice actions
+   (decision 17) — so there is never a window with two invoice issuers or none.
+3. **Remove the dead Admin → Page management controls** in DMS (decision 15).
+4. ~~Deploy production DMS~~ — **out of scope** (owner, 25 Sep 2026): the live / production DMS
+   is a separate project, not ours. Our DMS is the local repo.
+5. ~~Automatic domain registration after payment~~ — **built 24 Sep, switched off.** See
+   "Shipped" below for what it does and the eight steps before switching it on.
+
+### Why decision 5 was a safety change, not tidying
+
+The two apps collect renewals with different Razorpay instruments:
+
+- **ResellerOS** — Razorpay **Subscriptions** (UPI Autopay / e-NACH), `payment_mandates`,
+  `lib/payments/mandate.ts`. Razorpay fires each debit; ResellerOS cannot initiate one.
+- **DMS** — Razorpay **Tokens API**. DMS fires each debit itself (`chargeViaToken`,
+  cron `tokens-charge-recurring`, daily 22:00 UTC).
+
+Both running means two independent systems able to collect the same renewal. DMS dedups on
+`(hostingId, dueDate)` inside its own Mongo and knows nothing of ResellerOS, so a double debit
+would be caught by nothing on either side — the customer would be the detector.
+
+Two facts worth keeping for when real customers exist: a mandate cannot be moved between
+instruments silently (each needs fresh customer approval), and a UPI Autopay per-debit cap
+cannot be raised after approval — so `MAX_MANDATE_AMOUNT` in ResellerOS must be confirmed
+with Razorpay before the first live mandate.
+
+### Shipped 24 Sep 2026
+
+- [x] **DMS `8bf941e` — tokens recurring charging gated OFF.** Gate is inside
+      `chargeRecurringHosting` (the chokepoint, so `scripts/charge-recurring-hostings.js`
+      cannot walk round it — L65), placed **before** any Razorpay call, returns `skipped`
+      rather than throwing (a disabled feature is not a failed night — L6), and is off unless
+      `DMS_TOKEN_RECURRING_ENABLED === "1"` exactly (fails closed — L41). Nothing deleted: the
+      dedup claim, abandon-on-first-failure and yearly/monthly inference all stay.
+      Pinned by `tests/unit/lib/services/payment/recurring-charge-disabled.test.ts` (8 tests,
+      red-checked). The 23 existing tests in `recurring-charge-service.test.ts` opt in via the
+      env var in `beforeEach`. **test-verified.** DMS gate after the change:
+      **6,617 tests / 442 files, zero failures.**
+- [x] **ResellerOS shop gate — built (`32a454af`) and REVERTED (`0fc35259`) the same day.**
+      Pardeep first chose DMS as the shop, then reversed to decision 1 above. Recorded here so
+      nobody finds the commit in history and rebuilds it: the ResellerOS shop is **open and
+      primary**. DMS's `/hosting` page visibility is back to `draft` locally.
+- [x] **DMS public pages deleted; in-panel purchase dialogs built (decisions 8-10).** Gone:
+      `/`, `/about`, `/contact`, `/privacy`, `/terms-and-conditions`, `/cancellation-refund`,
+      `/data-deletion`, `/hosting`, `/domains-home`, `/domains/search`,
+      `/domains/bulk-search`, `components/marketing/`. Each URL is now a 307 to its ResellerOS
+      page, for every visitor, admins included (the old "admin still sees DMS's copy" rule
+      had nothing left to show). Kept: cart, checkout, login, SSO, the panel, and
+      `/hosting/error` (the control-panel SSO failure page, not marketing).
+      Panel: "Buy hosting" / "Register domain" in the sidebar, and every empty-state button,
+      open `?buy=hosting` / `?buy=domain` dialogs. They feed DMS's own cart unchanged: the
+      hosting lines are the old page's logic moved verbatim, and the domain dialog is the same
+      `DomainSearch` component. Three panel "Search Domains" buttons had been sending
+      customers to `/`, i.e. off to ResellerOS, and now open the dialog.
+      Guard: `scripts/deploy-cloud-run.sh` refuses to build without
+      `NEXT_PUBLIC_RESELLEROS_URL` and now passes it to both build paths, so production
+      cannot lose its policy pages to a 404 by accident. **test-verified:** DMS
+      6,676 tests / 444 files green, typecheck clean, lint 0 errors; the link scan and the
+      deploy guard were each red-checked. DMS `0fe6c95`. **browser-verified, local:** all 11
+      deleted URLs 307 to the right ResellerOS page; `/cart`, `/login`, `/hosting/error` still
+      200; sidebar → Buy hosting → Add to cart → `/cart` shows Starter Hosting at ₹599.88; the
+      domain dialog opens pre-filled and searches by itself. Adding a domain to the cart was NOT
+      verifiable locally: ResellerClub's API does not answer from this machine, same as before
+      the change.
+
+### Still to build (not started — each waits for a go-ahead)
+
+- [x] **DONE 25 Sep 2026 (DMS `2598cc4f`).** Stop DMS issuing invoices. Gate `lib/services/billing/createPrimaryInvoice.ts` (the
+      only caller of `allocateInvoiceNumber()`; 10 flows reach it). **In the same commit**
+      neutralise the legacy pre-save hook in `models/Order.ts` (~line 541) that mints
+      `INV-${timestamp}-${random}` when `status === "completed" && !invoiceNumber &&
+      invoiceProvider !== "primary"` — gating the first alone makes the second fire MORE
+      (L112 shape). Needs a scan test that both are closed.
+- [ ] ~~**New engine command `billing.record_external_invoice`.**~~ **SUPERSEDED 25 Sep 2026:** DMS
+      reads the customer's bills live from ResellerOS's `/api/v1` (DMS `08d8ec0c`), so it keeps no
+      copy. Original entry: DMS stores ResellerOS's invoice
+      number and PDF link as a foreign reference. Touches no DMS `Counter`, idempotent on the
+      ResellerOS invoice number.
+- [x] **Historical `TI/…` invoices — NOT NEEDED. USER DECISION, Pardeep, 24 Sep 2026:** every
+      DMS invoice so far was issued in testing, so there is no GSTR-1 history to preserve.
+      Do not build anything to keep them reportable.
+- [x] **DMS charges hosting at ResellerOS's price + GST (decisions 7 and 11).** One function,
+      DMS `lib/pricing/hosting-price.ts`, is ResellerOS's cart formula; every DMS hosting
+      charge reads it: the panel dialog, `create-order` (member and guest, now re-priced on
+      the server — before this both charged whatever price the browser sent), `/renew`,
+      `/renew-info`, `/upgrade`, `/upgrade-info` and the expiry worker. A plan ResellerOS does
+      not price is refused, never guessed. A cart holding the old figure gets `409
+      PRICE_CHANGED` with the new one. DMS no longer opens Razorpay Subscriptions for hosting
+      (their plans hard-code yearly = 12 × monthly, and renewals are ResellerOS's): paid hosting
+      is one payment for its period, trials take the no-mandate flow. Fixed on the way, both
+      customer-visible: the expiry worker emailed yearly renewals at the per-MONTH figure
+      (₹49.99 for a year), and fell back to Starter's price for unknown plans.
+      DMS `06a9546`. **test-verified:** 6,702 tests / 445 files; 25 go red if the GST is
+      removed. **browser-verified, local:** dialog ₹600→₹708 · ₹1,500→₹1,770 · ₹2,246→₹2,650
+      yearly and ₹118 · ₹295 · ₹441 monthly; cart Subtotal ₹600 · GST ₹108 · Total ₹708; the
+      running server refuses ₹599.88 with `409 PRICE_CHANGED`. A successful payment was NOT
+      run, because that creates a Razorpay order.
+- [ ] **DMS still holds a COPY of ResellerOS's hosting prices** (`config/hosting-plans.ts`,
+      pinned equal to `LANDING_PLANS` by a DMS test). Reading them over the engine API would
+      remove the copy.
+- [ ] **Existing DMS Razorpay hosting plans and subscriptions** (`hostingplans.razorpayPlans`)
+      still carry the old amounts. DMS no longer creates new ones, and there are no live
+      customers (decision 6), but any test subscription left in the Razorpay dashboard should
+      be cancelled there.
+- [x] **DONE 25 Sep 2026 (DMS `a6bab155`).** Remove the dead Admin → Page management controls in DMS (decision 15). Visibility
+      toggles for the deleted pages and the homepage-design switch change nothing now.
+- ~~**Production DMS still has its old pages.**~~ Out of scope: the live / production DMS is a
+      separate project (owner, 25 Sep 2026).
+- [x] **Automatic domain registration (decisions 21-24) — BUILT, SWITCHED OFF.** 24 Sep 2026.
+      **DMS** (engine `domain.register`, Phase 9): `lib/integrations/engine-handlers-register.ts`
+      + pure rules in `engine-register-policy.ts`. Order: validate → already in our reseller
+      account? (this customer → done with no spend; another → held) → ResellerClub cost
+      (stale cache refused) + last-24h usage → **test mode stops here and reports** → spend
+      decision (live payment, paid ≥ cost, ≤ 5/day, ≤ ₹10,000/day — env
+      `ENGINE_DOMAIN_REGISTER_MAX_PER_DAY` / `_MAX_RUPEES_PER_DAY`) → DMS account + RC
+      customer/contact (found or created by email) → register (a lost response is
+      `sent_unknown` and HOLDS the lock; balance-pending too) → Domain row on the customer's
+      account. Reconciler: "in our account, owned by this customer". Live only behind its OWN
+      gate `ENGINE_DOMAIN_REGISTER_LIVE=1` — flipping it puts nothing else live. The route now
+      returns the handler's sentence as `detail`, so a hold is readable on the first answer.
+      **ResellerOS:** checkout asks for the registrant's address when the cart holds a domain
+      (server-validated, 6-digit PIN) and records the registrant on the domain line;
+      `lib/dms-engine/commands.ts` (write client, `DMS_ENGINE_COMMAND_KEY`); worker
+      `/api/cron/register-domains` (gate `DOMAIN_REGISTRATION_LIVE=1`, workspace kill switch,
+      one command id per request per IST day so re-runs replay); the webhook approves a paid
+      domain row only when that gate is on.
+      **test-verified:** DMS 29 handler/policy tests (spend guard red-checked: 4 fail without it)
+      + updated engine tripwires; ResellerOS 11 worker tests (kill switch red-checked), 22
+      client/helper tests, 4 new checkout-route tests. Gates: ResellerOS 6,702 / 364, DMS
+      6,732 / 446, typecheck + lint clean in both. **browser-verified, local:** the address
+      fields appear only with a domain in the cart, the hosting domain pre-fills, Continue stays
+      disabled until the address (incl. a 6-digit PIN) is complete. **NOT verified:** any call to
+      ResellerClub — it does not answer this machine — and the engine was not exercised through a
+      running container.
+- [ ] **Before switching automatic registration on — in this order:**
+      1. Apply both ResellerOS migrations to production (see "Waiting on Pardeep").
+      2. Deploy both apps with this code.
+      3. Set the keys: ResellerOS `DMS_ENGINE_COMMAND_KEY` = DMS `BILLING_COMMAND_API_KEY`
+         on the DMS the engine points at, and `DMS_ENGINE_URL`.
+      4. Top up the ResellerClub reseller balance — an unfunded registration is held.
+      5. On the Automation page, set **provisioning.activate** to auto; otherwise every paid
+         domain is queued with a blocker and the worker never sees it.
+      6. Create a Cloud Scheduler job for `/api/cron/register-domains` (Bearer `CRON_SECRET`),
+         **with** a retry count (L1: a retryConfig without `retryCount` is zero retries). Safe to
+         retry: the command id is stable per day.
+      7. Run one `domain.register` in `mode:"test"` against production for a real paid order and
+         read the answer: availability, cost, cap, account. That is the "first real
+         registration" approval.
+      8. Then set `ENGINE_DOMAIN_REGISTER_LIVE=1` on DMS and `DOMAIN_REGISTRATION_LIVE=1` on
+         ResellerOS.
+      Rows paid BEFORE step 8 keep the `engine_not_connected` blocker and are never picked up
+      automatically — register those by hand.
+- [x] **Hosting provisioning through the DMS engine (decision 25) — BUILT, SWITCHED OFF.** 24 Sep.
+      **DMS** `hosting.provision` (`engine-handlers-provision.ts`), unblocked by decision 23: the
+      buyer's DMS account is found or created (`engine-customer.ts`, shared with
+      `domain.register`) with a "set your password" email. The DirectAdmin package comes from the
+      catalogue. **Usernames are deterministic per domain** (DMS's other provisioners pick them at
+      random, so a retry after a lost response would create a SECOND account): DirectAdmin is read
+      first — an account already on this domain is ADOPTED, one on another domain moves to the
+      next candidate, only a free name is created. Reconciler asks the same question. Its own gate
+      `ENGINE_HOSTING_PROVISION_LIVE=1`; a test-mode payment is held.
+      **ResellerOS** `/api/cron/provision-hosting` REWRITTEN: it no longer calls DirectAdmin or
+      emails a cPanel password — it sends `hosting.provision` (gate `HOSTING_PROVISIONING_LIVE=1`,
+      kill switch, day-keyed command id). The checkout records the hosting line's plan and months.
+      The webhook approves a paid hosting row on that gate instead of this app's own DA creds.
+      **test-verified:** DMS 18 provision tests (adopt-on-retry red-checked: 2 fail without it), the
+      engine tripwires moved (every known command now has a handler); ResellerOS 9 worker tests +
+      helpers. Gates: ResellerOS 6,713 / 365, DMS 6,750 / 447, typecheck + lint clean.
+      **Verified LIVE on 24 Sep 2026** against `server1.anutech.in:2222`, using a new key from Pardeep
+      and a local override that lives only in the session scratchpad (the committed config still
+      points DirectAdmin at the placeholder):
+      1. test mode: DirectAdmin read, "would create `rsospf34b2`, package Starter", nothing written;
+      2. live: account `rsospf34b2` created on `rsosprovtest2409.in`, package Starter, IP
+         35.207.233.155, plus the DMS account and hosting row;
+      3. same commandId: replayed, nothing ran;
+      4. new commandId: DMS already had the hosting row, no second account. DirectAdmin afterwards
+         lists exactly one user.
+      **Not exercised live:** the adopt-from-DirectAdmin path, where DMS has no row but the DA
+      account exists (a lost response). Running it needed a hosting row deleted locally and was
+      not done; unit tests only.
+      **The live run found two DMS bugs, fixed in DMS `23680de9`:**
+      - `createPackage` sent `action=create`, which DirectAdmin reads as a LIST request, so it had
+        never created a package.
+      - `unwrapDAError` dropped DirectAdmin's reply text, so a user that does not exist read as
+        "Unknown DirectAdmin error" and every provision refused (safely).
+- [x] **Test account DELETED from server1** (Pardeep: "Delete the live test hosting account"),
+      25 Sep 2026. DirectAdmin user `rsospf34b2` / `rsosprovtest2409.in` was confirmed first as the
+      only user on the server, created 24 Sep with the test email and holding 0.14 MB. DirectAdmin
+      answered "User deleted", its user list is now empty, and a lookup of the user answers
+      "Unable to show user". The local DMS records went too (Pardeep: "Remove from local DB
+      also"), all by exact id: the DMS user `rsos-provision-test@example.invalid`, its hosting
+      row, and the six `live-da-test-*` engine commands. Nothing else referred to them.
+- [x] **server1's address is updated to 35.207.233.155** (Pardeep: "Update the address",
+      25 Sep 2026). Measured first: server1's own IP list (`CMD_API_SHOW_RESELLER_IPS`) holds exactly
+      `35.207.233.155` and nothing else. Changed:
+      - DMS `lib/directadmin/client.ts` `DA_FALLBACK_IP` (was 34.93.167.160);
+      - DMS `.env.local` `DIRECTADMIN_IP`, which is gitignored and is what `scripts/deploy-cloud-run.sh`
+        sends to production.
+
+      History: in July the same hostname answered on 34.93.167.160 and held accounts (`testi5491c`,
+      `ramushamu`, DMS TASKS.md L229/L311). Before the 24 Sep test it had no users; after the test
+      cleanup it has none again, and it keeps the three packages (Starter 10 GB, Standard 25 GB,
+      Plus 50 GB; sites 1 / 5 / unlimited).
+- [x] **The hosting TRIAL no longer writes to DirectAdmin from ResellerOS** (25 Sep 2026). The
+      confirm link sends DMS `hosting.provision` with `trial: true` (DMS `05a2dce2`), command id
+      `rsos-hosttrial-<lead id>`, still behind `HOSTING_TRIAL_LIVE=1` here and
+      `ENGINE_HOSTING_PROVISION_LIVE=1` on DMS. The trial-expiry cron no longer suspends on
+      DirectAdmin: DMS suspends an expired trial itself. The customer is pointed at their DMS
+      panel; no password is emailed from here. Tests: `confirm/route.test.ts`.
+      **Open:** DMS's expiry worker still raises a DMS renewal order when a trial ends, which
+      conflicts with "DMS issues no bills" — part of round 2 below.
+- [ ] **Before switching hosting provisioning on:** production migrations, deploy both apps, set
+      `DMS_ENGINE_COMMAND_KEY`/`DMS_ENGINE_URL`, `provisioning.activate` on auto, a Cloud Scheduler
+      job for `/api/cron/provision-hosting` with a retry count, one test-mode run, then
+      `ENGINE_HOSTING_PROVISION_LIVE=1` on DMS and `HOSTING_PROVISIONING_LIVE=1` here. Rows paid
+      earlier keep their blocker and are set up by hand.
+- [x] **Customer email on registration** (25 Sep 2026, `ae6010f6`). `register-domains` emails the
+      registrant "<domain> is registered" after a registration made now (not one found already
+      registered), through the new automation action `domain.registered.send` (today: auto).
+- [x] **ResellerOS cart enabled properly (decisions 19-20), 24 Sep 2026.** The line above said
+      "v1 knows hosting SKUs only" — stale: domains were priced, but from a fixed table while the
+      search showed the live price. Found and fixed together:
+      · 6 site add-to-cart buttons sent no SKU, so checkout refused them at payment. Domain lines
+        now carry `sku` AND the exact `domain`; Workspace / Anutech Mail / SSL buttons go to a quote.
+      · A domain line kept only its TLD ("Domain .com"), so nobody knew WHICH name was paid for.
+        It now carries the name, validated (`lib/domains/live-lookup.ts` `splitDomain`).
+      · Domains are charged the live price, re-checked at payment from the same module the
+        search uses (`lookupDomains`); unreachable / taken / unpriced → refused, never guessed.
+      · The cart page applied coupons ANUTECH10 / MIGRATE15 to the total it SHOWED; the server
+        ignored them, so a coupon user was charged more than shown. Server now applies the same
+        table; checkout compares its total with the shown one and asks before charging a
+        different figure (reusing the same order, so no second quote number).
+      · Rate-card rows added placeholders `yourname.<tld>` / `yourbusiness.<tld>`; now "Search".
+      · A domain-only cart was labelled `cart-order` and filed as vendor `other`; now
+        `domain-registration`. Hosting defaults to the domain bought in the same cart.
+      · After payment only ONE provisioning request per quote was allowed, so in a domain +
+        hosting cart the domain was queued for nobody. Migration
+        `20260924120000_provisioning_one_per_product` + `lib/provisioning/products.ts`: one
+        request per product, re-delivered events still refused (SQL test
+        `provisioning_one_per_product`, red-checked against the old index).
+      **test-verified:** 11 route tests, 6-test source scan that every site cart add carries a
+      sku (red-checked), products + splitDomain units, SQL test. **browser-verified, local:**
+      email/SSL → quote, rate card → Search with no cart add, hosting line ₹600 with sku,
+      coupon shown ₹540, checkout passes pricing (stops at "payment not set up" — no local keys),
+      a domain line refused honestly ("couldn't reach the domain registry"), an old SKU-less
+      Workspace line refused. **NOT verified:** a live domain price and a real payment — the
+      registry does not answer this machine and there are no local Razorpay keys.
+- [ ] **Apply migration `20260924120000_provisioning_one_per_product` to production** — applied
+      to LOCAL only. Must be live before the new webhook code deploys: the webhook now inserts
+      one row per product, and under the old one-per-quote index the second row would fail
+      (logged, not thrown — but the domain would again be queued for nobody).
+- [x] **DONE 25 Sep 2026 (ResellerOS `ae6010f6`, deleted).** Two dead components hold SKU-less adds: `DomainRateCard`, `HostingPlans` (replaced
+      2-3 Sep, unmounted since). Pinned unmounted by `src/site/cart-lines-priceable.test.ts`;
+      delete them when convenient.
+
+- [x] **DONE 25 Sep 2026 (decision 30; ResellerOS `6c7b8afc`, DMS `15f52e9f` and `f575ce64`).** In-panel DMS purchases pay into ResellerOS's Razorpay account (decision 12). DMS's
+      checkout currently uses DMS's own keys. Moving it means ResellerOS creates the Razorpay
+      order and receives the webhook, or DMS is given ResellerOS's keys. Design this together
+      with the bill hand-off below.
+- [ ] ~~**Bill hand-off with an offline queue (decisions 13 and 16).**~~ **SUPERSEDED by decision 30
+      (25 Sep 2026):** ResellerOS creates every order, and DMS refuses a purchase when ResellerOS is
+      down, so there is nothing to queue. Original entry: After payment DMS asks
+      ResellerOS for the bill; if ResellerOS is unreachable it queues and retries (L1: say what
+      retries it, who is told, and how a stuck one is noticed a week later). The panel shows
+      "bill being prepared" until the ResellerOS PDF arrives, then serves that PDF.
+- [x] **DONE 25 Sep 2026 (DMS `2598cc4f`).** Remove DMS's three admin invoice actions (decision 17) in the same change that stops
+      DMS issuing invoices: re-sync invoice (`api/admin/orders/[id]/re-sync-invoice`), invoice
+      retry (`lib/invoice-retry.ts` + its pill), and the issue-invoice worker
+      (`api/workers/issue-invoice`).
+- [ ] **Pause `tokens-charge-recurring` (decision 18)** — the owner's to run; command under
+      "Waiting on Pardeep" above.
+
+### Open questions for Pardeep
+
+- [x] Which Razorpay account takes the money? **ResellerOS's (decision 12).**
+- [x] One bill or two? **DMS shows ResellerOS's own PDF (decision 13).**
+- [x] ResellerOS down during an in-panel purchase? ~~Take payment, bill later (decision 16).~~
+      **Refuse the purchase (decision 30, 25 Sep 2026), which replaces decision 16.**
+- [x] DMS's three admin invoice actions? **Removed (decision 17).**
+- [x] **Is a hosting price GST-inclusive or not?** Answered 24 Sep: ResellerOS's reading —
+      GST on top (decision 11). Built the same day, see above.
+- [x] Production ResellerOS address? **`https://reselleros.anutech.in` (decision 14).**
+- [ ] Confirm `MAX_MANDATE_AMOUNT` with Razorpay (see above).
+- [x] Pause the `tokens-charge-recurring` job? **Yes (decision 18); the command is in the build list above.**
+
+---
+
 ## 0. What is left — measured 2026-09-23 (refreshed after Phase 8)
+
+> **Older than §0A.** This section was measured on 23 Sep. The 24 Sep decisions and builds in
+> §0A come after it and win where they disagree — notably DMS no longer being the invoice
+> issuer (decision 3), which changes the seller-of-record entry below.
 
 Everything below is verified against the code today, not carried forward. Where an older
 entry in this file disagrees, **this section is the measurement** and the older one has been
@@ -57,9 +859,11 @@ not started.
       `hosting.provision`. DMS mints a `Math.random()` password it never returns because its
       customers arrive by SSO, so without a portal user there is no way in and provisioning
       still reports success. My recommendation: yes, create the portal user.
-- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. Needs the CA —
-      DMS's GST engine is permanent and ungated, and credit notes are manual with a statutory
-      deadline.
+- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. **Partly
+      answered 24 Sep:** ResellerOS issues every bill and takes the money into its Razorpay
+      account (decisions 3 and 12), so ResellerOS is the issuing side. What still needs the CA:
+      confirming that for GST, and how credit notes work once DMS stops issuing. The line this
+      replaced said "DMS's GST engine is permanent and ungated" — true until decision 3 is built.
 - [ ] **How does a ResellerOS-only buyer get a ResellerClub customer?** Blocks Phase 9.
       `registerDomain` needs a numeric `customerId`; contacts come from a private helper inside
       DMS's payment pipeline.
@@ -703,7 +1507,8 @@ Phases are ordered so each guard ships **before** the capability it guards.
       allowed and flagged rather than refused (L103: a guard that fires on a right answer gets
       deleted; a downgrade to a retired tier is legitimate).
 
-- [ ] **`hosting.provision` — blocked, and not on effort.** DMS's `createUser` mints the
+- [x] **`hosting.provision` — UNBLOCKED and built 24 Sep 2026** (decisions 23, 25; see §0A). The
+      original entry, kept for the reasoning: **blocked, and not on effort.** DMS's `createUser` mints the
       username itself and sets `passwd: Math.random().toString(36).slice(-10) + 'A1!'`, which
       it never stores and never returns. That is deliberate: the comment beside it says "user
       will use SSO", and DMS customers reach DirectAdmin by passwordless SSO from the DMS
@@ -747,8 +1552,9 @@ Phases are ordered so each guard ships **before** the capability it guards.
    command is the one forbidden operation.
 7. A dry run writes nothing, claims nothing, and makes no mutating outbound call.
 8. The command endpoints create no Order, Payment or Invoice in DMS — DMS's GST engine is
-   permanent and ungated, so reusing the paid path would mint a second tax invoice for one
-   supply.
+   still live and ungated TODAY, so reusing the paid path would mint a second tax invoice for
+   one supply. Decision 3 (24 Sep) will switch that engine off; this invariant stays until then,
+   and afterwards the reason becomes "ResellerOS is the only issuer" — the rule is the same.
 9. The rate limiter is not a spend control (it returns `allowed: true` when Redis is absent).
 10. A test-mode Razorpay payment can never reach a live command.
 
@@ -756,17 +1562,32 @@ Phases are ordered so each guard ships **before** the capability it guards.
 
 ## D. Decisions needed — these block phases
 
-- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. DMS's GST
-      engine is permanent and ungated; credit notes are manual with a statutory deadline. Needs
-      the CA.
-- [ ] **How does a ResellerOS-only buyer get a ResellerClub customer?** Top blocker for
-      register. `registerDomain` needs a numeric `customerId` and contacts that today come from
-      a private helper inside DMS's payment pipeline.
+- [x] **Zoho Books — REMOVED from DMS. USER DECISION, Pardeep, 24 Sep 2026:** *"Remove the Zoho
+      completely. Mark it as user decision."* DMS's own GST engine is the only invoice issuer,
+      with no fallback; a failed invoice is flagged on the order and retried, never re-issued
+      elsewhere. Record and rules: DMS `CLAUDE.md` → "Zoho Books removed". Consequence for the
+      seller-of-record question below: there is now exactly one invoice series on the DMS
+      side (`TI/…`), which is simpler to reason about. **Overtaken the same day by §0A:**
+      DMS is to issue no bills at all; ResellerOS issues every one and DMS keeps a copy. The
+      Zoho removal itself stands. Zoho as a PRODUCT ResellerOS resells
+      (Zoho Workplace licences) is unaffected — this is only about Zoho Books as DMS's
+      accounting back end.
+
+- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. **Partly
+      answered 24 Sep (§0A decisions 3 and 12):** ResellerOS issues every bill and takes the
+      money. Still needs the CA to confirm for GST, and a credit-note route once DMS stops issuing.
+- [x] **How does a ResellerOS-only buyer get a ResellerClub customer?** **Answered 24 Sep
+      (decisions 22-23):** the checkout collects the registrant's address, and the engine's
+      `domain.register` finds or creates the DMS account and the RC customer + contact by email
+      (`getOrCreateCustomerAndContact`), then registers under them.
 - [ ] **Which side owns DirectAdmin?** Keeping both writers means two username derivations and
       two definitions of `vendor_ref`. Did NOT block Phase 7 in the end — `hosting.change_plan`
       shipped by working with the existing `(userId, domainName)` uniqueness rather than
       altering it.
-- [ ] **What shape should the engine's spend control take?** Found 2026-09-23 while deciding
+- [x] **Spend control — answered for `domain.register` (decision 24):** live payment, paid ≥
+      cost, daily count + ₹ cap (engine-register-policy.ts). `domain.renew` still has none and
+      stays live-ineligible; the same policy shape could be reused for it.
+- [ ] **(original entry) What shape should the engine's spend control take?** Found 2026-09-23 while deciding
       whether `domain.renew` could be armed. Nothing anywhere caps how many money-spending
       commands a caller can trigger — irrelevant while every command was free or reversible,
       and now the reason `domain.renew` stays live-ineligible. It will gate Phase 9 the same
@@ -895,7 +1716,10 @@ Consequences accepted with the decision:
       `app.anutech.in`. This switch is off in production (`deploy-cloud-run.sh` passes no
       such var), so nothing is live yet — but turning it on there means updating those URLs
       to the ResellerOS origin first, or the account's policy links 307 off-domain.
-- [ ] **The purchase funnel is deliberately NOT taken over.** `/hosting`, `/domains/*`,
+- [x] **SUPERSEDED 24 Sep 2026 by §0A decision 1** — ResellerOS's cart and billing are now
+      primary for first purchases; DMS's funnel stays for in-panel purchases. The entry below
+      is kept as the record of what was true before.
+      **The purchase funnel is deliberately NOT taken over.** `/hosting`, `/domains/*`,
       `/cart` and `/checkout` are the **only working way to buy hosting or a domain**;
       ResellerOS has marketing pages for both but no management UI (see below). Tests in
       both `lib/reseller-os.test.ts` and `middleware.test.ts` pin that these are untouched,

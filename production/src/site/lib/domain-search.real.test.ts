@@ -10,7 +10,11 @@ import { join } from "node:path";
 const search = readFileSync(join(process.cwd(), "src/site/components/home/DomainSearch.tsx"), "utf8");
 const dock = readFileSync(join(process.cwd(), "src/site/components/home/DomainSearchDock.tsx"), "utf8");
 const lookup = readFileSync(join(process.cwd(), "src/site/lib/domain-search.ts"), "utf8");
-const proxy = readFileSync(join(process.cwd(), "src/app/api/domains/availability/route.ts"), "utf8");
+// The route and the lookup it calls, read together: since 24 Sep 2026 the lookup lives in
+// lib/domains/live-lookup.ts so the checkout charges the same live price the search shows.
+const proxy =
+  readFileSync(join(process.cwd(), "src/app/api/domains/availability/route.ts"), "utf8") +
+  readFileSync(join(process.cwd(), "src/lib/domains/live-lookup.ts"), "utf8");
 const config = readFileSync(join(process.cwd(), "src/site/lib/config.ts"), "utf8");
 
 describe("DomainSearch reads real availability", () => {

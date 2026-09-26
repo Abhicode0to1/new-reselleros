@@ -5016,6 +5016,23 @@ export type Database = {
         };
         Returns: undefined;
       };
+      /* R-004 — one RPC for every editable field of a project. Args are all optional
+         in SQL (DEFAULT NULL); `?` here so a title-only edit does not have to restate
+         the money. */
+      update_project_details: {
+        Args: {
+          p_project_id: string;
+          p_title?: string;
+          p_description?: string | null;
+          p_customer_id?: string;
+          p_customer_name?: string;
+          p_total_amount?: number;
+          p_gst_rate?: number;
+          p_inter_state?: boolean;
+          p_milestones?: unknown;
+        };
+        Returns: undefined;
+      };
       delete_project_sale: {
         Args: { p_project_id: string };
         Returns: undefined;

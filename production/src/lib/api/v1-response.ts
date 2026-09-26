@@ -27,5 +27,14 @@ export const unauthorized = () =>
 export const notFound = (message = "Not found") =>
   apiError(404, "not_found", message);
 
+/**
+ * A database error. Until 26 Sep 2026 these routes answered 404 "Could not load …" on a
+ * failed query, and a caller cannot tell that from "there is nothing": DMS's billing page
+ * shows "No bills yet" on a 404, so an outage would have read as an empty account
+ * (AGENTS §2). 500 says "try again", which is the truth.
+ */
+export const serverError = (message: string) =>
+  apiError(500, "server_error", message);
+
 export const badRequest = (message: string) =>
   apiError(400, "bad_request", message);

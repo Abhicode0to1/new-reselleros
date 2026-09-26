@@ -107,8 +107,8 @@ export interface Cert {
 
 export const CERTS: readonly Cert[] = [
   { name: "Free DV", who: "Every site we host", price: "₹0", unit: "", highlighted: true, cta: "Included", addPrice: null, lines: ["Auto-issued and auto-renewed", "Padlock in every browser", "Wildcard on Agency plans"] },
-  { name: "Positive SSL", who: "A single domain", price: "₹899", unit: "/yr", highlighted: false, cta: "Add", addPrice: 899, lines: ["Domain validation, minutes", "₹50k relying-party warranty", "Reissue any time"] },
-  { name: "Wildcard", who: "Every subdomain", price: "₹4,499", unit: "/yr", highlighted: false, cta: "Add", addPrice: 4499, lines: ["Covers *.yourdomain.in", "One cert, unlimited subdomains", "Fits multi-client setups"] },
+  { name: "Positive SSL", who: "A single domain", price: "₹899", unit: "/yr", highlighted: false, cta: "Get a quote", addPrice: 899, lines: ["Domain validation, minutes", "₹50k relying-party warranty", "Reissue any time"] },
+  { name: "Wildcard", who: "Every subdomain", price: "₹4,499", unit: "/yr", highlighted: false, cta: "Get a quote", addPrice: 4499, lines: ["Covers *.yourdomain.in", "One cert, unlimited subdomains", "Fits multi-client setups"] },
   { name: "OV / EV", who: "When a client needs paperwork", price: "₹6,999", unit: "/yr", highlighted: false, cta: "Talk to us", addPrice: null, lines: ["Organisation vetting by the CA", "Company name on the cert", "We handle the documents"] },
 ] as const;
 

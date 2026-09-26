@@ -36,8 +36,101 @@ ResellerOS reaches it over a read-only HTTP API plus a signed SSO hand-off
   it from the demo panel on `/login`. Do not rebuild one without being asked. The `portal_*`
   DB functions and their SQL tests were left in place on purpose, so their presence is not
   evidence the feature exists.
-- **ResellerOS is the front door.** With `NEXT_PUBLIC_RESELLEROS_URL` set on DMS, DMS's `/`
-  redirects here and it serves no marketing homepage of its own.
+- **ResellerOS is the front door, and DMS has no public pages at all** (owner decision,
+  24 Sep 2026). DMS's `/`, legal pages and shop pages (`/hosting`, `/domains/*`) were
+  deleted; each URL is a 307 to its ResellerOS page, so `NEXT_PUBLIC_RESELLEROS_URL` is
+  required on DMS and its deploy refuses to build without it. A customer already inside the
+  DMS panel buys from two dialogs there (`?buy=hosting` / `?buy=domain`), which use DMS's
+  own cart. Do not rebuild DMS marketing pages without being asked.
+
+**Billing belongs to ResellerOS (owner decision, 24 Sep 2026).** ResellerOS's cart and
+billing are primary for a first purchase; DMS keeps its cart only for in-panel purchases.
+**DMS is to issue no bills** — every bill and every renewal is ResellerOS's, and DMS holds a
+copy for reference. BUILT on 25 Sep 2026 (DMS `2598cc4f`): `createPrimaryInvoice`, its number
+allocator and the INV pre-save hook are gone, and a scan test fails if any returns. A payment DMS
+still takes is flagged "raise the bill in ResellerOS", never billed silently. DMS's Razorpay Tokens recurring charger is gated off
+(`DMS_TOKEN_RECURRING_ENABLED`, default off), because two systems able to debit the same
+renewal is a double-collection with no detector. Do not re-enable it or build a second
+invoice series in DMS without being asked. **Hosting prices are ResellerOS's too**
+(`LANDING_PLANS` in `site/lib/data/hosting-landing.ts`); DMS's `hostingplans` prices are
+disregarded and must not be read as a price source; DMS charges them plus 18% GST
+(`lib/pricing/hosting-price.ts` in DMS). Full record: `Todos.md` §0A.
+
+**The site cart charges only what the server can price** (24 Sep 2026). Every site
+`cart.add` must carry a `sku`, and a domain line must also carry the exact `domain` —
+`src/site/cart-lines-priceable.test.ts` fails otherwise. Domains are charged the LIVE price,
+re-checked at payment through `lib/domains/live-lookup.ts` (the same code the search uses),
+and refused when it cannot be read — never a fallback figure. Workspace, Anutech Mail and SSL
+are quote items, not cart items. After payment, provisioning is one request per product
+(`lib/provisioning/products.ts`), so a domain and hosting bought together are both queued.
+
+**Automatic domain registration exists and is OFF** (24 Sep 2026, decisions 21-24). It is
+registered under the customer's own details (checkout collects the address), into a DMS
+account for them, through the engine's `domain.register`, within a spend limit the ENGINE
+enforces (live payment, paid ≥ cost, daily count + ₹ cap). Two independent fail-closed
+switches: `DOMAIN_REGISTRATION_LIVE=1` here, `ENGINE_DOMAIN_REGISTER_LIVE=1` on DMS. Do not set
+either without the owner — the eight steps before switching on are in `Todos.md` §0A.
+
+**Paid hosting is provisioned by the DMS engine too, and it is OFF** (decision 25). This app no
+longer creates DirectAdmin accounts for a sale: `/api/cron/provision-hosting` sends
+`hosting.provision`, behind `HOSTING_PROVISIONING_LIVE=1` here and `ENGINE_HOSTING_PROVISION_LIVE=1`
+on DMS. The hosting TRIAL goes through the engine as well (`hosting.provision` with `trial: true`,
+25 Sep 2026), so DMS is the only DirectAdmin writer. The one exception is the admin test-account
+tool (`api/catalog/directadmin-test-account`), kept on purpose.
+
+**Domain renewals exist and are OFF** (decision 28, 25 Sep 2026). A paid domain gets a yearly
+vendor-`domain` subscription. Its renewal quote is priced at ResellerClub's LIVE renewal price, full
+price (`lib/domains/renewal.ts`). A paid renewal is queued as `plan = "domain-renewal"`, never a
+registration, and `/api/cron/renew-domains` sends DMS's `domain.renew` with the current expiry.
+Switches: `DOMAIN_RENEWAL_LIVE=1` here, `ENGINE_DOMAIN_RENEW_LIVE=1` on DMS.
+
+**A paid renewal is never set up again as a new sale** (25 Sep 2026). The Razorpay webhook finds
+the subscription a quote renews before `record_payment`:
+- **domain:** renewal row;
+- **hosting:** `hosting-renewal` row. `/api/cron/renew-hosting` sends DMS `hosting.renew` so DMS's
+  own expiry moves and it does not suspend a paid account. Switches: `HOSTING_RENEWAL_LIVE=1` here,
+  `ENGINE_HOSTING_RENEW_LIVE=1` on DMS.
+- **anything else:** nothing queued.
+
+Known and handed to the colleague (blocked folder): `lib/renewals/create-renewal-quote.ts` writes
+`extension_months: 12` even for monthly subscriptions (`Todos.md`).
+
+**The free hosting trial is Starter only, on monthly and yearly** (decisions 26-27, 24 Sep 2026).
+"Start free trial" on /hosting puts a ₹0 `hosting-trial:starter` line in the cart. Checkout
+starts it with no payment step (`lib/hosting/start-trial.ts`), and a trial checks out on its own.
+There is no trial form any more: `/hosting/trial` is only where the confirm-your-email link lands.
+**One trial per customer across BOTH apps**, matched on email, phone (last 10 digits) or domain.
+This app checks its own `buy-hosting-trial` leads, then asks DMS, which holds the shared record
+(`lib/dms-engine/trials.ts`). If DMS does not answer, the trial is refused. A trial line is
+always quantity 1.
+The one rule is `lib/hosting/trial-plan.ts`. DMS enforces the same rule on its in-panel trial,
+which on monthly renews one month at a time (`Hosting.billingCycle`).
+It was **run once against the live DirectAdmin on 24 Sep 2026** (test, create, replay,
+no-duplicate all passed). The test account `rsospf34b2` / `rsosprovtest2409.in` was deleted from
+server1 on 25 Sep 2026, which leaves server1 with no users.
+**server1.anutech.in is the DirectAdmin server, on 35.207.233.155** (owner, 25 Sep 2026: "Update the
+address"). That is the only IP in server1's own list. DMS's `DA_FALLBACK_IP` and its `.env.local` now
+say so; they said 34.93.167.160 before.
+
+**The live / production DMS is a SEPARATE project, not ours** (owner, 25 Sep 2026: "Ignore the Live
+DMS or Production DMS. That is a separate project from ours"). "DMS" in this repo's work means the
+local DMS repo and its local container. Do not plan, deploy, reconfigure or report on the production
+DMS service (Cloud Run), its env vars or its data. Do not list it as an open item.
+
+**ResellerOS creates every Razorpay order, including one made inside the DMS panel** (decision
+30, 25 Sep 2026; it replaces decision 16). DMS calls `POST /api/dms/panel-order` with
+`DMS_PANEL_API_KEY`, and it is priced by the same function as the site cart
+(`lib/checkout/cart-checkout.ts`). If ResellerOS cannot be reached, DMS refuses the purchase. The
+bill is the paid-order PDF at once, and the GST invoice when staff issue it (decision 29). DMS reads
+bills through the existing `/api/v1` API. The DMS half is built (DMS `15f52e9f`..`abf8cb57`); what it
+still leaves open is in `Todos.md`.
+
+**DMS takes no new payment on its own Razorpay keys** (25 Sep 2026, DMS `0b41b2ff`..`84b5ae33`). Its
+`/cart` pays through `/api/dms/panel-order`. A plan upgrade is a request, `POST /api/dms/upgrade-request`,
+which becomes a lead here; staff quote it and change the plan once it is paid. Guest checkout, autopay,
+`api/payments/create-order` and `verify` are deleted. A DMS scan test fails if anything outside a named
+allow-list can create a Razorpay order again: refunds, webhooks for old orders, and the gated Tokens
+charger remain.
 
 Open items for the integration are tracked in `Todos.md`, not here.
 
@@ -210,10 +303,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,629 tests
-passing across 357 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 23 Sep 2026 after merging `abhishek-pre-merge`. Earlier
-markers: 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **7,041 tests
+passing across 398 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 26 Sep 2026 after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work). Earlier markers:
+6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 
@@ -228,7 +321,23 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, currently **6,845 tests across 452 files**,
+`C:/xampp/htdocs/Domain-Management-Project`, **6,497 passing across 444 files, zero failures**
+on 25 Sep 2026, after DMS stopped taking payments on its own keys (DMS `84b5ae33`). The count
+FELL, on purpose: tests were deleted along with the payment code they covered (guest checkout,
+autopay, create-order, verify). Earlier:
+6,783 / 453 the same day after billing moved to ResellerOS (DMS `abf8cb57`), about 180 deleted with the invoice and renewal code,
+6,886 / 453 the same day after trial mode for hosting.provision (DMS `05a2dce2`),
+6,860 / 451 the same day after hosting.renew (DMS `e80c7851`),
+6,810 / 450 the same day after domain.renew got its gate and spend limit (DMS `e6c1406c`),
+6,787 / 450 on 24 Sep after the cross-app trial record (DMS `2315ae26`),
+6,768 / 448 after the monthly Starter trial (DMS `47f0a81a`),
+6,758 / 448 after the Starter-only trial guard (DMS `19c1134a`),
+6,753 / 447 after the live DirectAdmin fixes (DMS `23680de9`),
+6,702 / 445 after hosting moved to ResellerOS's price + GST (DMS `06a9546`), 6,676 / 444 after DMS's public pages were removed (`0fe6c95`), and 6,617 / 442, after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the
+code) and the tokens recurring flow was gated off (DMS `8bf941e`). An earlier reading the same
+day, 6,594 passing with 23 failing in `recurring-charge-service.test.ts`, caught that gate
+mid-change, before those tests were opted in; it was not a real regression. Integration suite
+238 passing. Before that: **6,845 tests across 452 files**,
 typecheck clean (measured 23 Sep 2026 after the public-page link fixes; 6,773/448 earlier the
 same day after Phase 8 and the transfer clean-up, then 6,748/447 and 6,724/447, and 6,451/432
 on 21 Sep).
@@ -252,9 +361,13 @@ before calling anything done.
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how
   4 unit tests sat broken for months.
-- The **54** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
-  means running them by hand, or it is not verified. (This line said 28 and L7 said 38;
-  both were stale — counted 23 Sep 2026.)
+- The **63** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
+  means running them by hand, or it is not verified. (This line said 54 on 23 Sep, 28 before
+  that, and L7 said 38; counted 26 Sep 2026.) **Measured 26 Sep 2026 against the LOCAL
+  Supabase, after applying `20260925140000`..`20260926120000` from the `pardeep-sir` merge:
+  62 pass / 1 not-applicable** (`sandbox_tenant_isolation`, below). Four files still MENTION
+  `TESTRESULT` in comments describing their old style; they are rollback tests now, so a
+  runner that keys on the word misreads them.
 
   Measured that day against the LOCAL Supabase: **53 pass / 1 not-applicable**. The one is
   `sandbox_tenant_isolation`, which measures the REAL sandbox tenant against the REAL live
@@ -345,6 +458,45 @@ a module list, or a bug status from a doc — verify it, then cite `file:line`.
 
 **And when you find a doc wrong: fix it in the same session.** Working around a stale doc
 leaves the trap armed for the next reader. That rule is why §1 of this file exists.
+
+---
+
+## 13. Hands off: the "Billing & Subscriptions" section belongs to a colleague
+
+**Owner instruction, 24 Sep 2026:** *"This part of ResellerOS cannot be edited or touched by
+our any edits … that part is being worked on by my colleague and can cause massive
+conflict."* It applies to Claude Code and Antigravity alike, until the owner lifts it.
+
+Do not edit, reformat, move, rename or "fix" anything in:
+
+| Menu item | Files |
+|---|---|
+| Customers, Parent Accounts | `production/src/app/(app)/customers/**`, `src/components/features/customers/**` |
+| Quotes | `src/app/(app)/quotes/**`, `src/components/features/quotes/**` |
+| Subscriptions | `src/app/(app)/subscriptions/**`, `src/components/features/subscriptions/**` |
+| Renewals | `src/app/(app)/renewals/**` |
+| Invoices | `src/app/(app)/invoices/**`, `src/components/features/invoices/**` |
+| Payments Received | `src/app/(app)/payments/**` |
+| Project Sales | `src/app/(app)/projects/**`, `src/components/features/projects/**` |
+| Shared money logic | `src/lib/quotes/**`, `src/lib/subscriptions/**`, `src/lib/invoices/**`, `src/lib/renewals/**` |
+| The menu itself | the `section: "Billing & Subscriptions"` block and the `["Billing", …]` breadcrumbs in `src/lib/nav.ts` — the rest of `nav.ts` is not covered |
+
+- **This includes "harmless" edits.** A lint fix, a renamed import or a reworded comment in
+  those files is still a conflict for the person rebuilding them. If a change elsewhere
+  would need one of these files to change, stop and ask the owner. Do not make the edit
+  and do not work round it by moving the code.
+- **Guarded mechanically in this clone.** `.git/hooks/pre-commit` runs
+  `scripts/guard-billing-section.mjs`, which refuses a commit that stages any of the above.
+  It is local on purpose and not shared, so it never blocks the colleague. Override only when
+  the owner explicitly allows that commit: `ALLOW_BILLING_SECTION_EDIT=1 git commit …`. The
+  hook lives in `.git/`, so a fresh clone or a new worktree does not have it: reinstall it
+  there before editing anything.
+- **The shared money logic is blocked too** (owner, 24 Sep 2026: *"block it for now. If need
+  to edit, ask me and I will ask my colleague"*): `src/lib/quotes/**`,
+  `src/lib/subscriptions/**`, `src/lib/invoices/**`, `src/lib/renewals/**`. If a task needs
+  any of it, stop and ask the owner, who checks with the colleague. Query hooks in
+  `src/lib/queries/` are not blocked, but check `git log` for the colleague's recent commits
+  before touching one that serves these pages.
 
 ---
 

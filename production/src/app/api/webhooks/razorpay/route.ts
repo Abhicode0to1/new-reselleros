@@ -30,7 +30,16 @@ import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
-import { daWriteConfigured } from "@/lib/directadmin/provision";
+import { provisioningProducts } from "@/lib/provisioning/products";
+import { domainRegistrationEnabled, hostingProvisioningEnabled } from "@/lib/provisioning/domain-registration";
+import {
+  DOMAIN_RENEWAL_PLAN,
+  domainRenewalEnabled,
+  domainSubscriptionInsert,
+  domainSubscriptionsToCreate,
+} from "@/lib/domains/renewal";
+import { HOSTING_RENEWAL_PLAN, hostingRenewalEnabled } from "@/lib/hosting/renewal";
+import { commandsConfigured } from "@/lib/dms-engine/commands";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
 import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
@@ -242,7 +251,7 @@ export async function POST(request: NextRequest) {
   // ── Look up the quote we created at checkout time ─────────────────────
   const { data: quote, error: qErr } = await admin
     .from("quotes")
-    .select("id, tenant_id, customer_name, amount, payment_status, lead_id, seats, plan, line_items")
+    .select("id, tenant_id, customer_name, amount, payment_status, lead_id, seats, plan, line_items, is_renewal")
     .eq("id", receipt)
     .single();
 
@@ -284,6 +293,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid payment amount" }, { status: 400 });
   }
 
+  /* Which subscription does this quote RENEW, if any? Read BEFORE record_payment, which
+     rolls it forward and clears the link. Until 25 Sep 2026 every paid quote was read as a
+     sale, so a paid domain renewal was queued as a REGISTRATION of a domain the customer
+     already owns, and a paid hosting renewal as a NEW account, with DMS's expiry never
+     moved. */
+  const { data: renewedSub } = await admin
+    .from("subscriptions")
+    .select("id, domain, vendor")
+    .eq("tenant_id", quote.tenant_id)
+    .eq("renewal_quote_id", quote.id)
+    .maybeSingle();
+
   const { error: rpcErr } = await admin.rpc("record_payment", {
     p_quote_id:  quote.id,
     p_amount:    paymentAmount,
@@ -322,49 +343,121 @@ export async function POST(request: NextRequest) {
   const provisioningVendor = await vendorForQuote(admin, quote.line_items, quote.plan);
   const provisioningDomain = (notes.domain as string | undefined)?.trim() || null;
 
-  const provisioning = decideProvisioning({
-    paymentMode: razorpayMode(keyIdForMode),
-    /* The signature verified and the amount was checked above — those two together are what
-       "verified" means here, and nothing weaker reaches this line. */
-    paymentVerified: true,
-    amountPaid: paymentAmount,
-    amountExpected: quote.amount ?? paymentAmount,
-    vendor: provisioningVendor,
-    seats: Number(quote.seats ?? 0),
-    /* No adapter exists — `src/lib/google-csp/` is absent. Hardcoded false rather than a
-       config read, because a config that could say "true" would be a config that can lie. */
-    vendorApiConfigured: false,
-    domainName: provisioningDomain,
-    /* HOSTING is now provisioned by us directly on DirectAdmin (2 Sep 2026), so it
-       IS connected — but only once the same explicit go-live gate the trial uses is
-       on (HOSTING_TRIAL_LIVE=1 + DA credentials present). DOMAIN stays false: we
-       read ResellerClub for availability/price but do NOT order on it yet, and a
-       registration is irreversible spend that must never flip on by config accident.
-       The hosting worker (/api/cron/provision-hosting) turns an unblocked hosting
-       request into a real cPanel account + login email. */
-    engineConnected:
-      provisioningVendor === "hosting"
-        ? process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured()
-        : false,
-    dialMode: (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off",
-  });
+  /* One request per PRODUCT (24 Sep 2026). A cart can buy a domain and a hosting
+     account in one payment; picking a single vendor left the paid domain queued for
+     nobody. Each product gets the same gate as before, on its own vendor and domain. */
+  const dialMode = (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off";
+  /* A paid RENEWAL is never read from the lines, which would make it a new sale:
+       domain  → renew that domain (DOMAIN_RENEWAL_PLAN row, renew-domains worker);
+       hosting → extend that account in DMS (HOSTING_RENEWAL_PLAN row, renew-hosting worker);
+       anything else (a Workspace / M365 / Zoho licence) → nothing to activate: the licence
+       is already running, the payment only settles its next term.
+     A quote marked as a renewal whose subscription cannot be found is not guessed at: it
+     queues nothing, loudly. */
+  const isRenewal = Boolean(renewedSub) || Boolean(quote.is_renewal);
+  const renewalDomain = renewedSub?.domain?.trim().toLowerCase() || null;
+  const renewalPlan =
+    renewedSub?.vendor === "domain" ? DOMAIN_RENEWAL_PLAN : renewedSub?.vendor === "hosting" ? HOSTING_RENEWAL_PLAN : null;
+  if (quote.is_renewal && !renewedSub) {
+    console.error(`[webhooks/razorpay] ${quote.id} is a renewal quote but no subscription points at it, so nothing was queued. Find the subscription it renews and extend it by hand.`);
+  } else if (renewedSub && !renewalPlan) {
+    console.log(`[webhooks/razorpay] ${quote.id} renews a ${renewedSub.vendor} subscription — nothing to activate.`);
+  }
+  const products = isRenewal
+    ? renewalPlan && renewalDomain
+      ? [{ vendor: renewedSub!.vendor as "domain" | "hosting", domain: renewalDomain, seats: 1 }]
+      : []
+    : provisioningProducts({
+        lineItems: quote.line_items,
+        vendor: provisioningVendor,
+        domain: provisioningDomain,
+        seats: Number(quote.seats ?? 0),
+      });
 
-  if (provisioning.action !== "refuse") {
-    const queued = await queueProvisioning({
-      tenantId:    quote.tenant_id,
-      quoteId:     quote.id,
-      vendor:      provisioningVendor,
-      seats:       Number(quote.seats ?? 0) || 1,
-      domain:      provisioningDomain,
-      plan:        quote.plan ?? null,
-      amountPaid:  paymentAmount,
+  for (const product of products) {
+    const provisioning = decideProvisioning({
       paymentMode: razorpayMode(keyIdForMode),
-      blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
-      note:        provisioning.reason,
+      /* The signature verified and the amount was checked above — those two together are what
+         "verified" means here, and nothing weaker reaches this line. */
+      paymentVerified: true,
+      amountPaid: paymentAmount,
+      amountExpected: quote.amount ?? paymentAmount,
+      vendor: product.vendor,
+      seats: product.seats,
+      /* No adapter exists — `src/lib/google-csp/` is absent. Hardcoded false rather than a
+         config read, because a config that could say "true" would be a config that can lie. */
+      vendorApiConfigured: false,
+      domainName: product.domain,
+      /* HOSTING is provisioned by us directly on DirectAdmin (2 Sep 2026), so it IS
+         connected — but only once the same explicit go-live gate the trial uses is on
+         (HOSTING_TRIAL_LIVE=1 + DA credentials present).
+         DOMAIN (owner decision 21, 24 Sep 2026): connected only when this side's own
+         fail-closed switch DOMAIN_REGISTRATION_LIVE=1 is on AND the engine command
+         key is configured. Otherwise the row is queued with `engine_not_connected`
+         and the register-domains worker never picks it up. The engine has a second,
+         independent gate and the spend limit (DMS engine-register-policy.ts). */
+      /* HOSTING (24 Sep 2026): provisioned by the DMS engine's hosting.provision,
+         so it is connected when THIS side's switch HOSTING_PROVISIONING_LIVE=1 is
+         on and the engine command key is set — no longer this app's own
+         DirectAdmin credentials, which only the hosting trial still uses. */
+      engineConnected:
+        product.vendor === "hosting"
+          ? (renewalPlan ? hostingRenewalEnabled() : hostingProvisioningEnabled()) && commandsConfigured()
+          : product.vendor === "domain"
+            ? (renewalPlan ? domainRenewalEnabled() : domainRegistrationEnabled()) && commandsConfigured()
+            : false,
+      dialMode,
     });
-    console.log(`[webhooks/razorpay] provisioning ${queued} for ${quote.id} — ${provisioning.reason}`);
-  } else {
-    console.warn(`[webhooks/razorpay] not provisioning ${quote.id} — ${provisioning.reason}`);
+
+    if (provisioning.action !== "refuse") {
+      const queued = await queueProvisioning({
+        tenantId:    quote.tenant_id,
+        quoteId:     quote.id,
+        vendor:      product.vendor,
+        seats:       product.seats,
+        domain:      product.domain,
+        // Renewal rows carry their plan marker; the new-sale workers skip them.
+        plan:        renewalPlan ?? quote.plan ?? null,
+        amountPaid:  paymentAmount,
+        paymentMode: razorpayMode(keyIdForMode),
+        blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
+        note:        provisioning.reason,
+      });
+      console.log(`[webhooks/razorpay] provisioning ${queued} for ${quote.id} ${product.vendor}${product.domain ? ` ${product.domain}` : ""} — ${provisioning.reason}`);
+    } else {
+      console.warn(`[webhooks/razorpay] not provisioning ${quote.id} ${product.vendor} — ${provisioning.reason}`);
+    }
+  }
+
+  /* ── A yearly subscription for each domain this sale bought ─────────────────
+     So the domain comes up for renewal (owner, 25 Sep 2026). Only on a first sale: a
+     renewal quote rolls its existing subscription forward in record_payment. Written
+     here rather than through record_payment's line `commitment`, which keeps one
+     subscription per (quote, domain) and would drop it when hosting shares the name.
+     Best-effort and logged: the payment is already recorded. */
+  if (!isRenewal) {
+    const toCreate = domainSubscriptionsToCreate(quote.line_items);
+    if (toCreate.length) {
+      const { data: paidQuote } = await admin
+        .from("quotes").select("customer_id").eq("id", quote.id).eq("tenant_id", quote.tenant_id).maybeSingle();
+      const customerId = (paidQuote as { customer_id?: string | null } | null)?.customer_id ?? null;
+      if (!customerId) {
+        console.error(`[webhooks/razorpay] ${quote.id}: paid, but no customer to hang domain subscriptions on — ${toCreate.map((d) => d.domain).join(", ")} will not come up for renewal. Add them by hand.`);
+      } else {
+        const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10); // IST (AGENTS.md §6)
+        for (const row of toCreate) {
+          const { data: existing } = await admin
+            .from("subscriptions").select("id")
+            .eq("tenant_id", quote.tenant_id).eq("vendor", "domain").eq("domain", row.domain).eq("status", "active")
+            .limit(1);
+          if (existing && existing.length) continue;
+          const { error: subErr } = await admin.from("subscriptions").insert(
+            domainSubscriptionInsert({ tenantId: quote.tenant_id, customerId, customerName: quote.customer_name ?? "", row, today }),
+          );
+          if (subErr) console.error(`[webhooks/razorpay] ${quote.id}: domain subscription for ${row.domain} NOT created — ${subErr.message}. It will not come up for renewal; add it by hand.`);
+        }
+      }
+    }
   }
 
   // ── Send confirmation emails (best-effort) ────────────────────────────

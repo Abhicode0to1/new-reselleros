@@ -89,7 +89,7 @@ export const SECURITY_FEATURES = [
 ] as const;
 
 export const MAIL_OPTIONS = [
-  { name: "Anutech Mail", who: "Most Indian SMBs", highlighted: true, cta: "Add a mailbox", lines: ["5 GB per mailbox, hosted in India", "IMAP, POP, ActiveSync", "Unlimited aliases and catch-all", "Anti-spam in and outbound"] },
+  { name: "Anutech Mail", who: "Most Indian SMBs", highlighted: true, cta: "Get a quote", lines: ["5 GB per mailbox, hosted in India", "IMAP, POP, ActiveSync", "Unlimited aliases and catch-all", "Anti-spam in and outbound"] },
   { name: "Google Workspace", who: "Teams living in Docs and Meet", highlighted: false, cta: "Get a quote", lines: ["30 GB per user, Drive included", "Docs, Sheets, Meet, Calendar", "India region pricing", "We handle DNS and setup"] },
   { name: "Microsoft 365", who: "Offices standardised on Outlook", highlighted: false, cta: "Get a quote", lines: ["50 GB mailbox, 1 TB OneDrive", "Outlook, Teams, web Office", "Works with existing AD", "Licence management by us"] },
 ] as const;

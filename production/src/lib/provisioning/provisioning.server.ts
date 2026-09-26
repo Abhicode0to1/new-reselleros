@@ -15,6 +15,8 @@
  */
 import { createClient as createBareClient } from "@supabase/supabase-js";
 import type { ProvisioningBlocker, ProvisioningVendor } from "./provisioning";
+import { DOMAIN_RENEWAL_PLAN } from "@/lib/domains/renewal";
+import { HOSTING_RENEWAL_PLAN } from "@/lib/hosting/renewal";
 
 function bare() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -41,22 +43,106 @@ export interface ReadyHostingRequest {
  * engine-not-connected or dial-hold row carries a blocker and is left alone.
  */
 export async function listReadyHostingRequests(limit = 50): Promise<ReadyHostingRequest[]> {
+  return listReadyHostingRows("new", limit);
+}
+
+/**
+ * Paid hosting RENEWALS approved the same way (25 Sep 2026). Separate, so the
+ * provision-hosting worker never creates an account for somebody renewing one; the
+ * renew-hosting worker takes only these.
+ */
+export async function listReadyHostingRenewals(limit = 50): Promise<ReadyHostingRequest[]> {
+  return listReadyHostingRows("renewal", limit);
+}
+
+async function listReadyHostingRows(kind: "new" | "renewal", limit: number): Promise<ReadyHostingRequest[]> {
   const db = bare();
   if (!db) return [];
-  const { data, error } = await db
+  let q = db
     .from("provisioning_requests")
     .select("id, tenant_id, quote_id, domain, plan")
     .eq("vendor", "hosting")
     .eq("status", "queued")
     .eq("payment_mode", "live")
-    .is("blocker", null)
-    .order("created_at", { ascending: true })
-    .limit(limit);
+    .is("blocker", null);
+  // As for domains: `neq` alone would drop NULL-plan rows, so the null case is named.
+  q = kind === "renewal" ? q.eq("plan", HOSTING_RENEWAL_PLAN) : q.or(`plan.is.null,plan.neq.${HOSTING_RENEWAL_PLAN}`);
+  const { data, error } = await q.order("created_at", { ascending: true }).limit(limit);
   if (error) {
-    console.error("[provisioning] list ready hosting failed:", error.message);
+    console.error(`[provisioning] list ready hosting ${kind === "new" ? "requests" : "renewals"} failed:`, error.message);
     return [];
   }
   return (data ?? []) as ReadyHostingRequest[];
+}
+
+/** One paid domain request the registration worker may send to the engine. */
+export interface ReadyDomainRequest {
+  id: string;
+  tenant_id: string;
+  quote_id: string;
+  domain: string | null;
+  amount_paid: number;
+  note: string | null;
+}
+
+/**
+ * Domain requests decideProvisioning fully approved (blocker IS NULL) on a LIVE
+ * payment. A row queued while registration was switched off carries the
+ * `engine_not_connected` blocker and is deliberately NOT picked up when it is
+ * switched on — it was paid for under the old arrangement and a person clears it.
+ */
+export async function listReadyDomainRequests(limit = 20): Promise<ReadyDomainRequest[]> {
+  return listReadyDomainRows("registration", limit);
+}
+
+/**
+ * Paid domain RENEWALS approved the same way (25 Sep 2026). A separate list, because
+ * registering a domain the customer already owns would be the wrong spend: the
+ * register-domains worker never sees these rows, and renew-domains sees only them.
+ */
+export async function listReadyDomainRenewals(limit = 20): Promise<ReadyDomainRequest[]> {
+  return listReadyDomainRows("renewal", limit);
+}
+
+async function listReadyDomainRows(kind: "registration" | "renewal", limit: number): Promise<ReadyDomainRequest[]> {
+  const db = bare();
+  if (!db) return [];
+  let q = db
+    .from("provisioning_requests")
+    .select("id, tenant_id, quote_id, domain, amount_paid, note")
+    .eq("vendor", "domain")
+    .eq("status", "queued")
+    .eq("payment_mode", "live")
+    .is("blocker", null);
+  // `neq` alone would also drop rows whose plan is NULL (a NULL is never "not equal"),
+  // which is most registrations, so the null case is named.
+  q = kind === "renewal" ? q.eq("plan", DOMAIN_RENEWAL_PLAN) : q.or(`plan.is.null,plan.neq.${DOMAIN_RENEWAL_PLAN}`);
+  const { data, error } = await q.order("created_at", { ascending: true }).limit(limit);
+  if (error) {
+    console.error(`[provisioning] list ready domain ${kind}s failed:`, error.message);
+    return [];
+  }
+  return (data ?? []) as ReadyDomainRequest[];
+}
+
+/**
+ * Record why a request is still waiting, without changing its status. Returns
+ * whether a row was actually updated — an update matching nothing is a success
+ * in supabase-js (AGENTS.md L84), so the count is read.
+ */
+export async function noteProvisioning(id: string, note: string): Promise<boolean> {
+  const db = bare();
+  if (!db) return false;
+  const { data, error } = await db
+    .from("provisioning_requests")
+    .update({ note: note.slice(0, 500), updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
+  if (error) {
+    console.error("[provisioning] note failed:", error.message);
+    return false;
+  }
+  return (data ?? []).length === 1;
 }
 
 export async function markProvisioningActivated(id: string, vendorRef: string): Promise<void> {

@@ -20,6 +20,11 @@ import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useCreateProjectSale, type MilestoneInput } from "@/lib/queries/projects";
+import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
+import { AddCustomerForm } from "@/components/features/customers/add-customer-form";
+import { useCustomers } from "@/lib/queries/customers";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { rupee } from "@/lib/utils";
 
 interface Props {
@@ -38,7 +43,18 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
   const router = useRouter();
   const create = useCreateProjectSale();
 
-  const [customerName, setCustomerName] = React.useState("");
+  /* R-002 (Pardeep, 25 Sep 2026). This was a free-text `customerName`, saved with
+     `customerId: null`. Three things followed: the sale never appeared in that
+     customer's Ledger or Aging, "Excel Tech" quietly became a different party from
+     "Excel Technologies", and the tax head came from a checkbox instead of from the
+     customer's state. The id is the record now; the name is read off it. */
+  const [customerId, setCustomerId]     = React.useState("");
+  const [addCustomerOpen, setAddCustomerOpen] = React.useState(false);
+  /* Set once the operator ticks the box themselves. Until then the checkbox follows
+     the customer, so choosing a Karnataka customer while you are in Delhi flips it to
+     IGST without anybody having to know the rule — and an explicit tick is never
+     overwritten afterwards. */
+  const [interStateTouched, setInterStateTouched] = React.useState(false);
   const [title, setTitle]               = React.useState("");
   const [description, setDescription]   = React.useState("");
   const [taxable, setTaxable]           = React.useState("");
@@ -48,10 +64,28 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
 
   React.useEffect(() => {
     if (!open) {
-      setCustomerName(""); setTitle(""); setDescription("");
+      setCustomerId(""); setTitle(""); setDescription("");
       setTaxable(""); setGstRate("18"); setInterState(false); setRows(BLANK_ROWS);
+      setInterStateTouched(false);
     }
   }, [open]);
+
+  const { data: customers } = useCustomers();
+  const { data: me } = useCurrentUser();
+  const selectedCustomer = customers?.find((c) => c.id === customerId);
+  const customerName = selectedCustomer?.name ?? "";
+
+  /* Follow the customer until the operator overrides. Both GSTINs are passed because
+     36 of 41 customers holding a GSTIN have no state_code, and the first two characters
+     of a GSTIN are the state — see lib/gst/place-of-supply.ts. */
+  React.useEffect(() => {
+    if (interStateTouched || !selectedCustomer) return;
+    setInterState(isInterStateSupply(
+      selectedCustomer.state_code,
+      me?.tenantStateCode,
+      { customerGstin: selectedCustomer.gstin, sellerGstin: me?.tenantGstin },
+    ));
+  }, [selectedCustomer, me?.tenantStateCode, me?.tenantGstin, interStateTouched]);
 
   const taxableNum = Math.max(0, Math.round(Number(taxable) || 0));
   const rateNum    = Math.max(0, Math.round(Number(gstRate) || 0));
@@ -71,7 +105,7 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
   const removeRow = (i: number) => setRows((rs) => rs.filter((_, idx) => idx !== i));
 
   const canSubmit =
-    customerName.trim().length >= 2 &&
+    customerId !== "" &&
     title.trim().length >= 2 &&
     taxableNum > 0 &&
     rows.some((r) => Math.round(Number(r.amount) || 0) > 0) &&
@@ -88,8 +122,9 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
       }));
     try {
       const id = await create.mutateAsync({
-        customerId:   null,
-        customerName: customerName.trim(),
+        // R-002: the real record, so the sale reaches the Ledger and Aging.
+        customerId,
+        customerName,
         title:        title.trim(),
         description:  description.trim() || null,
         taxable:      taxableNum,
@@ -114,7 +149,17 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
           <FormField label="Customer" required htmlFor="p_customer">
-            <Input id="p_customer" autoFocus placeholder="e.g. Sharma Cloud Solutions" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+            <CustomerCombobox
+              id="p_customer"
+              value={customerId}
+              onChange={setCustomerId}
+              onCreateNew={() => setAddCustomerOpen(true)}
+              placeholder="Search customers…"
+            />
+            <p className="text-3xs text-ink-3 mt-1">
+              The sale is filed against this customer — it shows in their Ledger and Aging, and
+              the tax head follows their state.
+            </p>
           </FormField>
 
           <FormField label="Project title" required htmlFor="p_title">
@@ -139,9 +184,24 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
           </div>
 
           <label className="flex items-center gap-2 text-sm text-ink-2">
-            <input type="checkbox" checked={interState} onChange={(e) => setInterState(e.target.checked)} className="rounded border-hairline" />
+            <input
+              type="checkbox"
+              checked={interState}
+              onChange={(e) => { setInterStateTouched(true); setInterState(e.target.checked); }}
+              className="rounded border-hairline"
+            />
             Inter-state supply (IGST instead of CGST + SGST)
           </label>
+          {/* Say where the tick came from. An unexplained tax head on a money document
+              is one the operator has to verify by hand, which costs more than the
+              pre-set saved — the same reasoning as the quote builder's match note. */}
+          {selectedCustomer && !interStateTouched && (
+            <p className="text-3xs text-ink-3 -mt-2">
+              {me?.tenantStateCode
+                ? <>Set from {selectedCustomer.name}&apos;s state{selectedCustomer.state ? ` (${selectedCustomer.state})` : ""} against yours. Change it if that is wrong.</>
+                : <>Your company&apos;s state is not set, so this defaults to intra-state. Set it in Settings → GST profile to have it decided for you.</>}
+            </p>
+          )}
 
           {/* GST summary */}
           <div className="rounded-md border border-hairline bg-paper-2/40 p-3 text-sm space-y-1">
@@ -187,6 +247,15 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
           </Button>
         </SheetFooter>
       </SheetContent>
+
+      {/* "＋ New customer" from the picker. Same form the Customers page uses, so a
+          customer created here gets its mandatory contact person like any other — and
+          comes back selected rather than as a typed name. */}
+      <AddCustomerForm
+        open={addCustomerOpen}
+        onOpenChange={setAddCustomerOpen}
+        onCreated={(newId) => setCustomerId(newId)}
+      />
     </Sheet>
   );
 }

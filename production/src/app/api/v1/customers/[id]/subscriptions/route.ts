@@ -7,7 +7,7 @@ import { authenticateApiKey } from "@/lib/api-keys/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveCustomer } from "@/lib/api/v1-customer";
 import { mapSubscription } from "@/lib/api/v1-mappers";
-import { unauthorized, notFound } from "@/lib/api/v1-response";
+import { unauthorized, notFound, serverError } from "@/lib/api/v1-response";
 import type { Subscription as SubscriptionRow } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     .eq("tenant_id", auth.tenantId)
     .eq("customer_id", customer.id)
     .order("start_date", { ascending: false });
-  if (error) return notFound("Could not load subscriptions");
+  if (error) return serverError("Could not load subscriptions just now. Try again in a minute.");
 
   return NextResponse.json((data as SubscriptionRow[]).map(mapSubscription));
 }

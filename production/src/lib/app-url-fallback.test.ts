@@ -65,7 +65,8 @@ const SRC = join(ROOT, "src");
  *   ai-support-sla            `${APP_URL}/support`          -> alert.to (owner)
  *   compliance-reminders      renderReminder(plan, APP_URL) -> users with role
  *                                                              owner / accountant
- *   provision-hosting x2      owner alert body              -> owner.to
+ *   (provision-hosting — gone 24 Sep 2026: the worker now provisions through the
+ *    DMS engine and its owner alerts carry no app link)
  *   trial-expiry              "Open the lead: …"           -> staff
  *   enquiry/general, enquiry/workspace, trial/hosting, trial/workspace,
  *   inbound/ingest            "Open the lead: …"           -> staff
@@ -76,7 +77,7 @@ const SRC = join(ROOT, "src");
  *                                "Nothing has been sent to the customer."
  *   razorpay                  "Open in app / Open quote"    -> staff
  *
- * All eleven are staff-facing, so a dead link there is an annoyance and not a
+ * All ten (eleven until 24 Sep 2026) are staff-facing, so a dead link there is an annoyance and not a
  * customer seeing a 503. They are left alone deliberately: none of those route
  * files has a test (L58), and the correct shape already exists in this codebase
  * four times over — `(auth)/callback` and `api/auth/signup` pass `origin`,
@@ -88,12 +89,10 @@ const SRC = join(ROOT, "src");
 const KNOWN = [
   "app/api/cron/ai-support-sla/route.ts",
   "app/api/cron/compliance-reminders/route.ts",
-  "app/api/cron/provision-hosting/route.ts",
   "app/api/cron/trial-expiry/route.ts",
   "app/api/public/enquiry/general/route.ts",
   "app/api/public/enquiry/workspace/route.ts",
   "app/api/public/trial/hosting/confirm/route.ts",
-  "app/api/public/trial/hosting/route.ts",
   "app/api/public/trial/workspace/route.ts",
   "app/api/v1/integrations/support-email-inbound/route.ts",
   "app/api/v1/integrations/support-whatsapp-inbound/route.ts",

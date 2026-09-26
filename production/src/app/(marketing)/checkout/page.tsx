@@ -62,12 +62,29 @@ export default function CheckoutPage() {
   const [gstin, setGstin] = useState("");
   const [phone, setPhone] = useState("");
   const [domain, setDomain] = useState("");
+  // Registrant address — asked only when the cart holds a domain (owner decision 22).
+  const [addrLine1, setAddrLine1] = useState("");
+  const [addrCity, setAddrCity] = useState("");
+  const [addrState, setAddrState] = useState("");
+  const [addrPin, setAddrPin] = useState("");
   const [method, setMethod] = useState<string>("UPI");
   const [agreed, setAgreed] = useState(false);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Set when the server's re-priced total differs from what this page showed. */
+  const [priceCheck, setPriceCheck] = useState<{
+    server: number; shown: number;
+    order: { orderId: string; amount: number; currency?: string; razorpayKeyId: string; quoteId?: string; totalRupees?: number };
+  } | null>(null);
 
   const hasHosting = cart.lines.some((l) => (l.sku || "").startsWith("hosting:"));
+  const hasDomain = cart.lines.some((l) => (l.sku || "").startsWith("domain:"));
+  /* A free hosting trial (24 Sep 2026: "Start free trial" goes straight to the cart,
+     no form in between). It checks out on its own, with no payment step: the
+     server starts the trial and emails a confirmation link. */
+  const hasTrial = cart.lines.some((l) => (l.sku || "").startsWith("hosting-trial:"));
+  const isTrialCart = hasTrial && cart.lines.length === 1;
+  const trialMixed = hasTrial && cart.lines.length > 1;
 
   // Remember the buyer's details across a refresh so nothing has to be re-typed.
   useEffect(() => {
@@ -79,13 +96,23 @@ export default function CheckoutPage() {
       if (typeof s.gstin === "string") setGstin(s.gstin);
       if (typeof s.phone === "string") setPhone(s.phone);
       if (typeof s.domain === "string") setDomain(s.domain);
+      if (typeof s.addrLine1 === "string") setAddrLine1(s.addrLine1);
+      if (typeof s.addrCity === "string") setAddrCity(s.addrCity);
+      if (typeof s.addrState === "string") setAddrState(s.addrState);
+      if (typeof s.addrPin === "string") setAddrPin(s.addrPin);
     } catch { /* private window / blocked storage — just start empty */ }
   }, []);
+  // Hosting + a domain being bought in the same cart: the hosting goes on that domain,
+  // so pre-fill it rather than making the customer type what is already in the cart.
+  const cartDomain = cart.lines.find((l) => l.domain)?.domain ?? "";
+  useEffect(() => {
+    if (hasHosting && cartDomain) setDomain((d) => d.trim() || cartDomain);
+  }, [hasHosting, cartDomain]);
   useEffect(() => {
     try {
-      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain }));
+      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain, addrLine1, addrCity, addrState, addrPin }));
     } catch { /* ignore */ }
-  }, [name, company, email, gstin, phone, domain]);
+  }, [name, company, email, gstin, phone, domain, addrLine1, addrCity, addrState, addrPin]);
 
   if (cart.lines.length === 0) {
     return (
@@ -103,10 +130,48 @@ export default function CheckoutPage() {
     company.trim().length >= 2 &&
     email.includes("@") &&
     phone.trim().length >= 10 &&
-    (!hasHosting || domain.trim().length >= 3);
+    (!hasHosting || domain.trim().length >= 3) &&
+    !trialMixed &&
+    (!hasDomain ||
+      (addrLine1.trim().length >= 3 && addrCity.trim().length >= 2 && addrState.trim().length >= 2 && /^\d{6}$/.test(addrPin.trim())));
+
+  /** The trial path: no payment, no quote — the server starts the trial and we show the done page. */
+  async function startTrial() {
+    if (paying) return;
+    setPaying(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/public/checkout/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: name.trim(),
+          companyName: company.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          domain: domain.trim() || undefined,
+          lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle })),
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { success?: boolean; trial?: boolean; error?: string };
+      if (!res.ok || !json.success || !json.trial) throw new Error(json.error || "Could not start your trial. Nothing was saved — please try again.");
+      try { window.sessionStorage.setItem("anutech.trial", email.trim()); window.sessionStorage.removeItem("anutech.order"); } catch { /* done page falls back */ }
+      cart.clear();
+      router.push("/done" as never);
+    } catch (err) {
+      setError((err as Error).message);
+      setPaying(false);
+    }
+  }
+
+  interface StartedOrder {
+    orderId: string; amount: number; currency?: string; razorpayKeyId: string;
+    quoteId?: string; totalRupees?: number;
+  }
 
   async function placeOrder() {
     if (!agreed || paying) return;
+    setPriceCheck(null);
     setPaying(true);
     setError(null);
     try {
@@ -120,17 +185,22 @@ export default function CheckoutPage() {
           phone: phone.trim(),
           gstin: gstin.trim() || undefined,
           domain: hasHosting ? domain.trim() : undefined,
-          lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle })),
+          lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain })),
+          coupon: cart.coupon.trim() || undefined,
+          address: hasDomain
+            ? { line1: addrLine1.trim(), city: addrCity.trim(), state: addrState.trim(), zipcode: addrPin.trim(), country: "IN" }
+            : undefined,
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
         success?: boolean; simulated?: boolean; orderId?: string; amount?: number;
         currency?: string; razorpayKeyId?: string; quoteId?: string; error?: string;
+        totalRupees?: number;
       };
       if (!res.ok || !json.success) throw new Error(json.error || "Could not start checkout. Please retry.");
 
       if (json.simulated) {
-        try { window.sessionStorage.setItem("anutech.order", json.quoteId || ""); } catch { /* default shown */ }
+        try { window.sessionStorage.removeItem("anutech.trial"); window.sessionStorage.setItem("anutech.order", json.quoteId || ""); } catch { /* default shown */ }
         cart.clear();
         router.push("/done" as never);
         return;
@@ -139,19 +209,44 @@ export default function CheckoutPage() {
       if (!json.orderId || !json.razorpayKeyId || !json.amount) {
         throw new Error("Payment details missing from server. Please retry.");
       }
+      const order: StartedOrder = {
+        orderId: json.orderId, amount: json.amount, currency: json.currency,
+        razorpayKeyId: json.razorpayKeyId, quoteId: json.quoteId, totalRupees: json.totalRupees,
+      };
+      /* The server re-prices every line (domains live, coupon from the same table). If
+         its total differs from what this page showed, say so and let the customer decide
+         — never open Razorpay on a figure they were not shown. Confirming reuses THIS
+         order: placing it again would take a second quote number for one purchase. */
+      const shown = Math.round(t.payable);
+      if (typeof order.totalRupees === "number" && Math.abs(order.totalRupees - shown) > 1) {
+        setPriceCheck({ server: order.totalRupees, shown, order });
+        setPaying(false);
+        return;
+      }
+      await openPayment(order);
+    } catch (err) {
+      setError((err as Error).message);
+      setPaying(false);
+    }
+  }
+
+  async function openPayment(order: StartedOrder) {
+    setPriceCheck(null);
+    setPaying(true);
+    try {
       const Razorpay = await loadRazorpay();
       const rzp = new Razorpay({
-        key: json.razorpayKeyId,
-        amount: json.amount,
-        currency: json.currency ?? "INR",
+        key: order.razorpayKeyId,
+        amount: order.amount,
+        currency: order.currency ?? "INR",
         name: "ANUTECH DIGITAL PVT LTD",
-        description: `Order ${json.quoteId ?? ""}`,
-        order_id: json.orderId,
+        description: `Order ${order.quoteId ?? ""}`,
+        order_id: order.orderId,
         prefill: { name, email, contact: phone },
-        notes: { quoteId: json.quoteId ?? "", domain: hasHosting ? domain.trim() : "" },
+        notes: { quoteId: order.quoteId ?? "", domain: hasHosting ? domain.trim() : "" },
         theme: { color: "#C2410C" },
         handler: () => {
-          try { window.sessionStorage.setItem("anutech.order", json.quoteId || ""); } catch { /* default */ }
+          try { window.sessionStorage.removeItem("anutech.trial"); window.sessionStorage.setItem("anutech.order", order.quoteId || ""); } catch { /* default */ }
           cart.clear();
           router.push("/done" as never);
         },
@@ -174,7 +269,9 @@ export default function CheckoutPage() {
         <div>
           <h1 className="h1-narrow" style={{ marginBottom: 6 }}>Checkout</h1>
           <p className="meta" style={{ marginBottom: 24 }}>
-            {step === "details" ? "Step 1 of 2 — who the invoice is for" : "Step 2 of 2 — how you would like to pay"}
+            {isTrialCart
+              ? "Your details — no card needed, nothing is charged"
+              : step === "details" ? "Step 1 of 2 — who the invoice is for" : "Step 2 of 2 — how you would like to pay"}
           </p>
 
           {step === "details" ? (
@@ -187,9 +284,44 @@ export default function CheckoutPage() {
               {hasHosting && (
                 <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
               )}
-              <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk} onClick={() => setStep("payment")}>
-                Continue
-              </button>
+              {hasTrial && !hasHosting && (
+                <Field label="YOUR WEBSITE DOMAIN — LEAVE BLANK IF YOU DON'T HAVE ONE YET" value={domain} onChange={setDomain} mono />
+              )}
+              {hasDomain && (
+                <>
+                  <p className="meta" style={{ margin: "6px 0 2px" }}>
+                    The domain is registered in your name, so the registry needs the owner&apos;s postal address.
+                  </p>
+                  <Field label="ADDRESS" value={addrLine1} onChange={setAddrLine1} />
+                  <Field label="CITY" value={addrCity} onChange={setAddrCity} />
+                  <Field label="STATE" value={addrState} onChange={setAddrState} />
+                  <Field label="PIN CODE" value={addrPin} onChange={setAddrPin} mono />
+                </>
+              )}
+              {trialMixed && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  The free trial checks out on its own. Remove the other items to start the trial now, or
+                  remove the trial to pay for them.{" "}
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => router.push("/cart" as never)}>Back to cart</button>
+                </div>
+              )}
+              {isTrialCart && error && (
+                <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
+              )}
+              {isTrialCart ? (
+                <>
+                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk || paying} onClick={() => void startTrial()}>
+                    {paying ? "Starting your trial…" : "Start my 15-day free trial"}
+                  </button>
+                  <p className="meta" style={{ marginTop: 10 }}>
+                    We email you a link to confirm your address; the account is set up once you click it.
+                  </p>
+                </>
+              ) : (
+                <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk} onClick={() => setStep("payment")}>
+                  Continue
+                </button>
+              )}
             </div>
           ) : (
             <div style={{ maxWidth: 460 }}>
@@ -224,6 +356,20 @@ export default function CheckoutPage() {
                 </span>
               </label>
 
+              {priceCheck && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  The total has changed from {rupee(priceCheck.shown)} to <strong>{rupee(priceCheck.server)}</strong> — usually because a
+                  domain&apos;s registry price moved since you added it. Nothing has been charged.
+                  <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => void openPayment(priceCheck.order)}>
+                      Pay {rupee(priceCheck.server)}
+                    </button>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => router.push("/cart" as never)}>
+                      Back to cart
+                    </button>
+                  </div>
+                </div>
+              )}
               {error && (
                 <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
               )}
@@ -237,7 +383,7 @@ export default function CheckoutPage() {
                   cursor: agreed && !paying ? "pointer" : "not-allowed",
                 }}
                 disabled={!agreed || paying}
-                onClick={placeOrder}
+                onClick={() => void placeOrder()}
               >
                 {paying ? "Starting secure payment…" : `Pay ${rupee(t.payable)}`}
               </button>

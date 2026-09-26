@@ -53,6 +53,10 @@ export function DomainSearch() {
 
   const addDomain = (r: DomainResult) => {
     cart.add({
+      /* sku + domain: the checkout re-prices this exact name live and registers
+         it. Without them every search result was refused at payment. */
+      sku: `domain:${r.domain.slice(r.domain.indexOf(".") + 1)}`,
+      domain: r.domain,
       label: r.domain,
       detail: `Domain registration · 1 year`,
       unitPrice: r.price,

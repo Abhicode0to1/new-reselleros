@@ -39,6 +39,7 @@ import { primaryContactEmail } from "@/lib/contacts/primary";
 import { decideCadence, CADENCE_TRIGGERS } from "@/lib/renewals/cadence";
 import { renderTemplate } from "@/lib/renewals/templates";
 import { createOrGetRenewalQuote } from "@/lib/renewals/create-renewal-quote";
+import { createDomainRenewalQuote } from "@/lib/domains/renewal";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { renderQuotePDF } from "@/lib/pdf";
 import { logoDataUri } from "@/lib/pdf/logo";
@@ -157,7 +158,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
     .from("subscriptions")
     .select(`
       id, tenant_id, customer_id, customer_name, plan, item_id, vendor, seats, mrr,
-      renewal_date, status, renewal_state, reminder_count, renewal_quote_id, term_months
+      renewal_date, status, renewal_state, reminder_count, renewal_quote_id, term_months, domain
     `)
     .eq("status", "active")
     .eq("auto_renew", true)
@@ -261,7 +262,22 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
         // created subs or those whose renewal_date got edited could fire a
         // 'FINAL NOTICE' email at T-0 with no quote attached. Now we always
         // try to ensure a quote exists before sending.
-        const quoteResult = await createOrGetRenewalQuote({
+        /* A DOMAIN renews at ResellerClub's live renewal price, read now (owner, 25 Sep
+           2026), not from the stored mrr — which is 0 for a domain that came free with
+           yearly hosting. Everything else keeps the shared helper. */
+        const quoteResult = sub.vendor === "domain" && sub.domain
+          ? await createDomainRenewalQuote({
+              supabase,
+              subscriptionId:  sub.id,
+              tenantId:        sub.tenant_id,
+              customerId:      sub.customer_id,
+              customerName:    sub.customer_name,
+              domain:          sub.domain,
+              renewalDate:     sub.renewal_date!,
+              graceDays:       tenant.grace_period_days ?? 0,
+              existingQuoteId: sub.renewal_quote_id,
+            })
+          : await createOrGetRenewalQuote({
           supabase,
           subscriptionId:  sub.id,
           tenantId:        sub.tenant_id,
@@ -277,6 +293,18 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
           existingQuoteId: sub.renewal_quote_id,
           notes:           `Auto-generated renewal quote for subscription ${sub.id}`,
         });
+
+        /* A domain whose live renewal price could not be read gets no email this run: a
+           reminder with no price and no way to pay is worse than one a day later. The
+           reason is logged by createDomainRenewalQuote and the step is retried next run,
+           because nothing was logged as sent. */
+        if (sub.vendor === "domain" && !quoteResult) {
+          detail.emailStatus = "(held: live domain renewal price unavailable — retried next run)";
+          result.emails_skipped += 1;
+          result.errors.push({ subscription_id: sub.id, message: `No renewal quote for domain ${sub.domain}: the live renewal price could not be read.` });
+          result.details.push(detail);
+          continue;
+        }
 
         const renewalQuoteId = quoteResult?.quoteId ?? null;
         const renewalQuote = quoteResult

@@ -243,6 +243,15 @@ export const AI_ACTIONS = {
     today: "auto",
     supports: ["off", "hold", "auto"],
   },
+  /* 25 Sep 2026. The register-domains worker tells the customer their domain is registered
+     and where to manage it. `auto` because it states a fact that already happened and
+     carries no price, date or promise; it is on this dial so it can be stopped like every
+     other customer send (L62-L65). */
+  "domain.registered.send": {
+    label: "Tell a customer their domain is registered",
+    today: "auto",
+    supports: ["off", "hold", "auto"],
+  },
 } as const satisfies Record<string, AiActionSpec>;
 
 export type AiAction = keyof typeof AI_ACTIONS;

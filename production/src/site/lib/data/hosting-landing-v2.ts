@@ -176,7 +176,7 @@ export const HOSTING_CHANNELS: readonly { t: string; d: string; a: string; href:
 ];
 
 export const HOSTING_FAQS_V2: readonly { q: string; a: string }[] = [
-  { q: `How does the ${TRIAL_DAYS}-day free trial work?`, a: "You get a real cPanel account on the plan you pick, with full access to every feature — storage, unlimited free SSL, one-click WordPress and support. Nothing is throttled. Before the trial ends you choose a plan to keep everything as it is, or simply let it close." },
+  { q: `How does the ${TRIAL_DAYS}-day free trial work?`, a: "The trial is on the Starter plan, monthly or yearly — Standard and Plus are bought, not trialled. You get a real Starter cPanel account with full access to every feature — storage, unlimited free SSL, one-click WordPress and support. Nothing is throttled. Before the trial ends you choose a plan to keep everything as it is (moving up to Standard or Plus carries the site over), or simply let it close." },
   { q: "Do I need a credit card to start?", a: "No. The trial asks for no card, which is also why nothing can be auto-charged when it ends. You reach a payment page only when you decide to buy." },
   { q: "Can you move my existing website for free?", a: "Yes, free website migration is included on every plan and on the trial. Share your current hosting login and our team moves the site for you. Your old host keeps serving traffic until you have checked the copy and approved the switch." },
   { q: "What happens after the trial if I don't buy?", a: "The account closes and you are never charged, because we never held a card. If you want your files first, ask support and we'll help you take them." },
