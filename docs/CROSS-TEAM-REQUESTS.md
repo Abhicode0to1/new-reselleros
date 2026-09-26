@@ -246,6 +246,32 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
 - **Done when:** a project milestone invoice shows "Complete Billing System — Doosri kist (advance) · SAC 998314 ·
   ₹5,00,000" in the dialog and the PDF, for new and existing invoices.
 
+### R-011 · Project "Profit & Loss" card: an expandable breakdown, and "to date" that means to date
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-26
+- **Why accounting needs it:** on `/projects/[id]` the card shows five totals — Contract ₹50,00,000 · Costs ₹5,00,000
+  · Labour ₹20,74,840 · Expected profit ₹24,25,160 · 49% — and "Booked to date: ₹10,00,000 invoiced −
+  ₹25,74,840 costs = −157%". Nothing says which entries make up a number, and two readings are misleading:
+  - **Labour counts the whole allocation, future months included.** Four people at 100% for 20 Apr – 26 Dec 2026
+    = ₹20,74,840; "Booked to date" subtracts all of it on 26 Sep, although only ~₹14.5L of that period has passed —
+    hence −157%.
+  - The ₹5,00,000 "cost" was a commission to an employee (now moved to Payroll) — nobody could tell from the card.
+- **What to change** — the project detail page (P&L card):
+  1. A **"Details"** toggle on the card that expands:
+     - **Revenue:** contract (ex-GST) · invoiced · received (bank + TDS) · still to invoice.
+     - **External costs** grouped by category, each row → vendor / payee, date, amount (link to the expense).
+     - **Labour** one row per person: % · dates · monthly salary · **to date** · **planned (full stint)**.
+     - **Commission** (referral commissions on this project's payments) as its own line.
+     - **Margin:** to date and expected, side by side.
+  2. **"Booked to date"** must use labour **up to today** (overlap of each allocation with start…today), not the full
+     stint. The P&L already does this per period — `projectCostForPeriod` in `lib/accounting/project-cost.ts`
+     (Pardeep's) can be reused for "start → today" as-is.
+  3. When a person is allocated 100% on more than one active project at once, flag it (a salary cannot be 200%
+     spent).
+- **Done when:** the card expands to show which entries make each number; "Booked to date" on 26 Sep counts
+  labour only to 26 Sep.
+
 <!-- Template — copy for each new request:
 
 ### R-001 · <short title>

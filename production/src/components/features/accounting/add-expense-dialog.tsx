@@ -42,6 +42,8 @@ import {
 } from "@/lib/queries/expenses";
 import { COMMISSION_CATEGORY, TDS_194H_THRESHOLD, commissionTdsView } from "@/lib/accounting/commission-tds";
 import { localDateISO } from "@/lib/leads/outcomes";
+import { useEmployees } from "@/lib/queries/payroll";
+import { compactName } from "@/lib/banking/salary-lines";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useVendors, ensureVendor } from "@/lib/queries/vendors";
 import { useAddReimbursement } from "@/lib/queries/reimbursements";
@@ -437,6 +439,13 @@ export function AddExpenseDialog({
     watch("expense_date") || localDateISO(new Date()),
     expense?.id ?? null,
   );
+  /* Same letters as an employee's name ("abhishek" = "Abhishek", "Hites H Babu" = "Hitesh Babu"). */
+  const { data: employeeList } = useEmployees();
+  const payeeEmployee = React.useMemo(() => {
+    const key = compactName(vendorNameWatch);
+    if (!isCommission || key.length < 3) return null;
+    return (employeeList ?? []).find((e) => e.is_active !== false && compactName(e.name) === key) ?? null;
+  }, [isCommission, vendorNameWatch, employeeList]);
   const commissionView = isCommission && commissionSoFar && vendorNameWatch.trim().length >= 2
     ? commissionTdsView({ amount: Number(watch("amount")) || 0, earlier: commissionSoFar.earlier, earlierWithoutTds: commissionSoFar.earlierWithoutTds })
     : null;
@@ -1187,8 +1196,24 @@ export function AddExpenseDialog({
                 <p className="mt-1 text-2xs text-ink-3">Naya payee — kaccha/no-bill hone se Vendors master me add nahi hoga.</p>
               )
             )}
+            {/* The payee is one of OUR employees: their commission is salary (incentive, TDS 192),
+                not an agent's commission (194H) — a ₹5L "commission to abhishek" was booked here
+                on 26 Sep 2026 and had to be moved to Payroll. */}
+            {isCommission && payeeEmployee && (
+              <div className="mt-1.5 rounded-md border border-rose/40 bg-rose/5 px-2.5 py-2 text-2xs text-ink-2 space-y-1">
+                <p>
+                  <b>{payeeEmployee.name}</b> aapka employee hai. Employee ka commission / incentive <b>salary</b> ka hissa hai —
+                  Payroll mein uski salary ke saath &quot;Incentive&quot; mein daalo (TDS 192, Form 16 mein aayega). Yahan agent ki tarah
+                  (194H) book karne se TDS aur Form 16 dono galat honge.
+                </p>
+                <button type="button" onClick={() => { onClose(); router.push("/accounting/payroll" as never); }}
+                  className="font-semibold text-rose underline underline-offset-2">
+                  Payroll mein incentive daalo →
+                </button>
+              </div>
+            )}
             {/* One person's commission for the year, and s.194H — lib/accounting/commission-tds.ts. */}
-            {isCommission && commissionView && (
+            {isCommission && commissionView && !payeeEmployee && (
               <div className="mt-1.5 rounded-md border border-hairline bg-paper-2/40 px-2.5 py-2 text-2xs text-ink-2 space-y-1">
                 <p>
                   Is FY mein <b>{vendorNameWatch.trim()}</b> ko ab tak <b>{rupee(commissionView.earlier)}</b> commission ·
