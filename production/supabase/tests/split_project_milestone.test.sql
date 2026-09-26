@@ -1,4 +1,4 @@
--- Regression test: split_project_milestone (migration 20260926130000).
+-- Regression test: split_project_milestone (migration 20260926160000).
 --
 -- Self-asserting: RAISEs on failure. Runs inside a transaction that ROLLS BACK.
 --
