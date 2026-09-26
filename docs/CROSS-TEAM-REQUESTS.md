@@ -190,7 +190,11 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
 - **Done when:** accepting a lead's project quotation turns the lead Won without a click, and the project
   page shows the lead it came from.
 
-### R-009 · Renewal quotes: monthly subscriptions renewed for a year, and cost guessed at 83% of price
+### R-012 · Renewal quotes: monthly subscriptions renewed for a year, and cost guessed at 83% of price
+
+> Numbered R-012 on 26 Sep 2026: it was first written here as R-009, but Pardeep's branch already uses
+> R-009 to R-011 for his own requests (credit notes on the invoice list, project invoice line items,
+> the project P&L card).
 - **For:** Abhishek
 - **From:** Pawan (checkout and renewals, `pawan-api-system`). Pardeep asked for it to be passed on.
 - **Status:** Open

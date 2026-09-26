@@ -56,7 +56,7 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
         no callers (no price in them).
 - [ ] **Colleague (blocked folder):** `src/lib/renewals/create-renewal-quote.ts` writes
       `extension_months: 12` for monthly subscriptions too, and guesses cost as 83% of price. Written up
-      for Abhishek as **R-009 in `docs/CROSS-TEAM-REQUESTS.md`** (26 Sep). See §0A.
+      for Abhishek as **R-012 in `docs/CROSS-TEAM-REQUESTS.md`** (26 Sep). See §0A.
 
 **Actions only you can take — before anything is switched on**
 - [ ] **Keys.** ResellerOS: `DMS_PANEL_API_KEY`. DMS: the same `DMS_PANEL_API_KEY`,
