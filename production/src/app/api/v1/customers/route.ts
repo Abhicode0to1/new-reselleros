@@ -11,7 +11,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { authenticateApiKey } from "@/lib/api-keys/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { mapCustomer, mapCustomerListItem, parsePagination, paginationMeta } from "@/lib/api/v1-mappers";
-import { unauthorized, notFound } from "@/lib/api/v1-response";
+import { unauthorized, notFound, serverError } from "@/lib/api/v1-response";
+import { likeLiteral, sameEmail } from "@/lib/api/v1-email-match";
 import type { Customer as CustomerRow } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
@@ -51,29 +52,39 @@ export async function GET(req: NextRequest) {
        is plainly on file, which is the kind of 404 that gets debugged as an auth
        problem. `contacts` is tenant-scoped in the query, not only by RLS, because
        this runs under the admin client. */
-    const { data: byContact } = await admin
+    /* The address is matched LITERALLY (lib/api/v1-email-match.ts): the pattern is
+       escaped, and only a row whose email equals it, ignoring case, counts. A raw
+       address used as an ilike pattern let `a_b@x.in` find `axb@x.in`. */
+    const pattern = likeLiteral(email);
+    const { data: contactRows, error: contactErr } = await admin
       .from("contacts")
-      .select("customer_id")
+      .select("customer_id, email")
       .eq("tenant_id", auth.tenantId)
-      .ilike("email", email)
+      .ilike("email", pattern)
       .not("customer_id", "is", null)
       .order("is_primary", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(20);
+    if (contactErr) return serverError("Could not look up the customer just now. Try again in a minute.");
+    const byContact = (contactRows ?? []).find((r) => sameEmail(r.email, email));
 
     const lookup = admin
       .from("customers").select("*")
       .eq("tenant_id", auth.tenantId);
-    const { data, error } = byContact?.customer_id
-      ? await lookup.eq("id", byContact.customer_id).limit(1).maybeSingle()
-      : await lookup
-          .ilike("contact_email", email)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-    if (error || !data) return notFound("Customer not found");
+    let customer: CustomerRow | null = null;
+    if (byContact?.customer_id) {
+      const { data, error } = await lookup.eq("id", byContact.customer_id).limit(1).maybeSingle();
+      if (error) return serverError("Could not look up the customer just now. Try again in a minute.");
+      customer = (data as CustomerRow | null) ?? null;
+    } else {
+      const { data, error } = await lookup
+        .ilike("contact_email", pattern)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) return serverError("Could not look up the customer just now. Try again in a minute.");
+      customer = ((data as CustomerRow[] | null) ?? []).find((c) => sameEmail(c.contact_email, email)) ?? null;
+    }
+    if (!customer) return notFound("Customer not found");
 
-    const customer = data as CustomerRow;
     const active = await activeCustomerIds(admin, auth.tenantId, [customer.id]);
     return NextResponse.json(mapCustomer(customer, active.has(customer.id)));
   }
@@ -87,7 +98,7 @@ export async function GET(req: NextRequest) {
     .eq("tenant_id", auth.tenantId)
     .order("created_at", { ascending: true })
     .range(offset, offset + perPage - 1);
-  if (error) return notFound("Could not load customers");
+  if (error) return serverError("Could not load customers just now. Try again in a minute.");
 
   const rows = (data as CustomerRow[]) ?? [];
   const active = await activeCustomerIds(admin, auth.tenantId, rows.map((c) => c.id));

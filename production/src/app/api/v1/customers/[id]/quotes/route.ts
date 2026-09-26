@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolveCustomer } from "@/lib/api/v1-customer";
 import { mapQuote } from "@/lib/api/v1-mappers";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
-import { unauthorized, notFound, requestBaseUrl } from "@/lib/api/v1-response";
+import { unauthorized, notFound, requestBaseUrl, serverError } from "@/lib/api/v1-response";
 import type { Quote as QuoteRow } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     .eq("tenant_id", auth.tenantId)
     .eq("customer_id", customer.id)
     .order("created_date", { ascending: false });
-  if (error) return notFound("Could not load quotes");
+  if (error) return serverError("Could not load quotes just now. Try again in a minute.");
 
   const base = requestBaseUrl(req);
   return NextResponse.json(

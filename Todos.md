@@ -364,8 +364,10 @@ registration queue picks up renewals.
   - An in-panel TRIAL has no ResellerOS renewal quote, so its convert button says to contact support.
   - `process-service-expiry` reminders quote `service.price`, a DMS figure (around L243).
     `renewal-payment-dunning` still chases old DMS renewal orders.
-  - ResellerOS `/api/v1/customers?email=` matches with `ilike`, so `_` and `%` act as wildcards. A
-    database error there, and on quotes/invoices, answers 404. DMS fails closed on an inexact email.
+  - [x] ResellerOS `/api/v1` lookup fixed (26 Sep 2026): the email is matched literally
+    (`lib/api/v1-email-match.ts`; the pattern is escaped, then the email must be equal ignoring case),
+    and a database error answers 500 `server_error`, not 404, on customers, quotes, invoices, payments
+    and subscriptions.
   - DMS integration e2e `purchase-to-invoice` / `verify-path-purchase` have been red since
     `06a9546b` (a ₹999 Starter price gives 409). They are not in the gate.
 

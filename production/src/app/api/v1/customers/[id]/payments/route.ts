@@ -10,7 +10,7 @@ import { authenticateApiKey } from "@/lib/api-keys/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveCustomer } from "@/lib/api/v1-customer";
 import { mapPayment } from "@/lib/api/v1-mappers";
-import { unauthorized, notFound } from "@/lib/api/v1-response";
+import { unauthorized, notFound, serverError } from "@/lib/api/v1-response";
 import type { Payment as PaymentRow } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     .eq("customer_id", customer.id)
     .eq("status", "received")
     .order("received_at", { ascending: false });
-  if (error) return notFound("Could not load payments");
+  if (error) return serverError("Could not load payments just now. Try again in a minute.");
 
   const payments = (data as PaymentRow[]) ?? [];
 
