@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Cloud Scheduler jobs for the six ResellerOS cron endpoints.
+# Cloud Scheduler jobs for EVERY ResellerOS cron endpoint (25 as of 27 Sep 2026).
 #
 # ─── WHY THIS FILE EXISTS ────────────────────────────────────────────────────
 # The repo carries a vercel.json with a `crons` block, and three of the six cron
@@ -134,6 +134,26 @@ JOBS=(
   # somebody moves that dial from /automation this job prepares each call — number, script,
   # the figures it is allowed to quote — files it on the call record, and dials nothing.
   "resellersos-ai-telecall-renewals|30 10 * * 1-5|/api/cron/ai-telecall-renewals|AI voice reminder for subscriptions renewing in 5 days"
+  # ── The ten that were never in this file (deep study S9, 27 Sep 2026) ──────────────
+  # Six of them existed in Cloud Scheduler by hand (Mumbai, then copied to Singapore on
+  # 27 Sep) and four never existed anywhere. A job that lives only in the console is a job
+  # the next region move loses again.
+  "resellersos-health-digest|30 8 * * *|/api/cron/health-digest|Morning ops digest: cron failures + health signals to the owner"
+  "resellersos-billing|0 8 * * *|/api/cron/billing|Subscription billing run (idempotent, at-least-once safe)"
+  "resellersos-ai-reflection|0 8 * * *|/api/cron/ai-reflection|AI agents daily reflection over yesterday conversations"
+  # Every 5 minutes: a reply the AI could not send (Gemini 503, timeout) is retried here; a
+  # lead waiting 5 minutes is fine, a lead waiting until tomorrow is lost.
+  "resellersos-ai-reply-retry|*/5 * * * *|/api/cron/ai-reply-retry|Retry AI replies that failed to send"
+  # Every minute: the inbound sales mailbox. Bounded by MAX_PER_RUN inside the route.
+  "resellersos-gmail-inbox|* * * * *|/api/cron/gmail-inbox|Read the sales Gmail inbox into enquiries"
+  "resellersos-attendance-reminders|*/30 9-20 * * *|/api/cron/attendance-reminders|Punch-in / punch-out nudges, working hours only"
+  # Hosting & domain workers. All four are gated INSIDE the route by env flags
+  # (DOMAIN_REGISTRATION_LIVE etc.) and by a per-row, per-day command id, so scheduling
+  # them is safe: with the flag off they list what they would do and touch nothing.
+  "resellersos-provision-hosting|*/15 9-21 * * *|/api/cron/provision-hosting|Provision paid hosting orders through the DMS engine"
+  "resellersos-register-domains|*/15 9-21 * * *|/api/cron/register-domains|Register paid domains through the DMS engine"
+  "resellersos-renew-domains|0 7 * * *|/api/cron/renew-domains|Renew paid domain renewals at the registrar"
+  "resellersos-renew-hosting|0 7 * * *|/api/cron/renew-hosting|Renew paid hosting through the DMS engine"
 )
 
 echo "Region:  $REGION"
