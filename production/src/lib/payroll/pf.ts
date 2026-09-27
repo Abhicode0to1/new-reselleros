@@ -51,6 +51,29 @@ export function pfEpsCap(periodOrDate?: string | null): number {
   return Math.round(pfWageCeiling(periodOrDate) * PF_EPS_RATE);
 }
 
+/**
+ * The wage PF is computed on for a month — Basic + DA (EPF Act s.6), prorated by the
+ * same loss-of-pay ratio as the gross, never HRA or allowances. With no Basic on the
+ * employee master the whole earned gross is used and `assumed` says so, which is what
+ * payroll always did before 27 Sep 2026 — an employee nobody set up does not silently
+ * get a different PF than last month.
+ */
+export interface PfWage { base: number; assumed: boolean; note: string }
+export function pfWage(i: { gross: number; lopAmount?: number | null; basic?: number | null; da?: number | null }): PfWage {
+  const gross = Math.max(0, Math.round(i.gross || 0));
+  const lop = Math.min(gross, Math.max(0, Math.round(i.lopAmount ?? 0)));
+  const earnedRatio = gross > 0 ? (gross - lop) / gross : 0;
+  if (i.basic === null || i.basic === undefined) {
+    return { base: gross - lop, assumed: true, note: "Basic set nahi — PF poore gross par lag raha hai. Employee → Statutory mein Basic bharo." };
+  }
+  const structural = Math.max(0, Math.round(i.basic)) + Math.max(0, Math.round(i.da ?? 0));
+  const base = Math.round(structural * earnedRatio);
+  return {
+    base, assumed: false,
+    note: lop > 0 ? `Basic + DA ₹${structural.toLocaleString("en-IN")}, LOP ke baad ₹${base.toLocaleString("en-IN")}.` : `Basic + DA ₹${structural.toLocaleString("en-IN")}.`,
+  };
+}
+
 export interface PfContribution {
   applicable: boolean;
   ceiling: number;   // the ceiling used for this month (₹)

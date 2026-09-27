@@ -1,5 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { computePf, pfWageCeiling, pfEpsCap, PF_WAGE_CEILINGS } from "./pf";
+import { computePf, pfWageCeiling, pfEpsCap, pfWage, PF_WAGE_CEILINGS } from "./pf";
+
+describe("PF wage = Basic + DA", () => {
+  it("uses Basic + DA, not the gross", () => {
+    const w = pfWage({ gross: 40_000, basic: 16_000, da: 2_000 });
+    expect(w).toMatchObject({ base: 18_000, assumed: false });
+    expect(computePf(w.base, true, "2026-10").employee).toBe(2_160);
+  });
+  it("prorates Basic + DA by the same loss-of-pay ratio as the gross", () => {
+    expect(pfWage({ gross: 30_000, lopAmount: 3_000, basic: 15_000, da: 0 }).base).toBe(13_500);
+  });
+  it("no Basic on the master → whole earned gross, flagged as assumed", () => {
+    const w = pfWage({ gross: 30_000, lopAmount: 1_000, basic: null });
+    expect(w).toMatchObject({ base: 29_000, assumed: true });
+    expect(w.note).toMatch(/Basic set nahi/);
+  });
+  it("a zero Basic is a real value, not a missing one", () => {
+    expect(pfWage({ gross: 30_000, basic: 0 })).toMatchObject({ base: 0, assumed: false });
+  });
+});
 
 describe("PF wage ceiling by salary month", () => {
   it("₹15,000 till September 2026, ₹25,000 from the October 2026 salary", () => {

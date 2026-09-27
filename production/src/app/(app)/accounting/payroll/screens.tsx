@@ -29,7 +29,7 @@ import {
 import { daysElapsedInPeriod, prorateSalary } from "@/lib/payroll/proration";
 import { nationalHolidaysForYear, FIXED_NATIONAL_HOLIDAYS, indiaPublicHolidaysForYear } from "@/lib/payroll/holidays-india";
 import { computeEsi, isEsiEligible, ESI_WAGE_CEILING } from "@/lib/payroll/esi";
-import { computePf, pfWageCeiling, PF_EMPLOYER_RATE } from "@/lib/payroll/pf";
+import { computePf, pfWage, pfWageCeiling, PF_EMPLOYER_RATE } from "@/lib/payroll/pf";
 import { calculateCtcBreakdown } from "@/lib/payroll/ctc";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useEmployeeLoans } from "@/lib/queries/employee-loans";
@@ -409,6 +409,9 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
   const [esiApplicable, setEsiApplicable] = React.useState<boolean>(employee?.esi_applicable ?? false);
   const [esiTouched, setEsiTouched] = React.useState(false);
   const [pfApplicable, setPfApplicable] = React.useState<boolean>(employee?.pf_applicable ?? false);
+  /* PF wage components — PF is on Basic + DA, not gross (lib/payroll/pf.ts). */
+  const [basicMonthly, setBasicMonthly] = React.useState(employee?.basic_monthly != null ? String(employee.basic_monthly) : "");
+  const [daMonthly, setDaMonthly] = React.useState(String(employee?.da_monthly ?? 0));
 
   // Tab state
   const [empTab, setEmpTab] = React.useState<"basic" | "ctc" | "statutory">("basic");
@@ -462,6 +465,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
       emergency_contact_name: ecName.trim() || null, emergency_contact_phone: ecPhone.trim() || null,
       pan: pan.trim().toUpperCase() || null, pf_no: pfNo.trim() || null, esi_no: esiNo.trim() || null,
       esi_applicable: esiApplicable, pf_applicable: pfApplicable,
+      basic_monthly: basicMonthly.trim() === "" ? null : Math.round(Number(basicMonthly) || 0),
+      da_monthly: Math.round(Number(daMonthly) || 0),
     });
     if (pin && id) await setPin.mutateAsync({ employeeId: id, pin });
     onClose();
@@ -699,6 +704,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                       size="sm"
                       onClick={() => {
                         setGross(String(ctcBreakdown.grossMonthly));
+                        setBasicMonthly(String(ctcBreakdown.basicMonthly));
                         setPfApplicable(true);
                         if (ctcBreakdown.employerEsiMonthly > 0) setEsiApplicable(true);
                         toast.success(`Applied Monthly Gross ${rupee(ctcBreakdown.grossMonthly)} & PF/ESI settings!`);
@@ -838,6 +844,27 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                     <b className="text-ink">PF applicable</b> — deduct 12% from salary + accrue 12% employer share each month.
                   </span>
                 </label>
+                {pfApplicable && (
+                  <div className="rounded-md border border-hairline p-3 space-y-2">
+                    <p className="text-xs text-ink-2">
+                      <b className="text-ink">PF kis par lagega</b> — Basic + DA par (HRA / allowances par nahi), ceiling tak.
+                      {basicMonthly.trim() === "" && <span className="block text-amber-ink mt-0.5">Basic khaali hai → PF poore gross par lagega (purana tareeka). Bharoge to agli salary se sahi lagega.</span>}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">Basic (₹/month)</label>
+                        <Input type="number" min={0} value={basicMonthly} onChange={(e) => setBasicMonthly(e.target.value)} placeholder={gross ? String(Math.round((Number(gross) || 0) * 0.5)) : "e.g. 15000"} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">DA (₹/month)</label>
+                        <Input type="number" min={0} value={daMonthly} onChange={(e) => setDaMonthly(e.target.value)} />
+                      </div>
+                    </div>
+                    {basicMonthly.trim() !== "" && (Number(basicMonthly) || 0) + (Number(daMonthly) || 0) > (Number(gross) || 0) && (
+                      <p className="text-2xs text-rose">Basic + DA gross se zyada hai — check karo.</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-hairline pt-3">
@@ -1482,7 +1509,8 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
   // ── PF (auto) — employee 12% (deducted from net) + employer 12% (extra company
   //    cost, NOT deducted). Computed on the wage capped at the ceiling for THIS
   //    salary month (₹15,000 till Sep 2026, ₹25,000 from Oct 2026 — lib/payroll/pf.ts).
-  const pfCalc = computePf(esiWage, employee.pf_applicable, period);
+  const pfWageNow = pfWage({ gross: grossN, lopAmount: lopN, basic: employee.basic_monthly, da: employee.da_monthly });
+  const pfCalc = computePf(pfWageNow.base, employee.pf_applicable, period);
   React.useEffect(() => {
     if (!pfEdited) setPf(String(pfCalc.employee));
   }, [pfCalc.employee, pfEdited]);
@@ -1701,7 +1729,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
                   <span>Total PF challan this month (employee + employer)</span>
                   <span className="font-mono text-ink font-semibold">{rupee(n(pf) + pfEmployerN)}</span>
                 </div>
-                <div className="text-ink-3">On wage capped at ₹{pfCalc.ceiling.toLocaleString("en-IN")} (ceiling for {period}). (Admin/EDLI ~1% not included.)</div>
+                <div className={pfWageNow.assumed ? "text-amber-ink" : "text-ink-3"}>{pfWageNow.note} PF wage ₹{pfCalc.base.toLocaleString("en-IN")} (ceiling ₹{pfCalc.ceiling.toLocaleString("en-IN")} for {period}). Admin/EDLI ~1% not included.</div>
               </div>
             )}
           </div>

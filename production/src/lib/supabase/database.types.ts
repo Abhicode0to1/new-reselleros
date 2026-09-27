@@ -2389,6 +2389,9 @@ type EmployeeRow = {
   esi_no:          string | null;
   esi_applicable:  boolean;
   pf_applicable:   boolean;
+  /** PF wage components (migration 20260927160000). Basic null → PF on gross, flagged. */
+  basic_monthly:   number | null;
+  da_monthly:      number;
   is_active:       boolean;
   pin_hash:        string | null;
   notes:           string | null;
@@ -2419,6 +2422,8 @@ type EmployeeInsert = {
   esi_no?:          string | null;
   esi_applicable?:  boolean;
   pf_applicable?:   boolean;
+  basic_monthly?:   number | null;
+  da_monthly?:      number;
   is_active?:       boolean;
   notes?:           string | null;
   email?:                    string | null;

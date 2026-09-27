@@ -59,6 +59,7 @@ export function useUpsertEmployee() {
       id?: string; name: string; monthly_gross: number; joining_date?: string | null;
       leave_allowance?: number; pan?: string | null; pf_no?: string | null; esi_no?: string | null;
       esi_applicable?: boolean; pf_applicable?: boolean; is_active?: boolean; notes?: string | null;
+      basic_monthly?: number | null; da_monthly?: number;
       email?: string | null; phone?: string | null; designation?: string | null;
       date_of_birth?: string | null; address?: string | null;
       emergency_contact_name?: string | null; emergency_contact_phone?: string | null;
