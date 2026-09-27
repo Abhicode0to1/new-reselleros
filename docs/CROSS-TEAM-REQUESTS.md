@@ -636,6 +636,73 @@ the correct renewal date and MRR. Don't fix them yourself.
 - **Done when:** a paid renewal of a monthly subscription moves `renewal_date` by exactly one month and
   leaves `mrr` unchanged (SQL test green), and no renewal quote carries a cost the catalogue didn't give.
 
+### R-013 · Security migration `20260927100000` rewrites 12 of your RPCs — review it, apply on production
+- **For:** Abhishek
+- **Status:** Sent (on the board, 2026-09-27)
+- **Raised:** 2026-09-27
+- **Why it matters:** the 27 Sep security audit found three holes that exposed any tenant's data: (1) a signed-in
+  account with no `users` row could `POST /rest/v1/users` and make itself owner of any tenant; (2) 17 SECURITY
+  DEFINER RPCs guarded with `if v_tenant is not null and …`, so a null tenant skipped the check — yours include
+  `refund_payment`, `reopen_quote`, `delete_payment`, `delete_subscription`, `delete_*_invoice`, `record_project_payment`,
+  `raise_project_milestone_invoice`, `update_project_*`; (3) 62 definer functions executable by `anon`.
+- **What to change:** read `supabase/migrations/20260927100000_definer_rpc_hardening.sql` (commit `631ec3f2`); tell
+  Pardeep if any function genuinely needs `anon`; apply on production together with the pending migrations, in file order.
+- **Done when:** the migration is on production, `supabase/tests/definer_rpc_hardening.test.sql` is green there, and the
+  signup → welcome → join-approval flow has been run once by hand.
+
+### R-014 · Issued GST invoices can be hard-deleted — receipts included, number never comes back
+- **For:** Abhishek
+- **Status:** Sent (on the board, 2026-09-27)
+- **Raised:** 2026-09-27
+- **Why it matters:** `delete_project_invoice` and `delete_subscription_invoice` run `DELETE FROM invoices` without
+  checking status; `tg_invoices_freeze_issued` is BEFORE UPDATE only. `delete_project_invoice` also deletes
+  `project_payments` (real bank receipts). `document_series` never decrements, so the series keeps a permanent gap.
+- **What to change:** freeze trigger `BEFORE UPDATE OR DELETE` refusing `status <> 'draft'`; draft-only guard in both
+  RPCs (issued → credit note via `issue_credit_note`); never delete `project_payments` — set `invoice_id = null`.
+- **Done when:** deleting an issued or paid invoice is refused by the DB (SQL test red-checked), draft delete works,
+  and no path deletes a `project_payments` row.
+
+### R-015 · Invoice number uses today's FY and is 21 characters; partial payments never reach Aging
+- **For:** Abhishek
+- **Status:** Sent (on the board, 2026-09-27)
+- **Raised:** 2026-09-27
+- **Why it matters:** `next_document_number` takes `indian_fiscal_year(current_date)` with no invoice-date parameter, so
+  a 28 March invoice issued in April gets the new FY's series. Rule 46(b) caps the number at 16 characters;
+  `INV-3BBD-2026-27-0002` is 21. `record_payment` never writes `invoices.paid_amount`, so Aging and the Balance Sheet
+  count the full `net_payable` after a ₹40k part-payment on a ₹1L invoice.
+- **What to change:** `next_document_number(p_doc_type, p_tenant_id, p_on date default current_date)`; a ≤16-char
+  format for new numbers only; `record_payment` adds to `paid_amount`, sets `paid_date = received_at`, status `partial`.
+- **Done when:** a 25 March invoice issued in April gets the 2025-26 series and ≤16 chars; ₹40,000 recorded on a
+  ₹1,00,000 invoice leaves `paid_amount = 40000` and Aging shows ₹60,000.
+
+### R-016 · Customer-portal auto-renew toggle fails on the DB — `activity_log` FK
+- **For:** Abhishek
+- **Status:** Sent (on the board, 2026-09-27)
+- **Raised:** 2026-09-27
+- **Why it matters:** `supabase/tests/portal_set_auto_renew.test.sql` is red: `set_subscription_auto_renew` violates
+  `activity_log_user_id_fkey` because portal users live in `customer_users`, not `public.users`. Every portal RPC that
+  logs activity will hit the same wall.
+- **What to change:** in the activity trigger, when `auth.uid()` is not in `users`, write `user_id = null` and put the
+  customer's name/email in the label (or drop the FK and add `actor_kind`).
+- **Done when:** `portal_set_auto_renew.test.sql` is green and a portal toggle shows "Customer <name>" in the activity feed.
+
+### R-017 · Google Cloud billing is on a FREE TRIAL — 5 days left; only you can upgrade it
+- **For:** Abhishek
+- **Status:** Sent (on the board and by WhatsApp, 2026-09-27) — **URGENT**
+- **Raised:** 2026-09-27
+- **Why it matters:** Cloud Console for project `resellsubsos-prod` shows "Upgrade your account to avoid a break in
+  service — ₹28,320.75 credit and 5 days left in your trial". When the trial ends, Cloud Run (the app), every Cloud
+  Scheduler cron and backups stop. The billing account (`My Billing Account`, `016FCA-400F3C-38036D`, org anutech.in)
+  has **abhishek@anutech.in as its only Billing Account Administrator**; pardeep@anutech.in is a Billing Account User,
+  so the Upgrade button and AI Studio billing both answer "You don't have permission to upgrade this account".
+- **What to change:** (1) console.cloud.google.com → banner **Upgrade** → "Upgrade to a full account" — the remaining
+  credit still applies, billing only starts once it is used up; (2) Billing → Account management → info panel → give
+  pardeep@anutech.in the **Billing Account Administrator** role so this never depends on one person again.
+- **Done when:** the trial banner is gone, Billing → Overview shows the account upgraded, and pardeep@anutech.in holds
+  Billing Account Administrator.
+
+> Live status for R-013 to R-017 is on the board (https://claude.ai/artifact/2E442MT5zCLxm2oE1Lipos), not here —
+> this file is the written record; the board is where the status changes.
 <!-- Template — copy for each new request:
 
 ### R-001 · <short title>
