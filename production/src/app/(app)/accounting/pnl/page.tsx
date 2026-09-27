@@ -42,6 +42,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { buildExpenseReport, type ExpenseReport } from "@/lib/accounting/expense-report";
+import { splitItc } from "@/lib/gst/itc";
 import { PnlHeadline } from "@/components/features/accounting/pnl-headline";
 import { netProfitView } from "@/lib/accounting/pnl-bound";
 import { projectCostForPeriod, type ProjectCostResult } from "@/lib/accounting/project-cost";
@@ -125,7 +126,9 @@ interface PnLNumbers {
 
   // GST snapshot
   outputGST: number;        // 18% of invoice subtotal proxy (using net_payable for simplicity)
-  inputGST:  number;        // CGST + SGST + IGST on bills + gst_paid on expenses
+  inputGST:  number;        // CGST + SGST + IGST on bills + CLAIMABLE gst_paid on expenses (lib/gst/itc.ts)
+  /** Expense GST that is not credit (kaccha bill, no vendor GSTIN, s.17(5)) — it stays inside `expenses` as cost. */
+  itcBlocked: number;
   netGST:    number;
 
   // For quick scan
@@ -207,15 +210,27 @@ function usePnL(range: DateRange, enabled = true) {
       // ── Expenses: non-COGS ─────────────────────────────────────────
       const { data: expenses, error: eErr } = await supabase
         .from("expenses")
-        .select("amount, gst_paid, category, vendor_name, expense_date, project_id, description")
+        .select("amount, gst_paid, category, vendor_name, vendor_id, bill_type, expense_date, project_id, description")
         .gte("expense_date", range.from)
         .lte("expense_date", range.to);
       if (eErr) throw eErr;
       const expenseReport = buildExpenseReport(expenses ?? []);
 
-      const expensesTotal = (expenses ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
+      /* ITC (27 Sep 2026): the GST on an expense was counted twice — inside the expense AND
+         as input credit — and claimed on every bill. Only GST that qualifies (GST invoice,
+         vendor GSTIN, not s.17(5)) is credit; that part comes OUT of the expense cost. The
+         rest stays a cost. lib/gst/itc.ts. */
+      const { data: vendorRows } = await supabase.from("vendors").select("id, gstin");
+      const vendorGstin = new Map((vendorRows ?? []).map((v) => [v.id, v.gstin ?? null]));
+      const itc = splitItc((expenses ?? []).map((e) => ({
+        gst_paid: e.gst_paid, bill_type: e.bill_type, category: e.category,
+        vendorGstin: e.vendor_id ? vendorGstin.get(e.vendor_id) ?? null : null,
+      })));
+
+      const expensesPaid  = (expenses ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
+      const expensesTotal = expensesPaid - itc.eligible;   // what the business bore; claimable GST is not a cost
       const expensesCount = (expenses ?? []).length;
-      const expensesGst   = (expenses ?? []).reduce((s, e) => s + (e.gst_paid ?? 0), 0);
+      const expensesGst   = itc.eligible;
 
       // Break operating expenses down by category (Salaries, Rent, Software…),
       // biggest first — so you can see where the money went at a glance.
@@ -352,7 +367,7 @@ function usePnL(range: DateRange, enabled = true) {
         expenses: expensesTotal, expensesCount, expensesByCategory, expenseReport,
         commissions, commissionsCount,
         netProfit,
-        outputGST, inputGST, netGST,
+        outputGST, inputGST, netGST, itcBlocked: itc.blocked,
         marginPct, profitPct,
         model,
         projectCost,
@@ -694,6 +709,12 @@ export default function PnLPage() {
                 <span className="text-ink-3">− <Term k="input_gst">Input GST</Term> paid</span>
                 <span className="font-mono text-emerald">−{rupee(data.inputGST)}</span>
               </div>
+              {data.itcBlocked > 0 && (
+                <div className="flex justify-between items-baseline text-xs">
+                  <span className="text-ink-3">GST jo credit nahi bana (kaccha bill / bina GSTIN / s.17(5)) — kharche mein hi gina</span>
+                  <span className="font-mono text-ink-3">{rupee(data.itcBlocked)}</span>
+                </div>
+              )}
               <div className="border-t-2 border-ink pt-3 flex justify-between items-baseline">
                 <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold"><Term k="net_liability">Net liability</Term></span>
                 <span className={`font-serif text-2xl ${data.netGST >= 0 ? "text-rose" : "text-emerald"}`}>

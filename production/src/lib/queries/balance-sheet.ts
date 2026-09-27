@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { BalanceSheetSection } from "@/lib/supabase/database.types";
 import { gstPaidForFy, incomeTaxPaidForFy } from "@/lib/accounting/tax-payments";
+import { splitItc } from "@/lib/gst/itc";
 
 export type BalanceSheetItem = {
   id:         string;
@@ -302,9 +303,15 @@ export function useBalanceSheetAuto() {
 
       const { data: fyExp } = await supabase
         .from("expenses")
-        .select("gst_paid, expense_date")
+        .select("gst_paid, expense_date, vendor_id, bill_type, category")
         .gte("expense_date", fyFrom).lte("expense_date", fyTo);
-      const expGst = (fyExp ?? []).reduce((s, e) => s + (e.gst_paid ?? 0), 0);
+      /* Only claimable credit reduces GST payable (lib/gst/itc.ts, 27 Sep 2026). */
+      const { data: vendorRows } = await supabase.from("vendors").select("id, gstin");
+      const vendorGstinOf = new Map((vendorRows ?? []).map((v) => [v.id, v.gstin ?? null]));
+      const expGst = splitItc((fyExp ?? []).map((e) => ({
+        gst_paid: e.gst_paid, bill_type: e.bill_type, category: e.category,
+        vendorGstin: e.vendor_id ? vendorGstinOf.get(e.vendor_id) ?? null : null,
+      }))).eligible;
 
       /* Tax paid from the bank (tax_payments). GST settles this FY's returns, so it comes
          off GST payable; income tax paid for this FY is an asset until the year's tax is

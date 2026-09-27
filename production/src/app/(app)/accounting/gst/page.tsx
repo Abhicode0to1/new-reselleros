@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
 import { expenseGstHeads } from "@/lib/accounting/gst-heads";
+import { splitItc, itcEligibility, type ItcSplit } from "@/lib/gst/itc";
 import { gstPaidForPeriods } from "@/lib/accounting/tax-payments";
 import { useTaxPayments } from "@/lib/queries/tax-payments";
 import { rupee, formatDate, GST_STATE_BY_CODE } from "@/lib/utils";
@@ -112,6 +113,8 @@ interface GstReport {
   inputTotal:    number;
   inputGST:      number;
   netLiability:  number;
+  /** Expense GST that is NOT credit (kaccha bill, no vendor GSTIN, s.17(5)) — lib/gst/itc.ts. Not in inputRows. */
+  blockedItc:    ItcSplit;
   sellerStateCode: string | null;   // your own state — place of supply for intra-state B2C
   sellerState:     string | null;
 }
@@ -234,10 +237,21 @@ function useGstReport(range: DateRange) {
 
       const { data: expenses } = await supabase
         .from("expenses")
-        .select("id, expense_date, vendor_name, amount, gst_paid, igst, cgst, sgst, category")
+        .select("id, expense_date, vendor_name, vendor_id, bill_type, amount, gst_paid, igst, cgst, sgst, category")
         .gte("expense_date", range.from)
         .lte("expense_date", range.to)
         .gt("gst_paid", 0);
+
+      /* ── Sirf wahi GST credit hai jo credit ho SAKTA hai (27 Sep 2026) ─────────
+         Pehle har `gst_paid > 0` kharcha ITC mein jaata tha — kaccha bill, bina GSTIN wala
+         vendor, staff ka khana sab. GSTR-2B mein wo kabhi nahi milte, aur 17(5) wale claim
+         hi nahi ho sakte. Ab lib/gst/itc.ts tay karta hai; jo credit nahi bana wo
+         `blockedItc` mein wajah ke saath dikhta hai. */
+      const { data: vendorRows } = await supabase.from("vendors").select("id, gstin");
+      const vendorGstinOf = new Map((vendorRows ?? []).map((v) => [v.id, v.gstin ?? null]));
+      const withGstin = (expenses ?? []).map((e) => ({ ...e, vendorGstin: e.vendor_id ? vendorGstinOf.get(e.vendor_id) ?? null : null }));
+      const blockedItc = splitItc(withGstin);
+      const claimable = withGstin.filter((e) => itcEligibility(e).eligible);
 
       /* ── Ab MAANA nahi jata jab NAAPA hua maujood ho (29 Aug 2026) ──────────
          Yahan pehle har kharche par ye chalta tha:
@@ -257,7 +271,7 @@ function useGstReport(range: DateRange) {
          Ab batwara `expenses` me hi rakha jata hai (migration 20260829180000), aur faisla
          `expenseGstHeads` karta hai — jahan bill se aaya ho wahan wahi, jahan na ho wahan
          maan kar bhi SAAF likh kar. */
-      const inputRowsExpenses: InputRow[] = (expenses ?? []).map((e) => {
+      const inputRowsExpenses: InputRow[] = claimable.map((e) => {
         const g = e.gst_paid ?? 0;
         const h = expenseGstHeads(e);
         return {
@@ -265,7 +279,7 @@ function useGstReport(range: DateRange) {
           id:           e.id,
           date:         e.expense_date,
           vendor:       e.vendor_name ?? "—",
-          vendorGstin:  null,
+          vendorGstin:  e.vendorGstin,
           taxableValue: (e.amount ?? 0) - g,
           gst:          g,
           igst:         h.igst,
@@ -288,7 +302,7 @@ function useGstReport(range: DateRange) {
       const inputGST     = inputRows.reduce((s, r) => s + r.gst, 0);
       const netLiability = outputGST - inputGST;
 
-      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability, sellerStateCode, sellerState };
+      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability, blockedItc, sellerStateCode, sellerState };
     },
   });
 }
@@ -854,6 +868,18 @@ export default function GstReportPage() {
               </tfoot>
             </table>
           </div>
+        </Card>
+      )}
+
+      {data && data.blockedItc.blocked > 0 && (
+        <Card className="p-4 mb-4 border-amber/40 bg-amber-soft/20">
+          <p className="text-sm font-semibold text-ink">GST jo credit nahi bana — {rupee(data.blockedItc.blocked)}</p>
+          <p className="text-xs text-ink-2 mt-0.5 mb-2">Ye kharche mein hi gina hai, ITC mein nahi. Wajah theek ho (GST bill lo, vendor ka GSTIN bharo) to agli baar credit milega.</p>
+          <ul className="text-xs text-ink-2 space-y-0.5">
+            {data.blockedItc.blockedByReason.map((r) => (
+              <li key={r.reason} className="flex justify-between gap-3"><span>{r.reason} · {r.count}</span><span className="font-mono tabular-nums">{rupee(r.amount)}</span></li>
+            ))}
+          </ul>
         </Card>
       )}
 
