@@ -76,6 +76,8 @@ type TenantRow = {
    *  driving it from an INVOICE clock can cut off a subscription over an unrelated
    *  one-off bill. See migration 20260816114500. */
   auto_suspend_on_overdue: boolean;
+  /** Migration 20260927120000 — books closed up to and including this date (period lock). */
+  books_locked_until?: string | null;
   setup_completed_at: string | null;
   gstin_verified_at: string | null;
   gstin_verification: GstinVerification | null;
@@ -110,6 +112,7 @@ type TenantInsert = {
   upi_vpa?: string | null;          // migration 0227
   upi_payee_name?: string | null;
   auto_suspend_on_overdue?: boolean;
+  books_locked_until?: string | null;
   grace_period_days?: number;
   setup_completed_at?: string | null;
   gstin_verified_at?: string | null;

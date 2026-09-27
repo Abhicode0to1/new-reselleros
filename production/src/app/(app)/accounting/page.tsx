@@ -38,6 +38,7 @@ import { useBalanceSheetAuto } from "@/lib/queries/balance-sheet";
 import { useUnreconciledExpenses, useUnpaidBillsDue } from "@/lib/queries/expenses";
 import { useBankAccounts, useUnmatchedBankCredits } from "@/lib/queries/bank";
 import { useInvoices } from "@/lib/queries/invoices";
+import { BooksLockCard } from "@/components/features/accounting/books-lock-card";
 import { GstHealthCard } from "@/components/features/accounting/gst-health-card";
 import {
   MONEY_FOLDERS, moneyInboxState, totalOpenItems,
@@ -134,6 +135,8 @@ export default function AccountingOverviewPage() {
         <HeroKpi label={`GST due · ${fyLabel}`} value={gstDue} tone={gstDue > 0 ? "rose" : "emerald"} loading={loading}
           hint="Net output − input, before filing" href="/accounting/gst" />
       </div>
+
+      <BooksLockCard />
 
       {/* Data-integrity + debit-side reconciliation. See the note where `alerts` is built
           for why these two are NOT folders. */}
