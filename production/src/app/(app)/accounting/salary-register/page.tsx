@@ -27,7 +27,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { rupee, formatDate, toTitleCase } from "@/lib/utils";
 import { useEmployees, useSalaryPayments, useEmployeeSalaryHistory, type SalaryPayment } from "@/lib/queries/payroll";
 import { calculateCtcBreakdown } from "@/lib/payroll/ctc";
-import { form16Working, fyStartOfPeriod, fyLabelOf, type Form16Working } from "@/lib/payroll/income-tax";
+import { form16Working, fyStartOfPeriod, fyLabelOf, taxYearFor, type Form16Working } from "@/lib/payroll/income-tax";
 
 /** Previous month (YYYY-MM) — the register shows the month that was just paid. */
 function prevPeriod(): string {
@@ -441,9 +441,19 @@ function EmployeeRegister({ employeeId }: { employeeId: string }) {
               </select>
             )}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
             <div><div className="text-2xs text-ink-3">Salary paid ({f16.monthsPaid} mo)</div><div className="font-mono text-ink">{rupee(f16.tax.grossSalary)}</div></div>
-            <div><div className="text-2xs text-ink-3">Taxable (after ₹{f16.tax.standardDeduction.toLocaleString("en-IN")} std. ded.)</div><div className="font-mono text-ink">{rupee(f16.tax.taxableIncome)}</div></div>
+            {/* New regime: ₹12L rebate (s.87A) + ₹75k standard deduction = nothing to pay up to
+                ₹12.75L of salary. Showing "taxable ₹37,445" for a ₹1.1L salary reads like a tax
+                bill — so the tile shows the tax-free limit and what, if anything, is above it. */}
+            <div>
+              <div className="text-2xs text-ink-3">Tax-free tak (₹{taxYearFor(f16.fyStart).rebateLimit.toLocaleString("en-IN")} s.87A + ₹{taxYearFor(f16.fyStart).standardDeduction.toLocaleString("en-IN")} std. ded.)</div>
+              <div className="font-mono text-ink">{rupee(taxYearFor(f16.fyStart).rebateLimit + taxYearFor(f16.fyStart).standardDeduction)}</div>
+            </div>
+            <div>
+              <div className="text-2xs text-ink-3">Limit se upar</div>
+              <div className={`font-mono ${f16.tax.taxableIncome > taxYearFor(f16.fyStart).rebateLimit ? "text-rose" : "text-emerald"}`}>{rupee(Math.max(0, f16.tax.taxableIncome - taxYearFor(f16.fyStart).rebateLimit))}</div>
+            </div>
             <div><div className="text-2xs text-ink-3">Tax for the year (incl. cess)</div><div className="font-mono text-ink">{rupee(f16.tax.totalTax)}</div></div>
             <div><div className="text-2xs text-ink-3">TDS deducted</div><div className="font-mono text-ink">{rupee(f16.tdsDeducted)}</div></div>
             <div>
