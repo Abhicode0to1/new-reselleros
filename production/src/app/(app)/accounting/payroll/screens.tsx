@@ -30,6 +30,7 @@ import { daysElapsedInPeriod, prorateSalary } from "@/lib/payroll/proration";
 import { nationalHolidaysForYear, FIXED_NATIONAL_HOLIDAYS, indiaPublicHolidaysForYear } from "@/lib/payroll/holidays-india";
 import { computeEsi, isEsiEligible, esiStickyCovered, ESI_WAGE_CEILING } from "@/lib/payroll/esi";
 import { computePf, pfWage, pfWageCeiling, PF_EMPLOYER_RATE } from "@/lib/payroll/pf";
+import { estimateMonthlyTds } from "@/lib/payroll/income-tax";
 import { calculateCtcBreakdown } from "@/lib/payroll/ctc";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useEmployeeLoans } from "@/lib/queries/employee-loans";
@@ -1473,6 +1474,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
   const [advId, setAdvId]     = React.useState("");
   const [advAmt, setAdvAmt]   = React.useState("0");
   const [tds, setTds]         = React.useState("0");
+  const [tdsEdited, setTdsEdited] = React.useState(false);
   const [pf, setPf]           = React.useState("0");
   const [pfEdited, setPfEdited] = React.useState(false);
   const [esi, setEsi]         = React.useState("0");
@@ -1505,6 +1507,18 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
   const { data: esiHistory } = useEmployeeSalaryHistory(employee.id);
   const esiSticky = esiStickyCovered(period, esiHistory ?? []);
   const esiCalc = computeEsi(esiWage, employee.esi_applicable, esiSticky);
+
+  /* s.192 (lib/payroll/income-tax.ts): the year's projected tax, less TDS already
+     deducted this FY, spread over the months left — fills the TDS box until typed over. */
+  const tdsEstimate = React.useMemo(() => estimateMonthlyTds({
+    period,
+    thisMonthEarned: earned,
+    earlier: (esiHistory ?? []).map((p) => ({ period: p.period, earned: Math.max(0, p.gross - (p.lop_amount ?? 0)) + (p.incentive ?? 0), tds: p.tds ?? 0 })),
+    monthlyGrossAhead: employee.monthly_gross,
+  }), [period, earned, esiHistory, employee.monthly_gross]);
+  React.useEffect(() => {
+    if (!tdsEdited && esiHistory !== undefined) setTds(String(tdsEstimate.thisMonth));
+  }, [tdsEstimate.thisMonth, tdsEdited, esiHistory]);
   React.useEffect(() => {
     if (!esiEdited) setEsi(String(esiCalc.employee));
   }, [esiCalc.employee, esiEdited]);
@@ -1694,8 +1708,12 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
                 </div>
               </div>
             )}
+            <p className="text-2xs text-ink-3 -mt-1">{tdsEstimate.note}{tdsEdited ? " (tumne badla)" : ""}</p>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs font-medium text-ink-2 mb-1">TDS (₹)</label><Input type="number" min={0} value={tds} onChange={(e) => setTds(e.target.value)} /></div>
+              <div>
+                <label className="block text-xs font-medium text-ink-2 mb-1">TDS (₹){!tdsEdited && <span className="text-emerald ml-1 font-normal">auto s.192</span>}</label>
+                <Input type="number" min={0} value={tds} onChange={(e) => { setTds(e.target.value); setTdsEdited(true); }} />
+              </div>
               <div>
                 <label className="block text-xs font-medium text-ink-2 mb-1">
                   PF — employee (₹){employee.pf_applicable && !pfEdited && <span className="text-emerald ml-1 font-normal">auto 12%</span>}
