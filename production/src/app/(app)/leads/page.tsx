@@ -2390,6 +2390,14 @@ function LeadDetailSheet({
             <Icon name="chevron-right" size={14} className="shrink-0 text-ink-3" />
           </button>
 
+          {lead.customer_id && (
+            <Link href={`/customers/${lead.customer_id}` as never}
+              className="flex items-center gap-2 rounded-lg border border-emerald/30 bg-emerald/5 px-3 py-2 text-sm text-ink hover:bg-emerald/10">
+              <Icon name="users" size={14} className="text-emerald" />
+              Existing customer ki lead — customer profile kholo
+            </Link>
+          )}
+
           {/* Grid of facts */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <Fact label="Plan" value={lead.plan} />

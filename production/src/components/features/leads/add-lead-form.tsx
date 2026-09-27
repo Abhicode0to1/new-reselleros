@@ -58,6 +58,8 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { sourceOptions } from "@/lib/leads/lead-sources";
+import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
+import { useCustomers } from "@/lib/queries/customers";
 import type { Lead, LeadPriority } from "@/lib/supabase/database.types";
 
 const STAGES = [
@@ -250,6 +252,12 @@ interface AddLeadFormProps {
 export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: AddLeadFormProps) {
   const router    = useRouter();
   const createLead = useCreateLead();
+  /* An existing customer's new need — more seats, another product, a software project
+     (migration 20260926250000). Picking the customer fills the contact fields from it and
+     links the lead, so an upsell is not re-keyed as a stranger. */
+  const { data: customerList } = useCustomers();
+  const [forCustomer, setForCustomer] = React.useState<boolean>(Boolean(editingLead?.customer_id));
+  const [customerId, setCustomerId] = React.useState<string>(editingLead?.customer_id ?? "");
   const updateLead = useUpdateLead();
   const isEditing  = !!editingLead;
   const { data: me } = useCurrentUser();
@@ -385,9 +393,12 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
     return allLeads.find(
       (l) =>
         l.id !== editingLead?.id &&
+        /* For an existing customer, their closed (won / lost) leads are history, not a
+           duplicate — a new need from them is exactly what this lead is. */
+        !(forCustomer && (l.stage === "won" || l.stage === "lost")) &&
         ((p && normPhone(l.contact_phone) === p) || (c && normCompany(l.company) === c)),
     ) ?? null;
-  }, [allLeads, wPhone, wCompany, editingLead?.id]);
+  }, [allLeads, wPhone, wCompany, editingLead?.id, forCustomer]);
 
   /**
    * Open the native Contacts Picker (Android Chrome / Edge Mobile only).
@@ -491,6 +502,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       setPlan("");
       setPriority("medium");
       setEnquiry("subscription");
+      setForCustomer(false);
+      setCustomerId("");
       // For a fresh "Add lead" the owner defaults to the currently logged-in
       // user — sales reps own their own intake by default. They can re-assign.
       setOwnerId(me?.userId ?? "");
@@ -523,6 +536,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       setPriority((editingLead.priority as LeadPriority) ?? "medium");
       setOwnerId(editingLead.owner_id ?? "");
       setEnquiry(editingLead.enquiry_type ?? "subscription");
+      setForCustomer(Boolean(editingLead.customer_id));
+      setCustomerId(editingLead.customer_id ?? "");
     } else {
       // New-lead default: owner = current user.
       setOwnerId(me?.userId ?? "");
@@ -596,6 +611,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         owner_id:       data.owner_id       || null,
         subscription_type: project ? null : (data.subscription_type || null),
         notes:          data.notes          || null,
+        customer_id:    forCustomer ? (customerId || null) : null,
       };
 
       if (isEditing && editingLead) {
@@ -738,6 +754,35 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           )}
 
           <Step show={!useSteps || step === 1}>
+
+          <div className="flex gap-2" role="group" aria-label="Lead kiska hai">
+            {[{ v: false, label: "Naya business" }, { v: true, label: "Existing customer" }].map((o) => (
+              <button key={o.label} type="button" onClick={() => { setForCustomer(o.v); if (!o.v) setCustomerId(""); }}
+                aria-pressed={forCustomer === o.v}
+                className={cn("rounded-full border px-3 py-1 text-xs",
+                  forCustomer === o.v ? "border-amber bg-amber-soft/40 text-ink font-medium" : "border-hairline text-ink-2 hover:border-amber/60")}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {forCustomer && (
+            <FormField label="Kaunsa customer" htmlFor="lead-customer">
+              <CustomerCombobox id="lead-customer" value={customerId} placeholder="Customer dhoondho…"
+                onChange={(id) => {
+                  setCustomerId(id);
+                  const c = (customerList ?? []).find((x) => x.id === id);
+                  if (!c) return;
+                  const person = [c.contact_first_name, c.contact_last_name].filter(Boolean).join(" ") || c.contact_name || "";
+                  setValue("company", c.display_name || c.name, { shouldDirty: true });
+                  if (person) setValue("contact_name", person, { shouldDirty: true });
+                  if (c.contact_email) setValue("contact_email", c.contact_email, { shouldDirty: true });
+                  const phone = c.contact_mobile || c.contact_phone;
+                  if (phone) setValue("contact_phone", commitPhone(phone), { shouldDirty: true });
+                  if (c.gstin) setValue("gstin", c.gstin, { shouldDirty: true });
+                }} />
+              <p className="mt-1 text-2xs text-ink-3">Upsell, zyada seats ya naya project — customer ki details khud bhar jaati hain, badal bhi sakte ho.</p>
+            </FormField>
+          )}
 
           {/* Company name — ab MARZI se. Contact zaroori hai, wajah schema par likhi hai.
               `autoFocus` bhi contact par chala gaya: cursor us khaane me khulna chahiye jise

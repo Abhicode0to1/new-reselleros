@@ -926,6 +926,7 @@ type LeadRow = {
   value: number | null;
   stage: "new" | "contact" | "demo" | "trial" | "quote" | "won" | "lost";
   is_junk: boolean;                 // migration 0187 — spam/fake; hidden from working views
+  customer_id?: string | null;      // migration 20260926250000 — existing customer this lead is for
   /** WHY it was binned (migration 20260817200000). NULL on leads binned before
    *  reasons existed — deliberately not backfilled. Matches JunkReasonId in
    *  lib/leads/qualification.ts. Recoverability hangs off this: "fake_phone" is a
@@ -1106,6 +1107,7 @@ type LeadInsert = {
   country?:            string;
   subscription_type?:  "fresh" | "switch" | null;
   is_junk?:            boolean;
+  customer_id?:        string | null;
   junk_reason?: "fake_phone" | "spam_email" | "not_commercial" | "unresponsive" | "other" | null;
   junk_note?:   string | null;
   junked_at?:   string | null;

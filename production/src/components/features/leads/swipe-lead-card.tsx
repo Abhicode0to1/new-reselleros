@@ -381,6 +381,10 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                   {followUp.text}
                 </span>
               )}
+              {/* An existing customer's new need (leads.customer_id) — says upsell, not stranger. */}
+              {lead.customer_id && (
+                <span className="text-3xs px-1.5 py-0.5 rounded bg-emerald/10 text-emerald shrink-0">Existing customer</span>
+              )}
               {/* Plan text — truncates when space tight. Shown for context. */}
               <span className="text-2xs text-ink-3 truncate min-w-0">
                 {lead.plan || "No plan"}
