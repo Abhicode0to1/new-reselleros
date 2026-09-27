@@ -29,7 +29,7 @@ import {
 import { daysElapsedInPeriod, prorateSalary } from "@/lib/payroll/proration";
 import { nationalHolidaysForYear, FIXED_NATIONAL_HOLIDAYS, indiaPublicHolidaysForYear } from "@/lib/payroll/holidays-india";
 import { computeEsi, isEsiEligible, ESI_WAGE_CEILING } from "@/lib/payroll/esi";
-import { computePf, PF_WAGE_CEILING } from "@/lib/payroll/pf";
+import { computePf, pfWageCeiling, PF_EMPLOYER_RATE } from "@/lib/payroll/pf";
 import { calculateCtcBreakdown } from "@/lib/payroll/ctc";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useEmployeeLoans } from "@/lib/queries/employee-loans";
@@ -675,7 +675,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                             onChange={(e) => setCapPfCeiling(e.target.checked)}
                             className="rounded border-hairline accent-amber"
                           />
-                          <span>Cap PF Ceiling at ₹1,800/mo</span>
+                          <span>Cap PF at the wage ceiling (₹{Math.round(pfWageCeiling() * PF_EMPLOYER_RATE).toLocaleString("en-IN")}/mo today)</span>
                         </label>
                       </div>
                     </div>
@@ -1480,8 +1480,9 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
   const esiEmployerN = esiCalc.employer;
 
   // ── PF (auto) — employee 12% (deducted from net) + employer 12% (extra company
-  //    cost, NOT deducted). Computed on the wage capped at ₹15,000.
-  const pfCalc = computePf(esiWage, employee.pf_applicable);
+  //    cost, NOT deducted). Computed on the wage capped at the ceiling for THIS
+  //    salary month (₹15,000 till Sep 2026, ₹25,000 from Oct 2026 — lib/payroll/pf.ts).
+  const pfCalc = computePf(esiWage, employee.pf_applicable, period);
   React.useEffect(() => {
     if (!pfEdited) setPf(String(pfCalc.employee));
   }, [pfCalc.employee, pfEdited]);
@@ -1700,7 +1701,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
                   <span>Total PF challan this month (employee + employer)</span>
                   <span className="font-mono text-ink font-semibold">{rupee(n(pf) + pfEmployerN)}</span>
                 </div>
-                <div className="text-ink-3">On wage capped at ₹{PF_WAGE_CEILING.toLocaleString("en-IN")}. (Admin/EDLI ~1% not included.)</div>
+                <div className="text-ink-3">On wage capped at ₹{pfCalc.ceiling.toLocaleString("en-IN")} (ceiling for {period}). (Admin/EDLI ~1% not included.)</div>
               </div>
             )}
           </div>
