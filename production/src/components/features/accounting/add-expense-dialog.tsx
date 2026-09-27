@@ -136,6 +136,14 @@ export function AddExpenseDialog({
   const [fxError, setFxError]   = React.useState<string | null>(null);
   const isForeign = currency !== "INR";
   const rate = isForeign ? Number(fxRate || 0) : 1;
+  /* Reverse charge on an imported service (Google Ireland, Meta, AWS…): the buyer pays
+     the IGST himself in 3B 3.1(d) and claims it in 4(A)(3). Suggested on for a foreign-
+     currency bill; the tax is 18% of the ₹ amount unless typed over (lib/gst/gstr3b.ts). */
+  const [rcm, setRcm] = React.useState<boolean>(expense?.rcm ?? false);
+  const [rcmEdited, setRcmEdited] = React.useState<boolean>(Boolean(expense?.rcm));
+  const [rcmTax, setRcmTax] = React.useState<string>(expense?.rcm_tax ? String(expense.rcm_tax) : "");
+  React.useEffect(() => { if (!rcmEdited && !expense) setRcm(isForeign); }, [isForeign, rcmEdited, expense]);
+  const inrPreview = (n: number) => Math.round(n * (rate > 0 ? rate : 0));
 
   // How the expense is supported: proper GST tax invoice, a kaccha (informal /
   // non-GST) bill, or no bill at all (petty cash). Only a GST invoice carries
@@ -623,6 +631,8 @@ export function AddExpenseDialog({
       project_id: projectId ?? expense?.project_id ?? null,
       // TDS deducted on this payment (26Q, deductor side). Stored in ₹ as typed.
       tds_section: values.tds_section?.trim() || null,
+      rcm,
+      rcm_tax: rcm ? (rcmTax.trim() !== "" ? Math.max(0, Math.round(Number(rcmTax) || 0)) : Math.round(inr(Number(values.amount) || 0) * 0.18)) : 0,
       tds_amount:  Math.round(values.tds_amount || 0),
       // Source bank account for a bank/UPI/card/cheque payment (not cash).
       bank_account_id: paid && values.payment_method !== "cash" ? (bankAccountId || null) : null,
@@ -1110,6 +1120,21 @@ export function AddExpenseDialog({
                 <Input id="amount" type="number" min={1} step="any" readOnly={itemiseActive} error={errors.amount?.message} {...register("amount")} />
               </FormField>
             )}
+
+            {/* Reverse charge — imported services. */}
+            <label className="flex items-start gap-2 rounded-md border border-hairline p-2.5 cursor-pointer">
+              <input type="checkbox" checked={rcm} onChange={(e) => { setRcm(e.target.checked); setRcmEdited(true); }} className="mt-0.5 rounded border-hairline" />
+              <span className="text-xs text-ink-2">
+                <b className="text-ink">Reverse charge (RCM)</b> — videshi vendor ka bill (Google Ireland, Meta, AWS, OpenAI): GST unhone nahi lagaya, IGST hum khud 3B mein cash se bharte hain aur usi mahine credit lete hain.
+                {rcm && (
+                  <span className="mt-1.5 flex items-center gap-2">
+                    <span>IGST @18% ₹</span>
+                    <Input type="number" min={0} value={rcmTax} onChange={(e) => setRcmTax(e.target.value)} placeholder={String(Math.round(inrPreview(Number(watch("amount")) || 0) * 0.18))} className="w-32" />
+                    <span className="text-3xs text-ink-3">khaali = 18% apne-aap</span>
+                  </span>
+                )}
+              </span>
+            </label>
 
             {/* TDS deducted (26Q) — optional; for rent / professional / contractor payments. */}
             <div className="grid grid-cols-12 gap-3">

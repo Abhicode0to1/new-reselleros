@@ -46,6 +46,25 @@ export default function BalanceSheetPage() {
   const { data: items, isLoading: itemsLoading } = useBalanceSheetItems();
   const del = useDeleteBalanceSheetItem();
   const confirm = useConfirm();
+  /* D16 (27 Sep 2026): the unexplained difference is almost always the owner's money that
+     never got a line — capital put in, or drawings taken out. One click books it. */
+  const createItem = useCreateBalanceSheetItem();
+  async function bookUnexplained() {
+    if (unexplained === null || unexplained === 0) return;
+    const capital = unexplained > 0;
+    const ok = await confirm({
+      title: capital ? `Owner's capital ${rupee(unexplained)} jodein?` : `Drawings ${rupee(-unexplained)} jodein?`,
+      body: capital
+        ? "Assets books se zyada hain — matlab itna paisa business mein daala gaya jiski entry nahi thi (opening bank balance, khud ka paisa). Equity mein Owner's capital line banegi."
+        : "Liabilities books se zyada hain — matlab itna paisa business se nikala gaya jiski entry nahi thi. Equity mein Drawings (negative) line banegi. Agar ye koi kharcha ya loss hai jo books mein nahi, to pehle wo entry karo.",
+      confirmLabel: "Haan, line banao", cancelLabel: "Nahi",
+    });
+    if (!ok) return;
+    await createItem.mutateAsync({
+      section: "equity", label: capital ? "Owner's capital" : "Drawings", amount: unexplained,
+      notes: `Balance Sheet ke unexplained difference se ${today} ko banaya — cumulative P&L se bacha hua farq.`,
+    });
+  }
   const [addOpen, setAddOpen] = React.useState(false);
   const [editItem, setEditItem] = React.useState<BalanceSheetItem | null>(null);
   const [retainedInfoOpen, setRetainedInfoOpen] = React.useState(false);
@@ -350,6 +369,14 @@ export default function BalanceSheetPage() {
                       <p className="mt-2 text-2xs text-ink-3">
                         Usual causes: bank opening balances entered without the matching capital line, owner drawings taken without an entry, or income / expense that never reached the books. Add the missing line (Owner&apos;s capital, Drawings) and this goes to zero.
                       </p>
+                      {unexplained !== null && unexplained !== 0 && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Button size="sm" variant="primary" loading={createItem.isPending} onClick={bookUnexplained}>
+                            {unexplained > 0 ? `Owner's capital ${rupee(unexplained)} jodo` : `Drawings ${rupee(-unexplained)} jodo`}
+                          </Button>
+                          <span className="text-2xs text-ink-3">Ek click — equity line ban jaayegi, farq zero. Baad mein Edit/Delete kar sakte ho.</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

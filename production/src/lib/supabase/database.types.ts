@@ -2235,6 +2235,9 @@ export type ExpenseRow = {
   project_id:       string | null;           // migration 0192 — cost of a specific project (per-project P&L)
   tds_section:      string | null;           // migration 0202 — TDS deducted section (26Q); null = none
   tds_amount:       number;                   // migration 0202 — TDS deducted (₹) on this payment
+  /** Migration 20260927220000 — imported service under reverse charge; rcm_tax = self-assessed IGST (₹). */
+  rcm:              boolean;
+  rcm_tax:          number;
   bank_account_id:  string | null;            // migration 0203 — source bank account (bank/UPI/card/cheque)
   notes:            string | null;            // migration 0204 — free-text comment / extra detail
   prepaid_advance_id: string | null;          // migration 0209 — advance this expense was consumed from
@@ -2274,6 +2277,8 @@ type ExpenseInsert = {
   project_id?:      string | null;
   tds_section?:     string | null;
   tds_amount?:      number;
+  rcm?:             boolean;
+  rcm_tax?:         number;
   bank_account_id?: string | null;
   notes?:           string | null;
   /** Migration 0232 — marketing channel for ad spend. Set only on marketing rows. */

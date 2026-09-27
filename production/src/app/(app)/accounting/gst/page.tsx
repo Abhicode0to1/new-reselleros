@@ -30,6 +30,7 @@ import { gstPaidForPeriods } from "@/lib/accounting/tax-payments";
 import { useTaxPayments } from "@/lib/queries/tax-payments";
 import { rupee, formatDate } from "@/lib/utils";
 import { buildGstr1, gstr1Csv, gstr1Json, gstSplit, hsnLines, GSTR1_HEADERS } from "@/lib/gst/gstr1";
+import { computeGstr3b, gstr3bRows, type Heads } from "@/lib/gst/gstr3b";
 import { createClient } from "@/lib/supabase/client";
 import { Term } from "@/components/shared/term";
 
@@ -117,6 +118,10 @@ interface GstReport {
   netLiability:  number;
   /** Expense GST that is NOT credit (kaccha bill, no vendor GSTIN, s.17(5)) — lib/gst/itc.ts. Not in inputRows. */
   blockedItc:    ItcSplit;
+  /** The s.17(5) part of that, by head — reported gross in 3B 4(A)(5) and reversed in 4(B)(1). */
+  blocked17Heads: Heads[];
+  /** Imported services under reverse charge this period (expenses.rcm) — 3B 3.1(d) / 4(A)(3). */
+  rcmRows:       { id: string; vendor: string; date: string; amount: number; tax: number }[];
   sellerStateCode: string | null;   // your own state — place of supply for intra-state B2C
   sellerState:     string | null;
   /** Company GSTIN from Settings — the Portal JSON is refused without it. */
@@ -262,6 +267,13 @@ function useGstReport(range: DateRange) {
         .lte("expense_date", range.to)
         .gt("gst_paid", 0);
 
+      /* Reverse charge (migration 20260927220000): the buyer's own IGST on imported services. */
+      const { data: rcmExp } = await supabase
+        .from("expenses")
+        .select("id, expense_date, vendor_name, amount, rcm_tax")
+        .gte("expense_date", range.from).lte("expense_date", range.to).eq("rcm", true);
+      const rcmRows = (rcmExp ?? []).map((e) => ({ id: e.id, vendor: e.vendor_name ?? "—", date: e.expense_date, amount: e.amount ?? 0, tax: e.rcm_tax ?? 0 }));
+
       /* ── Sirf wahi GST credit hai jo credit ho SAKTA hai (27 Sep 2026) ─────────
          Pehle har `gst_paid > 0` kharcha ITC mein jaata tha — kaccha bill, bina GSTIN wala
          vendor, staff ka khana sab. GSTR-2B mein wo kabhi nahi milte, aur 17(5) wale claim
@@ -272,6 +284,10 @@ function useGstReport(range: DateRange) {
       const withGstin = (expenses ?? []).map((e) => ({ ...e, vendorGstin: e.vendor_id ? vendorGstinOf.get(e.vendor_id) ?? null : null }));
       const blockedItc = splitItc(withGstin);
       const claimable = withGstin.filter((e) => itcEligibility(e).eligible);
+      /* s.17(5) blocked rows keep their heads: 3B wants them in 4(A)(5) and again in 4(B)(1). */
+      const blocked17Heads: Heads[] = withGstin
+        .filter((e) => (itcEligibility(e).reason ?? "").includes("17(5)"))
+        .map((e) => { const h = expenseGstHeads(e); return { igst: h.igst, cgst: h.cgst, sgst: h.sgst }; });
 
       /* ── Ab MAANA nahi jata jab NAAPA hua maujood ho (29 Aug 2026) ──────────
          Yahan pehle har kharche par ye chalta tha:
@@ -322,7 +338,7 @@ function useGstReport(range: DateRange) {
       const inputGST     = inputRows.reduce((s, r) => s + r.gst, 0);
       const netLiability = outputGST - inputGST;
 
-      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability, blockedItc, sellerStateCode, sellerState, sellerGstin };
+      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability, blockedItc, blocked17Heads, rcmRows, sellerStateCode, sellerState, sellerGstin };
     },
   });
 }
@@ -336,30 +352,7 @@ const toGstr1Doc = (r: OutputRow) => ({
   amount: r.amount, taxableValue: r.taxableValue, gst: r.gst, taxRate: r.taxRate, interState: r.interState, lines: r.lines,
 });
 
-// ────────────────────────────────────────────────────────────────
-// GSTR-3B · summary worksheet (typed on the portal, not uploaded)
-// ────────────────────────────────────────────────────────────────
-// 3B is a summary return: you enter a few figures per table. We compute the
-// exact box values from the period's books so the owner types them straight in.
-interface Gstr3b {
-  outTaxable: number; outIgst: number; outCgst: number; outSgst: number;   // Table 3.1(a) outward
-  itcIgst: number; itcCgst: number; itcSgst: number;                       // Table 4(A)(5) ITC
-  payIgst: number; payCgst: number; paySgst: number;                       // net (per head, floored)
-}
-function computeGstr3b(outputRows: OutputRow[], inputRows: InputRow[]): Gstr3b {
-  let outTaxable = 0, outIgst = 0, outCgst = 0, outSgst = 0;
-  for (const r of outputRows) {
-    const s = gstSplit(r);
-    outTaxable += r.taxableValue; outIgst += s.igst; outCgst += s.cgst; outSgst += s.sgst;
-  }
-  let itcIgst = 0, itcCgst = 0, itcSgst = 0;
-  for (const r of inputRows) { itcIgst += r.igst; itcCgst += r.cgst; itcSgst += r.sgst; }
-  const net = (o: number, i: number) => Math.max(0, o - i);
-  return {
-    outTaxable, outIgst, outCgst, outSgst, itcIgst, itcCgst, itcSgst,
-    payIgst: net(outIgst, itcIgst), payCgst: net(outCgst, itcCgst), paySgst: net(outSgst, itcSgst),
-  };
-}
+// GSTR-3B worksheet — lib/gst/gstr3b.ts (RCM, s.17(5) reversal, cash per head).
 
 // ────────────────────────────────────────────────────────────────
 // CSV export helpers
@@ -462,18 +455,20 @@ export default function GstReportPage() {
     toast.success(`GSTR-1 JSON downloaded (${parts}). Upload on gst.gov.in → Returns → GSTR-1 → Import JSON, then check every table before filing.${warn}`);
   }
 
-  const g3b = data ? computeGstr3b(data.outputRows, data.inputRows) : null;
+  const g3b = data ? computeGstr3b({
+    output: data.outputRows.map((r) => ({ taxableValue: r.taxableValue, heads: gstSplit(r) })),
+    itc: data.inputRows.map((r) => ({ igst: r.igst, cgst: r.cgst, sgst: r.sgst })),
+    blocked17: data.blocked17Heads,
+    notIn2b: data.blockedItc.blocked - data.blocked17Heads.reduce((s, h) => s + h.igst + h.cgst + h.sgst, 0),
+    rcm: data.rcmRows,
+  }) : null;
 
   function exportGstr3b() {
     if (!g3b) return;
     downloadCSV(
       `gstr3b-worksheet-${range.from}-to-${range.to}.csv`,
       ["Table", "Description", "Taxable value", "IGST", "CGST", "SGST"],
-      [
-        ["3.1(a)", "Outward taxable supplies (other than zero/nil/exempt)", g3b.outTaxable, g3b.outIgst, g3b.outCgst, g3b.outSgst],
-        ["4(A)(5)", "ITC available — all other ITC", "", g3b.itcIgst, g3b.itcCgst, g3b.itcSgst],
-        ["Net", "Tax payable in cash (per head, before IGST cross-set-off)", "", g3b.payIgst, g3b.payCgst, g3b.paySgst],
-      ],
+      gstr3bRows(g3b),
     );
   }
 
@@ -643,30 +638,22 @@ export default function GstReportPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline font-mono">
-                <tr>
-                  <td className="px-3 py-2 text-ink-2">3.1(a)</td>
-                  <td className="px-3 py-2 font-sans text-ink">Outward taxable supplies</td>
-                  <td className="px-3 py-2 text-right text-ink">{rupee(g3b.outTaxable)}</td>
-                  <td className="px-3 py-2 text-right">{rupee(g3b.outIgst)}</td>
-                  <td className="px-3 py-2 text-right">{rupee(g3b.outCgst)}</td>
-                  <td className="px-3 py-2 text-right">{rupee(g3b.outSgst)}</td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-ink-2">4(A)(5)</td>
-                  <td className="px-3 py-2 font-sans text-ink">ITC available (all other ITC)</td>
-                  <td className="px-3 py-2 text-right text-ink-3">—</td>
-                  <td className="px-3 py-2 text-right text-emerald">{rupee(g3b.itcIgst)}</td>
-                  <td className="px-3 py-2 text-right text-emerald">{rupee(g3b.itcCgst)}</td>
-                  <td className="px-3 py-2 text-right text-emerald">{rupee(g3b.itcSgst)}</td>
-                </tr>
-                <tr className="bg-paper-2/30">
-                  <td className="px-3 py-2 text-ink-2">Net</td>
-                  <td className="px-3 py-2 font-sans font-semibold text-ink">Tax payable in cash</td>
-                  <td className="px-3 py-2 text-right text-ink-3">—</td>
-                  <td className="px-3 py-2 text-right font-semibold text-rose">{rupee(g3b.payIgst)}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-rose">{rupee(g3b.payCgst)}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-rose">{rupee(g3b.paySgst)}</td>
-                </tr>
+                {gstr3bRows(g3b).map((r) => {
+                  const box = String(r[0]);
+                  const isNet = box === "Net", isRev = box === "4(B)(1)", isInfo = box === "—", isItc = box.startsWith("4(") && !isRev;
+                  const cell = (v: string | number) => (v === "" ? "—" : typeof v === "number" ? rupee(v) : v);
+                  const tone = isNet ? "font-semibold text-rose" : isRev ? "text-amber-ink" : isItc ? "text-emerald" : isInfo ? "text-ink-3" : "text-ink";
+                  return (
+                    <tr key={box + String(r[1])} className={isNet ? "bg-paper-2/30" : isInfo ? "opacity-80" : ""}>
+                      <td className="px-3 py-2 text-ink-2">{box}</td>
+                      <td className={`px-3 py-2 font-sans ${isNet ? "font-semibold text-ink" : "text-ink"}`}>{String(r[1])}</td>
+                      <td className="px-3 py-2 text-right text-ink-3">{cell(r[2])}</td>
+                      <td className={`px-3 py-2 text-right ${tone}`}>{cell(r[3])}</td>
+                      <td className={`px-3 py-2 text-right ${tone}`}>{cell(r[4])}</td>
+                      <td className={`px-3 py-2 text-right ${tone}`}>{cell(r[5])}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
