@@ -319,6 +319,7 @@ export const APP_NAV: NavSection[] = [
     items: [
       { id: "reports",             href: "/reports",                  label: "Reports Hub",         icon: "chart" },
       { id: "acc-overview",        href: "/accounting",               label: "Accounting Overview", icon: "layout" },
+      { id: "acc-close",           href: "/accounting/close",         label: "Month-end Close",     icon: "check" },
       { id: "banking",             href: "/accounting/banking",       label: "Banking",             icon: "rupee" },
       /* The khata. It sits in BOTH this section and the accountant-only "Filing" one,
          which is not a duplication mistake — P&L, Balance Sheet and Cash Flow already do
@@ -479,6 +480,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/banking/[id]":  ["Accounting", "Banking", "Account"],
   "/accounting/banking/rules": ["Accounting", "Banking", "Category Rules"],
   "/accounting/banking/brs":   ["Accounting", "Banking", "Bank Reconciliation"],
+  "/accounting/close":         ["Accounting", "Month-end Close"],
   "/accounting/business-loans": ["Accounting", "Business Loans"],
   "/accounting/pnl":           ["Accounting", "P&L Report"],
   "/accounting/balance-sheet": ["Accounting", "Balance Sheet"],

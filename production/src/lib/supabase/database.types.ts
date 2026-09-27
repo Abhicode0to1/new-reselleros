@@ -2709,6 +2709,18 @@ type StatutoryDuesPaymentInsert = {
 };
 type StatutoryDuesPaymentUpdate = Partial<Omit<StatutoryDuesPaymentInsert, "tenant_id">>;
 
+// ── Month-end close checklist — migration 20260927200000 ─────────────────────
+type MonthCloseCheckRow = {
+  id:        string;
+  tenant_id: string;
+  period:    string;          // YYYY-MM
+  key:       string;          // step key (lib/accounting/month-close.ts MANUAL_STEPS)
+  note:      string | null;
+  done_by:   string | null;
+  done_at:   string;
+};
+type MonthCloseCheckInsert = { id?: string; tenant_id: string; period: string; key: string; note?: string | null; done_by?: string | null; done_at?: string };
+
 // GST + income-tax payments booked from bank lines (migration 20260925140000).
 // Separate from statutory_dues_payments so TDS/PF/ESI totals never include GST.
 export type TaxPaymentKind = "gst" | "advance_tax" | "self_assessment_tax";
@@ -4254,6 +4266,8 @@ export type Database = {
       project_payments:  { Row: ProjectPaymentRow;   Insert: ProjectPaymentInsert;   Update: ProjectPaymentUpdate;   Relationships: [] };
       documents:         { Row: DocumentRow;         Insert: DocumentInsert;         Update: DocumentUpdate;         Relationships: [] };
       statutory_dues_payments:{ Row: StatutoryDuesPaymentRow; Insert: StatutoryDuesPaymentInsert; Update: StatutoryDuesPaymentUpdate; Relationships: [] };
+      /** Migration 20260927200000 — month-end close: the portal steps the owner ticked, per month. */
+      month_close_checks:     { Row: MonthCloseCheckRow; Insert: MonthCloseCheckInsert; Update: Partial<MonthCloseCheckInsert>; Relationships: [] };
       tax_payments:           { Row: TaxPaymentRow; Insert: TaxPaymentInsert; Update: TaxPaymentUpdate; Relationships: [] };
       customer_credits:{ Row: CustomerCreditRow; Insert: CustomerCreditInsert; Update: CustomerCreditUpdate; Relationships: [] };
       credit_notes:    { Row: CreditNoteRow;      Insert: CreditNoteInsert;      Update: CreditNoteUpdate;      Relationships: [] };
