@@ -1,5 +1,8 @@
 # CLAUDE.md — ResellerOS Production Project Memory
 
+> **Session start, every time:** read [`../docs/TEAM-PROTOCOL.md`](../docs/TEAM-PROTOCOL.md) — your
+> tasks and other people's changes live on the shared board, ownership in [`../OWNERS.json`](../OWNERS.json).
+
 This file is read by Claude Code on every session. It contains all conventions, decisions, and rules. **Follow these without exception.**
 
 > ### ⚠️ There is a second rulebook: [`../AGENTS.md`](../AGENTS.md)

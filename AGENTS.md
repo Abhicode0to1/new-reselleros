@@ -1,5 +1,10 @@
 # AGENTS.md — rules for any AI agent working in this repo
 
+> **Three people, three agents (27 Sep 2026).** At the start of EVERY session read
+> [`docs/TEAM-PROTOCOL.md`](docs/TEAM-PROTOCOL.md): it says how to read your tasks and other
+> people's changes from the shared board, how to stay in your area ([`OWNERS.json`](OWNERS.json)),
+> and what to write back before you stop. Five minutes of it saves a day of merge conflicts.
+
 Read this before writing code. It is the short list of things that, if you get them
 wrong, cost real money or break a live business.
 
