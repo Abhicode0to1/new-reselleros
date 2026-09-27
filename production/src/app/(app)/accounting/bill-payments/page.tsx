@@ -55,12 +55,6 @@ export default function PaymentsMadePage() {
         </div>
       </div>
 
-      <TabBar
-        className="overflow-y-hidden mb-4"
-        value={tab}
-        onChange={(v) => setTab(v as Tab)}
-        items={TABS.map((t) => ({ id: t, label: t === "all" ? "All payments" : GROUP_LABEL[t], count: countOf(t) || undefined, dot: t === "unreconciled" && countOf(t) ? "rose" : undefined }))}
-      />
 
       {/* Analytics strip — the mirror of "Payments & Collections Analytics" */}
       {!isLoading && lines.length > 0 && (
@@ -78,6 +72,13 @@ export default function PaymentsMadePage() {
         </Card>
       )}
 
+      {/* Tabs sit between the analytics (all money-out) and the list they filter. */}
+      <TabBar
+        className="overflow-y-hidden mb-3"
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+        items={TABS.map((t) => ({ id: t, label: t === "all" ? "All payments" : GROUP_LABEL[t], count: countOf(t) || undefined, dot: t === "unreconciled" && countOf(t) ? "rose" : undefined }))}
+      />
       <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-ink-3">Showing {rows.length} of {lines.length} payments · <b className="text-ink">{rupee(shown)}</b>{tab === "all" ? ` · ${rupee(summary.allTime)} paid all-time` : ""}</p>
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Payee, what, bill no., narration…" className="w-full sm:w-80" aria-label="Search payments" />
