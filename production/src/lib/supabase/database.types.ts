@@ -5267,6 +5267,14 @@ export type Database = {
         };
         Returns: string;
       };
+      book_bank_txn_as_vendor_bill: {
+        Args: { p_txn_id: string; p_bill_id: string; p_method?: string | null };
+        Returns: { bill_id: string; replaced_synthetic: string | null; amount: number };
+      };
+      book_bank_txn_as_referral_commission: {
+        Args: { p_txn_id: string; p_commission_id: string };
+        Returns: { commission_id: string; replaced_synthetic: string | null; amount: number };
+      };
       book_bank_txn_as_statutory: {
         Args: { p_txn_id: string; p_kind: string; p_notes?: string | null; p_challan_no?: string | null; p_period?: string | null };
         Returns: undefined;

@@ -51,7 +51,7 @@ export type BankTransactionRow = {
   balance_after:    number | null;
   reference:        string | null;
   source:           "manual" | "csv_upload" | "api_fetch";
-  matched_to_type:  "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | "statutory" | "prepaid" | null;
+  matched_to_type:  "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | "statutory" | "prepaid" | "referral_commission" | null;
   matched_to_id:    string | null;
   matched_at:       string | null;
   matched_by:       string | null;
@@ -901,6 +901,58 @@ export function useBookBankTxnAsStatutory() {
       toast.success("Booked as statutory payment & reconciled");
     },
     onError: (err) => toastError(err, { fallback: "Couldn't book statutory payment" }),
+  });
+}
+
+/**
+ * Book an unmatched money-OUT line as the payment of a vendor bill, reconciled to
+ * THIS imported line (migration 20260927190000). If the Bills page had already paid
+ * it (a synthetic line), that line is replaced — the money is never counted twice.
+ */
+export function useBookBankTxnAsVendorBill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { transactionId: string; accountId: string; billId: string; method?: string | null }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("book_bank_txn_as_vendor_bill", {
+        p_txn_id: input.transactionId, p_bill_id: input.billId, p_method: input.method ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return data as { bill_id: string; replaced_synthetic: string | null; amount: number };
+    },
+    onSuccess: (res, input) => {
+      qc.invalidateQueries({ queryKey: ["bank_transactions", input.accountId] });
+      qc.invalidateQueries({ queryKey: ["bank_transactions"] });
+      qc.invalidateQueries({ queryKey: ["vendor_bills"] });
+      qc.invalidateQueries({ queryKey: ["vendor-bills"] });
+      qc.invalidateQueries({ queryKey: ["balance-sheet"] });
+      toast.success(res?.replaced_synthetic ? "Bill payment reconciled — Bills page ki manual line hata di, ye asli line rahi" : "Bill payment booked & reconciled");
+    },
+    onError: (err) => toastError(err, { fallback: "Couldn't book bill payment" }),
+  });
+}
+
+/** Same for a referral commission: the line must equal the commission's net payable. */
+export function useBookBankTxnAsCommission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { transactionId: string; accountId: string; commissionId: string }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("book_bank_txn_as_referral_commission", {
+        p_txn_id: input.transactionId, p_commission_id: input.commissionId,
+      });
+      if (error) throw new Error(error.message);
+      return data as { commission_id: string; replaced_synthetic: string | null; amount: number };
+    },
+    onSuccess: (res, input) => {
+      qc.invalidateQueries({ queryKey: ["bank_transactions", input.accountId] });
+      qc.invalidateQueries({ queryKey: ["bank_transactions"] });
+      qc.invalidateQueries({ queryKey: ["referral-commissions"] });
+      qc.invalidateQueries({ queryKey: ["referral_commissions"] });
+      qc.invalidateQueries({ queryKey: ["balance-sheet"] });
+      toast.success(res?.replaced_synthetic ? "Commission reconciled — manual line hata di, ye asli line rahi" : "Commission paid & reconciled");
+    },
+    onError: (err) => toastError(err, { fallback: "Couldn't book commission payment" }),
   });
 }
 

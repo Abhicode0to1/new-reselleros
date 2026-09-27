@@ -42,6 +42,8 @@ import {
   useBookBankCredit,
   useBookBankAdvance,
   useBookBankTxnAsStatutory,
+  useBookBankTxnAsVendorBill,
+  useBookBankTxnAsCommission,
   useBookCreditAsInvoice,
   useReconcileSalaryAdvanceSplit,
   type BankTransactionRow,
@@ -61,6 +63,8 @@ import { useBookSalaryLines } from "@/lib/queries/salary-from-bank";
 import { detectGovtPayment } from "@/lib/banking/govt-payment";
 import { payeeFromNarration, TEST_TRANSFER_MAX } from "@/lib/banking/narration";
 import { usePrepaidAdvances, useBookBankTxnAsPrepaid } from "@/lib/queries/prepaid-advances";
+import { useVendorBills } from "@/lib/queries/vendor-bills";
+import { useReferralCommissions } from "@/lib/queries/referral-commissions";
 import { AddCustomerForm } from "@/components/features/customers/add-customer-form";
 import { ProjectPaymentSection } from "@/components/features/banking/project-payment-section";
 
@@ -228,6 +232,51 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
         category:      prepaidCategory,
         notes:         transaction.description,
       });
+      onOpenChange(false);
+    } catch { /* hook toasts */ }
+  };
+
+  /* Vendor bill / referral commission paid from this line (money-out). Settles the
+     bill / commission against THIS imported line; a synthetic line the Bills or
+     Referrals page had made for the same payment is replaced (migration 20260927190000).
+     Candidates: open bills, plus paid ones whose synthetic line matches this amount. */
+  const bookBill = useBookBankTxnAsVendorBill();
+  const bookCommission = useBookBankTxnAsCommission();
+  const { data: allBills } = useVendorBills();
+  const { data: allCommissions } = useReferralCommissions();
+  const [showBill, setShowBill] = React.useState(false);
+  const [billPick, setBillPick] = React.useState("");
+  const [showCommission, setShowCommission] = React.useState(false);
+  const [commissionPick, setCommissionPick] = React.useState("");
+  React.useEffect(() => { setShowBill(false); setBillPick(""); setShowCommission(false); setCommissionPick(""); }, [transaction?.id]);
+  const billCandidates = React.useMemo(() => {
+    const amt = transaction?.debit ?? 0;
+    return (allBills ?? [])
+      .filter((b) => (b.total - (b.paid_amount ?? 0)) > 0 || (b.paid_amount ?? 0) === amt || b.total === amt)
+      .sort((a, b) => {
+        const ax = Math.abs(a.total - (a.paid_amount ?? 0) - amt), bx = Math.abs(b.total - (b.paid_amount ?? 0) - amt);
+        return ax - bx || b.bill_date.localeCompare(a.bill_date);
+      })
+      .slice(0, 40);
+  }, [allBills, transaction?.debit]);
+  const commissionCandidates = React.useMemo(() => {
+    const amt = transaction?.debit ?? 0;
+    return (allCommissions ?? [])
+      .filter((c) => c.status !== "cancelled" && (c.status === "earned" || c.net_payable === amt))
+      .sort((a, b) => Math.abs(a.net_payable - amt) - Math.abs(b.net_payable - amt) || b.earned_date.localeCompare(a.earned_date))
+      .slice(0, 40);
+  }, [allCommissions, transaction?.debit]);
+  const handleBookBill = async () => {
+    if (!transaction || !billPick) return;
+    try {
+      await bookBill.mutateAsync({ transactionId: transaction.id, accountId: transaction.bank_account_id, billId: billPick, method: null });
+      onOpenChange(false);
+    } catch { /* hook toasts */ }
+  };
+  const handleBookCommission = async () => {
+    if (!transaction || !commissionPick) return;
+    try {
+      await bookCommission.mutateAsync({ transactionId: transaction.id, accountId: transaction.bank_account_id, commissionId: commissionPick });
       onOpenChange(false);
     } catch { /* hook toasts */ }
   };
@@ -973,6 +1022,57 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   </button>{" "}
                   run it there (payslip + statutory), then reconcile this line to it under “Combine multiple expenses”.
                 </p>
+              </div>
+            )}
+
+            {/* Vendor bill (COGS) paid from this line — settled against THIS line, never a second one. */}
+            {!isCredit && (
+              <div className="rounded-md border border-hairline p-3">
+                <button type="button" onClick={() => setShowBill((v) => !v)} aria-expanded={showBill} className="w-full flex items-center justify-between text-left">
+                  <span className="text-xs font-semibold text-ink-2">Vendor bill (Google / Microsoft / Zoho…) ka payment?</span>
+                  <Icon name={showBill ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
+                </button>
+                {!showBill ? (
+                  <p className="text-2xs text-ink-3 mt-1 leading-relaxed">Bill yahin se settle karo — Bills page se "Pay" karne par ek alag manual bank line banti hai, jo statement aane par double ho jaati hai.</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <select value={billPick} onChange={(e) => setBillPick(e.target.value)} aria-label="Vendor bill" className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40">
+                      <option value="">Bill chuno…</option>
+                      {billCandidates.map((b) => {
+                        const due = b.total - (b.paid_amount ?? 0);
+                        return <option key={b.id} value={b.id}>{b.vendor_name} · {b.bill_no ? `${b.bill_no} · ` : ""}{formatDate(b.bill_date)} · {due > 0 ? `due ${rupee(due)}` : `paid ${rupee(b.total)} (manual line replace hogi)`}</option>;
+                      })}
+                    </select>
+                    {billCandidates.length === 0 && <p className="text-2xs text-ink-3">Koi open bill nahi — pehle Bills page par bill banao.</p>}
+                    <Button size="sm" variant="primary" icon="check" disabled={!billPick || bookBill.isPending} loading={bookBill.isPending} onClick={handleBookBill}>
+                      Book {rupee(amount)} against this bill
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Referral commission paid from this line. */}
+            {!isCredit && commissionCandidates.length > 0 && (
+              <div className="rounded-md border border-hairline p-3">
+                <button type="button" onClick={() => setShowCommission((v) => !v)} aria-expanded={showCommission} className="w-full flex items-center justify-between text-left">
+                  <span className="text-xs font-semibold text-ink-2">Referral partner ki commission?</span>
+                  <Icon name={showCommission ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
+                </button>
+                {showCommission && (
+                  <div className="mt-2 space-y-2">
+                    <select value={commissionPick} onChange={(e) => setCommissionPick(e.target.value)} aria-label="Referral commission" className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40">
+                      <option value="">Commission chuno…</option>
+                      {commissionCandidates.map((c) => (
+                        <option key={c.id} value={c.id}>{c.partner_name ?? "partner"} · {formatDate(c.earned_date)} · net {rupee(c.net_payable)}{c.status === "paid" ? " (paid — manual line replace hogi)" : ""}</option>
+                      ))}
+                    </select>
+                    <p className="text-2xs text-ink-3">Line ki raqam commission ke net payable ke barabar honi chahiye (TDS kaat kar).</p>
+                    <Button size="sm" variant="primary" icon="check" disabled={!commissionPick || bookCommission.isPending} loading={bookCommission.isPending} onClick={handleBookCommission}>
+                      Book {rupee(amount)} as commission paid
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
