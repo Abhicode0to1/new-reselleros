@@ -3011,6 +3011,25 @@ type EmiPurchaseRow = {
 type EmiPurchaseInsert = Partial<EmiPurchaseRow> & { tenant_id: string; name: string; total_cost: number; financed: number; purchased_on: string };
 type EmiPurchaseUpdate = Partial<Omit<EmiPurchaseInsert, "tenant_id">>;
 
+// ── Fixed asset register — migration 20260927230000 ───────────────────────────
+type FixedAssetRow = {
+  id:              string;
+  tenant_id:       string;
+  name:            string;
+  block:           "computers" | "plant" | "furniture" | "vehicles" | "building" | "intangible";
+  cost:            number;
+  put_to_use:      string;
+  emi_purchase_id: string | null;
+  expense_id:      string | null;
+  disposed_on:     string | null;
+  disposal_value:  number;
+  notes:           string | null;
+  created_at:      string;
+  updated_at:      string;
+};
+type FixedAssetInsert = Omit<FixedAssetRow, "id" | "created_at" | "updated_at" | "disposed_on" | "disposal_value" | "emi_purchase_id" | "expense_id" | "notes">
+  & Partial<Pick<FixedAssetRow, "id" | "disposed_on" | "disposal_value" | "emi_purchase_id" | "expense_id" | "notes" | "updated_at">>;
+
 type ExpenseClaimRow = {
   id:            string;
   tenant_id:     string;
@@ -4282,6 +4301,8 @@ export type Database = {
       activity_log:{ Row: ActivityLogRow; Insert: ActivityLogInsert; Update: Partial<ActivityLogInsert>; Relationships: [] };
       attendance_settings:{ Row: AttendanceSettingsRow; Insert: AttendanceSettingsInsert; Update: AttendanceSettingsUpdate; Relationships: [] };
       emi_purchases:{ Row: EmiPurchaseRow; Insert: EmiPurchaseInsert; Update: EmiPurchaseUpdate; Relationships: [] };
+      /** Migration 20260927230000 — fixed asset register; depreciation is computed (lib/accounting/depreciation.ts). */
+      fixed_assets: { Row: FixedAssetRow; Insert: FixedAssetInsert; Update: Partial<Omit<FixedAssetInsert, "tenant_id">>; Relationships: [] };
       emi_payments:{ Row: EmiPaymentRow; Insert: EmiPaymentInsert; Update: EmiPaymentUpdate; Relationships: [] };
       business_loans:{ Row: BusinessLoanRow; Insert: BusinessLoanInsert; Update: BusinessLoanUpdate; Relationships: [] };
       business_loan_payments:{ Row: BusinessLoanPaymentRow; Insert: BusinessLoanPaymentInsert; Update: BusinessLoanPaymentUpdate; Relationships: [] };

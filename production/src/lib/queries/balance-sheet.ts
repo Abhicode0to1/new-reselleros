@@ -22,6 +22,7 @@ import type { BalanceSheetSection } from "@/lib/supabase/database.types";
 import { incomeTaxPaidForFy } from "@/lib/accounting/tax-payments";
 import { splitItc } from "@/lib/gst/itc";
 import { statutoryDues } from "@/lib/accounting/tds-deductor";
+import { bookValueNow, type AssetLike } from "@/lib/accounting/depreciation";
 
 export type BalanceSheetItem = {
   id:         string;
@@ -40,7 +41,7 @@ export interface BalanceSheetAuto {
   tdsReceivable:   number;   // pending TDS credits from customers
   employeeLoans:   number;   // outstanding loans/advances to employees (an asset)
   prepaidAdvances: number;   // vendor advances paid but not yet consumed (a current asset)
-  fixedAssets:     number;   // cost of assets bought on EMI (an asset)
+  fixedAssets:     number;   // registered assets at WDV (lib/accounting/depreciation.ts) + EMI purchases not yet registered, at cost
   payables:        number;   // unpaid vendor bills (total − paid)
   salaryPayable:   number;   // net salary accrued (payroll run) but not yet paid out — a liability
   salaryDuesPayable: number; // statutory dues: salary TDS/PF/ESI (both shares) + vendor TDS, less challans
@@ -212,11 +213,19 @@ export function useBalanceSheetAuto() {
 
       // Assets bought on EMI: total cost is a fixed asset; financed-minus-
       // principal-paid is a loan liability.
-      const { data: emiP, error: emiErr } = await supabase.from("emi_purchases").select("total_cost, financed");
+      const { data: emiP, error: emiErr } = await supabase.from("emi_purchases").select("id, total_cost, financed");
       if (emiErr) throw emiErr;
       const { data: emiPay, error: emiPayErr } = await supabase.from("emi_payments").select("principal_part");
       if (emiPayErr) throw emiPayErr;
-      const fixedAssets     = (emiP ?? []).reduce((s, r) => s + (r.total_cost ?? 0), 0);
+      /* Fixed assets at WDV (27 Sep 2026): the register depreciates each asset at its
+         Income-tax block rate; an EMI purchase not yet in the register still counts at
+         cost, so nothing disappears the day the register is empty. */
+      const { data: fa, error: faErr } = await supabase.from("fixed_assets").select("id, name, block, cost, put_to_use, disposed_on, disposal_value, emi_purchase_id");
+      if (faErr) throw faErr;
+      const registeredEmi = new Set((fa ?? []).map((a) => a.emi_purchase_id).filter(Boolean));
+      const todayIso = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const fixedAssets     = (fa ?? []).reduce((s, a) => s + bookValueNow(a as AssetLike, todayIso), 0)
+                            + (emiP ?? []).filter((r) => !registeredEmi.has(r.id)).reduce((s, r) => s + (r.total_cost ?? 0), 0);
       const emiFinanced     = (emiP ?? []).reduce((s, r) => s + (r.financed ?? 0), 0);
       const emiPrincipalPaid = (emiPay ?? []).reduce((s, r) => s + (r.principal_part ?? 0), 0);
       const emiLoansPayable = Math.max(0, emiFinanced - emiPrincipalPaid);

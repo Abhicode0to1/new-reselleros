@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { rupee, formatDate } from "@/lib/utils";
 import { useBankAccounts } from "@/lib/queries/bank";
+import { FixedAssetRegister } from "@/components/features/accounting/fixed-asset-register";
 import {
   useEmiPurchases, useRecordEmiPurchase, useRecordEmiPayment, useEmiPayments,
   EMI_CATEGORY_LABEL, type EmiPurchase, type EmiCategory,
@@ -153,6 +154,8 @@ export default function AssetsPage() {
           </ul>
         </>
       )}
+
+      <FixedAssetRegister />
 
       <FAB icon="plus" label="Purchase" onClick={() => setAddOpen(true)} ariaLabel="Record purchase" />
       {addOpen && <PurchaseDialog onClose={() => setAddOpen(false)} />}
