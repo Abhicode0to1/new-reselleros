@@ -38,6 +38,8 @@
 export const CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts";
 /** Iske bina bhejna 403 deta hai. */
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+/** Business Profile — iske bina listing sync 403 deta hai. */
+export const GBP_SCOPE = "https://www.googleapis.com/auth/business.manage";
 
 const split = (s: string | null | undefined): string[] =>
   (s ?? "").split(/\s+/).map((x) => x.trim()).filter(Boolean);
@@ -70,7 +72,7 @@ export function scopesLost(
 ): string[] {
   const had = split(before);
   const has = split(after);
-  return [CONTACTS_SCOPE, GMAIL_SEND_SCOPE].filter(
+  return [CONTACTS_SCOPE, GMAIL_SEND_SCOPE, GBP_SCOPE].filter(
     (s) => had.includes(s) && !has.includes(s),
   );
 }
@@ -82,7 +84,7 @@ export function scopesLost(
 export function scopeLossMessage(lost: readonly string[]): string | null {
   if (lost.length === 0) return null;
   const names = lost.map((s) =>
-    s === CONTACTS_SCOPE ? "Google Contacts sync" : "Gmail se bhejna",
+    s === CONTACTS_SCOPE ? "Google Contacts sync" : s === GBP_SCOPE ? "Google Business Profile sync" : "Gmail se bhejna",
   );
   return (
     `Ye connection ne ${names.join(" aur ")} ki permission hata di. ` +
@@ -109,6 +111,10 @@ export function hasContactsScope(scopes: string | null | undefined): boolean {
 }
 
 /** Wahi sawaal bhejne ke liye. `lib/email/provider` ka `canSendWithScopes` isi ka jodidar hai. */
+export function hasGbpScope(scopes: string | null | undefined): boolean {
+  return split(scopes).includes(GBP_SCOPE);
+}
+
 export function hasGmailSendScope(scopes: string | null | undefined): boolean {
   return split(scopes).includes(GMAIL_SEND_SCOPE);
 }

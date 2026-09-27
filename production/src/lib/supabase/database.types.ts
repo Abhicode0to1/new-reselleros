@@ -2466,6 +2466,27 @@ type EmployeeAssetRow = {
 type EmployeeAssetInsert = Omit<EmployeeAssetRow, "id" | "created_at" | "updated_at" | "returned_on" | "return_condition" | "identifier" | "fixed_asset_id" | "notes" | "issued_on">
   & Partial<Pick<EmployeeAssetRow, "id" | "returned_on" | "return_condition" | "identifier" | "fixed_asset_id" | "notes" | "issued_on" | "updated_at">>;
 
+// ── Google Business Profile — migration 20260927250000 (server-written) ──────
+type GbpLocationRow = {
+  id: string; tenant_id: string; connected_user_id: string; account_name: string; location_name: string; title: string;
+  primary_category: string | null; address: string | null; phone: string | null; website_uri: string | null; maps_uri: string | null;
+  new_review_uri: string | null; place_id: string | null; average_rating: number | null; total_reviews: number; is_verified: boolean | null;
+  last_synced_at: string | null; last_error: string | null; created_at: string; updated_at: string;
+};
+type GbpLocationInsert = Omit<GbpLocationRow, "id" | "created_at" | "updated_at" | "total_reviews"> & Partial<Pick<GbpLocationRow, "id" | "total_reviews" | "updated_at">>;
+type GbpReviewRow = {
+  id: string; tenant_id: string; location_id: string; review_name: string; reviewer_name: string | null; reviewer_photo_uri: string | null;
+  is_anonymous: boolean; star_rating: number; comment: string | null; reply_comment: string | null; replied_at: string | null;
+  reviewed_at: string; updated_at_google: string | null; created_at: string; updated_at: string;
+};
+type GbpReviewInsert = Omit<GbpReviewRow, "id" | "created_at" | "updated_at"> & Partial<Pick<GbpReviewRow, "id" | "updated_at">>;
+type GbpMetricDailyRow = { tenant_id: string; location_id: string; day: string; metric: string; value: number };
+type GbpSyncRunRow = {
+  id: string; tenant_id: string; started_at: string; finished_at: string | null; trigger: "manual" | "cron" | "connect";
+  locations: number; reviews: number; metric_rows: number; ok: boolean | null; error: string | null;
+};
+type GbpSyncRunInsert = Omit<GbpSyncRunRow, "id" | "started_at" | "finished_at" | "locations" | "reviews" | "metric_rows" | "ok" | "error"> & Partial<GbpSyncRunRow>;
+
 type EmployeeDocumentRow = {
   id:          string;
   tenant_id:   string;
@@ -4301,6 +4322,10 @@ export type Database = {
       employees:{ Row: EmployeeRow; Insert: EmployeeInsert; Update: EmployeeUpdate; Relationships: [] };
       employee_documents:{ Row: EmployeeDocumentRow; Insert: EmployeeDocumentInsert; Update: EmployeeDocumentUpdate; Relationships: [] };
       /** Migration 20260927240000 — company property issued to an employee (laptop, SIM, logins, keys…). */
+      gbp_locations:     { Row: GbpLocationRow;    Insert: GbpLocationInsert;    Update: Partial<GbpLocationInsert>;    Relationships: [] };
+      gbp_reviews:       { Row: GbpReviewRow;      Insert: GbpReviewInsert;      Update: Partial<GbpReviewInsert>;      Relationships: [] };
+      gbp_metrics_daily: { Row: GbpMetricDailyRow; Insert: GbpMetricDailyRow;    Update: Partial<GbpMetricDailyRow>;    Relationships: [] };
+      gbp_sync_runs:     { Row: GbpSyncRunRow;     Insert: GbpSyncRunInsert;     Update: Partial<GbpSyncRunRow>;        Relationships: [] };
       employee_assets: { Row: EmployeeAssetRow; Insert: EmployeeAssetInsert; Update: Partial<Omit<EmployeeAssetInsert, "tenant_id">>; Relationships: [] };
       reimbursements:{ Row: ReimbursementRow; Insert: ReimbursementInsert; Update: ReimbursementUpdate; Relationships: [] };
       leave_entries:{ Row: LeaveEntryRow; Insert: LeaveEntryInsert; Update: LeaveEntryUpdate; Relationships: [] };
