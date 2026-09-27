@@ -115,7 +115,7 @@ jobs:
           # link the app emails out. `resellersos-1005662057478.asia-south1.run.app` is a
           # live ALIAS for the same service and is what the Cloud Scheduler jobs call — do
           # not "fix" those to match this one.
-          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'https://resellersos-njvk4nxhdq-el.a.run.app' }}
+          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'https://resellersos-njvk4nxhdq-as.a.run.app' }}
         # suite-health.spec.ts is the tripwire the repo built for "70 auth-gated
         # tests silently skip and the run still reads green" — and then left out
         # of this very list, so it never fired (audit A6, 1 Sep 2026). It is IN
