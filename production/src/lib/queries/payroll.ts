@@ -371,6 +371,8 @@ export function usePaySalary() {
       employeeId: string; period: string; payDate: string; gross: number;
       lopDays: number; lopAmount: number; incentive?: number; advanceRecovered: number; advanceLoanId?: string | null;
       tds: number; pf: number; esi: number; esiEmployer?: number; pfEmployer?: number; other: number; bankAccountId: string; notes?: string | null;
+      /** The PF wage the form computed (Basic + DA prorated) — kept on the payslip for the ECR. */
+      pfWage?: number | null;
     }) => {
       const supabase = createClient();
       const { error } = await supabase.rpc("pay_salary", {
@@ -388,6 +390,7 @@ export function usePaySalary() {
         p_esi:               input.esi,
         p_esi_employer:      input.esiEmployer ?? 0,
         p_pf_employer:       input.pfEmployer ?? 0,
+        p_pf_wage:           input.pfWage ?? null,
         p_other:             input.other,
         p_bank_account_id:   input.bankAccountId,
         p_notes:             input.notes ?? null,
@@ -515,6 +518,47 @@ export function useEsiRegister() {
 
       const { data: paidRows } = await supabase
         .from("statutory_dues_payments").select("amount, kind").eq("kind", "esi");
+      const paid = (paidRows ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
+      const accrued = rows.reduce((s, r) => s + r.total, 0);
+      return { rows, accrued, paid, outstanding: Math.max(0, accrued - paid) };
+    },
+    staleTime: 30_000,
+  });
+}
+
+export interface PfRegisterRow {
+  period: string; employee: string; uan: string | null;
+  gross: number; lopAmount: number; lopDays: number;
+  pfWage: number | null;         // null = payslip from before 20260927180000
+  employeeShare: number; employerShare: number; total: number;
+}
+export interface PfRegister { rows: PfRegisterRow[]; accrued: number; paid: number; outstanding: number }
+
+/** PF register — every payslip that carried a PF contribution, newest first, with
+ *  accrued-vs-paid; feeds the EPFO ECR export (lib/payroll/ecr.ts). */
+export function usePfRegister() {
+  return useQuery({
+    queryKey: ["pf-register"],
+    queryFn: async (): Promise<PfRegister> => {
+      const supabase = createClient();
+      const { data: sal, error } = await supabase
+        .from("salary_payments")
+        .select("period, pf, pf_employer, pf_wage, employee_id, gross, lop_days, lop_amount")
+        .or("pf.gt.0,pf_employer.gt.0")
+        .order("period", { ascending: false });
+      if (error) throw error;
+      const { data: emps } = await supabase.from("employees").select("id, name, pf_no");
+      const empMap = new Map((emps ?? []).map((e) => [e.id, e]));
+      const rows: PfRegisterRow[] = (sal ?? []).map((r) => {
+        const e = empMap.get(r.employee_id);
+        return {
+          period: r.period, employee: e?.name ?? "—", uan: e?.pf_no ?? null,
+          gross: r.gross ?? 0, lopAmount: r.lop_amount ?? 0, lopDays: Number(r.lop_days ?? 0),
+          pfWage: r.pf_wage ?? null,
+          employeeShare: r.pf ?? 0, employerShare: r.pf_employer ?? 0, total: (r.pf ?? 0) + (r.pf_employer ?? 0),
+        };
+      });
+      const { data: paidRows } = await supabase.from("statutory_dues_payments").select("amount, kind").eq("kind", "pf");
       const paid = (paidRows ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
       const accrued = rows.reduce((s, r) => s + r.total, 0);
       return { rows, accrued, paid, outstanding: Math.max(0, accrued - paid) };

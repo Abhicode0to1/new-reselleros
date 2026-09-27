@@ -2537,6 +2537,8 @@ type SalaryPaymentRow = {
   paid_status:       "unpaid" | "partial" | "paid";
   paid_amount:       number;
   reconciled_txn_id: string | null;
+  /** PF wage the payslip was computed on (migration 20260927180000); null on older rows. */
+  pf_wage:           number | null;
   created_at:        string;
 };
 type SalaryPaymentInsert = Partial<SalaryPaymentRow> & { tenant_id: string; employee_id: string; period: string; pay_date: string; gross: number; net: number };
@@ -5261,6 +5263,7 @@ export type Database = {
           p_incentive?:        number;
           p_esi_employer?:     number;
           p_pf_employer?:      number;
+          p_pf_wage?:          number | null;
         };
         Returns: string;
       };

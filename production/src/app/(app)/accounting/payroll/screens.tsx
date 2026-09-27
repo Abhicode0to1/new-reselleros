@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { daysElapsedInPeriod, prorateSalary } from "@/lib/payroll/proration";
 import { nationalHolidaysForYear, FIXED_NATIONAL_HOLIDAYS, indiaPublicHolidaysForYear } from "@/lib/payroll/holidays-india";
-import { computeEsi, isEsiEligible, ESI_WAGE_CEILING } from "@/lib/payroll/esi";
+import { computeEsi, isEsiEligible, esiStickyCovered, ESI_WAGE_CEILING } from "@/lib/payroll/esi";
 import { computePf, pfWage, pfWageCeiling, PF_EMPLOYER_RATE } from "@/lib/payroll/pf";
 import { calculateCtcBreakdown } from "@/lib/payroll/ctc";
 import { useBankAccounts } from "@/lib/queries/bank";
@@ -1500,7 +1500,11 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
   //    company cost, NOT deducted). Base = monthly wage (gross − LOP), bonus
   //    excluded. Coverage comes from the employee's esi_applicable flag.
   const esiWage = Math.max(0, grossN - lopN);
-  const esiCalc = computeEsi(esiWage, employee.esi_applicable);
+  /* Contribution-period rule: covered in Apr–Sep / Oct–Mar once → covered till its end,
+     even above ₹21,000 (lib/payroll/esi.ts). Read from this employee's own payslips. */
+  const { data: esiHistory } = useEmployeeSalaryHistory(employee.id);
+  const esiSticky = esiStickyCovered(period, esiHistory ?? []);
+  const esiCalc = computeEsi(esiWage, employee.esi_applicable, esiSticky);
   React.useEffect(() => {
     if (!esiEdited) setEsi(String(esiCalc.employee));
   }, [esiCalc.employee, esiEdited]);
@@ -1577,6 +1581,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
       lopDays: Number(lopDays) || 0, lopAmount: lopN, incentive: bonusN,
       advanceRecovered: advN, advanceLoanId: advN > 0 ? advId : null,
       tds: tdsN, pf: pfN, esi: esiN, esiEmployer: esiEmployerN, pfEmployer: pfEmployerN, other: otherN, bankAccountId: accountId,
+      pfWage: employee.pf_applicable ? pfCalc.base : null,
     });
     onClose();
   }
@@ -1715,9 +1720,12 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
                   <span>Total ESIC due this month (employee + employer)</span>
                   <span className="font-mono text-ink font-semibold">{rupee(esiN + esiEmployerN)}</span>
                 </div>
+                {esiSticky && esiWage > ESI_WAGE_CEILING && (
+                  <div className="text-amber-ink">Wage ₹{ESI_WAGE_CEILING.toLocaleString("en-IN")} se upar hai, par is contribution period mein pehle se cover the — period khatam hone tak ESI lagega.</div>
+                )}
               </div>
             ) : (
-              <p className="text-2xs text-ink-3">ESI not applicable — gross above the ₹{ESI_WAGE_CEILING.toLocaleString("en-IN")} ceiling (or turned off for this employee).</p>
+              <p className="text-2xs text-ink-3">ESI not applicable — gross above the ₹{ESI_WAGE_CEILING.toLocaleString("en-IN")} ceiling (or turned off for this employee).{employee.esi_applicable && esiWage > ESI_WAGE_CEILING ? " Agar is contribution period (Apr–Sep / Oct–Mar) ke pehle mahine mein cover the to ESI chalta rehta — is employee ki us period ki koi payslip ESI ke saath nahi mili." : ""}</p>
             )}
             {employee.pf_applicable && (
               <div className="rounded bg-paper-2/50 px-2.5 py-2 text-2xs text-ink-2 space-y-0.5">
