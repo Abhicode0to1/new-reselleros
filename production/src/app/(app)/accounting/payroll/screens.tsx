@@ -36,7 +36,7 @@ import { useBankAccounts } from "@/lib/queries/bank";
 import { useEmployeeLoans } from "@/lib/queries/employee-loans";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { downloadPayslipPDF } from "@/lib/pdf";
-import { periodLabel } from "@/lib/pdf/PayslipPDF";
+import { periodLabel } from "@/lib/payroll/period-label";
 import { toast } from "sonner";
 import {
   useEmployees, useUpsertEmployee, useDeleteEmployee, useSetEmployeePin,

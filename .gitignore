@@ -105,3 +105,6 @@ supabase/.branches/
 # ===== Misc =====
 .vercel
 .netlify
+
+# One-off maintenance scripts (named after real people/incidents) — keep local, not in git
+production/scratch/

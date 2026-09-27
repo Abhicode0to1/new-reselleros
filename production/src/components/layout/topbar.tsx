@@ -182,8 +182,11 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
       </div>
 
       {/* Mounted panels */}
-      <CommandPalette open={cmdk.isOpen} onOpenChange={cmdk.setOpen} />
-      <NotificationPanel open={notifOpen} onOpenChange={setNotifOpen} />
+      {/* Mounted only while open. Both panels run ~14 unbounded table reads (leads, customers,
+         quotes, invoices, subscriptions, payments, contacts, tasks) the moment they mount, and
+         they used to mount on every page — closed. Deep study, 27 Sep 2026. */}
+      {cmdk.isOpen && <CommandPalette open onOpenChange={cmdk.setOpen} />}
+      {notifOpen && <NotificationPanel open onOpenChange={setNotifOpen} />}
       <QuickActionsPanel open={actionsOpen} onOpenChange={setActionsOpen} />
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </header>

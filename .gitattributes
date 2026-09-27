@@ -1,0 +1,15 @@
+# Normalise line endings in the index (LF). No `eol=` here on purpose: forcing a
+# working-tree ending would renormalise 1,400 files in one commit and hand every
+# open branch a conflict. The index is already LF; this just keeps it that way.
+* text=auto
+
+# Binary — never diff or normalise
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.ttf binary
+*.woff binary
+*.woff2 binary

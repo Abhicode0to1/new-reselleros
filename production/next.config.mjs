@@ -54,6 +54,10 @@ const nextConfig = {
     instrumentationHook: true,
   },
   images: {
+    /* Deep study 27 Sep 2026: next 14.2.35 carries an unauthenticated RCE advisory in the
+       Image Optimization API (AVIF path). Until the Next 15/16 upgrade lands, serve images
+       as-is — the app has 4 next/image call sites, nothing that needs on-the-fly resizing. */
+    unoptimized: true,
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
       { protocol: "https", hostname: "upload.wikimedia.org" },

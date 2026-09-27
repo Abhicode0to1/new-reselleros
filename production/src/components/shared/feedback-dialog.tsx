@@ -3,7 +3,6 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
-import html2canvas from "html2canvas";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useSubmitFeedback } from "@/lib/queries/feedback";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -80,6 +79,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
       onOpenChange(false);
       await new Promise((resolve) => setTimeout(resolve, 220));
 
+      // Loaded on click only: this dialog is mounted in the topbar of every page, and a
+      // static import shipped ~200 KB of html2canvas in every app bundle.
+      const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(document.body, {
         useCORS: true,
         allowTaint: true,

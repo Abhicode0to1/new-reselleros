@@ -37,7 +37,11 @@ const PROTECTED_PREFIXES = [
   "/compliance",      // Pvt Ltd statutory compliance tracker
   "/accounting",      // /accounting/bills, /accounting/pnl, etc.
   "/whatsapp",
-  "/automations",
+  "/automation",     // was "/automations" — the page was never gated (deep study, 27 Sep 2026)
+  "/activity",
+  "/help",
+  "/scorecard",
+  "/purchases",
   "/campaigns",
   "/online-promos",
   "/coupons",

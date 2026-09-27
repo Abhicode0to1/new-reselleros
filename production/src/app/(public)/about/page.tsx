@@ -63,7 +63,7 @@ export default function AboutPage() {
             <li>✔ A GST-compliant invoicing engine (HSN 998313 built-in)</li>
             <li>✔ A renewal automation engine that won&rsquo;t let a customer churn silently</li>
             <li>✔ A bank reconciliation module that imports statements + auto-matches</li>
-            <li>✔ A customer portal so your customers self-serve invoices + tickets</li>
+            <li>✔ Quote links your customers open, accept and pay from — no login needed</li>
             <li>✔ A WhatsApp + email engine to nudge prospects without leaving the app</li>
             <li>✔ A reporting layer that finally tells you who&rsquo;s actually profitable</li>
           </ul>
