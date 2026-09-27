@@ -32,6 +32,12 @@ import {
 import { planFifo, openBalancesByVendor } from "@/lib/accounting/prepaid-fifo";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { AD_CHANNELS, isMarketingCategory, suggestAdChannel } from "@/lib/marketing/ad-channels";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useVendorTdsThisFy } from "@/lib/queries/expenses";
+import { isInterStateSupply } from "@/lib/gst/place-of-supply";
+import { itcEligibility } from "@/lib/gst/itc";
+import { tdsDecision, panFromGstin } from "@/lib/accounting/tds-deductor";
+import { TDS_SECTION_RATES } from "@/lib/accounting/tds-rates";
 
 const CATEGORIES = ["Marketing", "Advertising", "Software / SaaS", "Hosting", "Subscriptions", "Other"];
 const METHODS = ["bank_transfer", "upi", "card", "cheque", "cash"];
@@ -512,16 +518,45 @@ function BookInvoiceDialog({ advances, onClose }: { advances: PrepaidAdvance[]; 
   const [gst, setGst] = React.useState("");
   const [date, setDate] = React.useState(localDateISO(new Date()));
   const [note, setNote] = React.useState("");
+  const [billNo, setBillNo] = React.useState("");
 
   const amt = Math.round(Number(amount) || 0);
   const gstAmt = Math.round(Number(gst) || 0);
   const plan = vendor && amt > 0 ? planFifo(advances, vendor, amt, gstAmt) : null;
   const balance = vendors.find((v) => v.vendor === vendor)?.balance ?? 0;
 
+  /* ── Tax facts on the invoice (migration 20260927210000) ─────────────────────
+     Vendor master → GSTIN → ITC yes/no and the GST head (IGST when the vendor's state
+     differs from ours); TDS section with the year-to-date threshold check — an
+     advertising bill is 194C even though the money went out as an advance. */
+  const { data: me } = useCurrentUser();
+  const { data: vendorMaster } = useVendors();
+  const vendorRow = React.useMemo(() => {
+    const key = vendor.trim().toUpperCase();
+    const adv = advances.find((a) => a.vendor_name.trim().toUpperCase() === key && a.vendor_id);
+    return (vendorMaster ?? []).find((v) => v.id === adv?.vendor_id) ?? (vendorMaster ?? []).find((v) => v.name.trim().toUpperCase() === key) ?? null;
+  }, [vendor, advances, vendorMaster]);
+  const interState = isInterStateSupply(null, me?.tenantStateCode ?? null, { customerGstin: vendorRow?.gstin ?? null, sellerGstin: me?.tenantGstin ?? null });
+  const heads = gstAmt > 0 ? (interState ? { igst: gstAmt, cgst: 0, sgst: 0 } : { igst: 0, cgst: Math.floor(gstAmt / 2), sgst: gstAmt - Math.floor(gstAmt / 2) }) : null;
+  const itc = itcEligibility({ gst_paid: gstAmt, bill_type: gstAmt > 0 ? "gst" : "none", category: advances.find((a) => a.vendor_name === vendor)?.category ?? "Advertising", vendorGstin: vendorRow?.gstin ?? null });
+  const [tdsSection, setTdsSection] = React.useState<string>("194C");
+  const [tdsEdited, setTdsEdited] = React.useState(false);
+  const [tds, setTds] = React.useState("0");
+  const { data: tdsSoFar } = useVendorTdsThisFy(vendorRow?.id ?? null, vendor, tdsSection, date);
+  const tdsView = tdsSection && tdsSoFar && amt > 0
+    ? tdsDecision({ section: tdsSection, base: amt - gstAmt, fyBaseSoFar: tdsSoFar.base, fyBaseWithoutTds: tdsSoFar.baseWithoutTds, pan: vendorRow?.pan ?? panFromGstin(vendorRow?.gstin) })
+    : null;
+  React.useEffect(() => { if (!tdsEdited && tdsView) setTds(String(tdsView.tds)); if (!tdsSection) setTds("0"); }, [tdsView?.tds, tdsEdited, tdsSection]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tdsAmt = Math.max(0, Math.round(Number(tds) || 0));
+
   async function submit() {
     if (!plan?.ok) return;
     try {
-      await book.mutateAsync({ vendorName: vendor, amount: amt, gst: gstAmt, date, note: note.trim() || null });
+      await book.mutateAsync({
+        vendorName: vendor, amount: amt, gst: gstAmt, date, note: note.trim() || null,
+        vendorId: vendorRow?.id ?? null, billNo: billNo.trim() || null, heads,
+        tdsSection: tdsAmt > 0 ? tdsSection : null, tdsAmount: tdsAmt,
+      });
       onClose();
     } catch { /* hook toasts */ }
   }
@@ -565,10 +600,45 @@ function BookInvoiceDialog({ advances, onClose }: { advances: PrepaidAdvance[]; 
             <FormField label="Invoice date" required htmlFor="inv_date">
               <Input id="inv_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </FormField>
-            <FormField label="Invoice no. / note" htmlFor="inv_note">
-              <Input id="inv_note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. FBADS-2026-07" />
+            <FormField label="Invoice no." htmlFor="inv_bill">
+              <Input id="inv_bill" value={billNo} onChange={(e) => setBillNo(e.target.value)} placeholder="e.g. FBADS-2026-07" />
             </FormField>
           </div>
+          <FormField label="Note" htmlFor="inv_note">
+            <Input id="inv_note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="optional" />
+          </FormField>
+
+          {/* GST: which head, and whether it is credit at all. */}
+          {gstAmt > 0 && (
+            <div className={`rounded-md border p-2.5 text-2xs ${itc.eligible ? "border-hairline bg-paper-2/30 text-ink-2" : "border-amber/40 bg-amber-soft/20 text-amber-ink"}`}>
+              {vendorRow?.gstin
+                ? <>Vendor <b>{vendorRow.name}</b> · GSTIN {vendorRow.gstin} → {interState ? <>inter-state: <b>IGST {rupee(gstAmt)}</b></> : <>same state: <b>CGST {rupee(heads!.cgst)} + SGST {rupee(heads!.sgst)}</b></>}.</>
+                : <>Vendor master mein <b>{vendor}</b> ka GSTIN nahi — GST head maan kar CGST/SGST likha jayega aur <b>ITC nahi milega</b> (lib/gst/itc.ts). Vendors page par GSTIN bharo, phir book karo.</>}
+              {!itc.eligible && itc.reason && vendorRow?.gstin ? <span className="block mt-0.5">ITC nahi: {itc.reason}</span> : null}
+            </div>
+          )}
+
+          {/* TDS on the invoice — deductible even though it was paid as an advance. */}
+          <div className="grid grid-cols-12 gap-3">
+            <FormField label="TDS section" htmlFor="inv_tds_sec" className="col-span-6">
+              <select id="inv_tds_sec" value={tdsSection} onChange={(e) => { setTdsSection(e.target.value); setTdsEdited(false); }}
+                className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40">
+                <option value="">No TDS</option>
+                {Object.keys(TDS_SECTION_RATES).map((s) => <option key={s} value={s}>{s}{s === "194C" ? " · Contractor / advertising" : s === "194J" ? " · Professional / technical" : ""}</option>)}
+              </select>
+            </FormField>
+            {tdsSection && (
+              <FormField label="TDS amount (₹)" htmlFor="inv_tds" className="col-span-6">
+                <Input id="inv_tds" type="number" min={0} value={tds} onChange={(e) => { setTds(e.target.value); setTdsEdited(true); }} />
+              </FormField>
+            )}
+          </div>
+          {tdsSection && tdsView && (
+            <p className={`text-2xs ${tdsView.applies ? (tdsView.noPan ? "text-rose" : "text-ink-2") : "text-emerald"}`}>
+              {tdsView.reason}{tdsView.applies && !tdsEdited ? ` ${rupee(tdsView.tds)} apne-aap bhara.` : ""}
+              {tdsView.applies ? " Paisa advance mein poora ja chuka hai — TDS challan se jama karo; vendor ko Form 16A do, wo credit/refund deta hai (Meta/Google TDS certificate lete hain)." : ""}
+            </p>
+          )}
 
           {/* The split, before booking. */}
           {plan && (

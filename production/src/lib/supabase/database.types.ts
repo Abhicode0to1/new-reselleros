@@ -4426,7 +4426,13 @@ export type Database = {
       };
       /** Migration 20260925160000 — one vendor invoice, oldest open advances first. */
       consume_prepaid_fifo: {
-        Args: { p_vendor_name: string; p_amount: number; p_gst?: number; p_date?: string; p_note?: string | null; p_attachment?: string | null };
+        Args: {
+          p_vendor_name: string; p_amount: number; p_gst?: number; p_date?: string; p_note?: string | null; p_attachment?: string | null;
+          /** Migration 20260927210000 — vendor link, bill no, GST heads, TDS on the invoice. */
+          p_vendor_id?: string | null; p_bill_no?: string | null;
+          p_igst?: number | null; p_cgst?: number | null; p_sgst?: number | null;
+          p_tds_section?: string | null; p_tds_amount?: number;
+        };
         Returns: number;
       };
       /** Migration 20260925160000 — money-out bank line → prepaid advance, reconciled. */
