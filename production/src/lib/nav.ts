@@ -502,7 +502,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/compliance/income-tax": ["Compliance", "Income Tax & TDS"],
   "/accounting/loans":         ["Payroll", "Loans & Advances"],
   "/accounting/employees":     ["Payroll", "Employees"],
-  "/accounting/payroll":       ["Payroll", "Payroll"],
+  "/accounting/payroll":       ["Payroll", "Payroll Overview"],
   "/accounting/salary-register": ["Payroll", "Salary Register"],
   "/accounting/leave":         ["Payroll", "Leave Register"],
   "/accounting/attendance":    ["Payroll", "Attendance Register"],
