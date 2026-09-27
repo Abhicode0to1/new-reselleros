@@ -19,7 +19,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { BalanceSheetSection } from "@/lib/supabase/database.types";
-import { gstPaidForFy, incomeTaxPaidForFy } from "@/lib/accounting/tax-payments";
+import { incomeTaxPaidForFy } from "@/lib/accounting/tax-payments";
 import { splitItc } from "@/lib/gst/itc";
 import { statutoryDues } from "@/lib/accounting/tds-deductor";
 
@@ -278,11 +278,13 @@ export function useBalanceSheetAuto() {
       if (reimbErr) throw reimbErr;
       const reimbursementsPayable = (reimb ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
 
-      // GST payable — net for the current fiscal year (output − input). This is
-      // an estimate before any GSTR filing/payment; the page footnotes it.
+      /* GST payable — CUMULATIVE since the books began (27 Sep 2026): every output tax
+         ever charged, less every credit ever earned, less every GST challan ever paid. It
+         used to be this FY only, which silently dropped March's unpaid GST every April and
+         any ITC carried forward from last year. Still an estimate before filing; the page
+         says so. `fyLabel` stays for the income-tax line below. */
       const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
       const fyStartYear = now.getUTCMonth() < 3 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
-      const fyFrom = `${fyStartYear}-04-01`;
       const fyTo   = now.toISOString().slice(0, 10);
       const fyLabel = `FY ${fyStartYear}-${String((fyStartYear + 1) % 100).padStart(2, "0")}`;
 
@@ -292,13 +294,13 @@ export function useBalanceSheetAuto() {
       const { data: invoices } = await supabase
         .from("invoices")
         .select("amount, tax_amount, tax_rate, invoice_date, status")
-        .gte("invoice_date", fyFrom).lte("invoice_date", fyTo)
+        .lte("invoice_date", fyTo)
         .in("status", ["pending", "paid", "overdue"]);
       const invGST = (invoices ?? []).reduce(
         (s, i) => s + (i.tax_amount ?? Math.round((i.amount ?? 0) * (i.tax_rate ?? 18) / (100 + (i.tax_rate ?? 18)))), 0);
       const [{ data: cnFy }, { data: dnFy }] = await Promise.all([
-        supabase.from("credit_notes").select("tax_amount, credit_date").gte("credit_date", fyFrom).lte("credit_date", fyTo),
-        supabase.from("debit_notes").select("tax_amount, debit_date").gte("debit_date", fyFrom).lte("debit_date", fyTo),
+        supabase.from("credit_notes").select("tax_amount, credit_date").lte("credit_date", fyTo),
+        supabase.from("debit_notes").select("tax_amount, debit_date").lte("debit_date", fyTo),
       ]);
       const cnGST = (cnFy ?? []).reduce((s, n) => s + (n.tax_amount ?? 0), 0);
       const dnGST = (dnFy ?? []).reduce((s, n) => s + (n.tax_amount ?? 0), 0);
@@ -307,13 +309,13 @@ export function useBalanceSheetAuto() {
       const { data: fyBills } = await supabase
         .from("vendor_bills")
         .select("cgst, sgst, igst, bill_date")
-        .gte("bill_date", fyFrom).lte("bill_date", fyTo);
+        .lte("bill_date", fyTo);
       const billsGst = (fyBills ?? []).reduce((s, b) => s + (b.cgst ?? 0) + (b.sgst ?? 0) + (b.igst ?? 0), 0);
 
       const { data: fyExp } = await supabase
         .from("expenses")
         .select("gst_paid, expense_date, vendor_id, bill_type, category")
-        .gte("expense_date", fyFrom).lte("expense_date", fyTo);
+        .lte("expense_date", fyTo);
       /* Only claimable credit reduces GST payable (lib/gst/itc.ts, 27 Sep 2026). */
       const { data: vendorRows } = await supabase.from("vendors").select("id, gstin");
       const vendorGstinOf = new Map((vendorRows ?? []).map((v) => [v.id, v.gstin ?? null]));
@@ -328,7 +330,7 @@ export function useBalanceSheetAuto() {
       const { data: taxRows, error: taxErr } = await supabase
         .from("tax_payments").select("kind, amount, period, fy");
       if (taxErr) throw taxErr;
-      const gstPaid = gstPaidForFy(taxRows ?? [], fyStartYear);
+      const gstPaid = (taxRows ?? []).filter((p) => p.kind === "gst").reduce((s, p) => s + (p.amount ?? 0), 0);
       const advanceTaxPaid = incomeTaxPaidForFy(taxRows ?? [], fyStartYear);
 
       const gstPayable = outputGST - billsGst - expGst - gstPaid;

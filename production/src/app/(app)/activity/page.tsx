@@ -12,6 +12,34 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import { useActivityLog, type ActivityRow } from "@/lib/queries/activity";
 
+/* The columns worth reading in a feed line — money and dates. Everything else in
+   `changes` is still there for an export; a feed that prints every jsonb key is noise. */
+const SHOWN_FIELDS = ["amount", "gst_paid", "tds_amount", "net", "gross", "paid_amount", "expense_date", "pay_date", "paid_on", "invoice_date", "status", "category", "vendor_name", "kind", "period", "channel", "bank_account_id"];
+function fmtVal(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "number") return v.toLocaleString("en-IN");
+  return String(v);
+}
+function ChangeLine({ changes, action }: { changes: Record<string, unknown> | null; action: string }) {
+  if (!changes) return null;
+  if (action === "delete") {
+    const old = changes.old as Record<string, unknown> | undefined;
+    if (!old) return null;
+    const bits = SHOWN_FIELDS.filter((k) => old[k] !== undefined && old[k] !== null).slice(0, 4).map((k) => `${k} ${fmtVal(old[k])}`);
+    return bits.length ? <span className="block text-2xs text-ink-3 mt-0.5 font-mono">tha: {bits.join(" · ")}</span> : null;
+  }
+  const keys = Object.keys(changes);
+  const shown = keys.filter((k) => SHOWN_FIELDS.includes(k));
+  const rest = keys.length - shown.length;
+  if (!shown.length && !rest) return null;
+  return (
+    <span className="block text-2xs text-ink-3 mt-0.5 font-mono">
+      {shown.map((k) => { const c = changes[k] as { old?: unknown; new?: unknown }; return `${k}: ${fmtVal(c?.old)} → ${fmtVal(c?.new)}`; }).join(" · ")}
+      {rest > 0 ? `${shown.length ? " · " : ""}+${rest} aur field` : ""}
+    </span>
+  );
+}
+
 const ENTITY_LABEL: Record<string, string> = {
   leads: "lead", customers: "customer", contacts: "contact", quotes: "quote",
   invoices: "invoice", payments: "payment", expenses: "expense",
@@ -114,6 +142,7 @@ export default function ActivityLogPage() {
                           {r.entity !== "session" ? `${ENTITY_LABEL[r.entity] ?? r.entity} ` : ""}{ACTION_VERB[r.action] ?? r.action}
                         </span>
                         {r.label ? <span className="text-ink-2"> — {r.label}</span> : null}
+                        <ChangeLine changes={r.changes} action={r.action} />
                       </div>
                       <span className="shrink-0 text-2xs text-ink-3 tabular-nums">{timeOf(r.created_at)}</span>
                     </li>

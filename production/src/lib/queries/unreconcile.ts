@@ -76,14 +76,18 @@ export function useUnreconcileBankTxn() {
         p_undo_sale: input.undoSale,
       });
       if (error) throw error;
-      return data as { invoice_voided: string | null; receipt_removed: string | null };
+      return data as { invoice_voided: string | null; invoice_credited: string | null; credit_note_id: string | null; receipt_removed: string | null };
     },
     onSuccess: (res) => {
       for (const k of ["bank_transactions", "bank_accounts", "invoices", "quotes", "payments", "customers", "aging",
                        "salary-payments", "expenses", "balance-sheet", "tax-payments", "project_sales", "accounting", "itr-pack"]) {
         qc.invalidateQueries({ queryKey: [k] });
       }
-      toast.success(res?.invoice_voided ? `Un-reconciled · invoice ${res.invoice_voided} void, receipt hata di` : "Un-reconciled");
+      toast.success(
+        res?.invoice_credited ? `Un-reconciled · invoice ${res.invoice_credited} par credit note ${res.credit_note_id ?? ""} ban gaya, receipt hata di`
+        : res?.invoice_voided ? `Un-reconciled · draft invoice ${res.invoice_voided} void, receipt hata di`
+        : "Un-reconciled",
+      );
     },
     onError: (err) => toastError(err, { fallback: "Un-reconcile failed" }),
   });

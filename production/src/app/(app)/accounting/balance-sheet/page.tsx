@@ -39,6 +39,7 @@ import {
   type BalanceSheetItem,
 } from "@/lib/queries/balance-sheet";
 import type { BalanceSheetSection } from "@/lib/supabase/database.types";
+import { usePnL, BOOKS_START } from "@/lib/queries/pnl";
 
 export default function BalanceSheetPage() {
   const { data: auto, isLoading: autoLoading } = useBalanceSheetAuto();
@@ -73,7 +74,14 @@ export default function BalanceSheetPage() {
   const totalAssets = autoAssets + sum(manualAssetRows);
   const totalLiab   = autoLiab + sum(manualLiabRows);
   const netWorth    = totalAssets - totalLiab;                 // = total equity
-  const retained    = netWorth - sum(manualEqRows);            // balancing plug
+  const retained    = netWorth - sum(manualEqRows);            // what equity must hold for the sheet to balance
+  /* Retained earnings PER THE BOOKS — cumulative net profit from the P&L, all periods
+     (27 Sep 2026). The plug above used to be shown AS retained earnings, which hid every
+     missing entry inside a number that always looked right. Now the P&L figure is the
+     retained earnings, and the gap between the two is printed as what it is. */
+  const cumulative = usePnL({ from: BOOKS_START, to: today });
+  const cumulativeProfit = cumulative.data ? (cumulative.data.model.netProfit ?? cumulative.data.netProfit) : null;
+  const unexplained = cumulativeProfit === null ? null : retained - cumulativeProfit;
 
   // ── Solvency ratios (liquidity + leverage) ──────────────────────────────
   // Current = liquid within a year. Long-term items (fixed assets, staff loans,
@@ -124,7 +132,8 @@ export default function BalanceSheetPage() {
         ["", ""],
         ["EQUITY", ""],
         ...manualEqRows.map((r): [string, number] => [r.label, r.amount]),
-        ["Retained earnings (derived)", retained],
+        ["Retained earnings (cumulative net profit per P&L)", cumulativeProfit ?? ""],
+        ["Unexplained difference (balancing figure)", unexplained ?? retained],
         ["Net worth (total equity)", netWorth],
       ],
     );
@@ -178,7 +187,7 @@ export default function BalanceSheetPage() {
             Auto figures (cash &amp; bank, receivables, TDS, payables, GST) come from your
             ResellerOS records. Add manual lines for anything the app doesn&apos;t track —
             fixed assets, loans, owner&apos;s capital, drawings — to make this a complete,
-            CA-ready sheet. <b>Equity&apos;s retained earnings is derived so the sheet balances.</b>
+            CA-ready sheet. <b>Retained earnings comes from the P&amp;L; whatever the sheet still needs to balance is shown separately as an unexplained difference.</b>
           </span>
         </p>
       </Card>
@@ -308,28 +317,38 @@ export default function BalanceSheetPage() {
                   />
                   <BSLine
                     label="Retained earnings"
-                    hint="derived so the sheet balances"
-                    amount={retained}
-                    kind="derived"
-                    onInfo={() => setRetainedInfoOpen((o) => !o)}
+                    hint={cumulativeProfit === null ? "cumulative net profit per P&L — loading…" : "cumulative net profit per P&L, all periods"}
+                    amount={cumulativeProfit ?? 0}
+                    kind="auto" source="P&L" href="/accounting/pnl"
                   />
+                  {(unexplained === null || unexplained !== 0) && (
+                    <BSLine
+                      label="Unexplained difference"
+                      hint={unexplained === null ? "assets − liabilities − equity, before the P&L loads" : unexplained > 0 ? "assets exceed what the books explain — an opening balance, capital or income not entered" : "liabilities exceed what the books explain — drawings, a loss or an expense not entered"}
+                      amount={unexplained ?? retained}
+                      kind="derived"
+                      onInfo={() => setRetainedInfoOpen((o) => !o)}
+                    />
+                  )}
                   {retainedInfoOpen && (
                     <div className="mt-1 mb-1 rounded-md border border-hairline bg-paper-2/40 p-3 text-[12px] text-ink-2 leading-relaxed">
                       <p className="font-semibold text-ink mb-1.5 flex items-center gap-1.5">
-                        <Icon name="info" size={13} className="text-amber-ink" /> How retained earnings is derived
+                        <Icon name="info" size={13} className="text-amber-ink" /> What the unexplained difference is
                       </p>
                       <p className="mb-2">
-                        This is a <b>balancing figure</b>, not a stored P&amp;L number — it&apos;s whatever makes
-                        <b> Assets = Liabilities + Equity</b> hold exactly.
+                        <b>Assets = Liabilities + Equity</b> must hold. Equity per the books is owner&apos;s capital (manual lines)
+                        plus retained earnings from the P&amp;L. Whatever is left over is an entry the books don&apos;t have —
+                        it is shown here as a <b>balancing figure</b>, not hidden inside retained earnings.
                       </p>
                       <div className="font-mono text-2xs space-y-1 bg-paper rounded p-2 border border-hairline">
                         <div className="flex justify-between gap-3"><span>Total assets</span><span className="tabular-nums">{fmtBS(totalAssets)}</span></div>
                         <div className="flex justify-between gap-3"><span>− Total liabilities</span><span className="tabular-nums">{fmtBS(totalLiab)}</span></div>
                         <div className="flex justify-between gap-3"><span>− Owner&apos;s capital &amp; other manual equity</span><span className="tabular-nums">{fmtBS(sum(manualEqRows))}</span></div>
-                        <div className="flex justify-between gap-3 border-t border-hairline pt-1 font-semibold text-ink"><span>= Retained earnings</span><span className="tabular-nums">{fmtBS(retained)}</span></div>
+                        <div className="flex justify-between gap-3"><span>− Retained earnings (P&amp;L, all periods)</span><span className="tabular-nums">{fmtBS(cumulativeProfit ?? 0)}</span></div>
+                        <div className="flex justify-between gap-3 border-t border-hairline pt-1 font-semibold text-ink"><span>= Unexplained difference</span><span className="tabular-nums">{fmtBS(unexplained ?? retained)}</span></div>
                       </div>
                       <p className="mt-2 text-2xs text-ink-3">
-                        A true P&amp;L-based figure (cumulative net income − owner drawings) needs closed-period books — a future enhancement. For now this keeps the sheet balanced and CA-explainable.
+                        Usual causes: bank opening balances entered without the matching capital line, owner drawings taken without an entry, or income / expense that never reached the books. Add the missing line (Owner&apos;s capital, Drawings) and this goes to zero.
                       </p>
                     </div>
                   )}
