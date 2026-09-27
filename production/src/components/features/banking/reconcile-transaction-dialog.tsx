@@ -337,6 +337,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const [statutoryKind, setStatutoryKind] = React.useState<"esi" | "pf" | "tds" | "mixed" | "gst" | "income_tax">("esi");
   const bookTax = useBookBankTxnAsTax();
   const [gstPeriod, setGstPeriod] = React.useState("");
+  const [duesPeriod, setDuesPeriod] = React.useState("");
+  const [challanNo, setChallanNo] = React.useState("");
   const [taxInterest, setTaxInterest] = React.useState("");
   const [taxLateFee, setTaxLateFee] = React.useState("");
   const [itKind, setItKind] = React.useState<"advance_tax" | "self_assessment_tax">("advance_tax");
@@ -421,6 +423,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
           accountId:     transaction.bank_account_id,
           kind:          statutoryKind,
           notes:         transaction.description,
+          challanNo:     challanNo.trim() || null,
+          period:        duesPeriod || null,
         });
       }
       onOpenChange(false);
@@ -564,7 +568,13 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 </div>
               </div>
             ) : (
-              <p className="text-2xs text-ink-3">Clears it from your TDS / PF / ESI “dues payable”.</p>
+              <div className="space-y-2">
+                <p className="text-2xs text-ink-3">Clears it from your TDS / PF / ESI “dues payable”. Mahina aur challan number likh do — 26Q / ECR mein quote hota hai.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Input type="month" value={duesPeriod} onChange={(e) => setDuesPeriod(e.target.value)} aria-label="Month the challan paid for" />
+                  <Input value={challanNo} onChange={(e) => setChallanNo(e.target.value)} placeholder="Challan / CIN no. (optional)" maxLength={40} aria-label="Challan number" />
+                </div>
+              </div>
             )}
 
             <Button

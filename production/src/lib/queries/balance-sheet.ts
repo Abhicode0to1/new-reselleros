@@ -21,6 +21,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { BalanceSheetSection } from "@/lib/supabase/database.types";
 import { gstPaidForFy, incomeTaxPaidForFy } from "@/lib/accounting/tax-payments";
 import { splitItc } from "@/lib/gst/itc";
+import { statutoryDues } from "@/lib/accounting/tds-deductor";
 
 export type BalanceSheetItem = {
   id:         string;
@@ -42,7 +43,7 @@ export interface BalanceSheetAuto {
   fixedAssets:     number;   // cost of assets bought on EMI (an asset)
   payables:        number;   // unpaid vendor bills (total − paid)
   salaryPayable:   number;   // net salary accrued (payroll run) but not yet paid out — a liability
-  salaryDuesPayable: number; // withheld TDS/PF/ESI not yet paid to govt (a liability)
+  salaryDuesPayable: number; // statutory dues: salary TDS/PF/ESI (both shares) + vendor TDS, less challans
   reimbursementsPayable: number; // company expenses paid from someone's own card/cash, not yet repaid (a liability)
   creditCardPayable: number; // outstanding owed on company credit-card accounts (a liability)
   emiLoansPayable: number;   // outstanding EMI/asset loans (a liability)
@@ -243,22 +244,30 @@ export function useBalanceSheetAuto() {
       // we only count the tds/pf/esi of paid rows toward that (unpaid rows'
       // whole net, incl. deductions, sits here until the bank debit clears).
       const { data: salRows, error: salErr } = await supabase
-        .from("salary_payments").select("net, paid_amount, tds, pf, esi, paid_status");
+        .from("salary_payments").select("net, paid_amount, tds, pf, esi, pf_employer, esi_employer, paid_status");
       if (salErr) throw salErr;
       // Payable = the still-owed slice: full net while unpaid, the remaining
       // (net − paid_amount) while partially paid, nothing once fully paid.
       const salaryPayable = (salRows ?? [])
         .filter((r) => r.paid_status !== "paid")
         .reduce((s, r) => s + Math.max(0, (r.net ?? 0) - (r.paid_amount ?? 0)), 0);
-      // Salary dues payable — withheld TDS/PF/ESI on ALREADY-PAID salaries
-      // (once paid, the net is out but the statutory portion is still owed to govt).
-      const withheld = (salRows ?? [])
-        .filter((r) => r.paid_status === "paid")
-        .reduce((s, r) => s + (r.tds ?? 0) + (r.pf ?? 0) + (r.esi ?? 0), 0);
-      const { data: duesPaid, error: dpErr } = await supabase.from("statutory_dues_payments").select("amount");
+      /* Statutory dues payable (27 Sep 2026) — owed the moment a salary is BOOKED, paid or
+         not (an unpaid salary's net sits above; its deductions sit here), employer PF/ESI
+         included (the company's cost AND its due), plus TDS withheld on vendor payments
+         (26Q). Less every challan. Same sum as Payroll's banner — lib/accounting/tds-deductor.ts.
+         Before this only paid rows' employee share counted, so the liability was understated
+         by the employer share and by every unpaid month. */
+      const [{ data: duesPaid, error: dpErr }, { data: vendorTdsRows, error: vtErr }] = await Promise.all([
+        supabase.from("statutory_dues_payments").select("kind, amount"),
+        supabase.from("expenses").select("tds_amount").gt("tds_amount", 0),
+      ]);
       if (dpErr) throw dpErr;
-      const duesPaidTotal = (duesPaid ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
-      const salaryDuesPayable = Math.max(0, withheld - duesPaidTotal);
+      if (vtErr) throw vtErr;
+      const salaryDuesPayable = statutoryDues({
+        salaries: salRows ?? [],
+        vendorTds: (vendorTdsRows ?? []).reduce((s, r) => s + (r.tds_amount ?? 0), 0),
+        paid: duesPaid ?? [],
+      }).payable;
 
       // Reimbursements payable — company expenses paid from a person's own
       // card/cash and not yet repaid. The expense already hit the P&L; this is

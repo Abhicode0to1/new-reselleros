@@ -36,6 +36,7 @@ import { useConfirm } from "@/components/providers/confirm-provider";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { groupExpenses, type GroupBy } from "@/lib/accounting/expense-groups";
+import { panFromGstin } from "@/lib/accounting/tds-deductor";
 
 type DateRange = { from: string; to: string };
 
@@ -342,17 +343,18 @@ export default function ExpensesPage() {
       return;
     }
     const vids = Array.from(new Set(exps.map((e) => e.vendor_id).filter(Boolean))) as string[];
-    const gstinByVid = new Map<string, string | null>();
+    /* PAN: the vendor's own (migration 20260927130000), else lifted from a well-formed GSTIN. */
+    const panByVid = new Map<string, string>();
     if (vids.length) {
-      const { data: vends } = await supabase.from("vendors").select("id, gstin").in("id", vids);
-      for (const v of vends ?? []) gstinByVid.set(v.id, v.gstin ?? null);
+      const { data: vends } = await supabase.from("vendors").select("id, gstin, pan").in("id", vids);
+      for (const v of vends ?? []) panByVid.set(v.id, v.pan ?? panFromGstin(v.gstin) ?? "");
     }
-    const panFrom = (g: string | null | undefined) => (g && g.length >= 12 ? g.slice(2, 12) : "");
+    const panFrom = (vid: string | null | undefined) => (vid ? panByVid.get(vid) ?? "" : "");
     const rows = exps.slice()
       .sort((a, b) => (a.vendor_name ?? "").localeCompare(b.vendor_name ?? "") || a.expense_date.localeCompare(b.expense_date))
       .map((e) => [
         e.vendor_name ?? "—",
-        panFrom(gstinByVid.get(e.vendor_id ?? "")),
+        panFrom(e.vendor_id),
         e.tds_section ?? "",
         e.expense_date,
         (e.amount ?? 0) - (e.gst_paid ?? 0),   // amount on which TDS applies (ex-GST base)
@@ -368,7 +370,7 @@ export default function ExpensesPage() {
     const totalTds = exps.reduce((s, e) => s + (e.tds_amount ?? 0), 0);
     const missingPan = rows.filter((r) => !r[1]).length;
     let msg = `26Q working — ${rows.length} rows, TDS ${rupee(totalTds)}. Import into your TDS software / RPU (app can't make the FVU).`;
-    if (missingPan) msg += ` ⚠ ${missingPan} row(s) missing PAN — add the vendor's GSTIN.`;
+    if (missingPan) msg += ` ⚠ ${missingPan} row(s) missing PAN — add it on the Vendors page (bina PAN ke 20% u/s 206AA).`;
     toast.success(msg);
   }
 

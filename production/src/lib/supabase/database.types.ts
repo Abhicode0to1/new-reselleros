@@ -2170,6 +2170,8 @@ export type VendorRow = {
   city:             string | null;
   state:            string | null;
   pincode:          string | null;
+  /** Deductee PAN for 26Q (migration 20260927130000). 4th letter = who they are; none → s.206AA 20%. */
+  pan:              string | null;
   notes:            string | null;
   created_at:       string;
   updated_at:       string;
@@ -2681,6 +2683,8 @@ type StatutoryDuesPaymentRow = {
   bank_account_id: string | null;
   notes:           string | null;
   bank_txn_id:     string | null;   // imported challan line this settled (migration 0140)
+  challan_no:      string | null;   // CIN / challan number (migration 20260927130000)
+  period:          string | null;   // YYYY-MM the challan paid for
   created_at:      string;
 };
 type StatutoryDuesPaymentInsert = {
@@ -2691,6 +2695,8 @@ type StatutoryDuesPaymentInsert = {
   paid_on:          string;
   bank_account_id?: string | null;
   notes?:           string | null;
+  challan_no?:      string | null;
+  period?:          string | null;
   /** Migration 0232 — marketing channel for ad spend. Set only on marketing rows. */
   channel?:         string | null;
 };
@@ -5254,7 +5260,7 @@ export type Database = {
         Returns: string;
       };
       book_bank_txn_as_statutory: {
-        Args: { p_txn_id: string; p_kind: string; p_notes?: string | null };
+        Args: { p_txn_id: string; p_kind: string; p_notes?: string | null; p_challan_no?: string | null; p_period?: string | null };
         Returns: undefined;
       };
       add_project_receipt_milestone: {
@@ -5345,6 +5351,8 @@ export type Database = {
           p_paid_on:         string;
           p_bank_account_id: string;
           p_notes?:          string | null;
+          p_challan_no?:     string | null;
+          p_period?:         string | null;
         };
         Returns: undefined;
       };

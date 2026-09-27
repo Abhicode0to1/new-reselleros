@@ -645,6 +645,41 @@ export function useDeleteExpense() {
  * (lib/accounting/commission-tds.ts). Matches the payee name case-insensitively; the entry
  * being edited is left out so it is not counted twice.
  */
+/**
+ * What this payee was paid this FY before the entry being typed — the TDS base (amount
+ * less GST) of every earlier expense to the same vendor, and how much of it carried no
+ * TDS. Feeds lib/accounting/tds-deductor.ts (thresholds are per payee per year).
+ * Matched by vendor id when the row has one, else by name; rows under another section
+ * are left out (a contractor's rent is not contract work).
+ */
+export function useVendorTdsThisFy(vendorId: string | null, vendorName: string, section: string, onDate: string, excludeId?: string | null) {
+  const name = vendorName.trim();
+  const sec = section.trim();
+  return useQuery({
+    queryKey: ["expenses", "vendor-tds-fy", vendorId ?? "", name.toLowerCase(), sec, onDate.slice(0, 10), excludeId ?? null],
+    enabled: sec.length > 0,
+    queryFn: async (): Promise<{ base: number; baseWithoutTds: number }> => {
+      if (!vendorId && name.length < 2) return { base: 0, baseWithoutTds: 0 };
+      const supabase = createClient();
+      let q = supabase
+        .from("expenses")
+        .select("id, amount, gst_paid, tds_amount, tds_section")
+        .gte("expense_date", fyStartOf(onDate))
+        .lte("expense_date", onDate.slice(0, 10));
+      q = vendorId ? q.eq("vendor_id", vendorId) : q.ilike("vendor_name", name.replace(/[%_\\]/g, (c) => "\\" + c));
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data ?? []).filter((r) => r.id !== excludeId && (!r.tds_section || r.tds_section === sec));
+      const baseOf = (r: { amount: number | null; gst_paid: number | null }) => Math.max(0, (r.amount ?? 0) - (r.gst_paid ?? 0));
+      return {
+        base: rows.reduce((s, r) => s + baseOf(r), 0),
+        baseWithoutTds: rows.filter((r) => !(r.tds_amount && r.tds_amount > 0)).reduce((s, r) => s + baseOf(r), 0),
+      };
+    },
+    staleTime: 30_000,
+  });
+}
+
 export function useCommissionToPayeeThisFy(payee: string, onDate: string, excludeId?: string | null) {
   const name = payee.trim();
   return useQuery({

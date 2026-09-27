@@ -1,0 +1,138 @@
+import { describe, it, expect } from "vitest";
+import { B2CL_THRESHOLD, buildGstr1, gstr1Csv, gstr1Json, gstSplit, hsnLines, posFor, type Gstr1Doc } from "./gstr1";
+import { SAAS_HSN } from "./hsn";
+
+const seller = { stateCode: "07", state: "Delhi", gstin: "07AABCU9603R1ZM" };
+
+function doc(over: Partial<Gstr1Doc>): Gstr1Doc {
+  return {
+    id: "INV-1", date: "2026-08-10", docType: "invoice", customerName: "Cust",
+    customerGstin: null, customerStateCode: null, customerState: null,
+    amount: 118000, taxableValue: 100000, gst: 18000, taxRate: 18, interState: false,
+    ...over,
+  };
+}
+
+describe("GSTR-1 sections", () => {
+  it("B2CL cut-off is ₹1,00,000 (Notification 12/2024-CT), on invoice VALUE, inter-state only", () => {
+    expect(B2CL_THRESHOLD).toBe(100_000);
+    const s = buildGstr1([
+      doc({ id: "BIG", interState: true, customerStateCode: "27", customerState: "Maharashtra", amount: 118000, taxableValue: 100000, gst: 18000 }),
+      doc({ id: "SMALL", interState: true, customerStateCode: "27", customerState: "Maharashtra", amount: 99999, taxableValue: 84745, gst: 15254 }),
+      doc({ id: "INTRA-BIG", interState: false, amount: 590000, taxableValue: 500000, gst: 90000 }),
+    ], seller);
+    expect(s.b2cl.map((r) => r.id)).toEqual(["BIG"]);
+    expect(s.b2cl[0].pos).toBe("27-Maharashtra");
+    expect(s.b2cl[0].heads).toEqual({ igst: 18000, cgst: 0, sgst: 0 });
+    // the small one and the intra-state one consolidate into B2CS, by POS + rate
+    expect(s.b2cs).toHaveLength(2);
+    const intra = s.b2cs.find((r) => r.pos === "07-Delhi")!;
+    expect(intra.taxable).toBe(500000);
+    expect(intra.heads).toEqual({ igst: 0, cgst: 45000, sgst: 45000 });
+  });
+
+  it("registered buyer → B2B from the GSTIN's state, whatever the customer record says", () => {
+    const s = buildGstr1([doc({ customerGstin: "29AABCU9603R1ZX", customerStateCode: "07", customerState: "Delhi", interState: true })], seller);
+    expect(s.b2b).toHaveLength(1);
+    expect(s.b2b[0].pos).toBe("29-Karnataka");
+    expect(s.b2cs).toHaveLength(0);
+  });
+
+  it("credit/debit notes of a registered buyer go to CDNR with positive values and the note type", () => {
+    const s = buildGstr1([
+      doc({ id: "CN-1", docType: "credit_note", customerGstin: "07AABCU9603R1ZM", amount: -11800, taxableValue: -10000, gst: -1800 }),
+      doc({ id: "DN-1", docType: "debit_note", customerGstin: "07AABCU9603R1ZM", amount: 2360, taxableValue: 2000, gst: 360 }),
+    ], seller);
+    expect(s.b2b).toHaveLength(0);
+    expect(s.cdnr.map((r) => [r.id, r.noteType, r.value, r.taxable, r.heads.cgst])).toEqual([
+      ["CN-1", "C", 11800, 10000, 900],
+      ["DN-1", "D", 2360, 2000, 180],
+    ]);
+  });
+
+  it("unregistered notes: large inter-state → CDNUR; small ones net into B2CS (signed)", () => {
+    const s = buildGstr1([
+      doc({ id: "INV-M", interState: true, customerStateCode: "27", customerState: "Maharashtra", amount: 59000, taxableValue: 50000, gst: 9000 }),
+      doc({ id: "CN-M", docType: "credit_note", interState: true, customerStateCode: "27", customerState: "Maharashtra", amount: -11800, taxableValue: -10000, gst: -1800 }),
+      doc({ id: "CN-BIG", docType: "credit_note", interState: true, customerStateCode: "27", customerState: "Maharashtra", amount: -236000, taxableValue: -200000, gst: -36000 }),
+    ], seller);
+    expect(s.cdnur).toHaveLength(1);
+    expect(s.cdnur[0]).toMatchObject({ id: "CN-BIG", noteType: "C", value: 236000, taxable: 200000, heads: { igst: 36000, cgst: 0, sgst: 0 } });
+    expect(s.b2cs).toHaveLength(1);
+    expect(s.b2cs[0].taxable).toBe(40000);
+    expect(s.b2cs[0].heads.igst).toBe(7200);
+    expect(s.notesNettedIntoB2cs).toBe(1);
+  });
+
+  it("a B2C document with no place of supply is skipped by id, never dropped silently", () => {
+    const s = buildGstr1([doc({ id: "NOPOS", interState: true })], { stateCode: null, state: null });
+    expect(s.skipped).toEqual(["NOPOS"]);
+    expect(s.b2cs).toHaveLength(0);
+    expect(s.hsn[0].taxable).toBe(100000); // still in the HSN summary — it was still a supply
+  });
+
+  it("HSN summary is per SAC from the lines, nets notes, and defaults to the SaaS SAC", () => {
+    const s = buildGstr1([
+      doc({ id: "A", lines: [{ hsn: "998313", taxable: 70000 }, { hsn: "998315", description: "Hosting", taxable: 30000 }] }),
+      doc({ id: "B" }),                               // no lines → 998313
+      doc({ id: "CN", docType: "credit_note", amount: -11800, taxableValue: -10000, gst: -1800 }),
+    ], seller);
+    const saas = s.hsn.find((h) => h.hsn === SAAS_HSN)!;
+    const host = s.hsn.find((h) => h.hsn === "998315")!;
+    expect(saas.taxable).toBe(70000 + 100000 - 10000);
+    expect(saas.heads).toEqual({ igst: 0, cgst: 6300 + 9000 - 900, sgst: 6300 + 9000 - 900 });
+    expect(host).toMatchObject({ description: "Hosting", taxable: 30000, value: 35400, heads: { igst: 0, cgst: 2700, sgst: 2700 } });
+  });
+
+  it("hsnLines prorates the invoice's taxable value by line weight and always adds up", () => {
+    const ln = hsnLines(100000, [{ hsn: "998313", weight: 1000 }, { hsn: "998315", weight: 500 }, { hsn: null, weight: 500 }]);
+    expect(ln.map((l) => l.taxable)).toEqual([50000, 25000, 25000]);
+    expect(ln[2].hsn).toBe(SAAS_HSN);
+    expect(hsnLines(999, [{ hsn: "1", weight: 1 }, { hsn: "2", weight: 1 }, { hsn: "3", weight: 1 }]).reduce((s, l) => s + l.taxable, 0)).toBe(999);
+    expect(hsnLines(500, [])).toEqual([{ hsn: SAAS_HSN, description: expect.any(String), taxable: 500 }]);
+  });
+
+  it("CSV rows follow the Offline Tool templates (CDNR note type, CDNUR UR type B2CL)", () => {
+    const s = buildGstr1([
+      doc({ id: "CN-1", docType: "credit_note", customerGstin: "07AABCU9603R1ZM", amount: -11800, taxableValue: -10000, gst: -1800 }),
+      doc({ id: "CN-BIG", docType: "debit_note", interState: true, customerStateCode: "27", customerState: "Maharashtra", amount: 236000, taxableValue: 200000, gst: 36000 }),
+    ], seller);
+    const csv = gstr1Csv(s);
+    expect(csv.cdnr[0]).toEqual(["07AABCU9603R1ZM", "Cust", "CN-1", "10-Aug-2026", "C", "07-Delhi", "N", "Regular B2B", 11800, "", 18, 10000, 0]);
+    expect(csv.cdnur[0]).toEqual(["B2CL", "CN-BIG", "10-Aug-2026", "D", "27-Maharashtra", "B2CL", 236000, "", 18, 200000, 0]);
+    expect(csv.hsn[0][0]).toBe(SAAS_HSN);
+  });
+
+  it("Portal JSON carries the real GSTIN, split tax heads, and every section", () => {
+    const s = buildGstr1([
+      doc({ id: "INV-B2B", customerGstin: "07AABCU9603R1ZM" }),
+      doc({ id: "INV-B2B-2", customerGstin: "07AABCU9603R1ZM", amount: 1180, taxableValue: 1000, gst: 180 }),
+      doc({ id: "CN-1", docType: "credit_note", customerGstin: "07AABCU9603R1ZM", amount: -11800, taxableValue: -10000, gst: -1800 }),
+      doc({ id: "INV-BIG", interState: true, customerStateCode: "27", customerState: "Maharashtra" }),
+      doc({ id: "INV-SM", customerStateCode: "07", customerState: "Delhi", amount: 590, taxableValue: 500, gst: 90 }),
+    ], seller);
+    const j = gstr1Json(s, seller.gstin, "082026");
+    expect(j.gstin).toBe("07AABCU9603R1ZM");
+    expect(j.fp).toBe("082026");
+    expect(j.b2b).toHaveLength(1);                     // grouped by ctin
+    expect(j.b2b[0].inv).toHaveLength(2);
+    expect(j.b2b[0].inv[0]).toMatchObject({ inum: "INV-B2B", idt: "10-08-2026", pos: "07", itms: [{ num: 1, itm_det: { rt: 18, txval: 100000, iamt: 0, camt: 9000, samt: 9000 } }] });
+    expect(j.cdnr[0].nt[0]).toMatchObject({ ntty: "C", nt_num: "CN-1", val: 11800, itms: [{ itm_det: { camt: 900, samt: 900 } }] });
+    expect(j.b2cl[0]).toMatchObject({ pos: "27", inv: [{ inum: "INV-BIG", itms: [{ itm_det: { iamt: 18000 } }] }] });
+    expect(j.b2cs[0]).toMatchObject({ sply_ty: "INTRA", pos: "07", txval: 500, camt: 45, samt: 45 });
+    expect(j.hsn.data[0]).toMatchObject({ hsn_sc: SAAS_HSN, uqc: "OTH" });
+  });
+
+  it("gstSplit halves CGST/SGST exactly, also for a signed note", () => {
+    expect(gstSplit({ gst: 181, interState: false })).toEqual({ igst: 0, cgst: 90, sgst: 91 });
+    expect(gstSplit({ gst: -181, interState: false })).toEqual({ igst: 0, cgst: -90, sgst: -91 });
+    expect(gstSplit({ gst: 181, interState: true })).toEqual({ igst: 181, cgst: 0, sgst: 0 });
+  });
+
+  it("posFor: GSTIN beats customer state beats seller state; inter-state without a state is unknown", () => {
+    expect(posFor({ customerGstin: "27ABCDE1234F1Z5", customerStateCode: "07", customerState: "Delhi", interState: true }, seller)?.code).toBe("27");
+    expect(posFor({ customerGstin: null, customerStateCode: "9", customerState: null, interState: true }, seller)).toEqual({ code: "09", name: "Uttar Pradesh" });
+    expect(posFor({ customerGstin: null, customerStateCode: null, customerState: null, interState: false }, seller)?.code).toBe("07");
+    expect(posFor({ customerGstin: null, customerStateCode: null, customerState: null, interState: true }, seller)).toBeNull();
+  });
+});

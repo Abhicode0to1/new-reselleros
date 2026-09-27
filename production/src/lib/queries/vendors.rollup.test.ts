@@ -3,7 +3,7 @@ import { rollupVendors } from "./vendors";
 import type { VendorRow } from "@/lib/supabase/database.types";
 
 const V = (id: string, name: string): VendorRow => ({
-  id, tenant_id: "t1", name, gstin: null, contact_name: null, contact_email: null,
+  id, tenant_id: "t1", name, gstin: null, pan: null, contact_name: null, contact_email: null,
   contact_phone: null, default_category: null, address: null, city: null, state: null,
   pincode: null, notes: null, created_at: "", updated_at: "",
 });

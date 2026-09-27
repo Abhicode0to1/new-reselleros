@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { guardErrorToast } from "@/lib/ui/guard-toast";
 import type { Database } from "@/lib/supabase/database.types";
+import { statutoryDues, type DuesSummary } from "@/lib/accounting/tds-deductor";
 
 export type Employee = Database["public"]["Tables"]["employees"]["Row"];
 export type LeaveEntry = Database["public"]["Tables"]["leave_entries"]["Row"];
@@ -437,18 +438,23 @@ export function useDeleteSalaryPayment() {
 export function useStatutoryDues() {
   return useQuery({
     queryKey: ["statutory-dues"],
-    queryFn: async () => {
+    queryFn: async (): Promise<DuesSummary> => {
       const supabase = createClient();
-      const { data: sal, error: sErr } = await supabase.from("salary_payments").select("tds, pf, esi, esi_employer, pf_employer");
+      /* Salary TDS/PF/ESI (both shares) + TDS withheld on vendor payments (26Q), less
+         every challan — lib/accounting/tds-deductor.ts. The Balance Sheet uses the same sum. */
+      const [{ data: sal, error: sErr }, { data: paid, error: pErr }, { data: vt, error: vErr }] = await Promise.all([
+        supabase.from("salary_payments").select("tds, pf, esi, esi_employer, pf_employer"),
+        supabase.from("statutory_dues_payments").select("kind, amount"),
+        supabase.from("expenses").select("tds_amount").gt("tds_amount", 0),
+      ]);
       if (sErr) throw sErr;
-      const withheld = (sal ?? []).reduce((s, r) => s + (r.tds ?? 0) + (r.pf ?? 0) + (r.esi ?? 0) + (r.esi_employer ?? 0) + (r.pf_employer ?? 0), 0);
-
-      const { data: paid, error: pErr } = await supabase
-        .from("statutory_dues_payments").select("amount");
       if (pErr) throw pErr;
-      const paidTotal = (paid ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
-
-      return { withheld, paid: paidTotal, payable: Math.max(0, withheld - paidTotal) };
+      if (vErr) throw vErr;
+      return statutoryDues({
+        salaries: sal ?? [],
+        vendorTds: (vt ?? []).reduce((s, r) => s + (r.tds_amount ?? 0), 0),
+        paid: paid ?? [],
+      });
     },
     staleTime: 30_000,
   });
@@ -605,7 +611,7 @@ export function useSetAttendanceNetwork() {
 export function usePayStatutoryDues() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { amount: number; kind: string; paidOn: string; bankAccountId: string; notes?: string | null }) => {
+    mutationFn: async (input: { amount: number; kind: string; paidOn: string; bankAccountId: string; notes?: string | null; challanNo?: string | null; period?: string | null }) => {
       const supabase = createClient();
       const { error } = await supabase.rpc("pay_statutory_dues", {
         p_amount:          input.amount,
@@ -613,6 +619,8 @@ export function usePayStatutoryDues() {
         p_paid_on:         input.paidOn,
         p_bank_account_id: input.bankAccountId,
         p_notes:           input.notes ?? null,
+        p_challan_no:      input.challanNo ?? null,
+        p_period:          input.period ?? null,
       });
       if (error) throw error;
     },

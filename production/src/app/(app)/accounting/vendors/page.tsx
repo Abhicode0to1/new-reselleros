@@ -39,6 +39,7 @@ import { VENDOR_BILL_CATEGORIES } from "@/lib/queries/vendor-bills";
 import { rupee, formatDate, GST_STATE_BY_CODE, gstStateFromGstin, foreignAmount, formatForeignAmount } from "@/lib/utils";
 import { newestFirst } from "@/lib/sort/newest-first";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
+import { panFromGstin, isPan, deducteeTypeFromPan, DEDUCTEE_LABEL } from "@/lib/accounting/tds-deductor";
 
 const VENDOR_SUPPLIED_PRODUCTS = [
   "Google Workspace & GCP",
@@ -321,6 +322,7 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
   const [city, setCity] = React.useState(vendor?.city ?? "");
   const [state, setState] = React.useState(vendor?.state ?? "");
   const [pincode, setPincode] = React.useState(vendor?.pincode ?? "");
+  const [pan, setPan] = React.useState(vendor?.pan ?? "");
   const [category, setCategory] = React.useState(vendor?.default_category ?? "");
   const [notes, setNotes] = React.useState(() => {
     if (!vendor?.notes) return "";
@@ -337,6 +339,9 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
     setGstin(raw);
     const { name: stName } = gstStateFromGstin(raw);
     if (stName) setState((prev) => (prev ? prev : stName));
+    /* The PAN is inside the GSTIN — fill it unless one was typed. */
+    const p = panFromGstin(raw);
+    if (p) setPan((prev) => (prev ? prev : p));
   };
 
   const fillFromGst = (v: import("@/lib/supabase/database.types").GstinVerification) => {
@@ -359,6 +364,7 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
         id: vendor?.id, name: name.trim(), gstin: gstin || null, defaultCategory: category || null,
         contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null,
         address: address || null, city: city || null, state: state || null, pincode: pincode || null,
+        pan: pan.trim().toUpperCase() || null,
         notes: finalNotes || null,
       });
       onClose();
@@ -381,6 +387,11 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
               <Input value={gstin} onChange={(e) => onGstinChange(e.target.value)} placeholder="e.g. 27ABCDE1234F1Z5" />
             </FormField>
           </div>
+          {/* PAN decides the TDS rate (194C 1% for an individual, 2% for a company) and, when
+              missing, forces 20% u/s 206AA — so it is asked for here, not guessed at 26Q time. */}
+          <FormField label="PAN (for TDS / 26Q)" hint={pan && !isPan(pan) ? "10 characters, e.g. ABCDE1234F" : deducteeTypeFromPan(pan) ? `${DEDUCTEE_LABEL[deducteeTypeFromPan(pan)!]} — TDS rate isi se tay hota hai` : "Bina PAN ke TDS 20% kaatna padta hai (s.206AA)"}>
+            <Input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} className="font-mono uppercase" />
+          </FormField>
           <GstinVerifyCard gstin={gstin} noPersist onFillForm={fillFromGst} />
 
           {/* Products & Services Supplied Selection */}

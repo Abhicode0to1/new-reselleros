@@ -201,6 +201,7 @@ export function useUpsertVendor() {
       contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null;
       defaultCategory?: string | null; notes?: string | null;
       address?: string | null; city?: string | null; state?: string | null; pincode?: string | null;
+      pan?: string | null;
     }) => {
       const supabase = createClient();
       const { data: authData } = await supabase.auth.getUser();
@@ -220,6 +221,7 @@ export function useUpsertVendor() {
         city:             input.city?.trim() || null,
         state:            input.state?.trim() || null,
         pincode:          input.pincode?.trim() || null,
+        pan:              input.pan?.trim().toUpperCase() || null,
         notes:            input.notes?.trim() || null,
       };
       if (input.id) {

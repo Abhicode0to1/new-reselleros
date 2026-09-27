@@ -38,6 +38,7 @@ import {
   EXPENSE_CATEGORIES,
   PAYMENT_METHODS,
   useCommissionToPayeeThisFy,
+  useVendorTdsThisFy,
   type Expense,
 } from "@/lib/queries/expenses";
 import { COMMISSION_CATEGORY, TDS_194H_THRESHOLD, commissionTdsView } from "@/lib/accounting/commission-tds";
@@ -46,7 +47,8 @@ import { useCampaignOptions } from "@/lib/queries/marketing-campaigns";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { useEmployees } from "@/lib/queries/payroll";
 import { compactName } from "@/lib/banking/salary-lines";
-import { TDS_SECTION_RATES, defaultTds, tdsBase } from "@/lib/accounting/tds-rates";
+import { TDS_SECTION_RATES, tdsBase } from "@/lib/accounting/tds-rates";
+import { tdsDecision, panFromGstin } from "@/lib/accounting/tds-deductor";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useVendors, ensureVendor } from "@/lib/queries/vendors";
 import { useAddReimbursement } from "@/lib/queries/reimbursements";
@@ -460,18 +462,24 @@ export function AddExpenseDialog({
     watch("expense_date") || localDateISO(new Date()),
     expense?.id ?? null,
   );
-  /* TDS fills itself from the section's default rate on the pre-GST value
-     (lib/accounting/tds-rates.ts) — until the operator types an amount; an existing entry's
-     recorded TDS is never overwritten on open. */
+  /* TDS decides itself (lib/accounting/tds-deductor.ts, 27 Sep 2026): the section's
+     threshold against what this payee got this FY, the rate from the vendor's PAN (1% for
+     an individual contractor, 20% with no PAN), 194Q only above ₹50L — until the operator
+     types an amount; an existing entry's recorded TDS is never overwritten on open. */
   const [tdsEdited, setTdsEdited] = React.useState<boolean>(Boolean(expense && (expense.tds_amount ?? 0) > 0));
   const tdsSectionNow = watch("tds_section") || "";
   const tdsBaseNow = tdsBase(Number(watch("amount")) || 0, isGstBill ? Number(watch("gst_paid")) || 0 : 0);
   const tdsRate = TDS_SECTION_RATES[tdsSectionNow] ?? null;
+  const tdsVendor = vendorId ? (vendors ?? []).find((v) => v.id === vendorId) ?? null : null;
+  const { data: vendorTdsSoFar } = useVendorTdsThisFy(vendorId, vendorNameWatch, tdsSectionNow, watch("expense_date") || localDateISO(new Date()), expense?.id ?? null);
+  const tdsView = tdsSectionNow && vendorTdsSoFar
+    ? tdsDecision({ section: tdsSectionNow, base: tdsBaseNow, fyBaseSoFar: vendorTdsSoFar.base, fyBaseWithoutTds: vendorTdsSoFar.baseWithoutTds, pan: tdsVendor?.pan ?? panFromGstin(tdsVendor?.gstin) })
+    : null;
+  const tdsSuggested = tdsView ? tdsView.tds : null;
   React.useEffect(() => {
-    if (tdsEdited || !tdsSectionNow) return;
-    const v = defaultTds(tdsSectionNow, tdsBaseNow);
-    if (v !== null) setValue("tds_amount", v);
-  }, [tdsEdited, tdsSectionNow, tdsBaseNow, setValue]);
+    if (tdsEdited || tdsSuggested === null) return;
+    setValue("tds_amount", tdsSuggested);
+  }, [tdsEdited, tdsSuggested, setValue]);
 
   /* Same letters as an employee's name ("abhishek" = "Abhishek", "Hites H Babu" = "Hitesh Babu"). */
   const { data: employeeList } = useEmployees();
@@ -1127,8 +1135,14 @@ export function AddExpenseDialog({
             </div>
             {(watch("tds_section") || "") !== "" && (
               <p className="text-3xs text-ink-3">
-                {tdsRate && !tdsEdited
-                  ? <>{tdsRate.ratePct}% of {rupee(tdsBaseNow)}{isGstBill && (Number(watch("gst_paid")) || 0) > 0 ? " (GST ke bina)" : ""} — apne-aap bhara, badal sakte ho.{tdsRate.note ? ` ${tdsRate.note}` : ""} </>
+                {tdsView ? (
+                  <>
+                    <span className={tdsView.noPan && tdsView.applies ? "text-rose" : tdsView.applies ? "text-ink-2" : "text-emerald"}>{tdsView.reason}</span>
+                    {tdsView.applies && !tdsEdited ? ` ${tdsView.ratePct}% of ${rupee(tdsBaseNow)}${isGstBill && (Number(watch("gst_paid")) || 0) > 0 ? " (GST ke bina)" : ""} = ${rupee(tdsView.tds)} apne-aap bhara, badal sakte ho.` : ""}
+                    {tdsView.applies && tdsRate?.note ? ` ${tdsRate.note}` : ""}{" "}
+                  </>
+                ) : tdsRate && !tdsEdited
+                  ? <>{tdsRate.ratePct}% of {rupee(tdsBaseNow)} — apne-aap bhara, badal sakte ho. </>
                   : null}
                 Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.
               </p>

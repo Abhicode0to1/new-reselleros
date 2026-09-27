@@ -151,6 +151,13 @@ export function PayrollScreen() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm text-ink-2">
               <b className="text-ink">{rupee(dues.data!.payable)}</b> statutory dues withheld (TDS/PF/ESI) — pending payment to govt.
+              {dues.data!.payableByKind ? (
+                <span className="block text-2xs text-ink-3 mt-0.5">
+                  TDS {rupee(dues.data!.payableByKind.tds)}{dues.data!.tdsVendor > 0 ? ` (salary ${rupee(dues.data!.tdsSalary)} + vendor 26Q ${rupee(dues.data!.tdsVendor)}, challans ke baad)` : ""} · PF {rupee(dues.data!.payableByKind.pf)} · ESI {rupee(dues.data!.payableByKind.esi)}
+                </span>
+              ) : (
+                <span className="block text-2xs text-ink-3 mt-0.5">Kuch challans &ldquo;Mixed&rdquo; book hue hain, isliye TDS/PF/ESI alag-alag nahi dikh sakte.</span>
+              )}
             </div>
             <Button variant="outline" size="sm" onClick={() => setPayDuesOpen(true)}>Record statutory payment</Button>
           </div>
@@ -2531,6 +2538,8 @@ function PayDuesDialog({ payable, onClose }: { payable: number; onClose: () => v
   const [kind, setKind]     = React.useState("mixed");
   const [date, setDate]     = React.useState(todayISO());
   const [accountId, setAccountId] = React.useState("");
+  const [challanNo, setChallanNo] = React.useState("");
+  const [period, setPeriod]       = React.useState("");
   React.useEffect(() => { if (!accountId && accounts.length > 0) setAccountId(accounts[0].id); }, [accounts, accountId]);
 
   const amt = Math.max(0, Math.round(Number(amount) || 0));
@@ -2539,7 +2548,7 @@ function PayDuesDialog({ payable, onClose }: { payable: number; onClose: () => v
 
   async function submit() {
     if (!valid) return;
-    await pay.mutateAsync({ amount: amt, kind, paidOn: date, bankAccountId: accountId });
+    await pay.mutateAsync({ amount: amt, kind, paidOn: date, bankAccountId: accountId, challanNo: challanNo.trim() || null, period: period || null });
     onClose();
   }
 
@@ -2574,6 +2583,17 @@ function PayDuesDialog({ payable, onClose }: { payable: number; onClose: () => v
           <div>
             <label className="block text-xs font-medium text-ink-2 mb-1">Date</label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          {/* Challan details — the 26Q / ECR quotes them; the payable can then be read month-wise. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-ink-2 mb-1">Kis mahine ka</label>
+              <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Period the challan paid for" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink-2 mb-1">Challan / CIN no.</label>
+              <Input value={challanNo} onChange={(e) => setChallanNo(e.target.value)} placeholder="optional" maxLength={40} />
+            </div>
           </div>
         </div>
         <DialogFooter>

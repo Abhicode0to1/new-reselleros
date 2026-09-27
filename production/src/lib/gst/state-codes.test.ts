@@ -20,18 +20,26 @@ import { join } from "node:path";
  * source and fails if a literal state-code map ever reappears there.
  */
 describe("the GST state table has exactly one home", () => {
+  /* The exporter moved out of the page into lib/gst/gstr1.ts (27 Sep 2026); the page
+     only calls it now. Both are guarded — the page so a map never creeps back, the lib
+     because that is where place of supply is resolved today. */
   const gstPageSrc = readFileSync(
     join(process.cwd(), "src/app/(app)/accounting/gst/page.tsx"), "utf8");
+  const gstr1LibSrc = readFileSync(
+    join(process.cwd(), "src/lib/gst/gstr1.ts"), "utf8");
 
   it("has no second literal map of state codes in the GSTR-1 exporter", () => {
     /* A literal map looks like `"27": "Maharashtra"`. Three or more such pairs in one
        file is a table, not an incidental string. */
-    const pairs = gstPageSrc.match(/"\d\d":\s*"[A-Z][^"]+"/g) ?? [];
-    expect(pairs.length).toBeLessThan(3);
+    for (const src of [gstPageSrc, gstr1LibSrc]) {
+      const pairs = src.match(/"\d\d":\s*"[A-Z][^"]+"/g) ?? [];
+      expect(pairs.length).toBeLessThan(3);
+    }
   });
 
   it("imports the canonical table instead", () => {
-    expect(gstPageSrc).toMatch(/GST_STATE_BY_CODE/);
+    expect(gstr1LibSrc).toMatch(/import \{ GST_STATE_BY_CODE \} from "@\/lib\/utils"/);
+    expect(gstPageSrc).not.toMatch(/GST_STATE_NAMES\s*=\s*\{/);
   });
 });
 

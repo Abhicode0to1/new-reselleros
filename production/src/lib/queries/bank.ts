@@ -882,12 +882,15 @@ export function useBookBankTxnAsStatutory() {
     mutationFn: async (input: {
       transactionId: string; accountId: string;
       kind: "tds" | "pf" | "esi" | "mixed"; notes?: string | null;
+      challanNo?: string | null; period?: string | null;
     }) => {
       const supabase = createClient();
       const { error } = await supabase.rpc("book_bank_txn_as_statutory", {
-        p_txn_id: input.transactionId,
-        p_kind:   input.kind,
-        p_notes:  input.notes ?? null,
+        p_txn_id:     input.transactionId,
+        p_kind:       input.kind,
+        p_notes:      input.notes ?? null,
+        p_challan_no: input.challanNo ?? null,
+        p_period:     input.period ?? null,
       });
       if (error) throw new Error(error.message);
     },
