@@ -9,7 +9,7 @@ work before it reaches customers. This is that place.*
 | Piece | Production | Staging today |
 |---|---|---|
 | App | Cloud Run `resellersos`, `asia-southeast1`, built by Cloud Build on push to `deploy` | none |
-| Database + Data API | Self-hosted: Cloud SQL + PostgREST/GoTrue/Storage on an e2-small VM, `https://api.anutech.in` | hosted Supabase project `ixgvlbgmvgaihvudtbwt` (`resellerosv3-staging`), schema only, rebuilt by `npm run db:rebuild` |
+| Database + Data API | Self-hosted: Cloud SQL + PostgREST/GoTrue/Storage on an e2-small VM, `https://api.anutech.in` | **none yet.** The `resellerosv3-staging` project the old README named no longer exists. Decision 27 Sep 2026: reuse the OLD hosted prod project `ontpnqjoysjgrlsukecm` (`resellersos`, ap-south-1, paused since the Cloud SQL move) as staging — restore it, wipe it, rebuild from migrations |
 | Crons | 15 Cloud Scheduler jobs (Singapore) | none |
 | Email / WhatsApp / Razorpay | live keys | — |
 | Who can see a branch before deploy | nobody | nobody |
@@ -26,7 +26,7 @@ git push origin <my-branch>:staging  ──►  Cloud Build trigger (branch: sta
                               Cloud Run service `resellersos-staging`  (scale-to-zero)
                                           │
                                           ▼
-                     hosted Supabase `ixgvlbgmvgaihvudtbwt`  (free tier; schema = migrations; demo tenant)
+                     hosted Supabase `ontpnqjoysjgrlsukecm`  (free tier; schema = migrations; demo tenant)
 ```
 
 - **One service, one branch.** `staging` is a throwaway integration branch: anyone pushes to it,
@@ -39,12 +39,20 @@ git push origin <my-branch>:staging  ──►  Cloud Build trigger (branch: sta
 
 ## Setup — one time (about an hour, needs Cloud project + Supabase access)
 
-### 1. Staging database (exists — confirm and seed)
+### 1. Staging database (restore the old project, wipe, rebuild)
+
+1. supabase.com → project **resellersos** (`ontpnqjoysjgrlsukecm`) → **Restore** (a paused free
+   project; takes a few minutes). Only the dashboard can do this.
+2. Settings → Database → **reset the database password**; Settings → API → copy the anon key
+   and the service_role key. Keep both out of chat.
+3. From `production/`, after `npx supabase login` with a fresh access token:
 
 ```bash
-# from production/, with SUPABASE_ACCESS_TOKEN for the staging project
-npm run db:rebuild            # baseline.sql + supabase/migrations → staging, schema only
+node scripts/rebuild-db.mjs ontpnqjoysjgrlsukecm   # WIPES it, then baseline.sql + baseline-storage.sql + supabase/migrations
 ```
+
+The wipe is the point: that project holds a stale pre-September copy of production, and staging
+must never be mistaken for a source of real data.
 
 Then seed one demo tenant so the app is not empty on first open. `supabase/seed.sql` is written
 for the local stack; the demo tenant, owner user and catalogue rows from it can be applied to
@@ -53,7 +61,12 @@ staging through the SQL editor of the staging project (never the prod project �
 staging project's Auth → Users with a throwaway password and share it in the board's
 `#deploy` channel.
 
-### 2. Staging secrets (Secret Manager, not env vars)
+### 2. Staging secrets
+
+Secret Manager is not enabled on the project yet (checked 27 Sep 2026). Enable it once at
+https://console.developers.google.com/apis/api/secretmanager.googleapis.com/overview?project=resellsubsos-prod
+— or, for staging only, pass these as plain env vars on the service; nothing on staging guards
+real money. If Secret Manager is enabled:
 
 ```bash
 P=resellsubsos-prod
@@ -77,7 +90,7 @@ substitutions so the same file serves both services. Then:
 gcloud builds triggers create github --project $P --name resellersos-staging \
   --repo-owner <owner> --repo-name <repo> --branch-pattern '^staging$' \
   --build-config cloudbuild.yaml \
-  --substitution _REGION=asia-southeast1,_SERVICE=resellersos-staging,_SUPABASE_URL=https://ixgvlbgmvgaihvudtbwt.supabase.co,_SUPABASE_ANON_KEY=<staging anon key>
+  --substitution _REGION=asia-southeast1,_SERVICE=resellersos-staging,_SUPABASE_URL=https://ontpnqjoysjgrlsukecm.supabase.co,_SUPABASE_ANON_KEY=<staging anon key>
 ```
 
 First deploy of the service (after that the trigger updates it):
@@ -87,7 +100,7 @@ gcloud run deploy resellersos-staging --project $P --region asia-southeast1 \
   --image <image the trigger built> --allow-unauthenticated --min-instances 0 --max-instances 2 \
   --memory 1Gi --timeout 600 \
   --update-secrets SUPABASE_SERVICE_ROLE_KEY=STAGING_SUPABASE_SERVICE_ROLE_KEY:latest,CRON_SECRET=STAGING_CRON_SECRET:latest,SECRETS_MASTER_KEY=STAGING_SECRETS_MASTER_KEY:latest \
-  --update-env-vars NEXT_PUBLIC_SUPABASE_URL=https://ixgvlbgmvgaihvudtbwt.supabase.co,NEXT_PUBLIC_APP_URL=https://resellersos-staging-<hash>-as.a.run.app,APP_ENV=staging,RAZORPAY_MODE=test,EMAIL_PROVIDER=log,WHATSAPP_BSP=off
+  --update-env-vars NEXT_PUBLIC_SUPABASE_URL=https://ontpnqjoysjgrlsukecm.supabase.co,NEXT_PUBLIC_APP_URL=https://resellersos-staging-<hash>-as.a.run.app,APP_ENV=staging,RAZORPAY_MODE=test,EMAIL_PROVIDER=log,WHATSAPP_BSP=off
 ```
 
 `--timeout 600` on purpose: the scheduler's attempt deadline is 540s and prod still runs the
@@ -109,7 +122,7 @@ gcloud run deploy resellersos-staging --project $P --region asia-southeast1 \
 Every laptop's `production/.env.local`:
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://ixgvlbgmvgaihvudtbwt.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://ontpnqjoysjgrlsukecm.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<staging anon>
 SUPABASE_SERVICE_ROLE_KEY=<staging service_role>
 ```
