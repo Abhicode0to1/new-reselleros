@@ -72,7 +72,8 @@ export default function PaymentsMadePage() {
         </Card>
       )}
 
-      {/* Tabs sit between the analytics (all money-out) and the list they filter. */}
+      {/* Tabs + search stay pinned under the top bar (h-14) while the list scrolls. */}
+      <div className="sticky top-14 z-20 -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 pt-2 pb-1 bg-paper/95 backdrop-blur-sm border-b border-hairline">
       <TabBar
         className="overflow-y-hidden mb-3"
         value={tab}
@@ -82,6 +83,7 @@ export default function PaymentsMadePage() {
       <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-ink-3">Showing {rows.length} of {lines.length} payments · <b className="text-ink">{rupee(shown)}</b>{tab === "all" ? ` · ${rupee(summary.allTime)} paid all-time` : ""}</p>
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Payee, what, bill no., narration…" className="w-full sm:w-80" aria-label="Search payments" />
+      </div>
       </div>
 
       {isLoading ? (
