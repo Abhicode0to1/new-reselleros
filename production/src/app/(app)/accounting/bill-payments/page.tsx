@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Icon } from "@/components/ui/icon";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TabBar } from "@/components/ui/tabs";
 import { rupee, formatDate } from "@/lib/utils";
@@ -28,6 +29,10 @@ export default function PaymentsMadePage() {
   const { data, isLoading, error } = useMoneyOut();
   const [tab, setTab] = React.useState<Tab>("all");
   const [q, setQ] = React.useState("");
+  /* Analytics card folds like the one on Payments Received; the choice is remembered per browser. */
+  const [analyticsOpen, setAnalyticsOpen] = React.useState(true);
+  React.useEffect(() => { try { setAnalyticsOpen(localStorage.getItem("ros.paymentsMade.analytics") !== "closed"); } catch { /* private mode */ } }, []);
+  const toggleAnalytics = () => setAnalyticsOpen((v) => { try { localStorage.setItem("ros.paymentsMade.analytics", v ? "closed" : "open"); } catch { /* ignore */ } return !v; });
   const lines = React.useMemo(() => data ?? [], [data]);
   const summary = React.useMemo(() => summarisePaidOut(lines, todayIso()), [lines]);
   const rows = React.useMemo(() => {
@@ -59,8 +64,17 @@ export default function PaymentsMadePage() {
       {/* Analytics strip — the mirror of "Payments & Collections Analytics" */}
       {!isLoading && lines.length > 0 && (
         <Card className="mb-4 p-3 md:p-4">
-          <p className="text-xs font-semibold text-ink-2 mb-2">Payments &amp; Outflow Analytics</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-xs font-semibold text-ink-2 font-mono">
+              Payments &amp; Outflow Analytics
+              {!analyticsOpen && <span className="font-normal text-ink-3"> · Paid MTD: <b className="text-rose">{rupee(summary.mtd)}</b> · This FY: <b className="text-ink">{rupee(summary.fy)}</b> · Awaiting reconcile: {summary.unreconciled.count}</span>}
+            </p>
+            <button type="button" onClick={toggleAnalytics} aria-expanded={analyticsOpen} className="text-xs font-semibold text-amber-ink hover:underline inline-flex items-center gap-1">
+              {analyticsOpen ? "Collapse" : "Expand"} <Icon name={analyticsOpen ? "chevron_up" : "chevron_down"} size={13} />
+            </button>
+          </div>
+          {analyticsOpen && (<>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
             <div className="rounded-md border border-hairline p-3"><p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid MTD</p><p className="font-serif text-2xl text-rose mt-1">{rupee(summary.mtd)}</p></div>
             <div className="rounded-md border border-hairline p-3"><p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid this FY</p><p className="font-serif text-2xl text-ink mt-1">{rupee(summary.fy)}</p></div>
             <div className="rounded-md border border-hairline p-3"><p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Awaiting reconcile</p><p className={`font-serif text-2xl mt-1 ${summary.unreconciled.count ? "text-amber-ink" : "text-emerald"}`}>{rupee(summary.unreconciled.amount)} <span className="text-xs font-sans text-ink-3">({summary.unreconciled.count})</span></p></div>
@@ -69,6 +83,7 @@ export default function PaymentsMadePage() {
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-2xs text-ink-3">
             {summary.byGroup.map((g) => <span key={g.group}>{g.label} <b className="text-ink-2">{rupee(g.amount)}</b> ({g.count})</span>)}
           </div>
+          </>)}
         </Card>
       )}
 
