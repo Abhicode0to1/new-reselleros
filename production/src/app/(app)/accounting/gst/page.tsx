@@ -31,6 +31,7 @@ import { useTaxPayments } from "@/lib/queries/tax-payments";
 import { rupee, formatDate } from "@/lib/utils";
 import { buildGstr1, gstr1Csv, gstr1Json, gstSplit, hsnLines, GSTR1_HEADERS } from "@/lib/gst/gstr1";
 import { computeGstr3b, gstr3bRows, type Heads } from "@/lib/gst/gstr3b";
+import { parseGstr2b, reconcile2b, type Reconciliation } from "@/lib/gst/gstr2b";
 import { createClient } from "@/lib/supabase/client";
 import { Term } from "@/components/shared/term";
 
@@ -107,6 +108,8 @@ interface InputRow {
   cgst:         number;
   sgst:         number;
   category:     string;
+  /** Bill / invoice number as entered — the key GSTR-2B matching uses (lib/gst/gstr2b.ts). */
+  billNo:       string | null;
 }
 interface GstReport {
   outputRows:    OutputRow[];
@@ -240,7 +243,7 @@ function useGstReport(range: DateRange) {
       // ── Input: vendor bills + GST-paying expenses ─────────────────
       const { data: bills } = await supabase
         .from("vendor_bills")
-        .select("id, bill_date, vendor_name, vendor_gstin, subtotal, cgst, sgst, igst, total, category")
+        .select("id, bill_date, vendor_name, vendor_gstin, subtotal, cgst, sgst, igst, total, category, bill_no")
         .gte("bill_date", range.from)
         .lte("bill_date", range.to);
 
@@ -249,6 +252,7 @@ function useGstReport(range: DateRange) {
         assumed: false,
         source:       "bill",
         id:           b.id,
+        billNo:       b.bill_no ?? null,
         date:         b.bill_date,
         vendor:       b.vendor_name,
         vendorGstin:  b.vendor_gstin ?? null,
@@ -262,7 +266,7 @@ function useGstReport(range: DateRange) {
 
       const { data: expenses } = await supabase
         .from("expenses")
-        .select("id, expense_date, vendor_name, vendor_id, bill_type, amount, gst_paid, igst, cgst, sgst, category")
+        .select("id, expense_date, vendor_name, vendor_id, bill_type, amount, gst_paid, igst, cgst, sgst, category, bill_no")
         .gte("expense_date", range.from)
         .lte("expense_date", range.to)
         .gt("gst_paid", 0);
@@ -313,6 +317,7 @@ function useGstReport(range: DateRange) {
         return {
           source:       "expense" as const,
           id:           e.id,
+          billNo:       e.bill_no ?? null,
           date:         e.expense_date,
           vendor:       e.vendor_name ?? "—",
           vendorGstin:  e.vendorGstin,
@@ -391,6 +396,35 @@ export default function GstReportPage() {
   const { data, isLoading } = useGstReport(range);
   const { data: taxPayments } = useTaxPayments();
   const gstPaidInRange = gstPaidForPeriods(taxPayments ?? [], range.from.slice(0, 7), range.to.slice(0, 7));
+
+  /* ── GSTR-2B milaan (27 Sep 2026) ────────────────────────────────────────
+     The portal's JSON is read in the browser and matched against this period's ITC rows;
+     nothing is uploaded or stored. s.16(2)(aa): only what the supplier filed is credit. */
+  const [twoB, setTwoB] = React.useState<{ period: string | null; recon: Reconciliation; count: number } | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  async function onPick2b(file: File | null) {
+    if (!file || !data) return;
+    try {
+      const parsed = parseGstr2b(JSON.parse(await file.text()));
+      if (parsed.errors.length) { toast.error(parsed.errors.join(" ")); return; }
+      const books = data.inputRows.map((r) => ({ id: r.id, source: r.source, vendor: r.vendor, vendorGstin: r.vendorGstin, billNo: r.billNo, date: r.date, taxable: r.taxableValue, igst: r.igst, cgst: r.cgst, sgst: r.sgst }));
+      const recon = reconcile2b(parsed.invoices, books);
+      setTwoB({ period: parsed.period, recon, count: parsed.invoices.length });
+      const fp = range.from.slice(5, 7) + range.from.slice(0, 4);
+      if (parsed.period && parsed.period !== fp) toast.warning(`2B ka period ${parsed.period} hai, page par ${fp} — range wahi mahina rakho.`);
+    } catch { toast.error("JSON padha nahi gaya — portal se GSTR-2B ka JSON download karke wahi file chuno."); }
+    if (fileRef.current) fileRef.current.value = "";
+  }
+  function export2b() {
+    if (!twoB) return;
+    const r = twoB.recon;
+    downloadCSV(`gstr2b-milaan-${range.from}-to-${range.to}.csv`, ["Status", "Supplier GSTIN", "Invoice no.", "Date", "Books id", "2B tax", "Books tax", "Diff"], [
+      ...r.matched.map((m): (string | number)[] => ["Matched", m.b2b.gstin, m.b2b.invoiceNo, m.b2b.date ?? "", m.book.id, m.b2b.igst + m.b2b.cgst + m.b2b.sgst, m.book.igst + m.book.cgst + m.book.sgst, 0]),
+      ...r.amountDiffers.map((m): (string | number)[] => ["Amount differs", m.b2b.gstin, m.b2b.invoiceNo, m.b2b.date ?? "", m.book.id, m.b2b.igst + m.b2b.cgst + m.b2b.sgst, m.book.igst + m.book.cgst + m.book.sgst, m.diff]),
+      ...r.onlyIn2b.map((x): (string | number)[] => ["Only in 2B (bill missing in books)", x.gstin, x.invoiceNo, x.date ?? "", "", x.igst + x.cgst + x.sgst, "", ""]),
+      ...r.onlyInBooks.map((b): (string | number)[] => ["Only in books (supplier not filed — hold)", b.vendorGstin ?? "", b.billNo ?? "", b.date, b.id, "", b.igst + b.cgst + b.sgst, ""]),
+    ]);
+  }
 
   function exportOutput() {
     if (!data) return;
@@ -737,6 +771,59 @@ export default function GstReportPage() {
               </tfoot>
             </table>
           </div>
+        </Card>
+      )}
+
+      {/* GSTR-2B milaan — only what the supplier filed is credit (s.16(2)(aa)). */}
+      {data && (data.inputRows.length > 0 || twoB) && (
+        <Card className="p-4 mb-4 border border-indigo/30 bg-indigo/5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">GSTR-2B milaan — {range.label}</p>
+              <p className="text-xs text-ink-2 mt-0.5 leading-relaxed max-w-2xl">
+                Portal → Returns → GSTR-2B → <b>Download JSON</b>, phir yahan chuno. Jo supplier ne file kiya sirf wahi credit hai; baaki hold.
+                File browser mein hi padhti hai — kahin upload/save nahi hoti.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => onPick2b(e.target.files?.[0] ?? null)} />
+              <Button variant="default" size="sm" onClick={() => fileRef.current?.click()}><Icon name="file" size={14} className="mr-1.5" />2B JSON chuno</Button>
+              {twoB && <Button variant="ghost" size="sm" icon="download" onClick={export2b}>CSV</Button>}
+            </div>
+          </div>
+          {twoB && (() => {
+            const r = twoB.recon;
+            const t = (x: { igst: number; cgst: number; sgst: number }) => x.igst + x.cgst + x.sgst;
+            return (
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Claim karo (2B ✓)</div><div className="font-mono text-emerald font-semibold">{rupee(r.claimable.total)}</div><div className="text-2xs text-ink-3">{r.matched.length} matched · {r.amountDiffers.length} farq</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Hold (2B mein nahi)</div><div className="font-mono text-amber-ink font-semibold">{rupee(r.held)}</div><div className="text-2xs text-ink-3">{r.onlyInBooks.length} books row</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Bill chhoota (sirf 2B mein)</div><div className="font-mono text-rose font-semibold">{rupee(r.unbooked)}</div><div className="text-2xs text-ink-3">{r.onlyIn2b.length} invoice</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">2B file</div><div className="font-mono text-ink">{twoB.count} inv · {twoB.period ?? "?"}</div><div className="text-2xs text-ink-3">books ITC {rupee(data.inputGST)}</div></div>
+                </div>
+                {r.onlyInBooks.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-amber-ink mb-1">Books mein hai, 2B mein nahi — is mahine claim mat karo, agle 2B mein dekho (ya supplier se filing poochho)</p>
+                    <ul className="text-xs text-ink-2 space-y-0.5">{r.onlyInBooks.slice(0, 20).map((b) => <li key={b.id} className="flex justify-between gap-3"><span className="truncate">{b.vendor} · {b.billNo ?? "bill no. nahi"} · {formatDate(b.date)}{!b.vendorGstin ? " · GSTIN nahi" : ""}</span><span className="font-mono">{rupee(t(b))}</span></li>)}</ul>
+                  </div>
+                )}
+                {r.onlyIn2b.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-rose mb-1">2B mein hai, books mein nahi — bill dhoondh kar Expenses / Bills mein daalo, credit tabhi milega</p>
+                    <ul className="text-xs text-ink-2 space-y-0.5">{r.onlyIn2b.slice(0, 20).map((x, i) => <li key={x.gstin + x.invoiceNo + i} className="flex justify-between gap-3"><span className="truncate">{x.supplierName ?? x.gstin} · {x.invoiceNo} · {x.date ? formatDate(x.date) : "—"}</span><span className="font-mono">{rupee(t(x))}</span></li>)}</ul>
+                  </div>
+                )}
+                {r.amountDiffers.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-ink mb-1">Tax alag hai — 2B ka figure claim karo, books theek karo</p>
+                    <ul className="text-xs text-ink-2 space-y-0.5">{r.amountDiffers.slice(0, 20).map((m) => <li key={m.book.id} className="flex justify-between gap-3"><span className="truncate">{m.book.vendor} · {m.b2b.invoiceNo}</span><span className="font-mono">books {rupee(t(m.book))} → 2B {rupee(t(m.b2b))}</span></li>)}</ul>
+                  </div>
+                )}
+                {r.onlyInBooks.length === 0 && r.onlyIn2b.length === 0 && r.amountDiffers.length === 0 && <p className="text-xs text-emerald">Sab match — poora {rupee(r.claimable.total)} claim karo.</p>}
+              </div>
+            );
+          })()}
         </Card>
       )}
 
