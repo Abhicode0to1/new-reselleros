@@ -262,6 +262,7 @@ export const APP_NAV: NavSection[] = [
       { id: "coupons",         href: "/coupons",           label: "Coupons",         icon: "ticket",  roles: ["owner", "manager"] },
       { id: "online-promos",   href: "/online-promos",     label: "Website offer banner", icon: "sparkles", roles: ["owner", "manager"] },
       { id: "lead-gen",        href: "/lead-gen",          label: "Lead sources",    icon: "target",  roles: ["owner", "manager"] },
+      { id: "lead-finder",     href: "/marketing/lead-finder", label: "AI Lead Finder", icon: "sparkles", roles: ["owner", "manager"], hint: "Agent public web se aapke jaise customers dhoondhe — approve karo to lead" },
     ],
   },
   {
@@ -444,6 +445,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/marketing/campaigns": ["Marketing & Advertising", "Campaign budgets"],
   "/marketing/templates": ["Marketing & Advertising", "Email templates"],
   "/marketing/ads":      ["Marketing & Advertising", "Ad accounts (live)"],
+  "/marketing/lead-finder": ["Marketing & Advertising", "AI Lead Finder"],
   "/marketing/google-business": ["Marketing & Advertising", "Google Business Profile"],
   "/marketing/reviews":   ["Marketing & Advertising", "Google reviews"],
   "/marketing/whatsapp":  ["Marketing & Advertising", "WhatsApp broadcast"],

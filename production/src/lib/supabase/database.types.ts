@@ -2499,6 +2499,22 @@ type AdSpendDailyRow = { tenant_id: string; ad_account_id: string; day: string; 
 type AdSyncRunRow = { id: string; tenant_id: string; started_at: string; finished_at: string | null; trigger: "manual" | "cron" | "connect"; accounts: number; rows_written: number; ok: boolean | null; error: string | null };
 type AdSyncRunInsert = Pick<AdSyncRunRow, "tenant_id" | "trigger"> & Partial<AdSyncRunRow>;
 
+// ── AI Lead Finder — migration 20260927270000 ──────────────────────────────
+type LeadFinderProfileRow = {
+  id: string; tenant_id: string; name: string; cities: string; industries: string; company_size: string; products: string[];
+  must_have: string; exclude: string; daily_limit: number; enabled: boolean; last_run_at: string | null; created_by: string | null; created_at: string; updated_at: string;
+};
+type LeadFinderProfileInsert = Pick<LeadFinderProfileRow, "tenant_id" | "name"> & Partial<LeadFinderProfileRow>;
+type LeadFinderRunRow = { id: string; tenant_id: string; profile_id: string | null; started_at: string; finished_at: string | null; trigger: "manual" | "cron"; discovered: number; skipped_dupe: number; saved: number; ok: boolean | null; error: string | null };
+type LeadFinderRunInsert = Pick<LeadFinderRunRow, "tenant_id" | "trigger"> & Partial<LeadFinderRunRow>;
+type LeadFinderCandidateRow = {
+  id: string; tenant_id: string; profile_id: string | null; run_id: string | null; company: string; domain: string; website: string | null; city: string | null;
+  description: string | null; source_url: string | null; mx_provider: string | null; on_workspace: boolean | null; site_https: boolean | null; site_status: number | null;
+  site_note: string | null; signals: Json; score: number | null; product: string | null; fit_reason: string | null; pitch: string | null;
+  status: "new" | "approved" | "rejected" | "converted"; lead_id: string | null; decided_by: string | null; decided_at: string | null; created_at: string;
+};
+type LeadFinderCandidateInsert = Pick<LeadFinderCandidateRow, "tenant_id" | "company" | "domain"> & Partial<LeadFinderCandidateRow>;
+
 type EmployeeDocumentRow = {
   id:          string;
   tenant_id:   string;
@@ -4334,6 +4350,9 @@ export type Database = {
       employees:{ Row: EmployeeRow; Insert: EmployeeInsert; Update: EmployeeUpdate; Relationships: [] };
       employee_documents:{ Row: EmployeeDocumentRow; Insert: EmployeeDocumentInsert; Update: EmployeeDocumentUpdate; Relationships: [] };
       /** Migration 20260927240000 — company property issued to an employee (laptop, SIM, logins, keys…). */
+      lead_finder_profiles:   { Row: LeadFinderProfileRow;   Insert: LeadFinderProfileInsert;   Update: Partial<LeadFinderProfileRow>;   Relationships: [] };
+      lead_finder_runs:       { Row: LeadFinderRunRow;       Insert: LeadFinderRunInsert;       Update: Partial<LeadFinderRunRow>;       Relationships: [] };
+      lead_finder_candidates: { Row: LeadFinderCandidateRow; Insert: LeadFinderCandidateInsert; Update: Partial<LeadFinderCandidateRow>; Relationships: [] };
       ad_accounts:       { Row: AdAccountRow;      Insert: AdAccountInsert;      Update: Partial<AdAccountInsert>;      Relationships: [] };
       ad_spend_daily:    { Row: AdSpendDailyRow;   Insert: AdSpendDailyRow;      Update: Partial<AdSpendDailyRow>;      Relationships: [] };
       ad_sync_runs:      { Row: AdSyncRunRow;      Insert: AdSyncRunInsert;      Update: Partial<AdSyncRunRow>;         Relationships: [] };

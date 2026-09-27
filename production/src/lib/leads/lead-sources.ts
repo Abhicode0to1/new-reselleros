@@ -40,6 +40,7 @@ export const LEAD_SOURCES: readonly LeadSource[] = [
   { value: "email-inbound",    label: "Email (unhone bheja)" },
   { value: "trade-show",       label: "Trade show / event" },
   { value: "walk-in",          label: "Walk-in / office visit" },
+  { value: "ai-finder",        label: "AI Lead Finder" },
   // How it was entered — not a channel (channel-economics reports these apart)
   { value: "manual",           label: "Added manually" },
   { value: "csv",              label: "CSV import" },
