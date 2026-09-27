@@ -461,7 +461,8 @@ export type BankTransactionSource =
 
 export type BankMatchToType =
   | "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | "statutory"
-  | "prepaid";   // migration 20260925160000 — line funded a prepaid advance
+  | "prepaid"    // migration 20260925160000 — line funded a prepaid advance
+  | "referral_commission";   // migration 20260927190000 — referral commission paid from this line
 
 export type BankMatchConfidence =
   | "exact" | "high" | "low" | "manual";
