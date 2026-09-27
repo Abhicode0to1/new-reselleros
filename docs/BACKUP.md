@@ -4,9 +4,39 @@ _Set up 2026-08-13, after the Supabase dashboard was found showing **`LAST BACKU
 
 ---
 
-## The situation
+## State on 27 Sep 2026 (read this first — the sections below describe August)
 
-The project is on the Supabase **free plan**, which has **no automatic backups and no PITR**.
+Production moved off hosted Supabase to **Cloud SQL `resellersos-db`** (Postgres 17, `asia-southeast1`, project `resellsubsos-prod`). Checked read-only on 27 Sep (S4):
+
+| Layer | State | Gap |
+|---|---|---|
+| Cloud SQL automated backups | ✅ daily 03:00 UTC, 7 kept, last five all SUCCESSFUL | 7 days only |
+| Point-in-time recovery | ✅ on, 7 days of logs | — |
+| Deletion protection | ✅ on | — |
+| Off-site JSON (`gs://resellsubsos-prod-offsite-backups/daily/`, asia-south2, versioned) | ⚠ **last file 2026-09-03** | Stopped when the scheduler still pointed at the old Mumbai URL (403). Job recreated in asia-southeast1 on 27 Sep; first run 28 Sep 00:00 IST — check that `daily/2026-09-28.json` appears |
+| Long retention for GST / income-tax (8 years) | ❌ | `daily/` is deleted after 400 days; nothing longer |
+| Outside this project and billing account | ❌ | Bucket and DB share one project + one billing account: a lapsed bill (R-017) or a lost owner account takes both |
+| Uploaded files (storage) | ❓ not verified | — |
+| Restore rehearsal | ❌ never done on Cloud SQL | do it on staging (docs/STAGING.md) |
+
+**Monthly copy (code, not yet deployed):** from the next deploy, the backup cron also writes `monthly/YYYY-MM.json` on the 1st (IST). For it to outlive 400 days, the bucket's delete rule must skip `monthly/` — run once (replaces the lifecycle; keeps the noncurrent-version rule):
+
+```bash
+cat > /tmp/lc.json <<'EOF'
+{"rule":[
+  {"action":{"type":"Delete"},"condition":{"age":400,"isLive":true,"matchesPrefix":["daily/"]}},
+  {"action":{"type":"Delete"},"condition":{"age":3000,"isLive":true,"matchesPrefix":["monthly/"]}},
+  {"action":{"type":"Delete"},"condition":{"daysSinceNoncurrentTime":30}}
+]}
+EOF
+gcloud storage buckets update gs://resellsubsos-prod-offsite-backups --lifecycle-file=/tmp/lc.json
+```
+
+(3000 days ≈ 8.2 years.) Still open and needs a person: a copy in a **different** project/billing account, a retention lock, and one real restore.
+
+## The situation (August 2026)
+
+The project was on the Supabase **free plan**, which has **no automatic backups and no PITR**.
 
 There was already an in-app snapshot feature (`/settings/backup`, migrations `0210`–`0212`), and its own migration header is honest about why it exists: *"the free Supabase plan has no automatic backups / PITR"*. But those snapshots are written to `backup.snapshots` — **a table inside the same database**.
 

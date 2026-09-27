@@ -43,6 +43,22 @@ export function offsiteObjectName(now: Date): string {
   return `daily/${y}-${m}-${d}.json`;
 }
 
+/**
+ * Mahine ki pehli tareekh (IST) ko ek aur copy `monthly/YYYY-MM.json` par — warna `null`.
+ *
+ * `daily/` 400 din baad lifecycle se mitta hai; GST/Income-tax records 8 saal rakhne hote
+ * hain (S4, 27 Sep 2026). Mahine me ek snapshot lambe samay tak rakhna sasta hai, har din ka
+ * nahi. Bucket ka lifecycle `monthly/` ko 400-din wale niyam se bahar rakhe — wo niyam bucket
+ * par hai, code me nahi (command: repo-root docs/BACKUP.md).
+ */
+export function offsiteMonthlyName(now: Date): string | null {
+  const ist = new Date(now.getTime() + IST_OFFSET_MS);
+  if (ist.getUTCDate() !== 1) return null;
+  const y = ist.getUTCFullYear();
+  const m = String(ist.getUTCMonth() + 1).padStart(2, "0");
+  return `monthly/${y}-${m}.json`;
+}
+
 /** Kis waqt ke baad ke snapshot lene hain. */
 export function offsiteWindowStart(now: Date, hours = OFFSITE_WINDOW_HOURS): Date {
   return new Date(now.getTime() - hours * 3600_000);

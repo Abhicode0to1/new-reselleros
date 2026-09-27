@@ -30,6 +30,7 @@ import { reportCron } from "@/lib/ops/cron-report";
 import {
   OFFSITE_BUCKET,
   offsiteObjectName,
+  offsiteMonthlyName,
   offsiteWindowStart,
   offsiteEnvelope,
   offsiteRefusal,
@@ -88,29 +89,38 @@ async function putOffsite(admin: ReturnType<typeof createAdminClient>): Promise<
     return "metadata server tak nahi pahunch paye — ye route sirf Cloud Run par chalta hai";
   }
 
-  const name = offsiteObjectName(now);
-  const up = await fetch(
-    `https://storage.googleapis.com/upload/storage/v1/b/${OFFSITE_BUCKET}/o` +
-      `?uploadType=media&name=${encodeURIComponent(name)}`,
-    {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify(env),
-      signal: AbortSignal.timeout(120_000),
-    },
-  );
-  if (!up.ok) {
-    /* §24: kya hua, kyun, ab kya. 403 ka matlab lagbhag hamesha ek hi cheez hai. */
-    const body = (await up.text()).slice(0, 200);
-    const hint = up.status === 403
-      ? ` — bucket par grant chahiye: gcloud storage buckets add-iam-policy-binding gs://${OFFSITE_BUCKET}` +
-        ` --member="serviceAccount:1005662057478-compute@developer.gserviceaccount.com" --role="roles/storage.objectAdmin"`
-      : "";
-    return `upload ${up.status}: ${body}${hint}`;
-  }
+  const body = JSON.stringify(env);
+  const upload = async (name: string): Promise<string | null> => {
+    const up = await fetch(
+      `https://storage.googleapis.com/upload/storage/v1/b/${OFFSITE_BUCKET}/o` +
+        `?uploadType=media&name=${encodeURIComponent(name)}`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body,
+        signal: AbortSignal.timeout(120_000),
+      },
+    );
+    if (!up.ok) {
+      /* §24: kya hua, kyun, ab kya. 403 ka matlab lagbhag hamesha ek hi cheez hai. */
+      const text = (await up.text()).slice(0, 200);
+      const hint = up.status === 403
+        ? ` — bucket par grant chahiye: gcloud storage buckets add-iam-policy-binding gs://${OFFSITE_BUCKET}` +
+          ` --member="serviceAccount:1005662057478-compute@developer.gserviceaccount.com" --role="roles/storage.objectAdmin"`
+        : "";
+      return `upload ${name} ${up.status}: ${text}${hint}`;
+    }
+    console.log(`[cron/backup] off-site: gs://${OFFSITE_BUCKET}/${name} — ${env.tenant_count} tenant`);
+    return null;
+  };
 
-  console.log(`[cron/backup] off-site: gs://${OFFSITE_BUCKET}/${name} — ${env.tenant_count} tenant`);
-  return null;
+  const dailyError = await upload(offsiteObjectName(now));
+  if (dailyError) return dailyError;
+
+  /* Mahine ki 1 tareekh: lambi retention wali copy (S4). Daily ho chuka hai, to iski naakami
+     alag se report hoti hai — raat ka backup phir bhi bacha hai. */
+  const monthly = offsiteMonthlyName(now);
+  return monthly ? upload(monthly) : null;
 }
 
 export async function GET(req: NextRequest) {

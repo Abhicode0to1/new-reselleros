@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   offsiteObjectName,
+  offsiteMonthlyName,
   offsiteWindowStart,
   offsiteEnvelope,
   offsiteRefusal,
@@ -47,6 +48,31 @@ describe("offsiteObjectName — IST, kyunki cron IST me chalta hai", () => {
     const a = offsiteObjectName(new Date("2026-08-28T18:30:00Z"));
     const b = offsiteObjectName(new Date("2026-08-29T11:47:13Z"));
     expect(a).toBe(b);
+  });
+});
+
+describe("offsiteMonthlyName — GST ke liye mahine ki ek lambi copy (S4)", () => {
+  it("1 tareekh 00:00 IST (pichhle din 18:30 UTC) par us mahine ka naam", () => {
+    expect(offsiteMonthlyName(new Date("2026-09-30T18:30:00Z"))).toBe("monthly/2026-10.json");
+  });
+
+  it("UTC me 1 tareekh par, IST me 1 nahi — to null (ASLI JAAL)", () => {
+    /* 1 Oct 18:30 UTC = 2 Oct 00:00 IST. UTC se dekhte to 2 Oct ka backup monthly ban jaata. */
+    expect(offsiteMonthlyName(new Date("2026-10-01T18:30:00Z"))).toBeNull();
+  });
+
+  it("baaki har din null", () => {
+    expect(offsiteMonthlyName(new Date("2026-10-14T18:30:00Z"))).toBeNull();
+  });
+
+  it("saal badalna sambhalta hai", () => {
+    expect(offsiteMonthlyName(new Date("2026-12-31T18:30:00Z"))).toBe("monthly/2027-01.json");
+  });
+
+  it("daily/ se alag prefix — bucket ka 400-din niyam ise bahar rakh sake", () => {
+    const now = new Date("2026-09-30T18:30:00Z");
+    expect(offsiteMonthlyName(now)!.startsWith("monthly/")).toBe(true);
+    expect(offsiteObjectName(now).startsWith("daily/")).toBe(true);
   });
 });
 
