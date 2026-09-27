@@ -21,12 +21,12 @@
 
 import * as React from "react";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
+import dynamic from "next/dynamic";
 import { useTeamTree } from "@/lib/queries/team-tree";
 import { TeamViewToggle } from "@/components/shared/team-view-toggle";
 import { HIERARCHY_ENFORCED_IN_DATABASE } from "@/lib/team/enforcement";
 import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { ProjectQuoteFromLead } from "@/components/features/leads/project-quote-from-lead";
 import { pipelineSplit } from "@/lib/leads/enquiry";
 import { toast } from "sonner";
 import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead, useLeadQuotes, useLeadProject, type LeadQuoteRef } from "@/lib/queries/leads";
@@ -37,23 +37,19 @@ import { InlineCell } from "@/components/features/leads/inline-cell";
 import { LossReasonsCard } from "@/components/features/leads/loss-reasons-card";
 import { parseRupeeInput, parseFollowUpDate } from "@/lib/leads/inline-edit";
 import { looksLikeJunk } from "@/lib/leads/junk";
-import { MarkJunkDialog } from "@/components/features/leads/mark-junk-dialog";
 import { qualification } from "@/lib/leads/qualification";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { useInboundEmails } from "@/lib/queries/inbound-emails";
 import { isSentReply } from "@/lib/inbound/sent";
 import { buildEmailThread, summariseThread, factsSuperseded } from "@/lib/leads/email-thread";
 import { EmailThreadPanel } from "@/components/features/leads/email-thread-panel";
-import { LeadEmailComposer } from "@/components/features/leads/lead-email-composer";
 import { ReplyComposer } from "@/components/features/enquiries/reply-composer";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
 import { useQuotesByLead } from "@/lib/queries/quotes";
 import { QuoteActionBar } from "@/components/features/quotes/quote-action-bar";
 import { useTasks, useTasksForLead, useCompleteTask, useSnoozeTask, useDeleteTask } from "@/lib/queries/tasks";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
-import { AddTaskDialog } from "@/components/features/tasks/add-task-dialog";
 import { LeadCard } from "@/components/features/leads/lead-card";
-import { AddLeadForm } from "@/components/features/leads/add-lead-form";
 import { QuickAddLeadForm } from "@/components/features/leads/quick-add-lead-form";
 import { LeadsSmartViews, type SmartView } from "@/components/features/leads/leads-smart-views";
 import { PriorityCallQueue } from "@/components/features/leads/priority-call-queue";
@@ -92,14 +88,9 @@ import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/lead
 import { leadDisplayName, leadContactLines, leadCompanyCell } from "@/lib/leads/display-name";
 import { SALES_FOLDERS, inSalesFolder, salesFolderCounts, type SalesFolder } from "@/lib/leads/folders";
 import { SwipeLeadCard } from "@/components/features/leads/swipe-lead-card";
-import { ImportCsvDialog } from "@/components/features/leads/import-csv-dialog";
 import { downloadCSV } from "@/lib/csv";
 import { LEADS_CSV_HEADERS, leadsCsvRows } from "@/lib/export/crm-csv";
 import { ShareFormSheet, ENQUIRY_SHARE } from "@/components/features/leads/share-form-sheet";
-import StartTrialDialog from "@/components/features/leads/start-trial-dialog";
-import CampaignComposerDialog from "@/components/features/campaigns/campaign-composer-dialog";
-import GoogleContactsImportDialog from "@/components/features/contacts/google-contacts-import-dialog";
-import SendWhatsAppDialog from "@/components/features/whatsapp/send-whatsapp-dialog";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { JunkAIReview } from "@/components/features/leads/junk-ai-review";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -133,6 +124,20 @@ import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useUserNames } from "@/lib/hooks/useUserNames";
 import { addedByLabel } from "@/lib/leads/added-by";
 import { WhatsAppActionDialog } from "@/components/shared/whatsapp-action-dialog";
+
+/* Dialogs nobody sees on first paint are loaded when opened (27 Sep 2026): the Sales &
+   Pipeline page carried ~4,000 lines of dialog code into every load — Add lead, CSV import,
+   Google contacts, campaign composer, WhatsApp, trial, tasks, junk, email, project quote. */
+const AddLeadForm = dynamic(() => import("@/components/features/leads/add-lead-form").then((m) => m.AddLeadForm), { ssr: false });
+const ImportCsvDialog = dynamic(() => import("@/components/features/leads/import-csv-dialog").then((m) => m.ImportCsvDialog), { ssr: false });
+const AddTaskDialog = dynamic(() => import("@/components/features/tasks/add-task-dialog").then((m) => m.AddTaskDialog), { ssr: false });
+const MarkJunkDialog = dynamic(() => import("@/components/features/leads/mark-junk-dialog").then((m) => m.MarkJunkDialog), { ssr: false });
+const LeadEmailComposer = dynamic(() => import("@/components/features/leads/lead-email-composer").then((m) => m.LeadEmailComposer), { ssr: false });
+const ProjectQuoteFromLead = dynamic(() => import("@/components/features/leads/project-quote-from-lead").then((m) => m.ProjectQuoteFromLead), { ssr: false });
+const CampaignComposerDialog = dynamic(() => import("@/components/features/campaigns/campaign-composer-dialog"), { ssr: false });
+const GoogleContactsImportDialog = dynamic(() => import("@/components/features/contacts/google-contacts-import-dialog"), { ssr: false });
+const SendWhatsAppDialog = dynamic(() => import("@/components/features/whatsapp/send-whatsapp-dialog"), { ssr: false });
+const StartTrialDialog = dynamic(() => import("@/components/features/leads/start-trial-dialog"), { ssr: false });
 
 // ============================================================
 // Stage config (matches prototype LEAD_STAGES)
