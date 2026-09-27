@@ -889,6 +889,9 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                 <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="w-4 h-4 accent-amber" />
                 Active employee
               </label>
+              {!active && (employee?.is_active ?? true) && (
+                <p className="text-2xs text-amber-ink -mt-1">Inactive karne se pehle profile mein <b>Exit checklist</b> dekho — devices/logins wapas, advance settle, full &amp; final.</p>
+              )}
             </section>
           )}
         </div>

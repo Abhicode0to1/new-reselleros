@@ -2446,6 +2446,25 @@ type EmployeeInsert = {
 };
 type EmployeeUpdate = Partial<Omit<EmployeeInsert, "tenant_id">>;
 
+// ── Company property with an employee — migration 20260927240000 ─────────────
+type EmployeeAssetRow = {
+  id:               string;
+  tenant_id:        string;
+  employee_id:      string;
+  kind:             "laptop" | "phone" | "sim" | "id_card" | "keys" | "access" | "vehicle" | "document" | "other";
+  name:             string;
+  identifier:       string | null;
+  fixed_asset_id:   string | null;
+  issued_on:        string;
+  returned_on:      string | null;
+  return_condition: "ok" | "damaged" | "lost" | "revoked" | null;
+  notes:            string | null;
+  created_at:       string;
+  updated_at:       string;
+};
+type EmployeeAssetInsert = Omit<EmployeeAssetRow, "id" | "created_at" | "updated_at" | "returned_on" | "return_condition" | "identifier" | "fixed_asset_id" | "notes" | "issued_on">
+  & Partial<Pick<EmployeeAssetRow, "id" | "returned_on" | "return_condition" | "identifier" | "fixed_asset_id" | "notes" | "issued_on" | "updated_at">>;
+
 type EmployeeDocumentRow = {
   id:          string;
   tenant_id:   string;
@@ -4280,6 +4299,8 @@ export type Database = {
       employee_loan_repayments:{ Row: EmployeeLoanRepaymentRow; Insert: EmployeeLoanRepaymentInsert; Update: EmployeeLoanRepaymentUpdate; Relationships: [] };
       employees:{ Row: EmployeeRow; Insert: EmployeeInsert; Update: EmployeeUpdate; Relationships: [] };
       employee_documents:{ Row: EmployeeDocumentRow; Insert: EmployeeDocumentInsert; Update: EmployeeDocumentUpdate; Relationships: [] };
+      /** Migration 20260927240000 — company property issued to an employee (laptop, SIM, logins, keys…). */
+      employee_assets: { Row: EmployeeAssetRow; Insert: EmployeeAssetInsert; Update: Partial<Omit<EmployeeAssetInsert, "tenant_id">>; Relationships: [] };
       reimbursements:{ Row: ReimbursementRow; Insert: ReimbursementInsert; Update: ReimbursementUpdate; Relationships: [] };
       leave_entries:{ Row: LeaveEntryRow; Insert: LeaveEntryInsert; Update: LeaveEntryUpdate; Relationships: [] };
       salary_payments:{ Row: SalaryPaymentRow; Insert: SalaryPaymentInsert; Update: SalaryPaymentUpdate; Relationships: [] };

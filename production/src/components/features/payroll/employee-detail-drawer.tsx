@@ -27,6 +27,7 @@ import { rupee, formatDate } from "@/lib/utils";
 import { calculateCtcBreakdown } from "@/lib/payroll/ctc";
 import { DocViewerDialog } from "@/components/features/documents/doc-viewer-dialog";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { EmployeeProperty } from "@/components/features/payroll/employee-property";
 
 const DOC_LABEL = new Map(EMPLOYEE_DOC_TYPES.map((d) => [d.value, d.label]));
 
@@ -155,6 +156,9 @@ export function EmployeeDetailDrawer({
                 </div>
               );
             })()}
+
+            {/* Company property + exit checklist (lib/payroll/employee-assets.ts) */}
+            {employee && <EmployeeProperty employee={{ id: employee.id, name: employee.name, is_active: employee.is_active !== false }} />}
 
             {/* Documents */}
             <div>

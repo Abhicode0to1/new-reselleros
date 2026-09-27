@@ -18,12 +18,15 @@ import { rupee, formatDate } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import { useFixedAssets, useCreateFixedAsset, useDisposeFixedAsset, useDeleteFixedAsset, useCapitalisableExpenses, type FixedAsset } from "@/lib/queries/fixed-assets";
 import { useEmiPurchases } from "@/lib/queries/emi";
+import { useEmployeeAssets } from "@/lib/queries/employee-assets";
 import { BLOCKS, depreciationSchedule, depreciationInFy, bookValueNow, registerSummary, fyStartOf, fyLabel, type AssetBlock } from "@/lib/accounting/depreciation";
 
 function todayIso(): string { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10); }
 
 export function FixedAssetRegister() {
   const { data: assets, isLoading } = useFixedAssets();
+  const { data: issued } = useEmployeeAssets();
+  const holder = new Map((issued ?? []).filter((a) => !a.returned_on && a.fixed_asset_id).map((a) => [a.fixed_asset_id as string, a.employee_name]));
   const dispose = useDisposeFixedAsset();
   const del = useDeleteFixedAsset();
   const confirm = useConfirm();
@@ -92,7 +95,7 @@ export function FixedAssetRegister() {
                     const sold = !!a.disposed_on;
                     return (
                       <tr key={a.id} className={sold ? "opacity-60" : ""}>
-                        <td className="px-3 py-2 text-ink">{a.name}{sold && <span className="ml-2 text-2xs text-ink-3">sold {formatDate(a.disposed_on!)} for {rupee(a.disposal_value)}</span>}</td>
+                        <td className="px-3 py-2 text-ink">{a.name}{holder.get(a.id) && <span className="ml-2 text-2xs text-indigo">with {holder.get(a.id)}</span>}{sold && <span className="ml-2 text-2xs text-ink-3">sold {formatDate(a.disposed_on!)} for {rupee(a.disposal_value)}</span>}</td>
                         <td className="px-3 py-2 text-ink-2 text-xs">{BLOCKS[a.block].label} · {BLOCKS[a.block].ratePct}%</td>
                         <td className="px-3 py-2 text-right font-mono">{rupee(a.cost)}</td>
                         <td className="px-3 py-2 text-ink-2 text-xs">{formatDate(a.put_to_use)}{fyStartOf(a.put_to_use) === fy && depreciationSchedule(a, fy)[0]?.halfRate ? <span className="ml-1 text-amber-ink">(½ rate — &lt;180 din)</span> : null}</td>

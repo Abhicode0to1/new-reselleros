@@ -120,6 +120,12 @@ export const EMPLOYEE_DOC_TYPES: { value: string; label: string }[] = [
   { value: "voter_id",     label: "Voter ID" },
   { value: "resume",       label: "Resume / CV" },
   { value: "offer_letter", label: "Offer letter" },
+  /* The exit set (27 Sep 2026) — the offboarding checklist looks for "relieving_letter". */
+  { value: "appointment_letter", label: "Appointment letter" },
+  { value: "nda",                label: "NDA / agreement" },
+  { value: "resignation",        label: "Resignation letter" },
+  { value: "relieving_letter",   label: "Relieving / experience letter" },
+  { value: "form16",             label: "Form 16" },
   { value: "other",        label: "Other" },
 ];
 export const EMPLOYEE_DOC_BUCKET = "employee-docs";
