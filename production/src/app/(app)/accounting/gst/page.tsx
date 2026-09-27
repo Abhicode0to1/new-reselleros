@@ -775,7 +775,7 @@ export default function GstReportPage() {
       )}
 
       {/* GSTR-2B milaan — only what the supplier filed is credit (s.16(2)(aa)). */}
-      {data && (data.inputRows.length > 0 || twoB) && (
+      {data && (
         <Card className="p-4 mb-4 border border-indigo/30 bg-indigo/5">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
