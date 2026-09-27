@@ -7,9 +7,10 @@
  * changed in a single place rather than inside markup.
  *
  * ⚠️ PLACEHOLDER CONTENT, flagged deliberately:
- *   · TRUSTED_LOGOS and TESTIMONIALS are the engine's existing placeholder
- *     names and stock portraits — they are NOT real, signed-off customer
- *     references. The rest of this site already labels such content ("Client
+ *   · TRUSTED_LOGOS are the engine's existing placeholder names — NOT real,
+ *     signed-off customer references. (The placeholder TESTIMONIALS with stock
+ *     portraits were removed on 27 Sep 2026; real reviews come from
+ *     Marketing → Google reviews.) The rest of this site already labels such content ("Client
  *     names and figures are placeholders until the real case studies are signed
  *     off"). Replace them with real reviews, or drop the sections, before this
  *     page is promoted as the public face.
@@ -125,16 +126,6 @@ export const HOSTING_STEPS = [
   { num: 2, icon: "globe",  title: "Choose Domain",        body: "Register a new domain or connect your existing one." },
   { num: 3, icon: "server", title: "Build Your Website",   body: "Install WordPress or use one-click apps to build your site." },
   { num: 4, icon: "rocket", title: "Go Live & Upgrade",    body: "Launch your website. Upgrade anytime if you love our service!" },
-] as const;
-
-/** ⚠️ Placeholder testimonials + stock portraits — see the file header. */
-export const HOSTING_TESTIMONIALS = [
-  { quote: "Anutech Hosting is fast, reliable and the support team is outstanding. Highly recommended!", name: "Ravi Sharma",     role: "Founder, TechSolution",        img: "https://randomuser.me/api/portraits/men/32.jpg" },
-  { quote: "Our website migrated seamlessly and the performance boost is amazing. Great support!",       name: "Priya Mehta",     role: "Marketing Head, Crafto",       img: "https://randomuser.me/api/portraits/women/44.jpg" },
-  { quote: "Finally, a hosting company that actually cares about its customers. 10/10!",                 name: "Amit Verma",      role: "CEO, DigitalGrow",             img: "https://randomuser.me/api/portraits/men/54.jpg" },
-  { quote: "Affordable pricing with premium features. Best decision for our business.",                  name: "Sneha Iyer",      role: "Co-founder, Travelizo",        img: "https://randomuser.me/api/portraits/women/68.jpg" },
-  { quote: "Setup took minutes and our site has not gone down once. Rock-solid uptime.",                 name: "Karan Malhotra",  role: "Owner, Brilliant Studio",      img: "https://randomuser.me/api/portraits/men/76.jpg" },
-  { quote: "The free migration was painless and support answered within minutes. Fantastic.",            name: "Neha Kapoor",     role: "Director, GrowMore Digital",   img: "https://randomuser.me/api/portraits/women/12.jpg" },
 ] as const;
 
 export const HOSTING_FAQS = [

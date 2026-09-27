@@ -32,7 +32,6 @@ import {
   MIGRATION_WEDO,
   HOSTING_WORRIES,
   HOSTING_PROOFS,
-  HOSTING_QUOTES,
   HOSTING_GOOD_FIT,
   HOSTING_BAD_FIT,
   HOSTING_CHANNELS,
@@ -470,20 +469,9 @@ export function HostingLanding() {
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: tripleCol, gap: 16 }}>
-            {HOSTING_QUOTES.map((q) => (
-              <div key={q.name} style={{ border: `1px solid ${C.line}`, borderRadius: 14, padding: 22, background: C.tint, display: "flex", flexDirection: "column", gap: 14 }}>
-                <p style={{ fontSize: 16.5, lineHeight: 1.5, letterSpacing: "-.01em", textWrap: "pretty" } as React.CSSProperties}>&ldquo;{q.text}&rdquo;</p>
-                <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 11 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 999, background: "#F0E8E0", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 14, color: C.muted }}>{q.initials}</div>
-                  <div>
-                    <div style={{ fontSize: 14.5, fontWeight: 700 }}>{q.name}</div>
-                    <div style={{ fontSize: 13, color: C.muted }}>{q.role}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          {/* Testimonials removed 27 Sep 2026: the three quotes here were placeholders with
+              invented names, which is misleading advertising. Real, consented reviews go
+              here — Marketing → Google reviews collects them. */}
         </div>
       </section>
 

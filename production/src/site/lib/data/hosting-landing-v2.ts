@@ -146,13 +146,6 @@ export const HOSTING_PROOFS: readonly { k: string; v: string; a: string; href: s
   { k: "TERMS", v: "Refund policy and terms published in plain language", a: "Read the refund policy", href: "/refund" },
 ];
 
-/** ⚠️ Placeholder testimonials — kept as-is per Pardeep (already on the live page). */
-export const HOSTING_QUOTES: readonly { text: string; initials: string; name: string; role: string }[] = [
-  { text: "Anutech Hosting is fast, reliable and the support team is outstanding. Highly recommended!", initials: "RS", name: "Ravi Sharma", role: "Founder, TechSolution" },
-  { text: "Our website migrated seamlessly and the performance boost is amazing. Great support!", initials: "PM", name: "Priya Mehta", role: "Marketing Head, Crafto" },
-  { text: "Finally, a hosting company that actually cares about its customers. 10/10!", initials: "AV", name: "Amit Verma", role: "CEO, DigitalGrow" },
-];
-
 export const HOSTING_GOOD_FIT: readonly string[] = [
   "Business, portfolio and brochure websites",
   "WordPress, WooCommerce and other one-click apps",
