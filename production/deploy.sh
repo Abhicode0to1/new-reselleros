@@ -17,7 +17,7 @@ set -euo pipefail
 ACCOUNT="pardeep@anutech.in"       # owns the project below. NOT exceltechnologies.
 PROJECT="resellsubsos-prod"        # LIVE project. NOT "resellersos-prod" (that is a
                                    # different, unrelated project — stale in old docs).
-REGION="asia-south1"               # Mumbai
+REGION="asia-southeast1"           # Singapore — the service moved here on 5 Sep 2026 (cloudbuild.yaml _REGION)
 SERVICE="resellersos"
 
 cd "$(dirname "$0")"               # always run from production/ (has the Dockerfile)

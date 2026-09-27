@@ -37,8 +37,18 @@
 
 set -euo pipefail
 
-REGION="${REGION:-asia-south1}"
-SERVICE_URL="${SERVICE_URL:-https://resellersos-1005662057478.asia-south1.run.app}"
+# Singapore since 5 Sep 2026 (cloudbuild.yaml _REGION). The Mumbai URL that used to sit
+# here as the default pointed every job at the OLD service after the move — jobs that
+# looked scheduled and ran old code (or got 403). The URL is now read from the live
+# service, so it cannot go stale again.
+REGION="${REGION:-asia-southeast1}"
+SERVICE_NAME="${SERVICE_NAME:-resellersos}"
+SERVICE_URL="${SERVICE_URL:-$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')}"
+if [[ -z "$SERVICE_URL" ]]; then
+  echo "Could not resolve the Cloud Run URL for $SERVICE_NAME in $REGION — set SERVICE_URL explicitly." >&2
+  exit 1
+fi
+echo "Scheduling against $SERVICE_URL"
 # Schedules are written in IST. Cloud Scheduler does the UTC conversion, and
 # daylight saving does not apply in India — so these read exactly as intended,
 # which UTC cron expressions do not.
