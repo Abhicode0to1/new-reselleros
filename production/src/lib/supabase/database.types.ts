@@ -2487,6 +2487,18 @@ type GbpSyncRunRow = {
 };
 type GbpSyncRunInsert = Omit<GbpSyncRunRow, "id" | "started_at" | "finished_at" | "locations" | "reviews" | "metric_rows" | "ok" | "error"> & Partial<GbpSyncRunRow>;
 
+// ── Ad platforms (Google Ads / Meta Ads) — migration 20260927260000 (server-written) ──
+type AdAccountRow = {
+  id: string; tenant_id: string; platform: "google-ads" | "meta-ads"; account_id: string; name: string; currency: string;
+  login_customer_id: string | null; connected_user_id: string | null; access_token: string | null; token_expires_at: string | null;
+  enabled: boolean; last_synced_at: string | null; last_error: string | null; created_at: string; updated_at: string;
+};
+type AdAccountInsert = Omit<AdAccountRow, "id" | "created_at" | "updated_at" | "enabled" | "login_customer_id" | "connected_user_id" | "access_token" | "token_expires_at" | "last_synced_at" | "last_error" | "currency">
+  & Partial<Pick<AdAccountRow, "id" | "enabled" | "login_customer_id" | "connected_user_id" | "access_token" | "token_expires_at" | "last_synced_at" | "last_error" | "currency" | "updated_at">>;
+type AdSpendDailyRow = { tenant_id: string; ad_account_id: string; day: string; campaign_id: string; campaign_name: string; spend: number; impressions: number; clicks: number; conversions: number; conversion_value: number };
+type AdSyncRunRow = { id: string; tenant_id: string; started_at: string; finished_at: string | null; trigger: "manual" | "cron" | "connect"; accounts: number; rows_written: number; ok: boolean | null; error: string | null };
+type AdSyncRunInsert = Pick<AdSyncRunRow, "tenant_id" | "trigger"> & Partial<AdSyncRunRow>;
+
 type EmployeeDocumentRow = {
   id:          string;
   tenant_id:   string;
@@ -4322,6 +4334,9 @@ export type Database = {
       employees:{ Row: EmployeeRow; Insert: EmployeeInsert; Update: EmployeeUpdate; Relationships: [] };
       employee_documents:{ Row: EmployeeDocumentRow; Insert: EmployeeDocumentInsert; Update: EmployeeDocumentUpdate; Relationships: [] };
       /** Migration 20260927240000 — company property issued to an employee (laptop, SIM, logins, keys…). */
+      ad_accounts:       { Row: AdAccountRow;      Insert: AdAccountInsert;      Update: Partial<AdAccountInsert>;      Relationships: [] };
+      ad_spend_daily:    { Row: AdSpendDailyRow;   Insert: AdSpendDailyRow;      Update: Partial<AdSpendDailyRow>;      Relationships: [] };
+      ad_sync_runs:      { Row: AdSyncRunRow;      Insert: AdSyncRunInsert;      Update: Partial<AdSyncRunRow>;         Relationships: [] };
       gbp_locations:     { Row: GbpLocationRow;    Insert: GbpLocationInsert;    Update: Partial<GbpLocationInsert>;    Relationships: [] };
       gbp_reviews:       { Row: GbpReviewRow;      Insert: GbpReviewInsert;      Update: Partial<GbpReviewInsert>;      Relationships: [] };
       gbp_metrics_daily: { Row: GbpMetricDailyRow; Insert: GbpMetricDailyRow;    Update: Partial<GbpMetricDailyRow>;    Relationships: [] };

@@ -21,6 +21,13 @@ const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
  * four APIs (Google has no read-only one). Its own consent flow, for the reason the Gmail
  * block below gives: the consent screen must say what the button says.
  */
+/** Google Ads (adwords) — read spend per campaign. Its own consent, like the others. */
+export const GOOGLE_ADS_SCOPES = [
+  "openid",
+  "email",
+  "https://www.googleapis.com/auth/adwords",
+].join(" ");
+
 export const GBP_SCOPES = [
   "openid",
   "email",
@@ -130,6 +137,10 @@ export function contactsRedirectUri(origin: string): string {
  * which consent it was completing, so it could not decide what to store or where
  * to send the user back to. Two URIs, two unambiguous handlers.
  */
+export function googleAdsRedirectUri(origin: string): string {
+  return `${origin}/api/integrations/google-ads/callback`;
+}
+
 export function gbpRedirectUri(origin: string): string {
   return `${origin}/api/integrations/google-business/callback`;
 }

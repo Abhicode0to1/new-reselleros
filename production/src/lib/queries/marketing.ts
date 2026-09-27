@@ -167,6 +167,25 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         }
       }
 
+      // ── Platform-reported spend beside the books (migration 20260927260000) ──
+      // The books stay the source above; this only NAMES a disagreement, so a month whose
+      // Google invoice is not booked yet does not silently read as "CAC improved".
+      {
+        const [{ data: accs }, { data: daily }] = await Promise.all([
+          supabase.from("ad_accounts").select("id, platform"),
+          supabase.from("ad_spend_daily").select("ad_account_id, spend").gte("day", range.start).lt("day", range.end),
+        ]);
+        const platformOf = new Map((accs ?? []).map((a) => [a.id, a.platform as string]));
+        const reported = new Map<string, number>();
+        for (const r of daily ?? []) { const p = platformOf.get(r.ad_account_id); if (p) reported.set(p, (reported.get(p) ?? 0) + Number(r.spend)); }
+        for (const [p, plat] of reported) {
+          const booked = spend.filter((x) => x.channel === p).reduce((a, x) => a + x.rupees, 0);
+          const label = p === "google-ads" ? "Google Ads" : "Meta Ads";
+          if (plat > 0 && (booked === 0 || Math.abs(booked - plat) / plat > 0.25)) {
+            gaps.push(`${label} ne is range mein ₹${Math.round(plat).toLocaleString("en-IN")} kharcha report kiya, books mein ₹${Math.round(booked).toLocaleString("en-IN")} tagged hai — CAC books se hai; farq Ad accounts (live) page par mahine-wise dekho.`);
+          }
+        }
+      }
       // ── Revenue actually collected, and the monthly series ───────────────
       const payQ = await supabase
         .from("payments")
