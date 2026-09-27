@@ -16,8 +16,16 @@ Fill each row, then both people log in once and tick "checked".
 | GitHub — repository admin | Code, branches, Actions (integration-check) | | | |
 | Google Ads (Admin) | Ad spend, API developer token | | | |
 | Meta Business Manager (Admin) | Meta ads, WhatsApp Business | | | |
-| WhatsApp Business API provider | Customer WhatsApp messages | | | |
-| Email sending provider | Invoices, reminders, OTP emails | | | |
+| WhatsApp Business API — Gupshup (`GUPSHUP_*`) | Customer WhatsApp messages, broadcasts | | | |
+| Email sending — Resend (`RESEND_API_KEY`) | Invoices, reminders, OTP emails | | | |
+| Google Workspace reseller — Partner Sales Console (`GOOGLE_CSP_*`) | **Core business**: customer Workspace orders, seats, renewals, provisioning | | | |
+| GST e-invoice portal / IRP (`GST_IRP_*`) | IRN on B2B invoices; e-invoice mandatory above the turnover limit | | | |
+| Google AI Studio — Gemini API (`GEMINI_API_KEY`) | AI Lead Finder, AI replies and drafts | | | |
+| Sentry (`SENTRY_*`) | Error alerts from production | | | |
+| Healthchecks.io (`HEARTBEAT_PING_URL`) | Alert when a cron job silently stops | | | |
+| Plausible analytics (`NEXT_PUBLIC_PLAUSIBLE_DOMAIN`) | Website traffic numbers | | | |
+| AI calling — Vapi / Retell, Sarvam (`VAPI_*`, `RETELL_*`, `SARVAM_API_KEY`) | Telecalling agent, phone numbers, voice | | | |
+| DMS engine / panel (`DMS_*`) | DMS panel purchase, trial, SSO for customers | | | |
 | Claude organisation (team board, artifacts) | Cross-team board and chat | pardeep@anutech.in | | |
 
 ## When someone leaves or changes role
