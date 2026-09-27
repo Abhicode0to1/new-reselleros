@@ -1737,6 +1737,11 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
           <div>
             <label className="block text-xs font-medium text-ink-2 mb-1">Pay date</label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            {/* Accrual (migration 20260927170000): the cost sits in the salary month, the cash on the pay date. */}
+            <p className="mt-1 text-2xs text-ink-3">
+              Kharcha <b>{period}</b> ke mahine mein book hoga{date.slice(0, 7) !== period ? ` (${period} ki aakhri tareekh par)` : ""}; bank se paisa {date ? formatDate(date) : "pay date"} ko niklega.
+              {date.slice(0, 7) !== period && " Agar wo mahina books-lock hai to pehle lock hatao."}
+            </p>
           </div>
 
           <div className="rounded-md bg-paper-2/50 p-3 text-sm space-y-1">
