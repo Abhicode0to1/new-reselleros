@@ -22,7 +22,7 @@
 # See what already exists — birthday-greetings names a Cloud Scheduler job in its
 # own comments, so some jobs may already be set up by hand:
 #
-#   gcloud scheduler jobs list --location=asia-south1
+#   gcloud scheduler jobs list --location=asia-southeast1
 #
 # This script CREATES missing jobs and SKIPS ones that already exist, so it is
 # safe to re-run and cannot disturb a job that is working. Set UPDATE_EXISTING=1
@@ -222,12 +222,12 @@ cat <<'DONE'
 
 Done. Verify what is now scheduled:
 
-  gcloud scheduler jobs list --location=asia-south1
+  gcloud scheduler jobs list --location=asia-southeast1
 
 Prove one end to end WITHOUT waiting for its schedule — the renewals and
 compliance jobs both support a dry run that sends nothing and writes nothing:
 
-  gcloud scheduler jobs run resellersos-renewals --location=asia-south1
+  gcloud scheduler jobs run resellersos-renewals --location=asia-southeast1
   gcloud logging read \
     'resource.type=cloud_run_revision AND textPayload:"cron"' \
     --limit=20 --freshness=10m

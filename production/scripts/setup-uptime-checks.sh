@@ -15,6 +15,10 @@
 # Idempotent: every resource is looked up by display name and skipped if present.
 #
 #   PROJECT=resellsubsos-prod NOTIFY_EMAIL=pardeep@anutech.in ./scripts/setup-uptime-checks.sh
+#
+# Before /api/public/health/live is deployed, run with HEALTH_PATH=/login so the check
+# watches the page that exists today. After the deploy, run it again without HEALTH_PATH:
+# an existing check on a different path is updated in place (same name, same alert).
 
 set -euo pipefail
 
@@ -22,9 +26,10 @@ PROJECT="${PROJECT:-resellsubsos-prod}"
 REGION="${REGION:-asia-southeast1}"
 SERVICE_NAME="${SERVICE_NAME:-resellersos}"
 NOTIFY_EMAIL="${NOTIFY_EMAIL:?Set NOTIFY_EMAIL=someone@anutech.in}"
+HEALTH_PATH="${HEALTH_PATH:-/api/public/health/live}"
 HOST="${HOST:-$(gcloud run services describe "$SERVICE_NAME" --project "$PROJECT" --region "$REGION" --format='value(status.url)' | sed 's#https://##')}"
 
-echo "Project: $PROJECT · host: $HOST · notify: $NOTIFY_EMAIL"
+echo "Project: $PROJECT · host: $HOST · path: $HEALTH_PATH · notify: $NOTIFY_EMAIL"
 
 # ── Notification channel (email) ─────────────────────────────────────────────
 CHANNEL="$(gcloud alpha monitoring channels list --project "$PROJECT" --filter="displayName='ResellerOS ops email' AND type='email'" --format='value(name)' | head -1 || true)"
@@ -36,14 +41,21 @@ else
 fi
 
 # ── 1. Uptime check ──────────────────────────────────────────────────────────
-if gcloud monitoring uptime list-configs --project "$PROJECT" --format='value(displayName)' 2>/dev/null | grep -qx 'ResellerOS live'; then
-  echo "uptime check exists"
+UPTIME_ID="$(gcloud monitoring uptime list-configs --project "$PROJECT" --filter="displayName=\"ResellerOS live\"" --format="value(name.basename())" 2>/dev/null | head -1 || true)"
+if [[ -n "$UPTIME_ID" ]]; then
+  CUR_PATH="$(gcloud monitoring uptime describe "$UPTIME_ID" --project "$PROJECT" --format="value(httpCheck.path)")"
+  if [[ "$CUR_PATH" != "$HEALTH_PATH" ]]; then
+    gcloud monitoring uptime update "$UPTIME_ID" --project "$PROJECT" --path="$HEALTH_PATH"
+    echo "uptime check path $CUR_PATH -> $HEALTH_PATH"
+  else
+    echo "uptime check exists ($CUR_PATH)"
+  fi
 else
-  gcloud monitoring uptime create 'ResellerOS live' --project "$PROJECT" \
+  gcloud monitoring uptime create "ResellerOS live" --project "$PROJECT" \
     --resource-type=uptime-url --resource-labels="host=$HOST,project_id=$PROJECT" \
-    --protocol=https --path=/api/public/health/live --port=443 --period=5 --timeout=10 \
+    --protocol=https --path="$HEALTH_PATH" --port=443 --period=5 --timeout=10 \
     --regions=asia-pacific,europe,usa-oregon --status-codes=200
-  echo "created uptime check"
+  echo "created uptime check on $HEALTH_PATH"
 fi
 
 # ── 2 + 3. Alert policies ────────────────────────────────────────────────────
