@@ -66,6 +66,10 @@ export default function BankingPage() {
           <Button icon="list" onClick={() => router.push("/accounting/banking/rules" as Route)}>
             Category rules
           </Button>
+          {/* Month-end: bank balance vs book balance, every difference named (lib/banking/brs.ts). */}
+          <Button icon="check" onClick={() => router.push("/accounting/banking/brs" as Route)}>
+            Bank reconciliation
+          </Button>
           {(accounts?.length ?? 0) >= 2 && (
             <Button icon="refresh" onClick={() => setTransferOpen(true)}>
               Move money / withdraw
