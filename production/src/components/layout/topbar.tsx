@@ -55,6 +55,10 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
 
   return (
     <header className="sticky top-0 z-30 h-14 border-b border-hairline bg-paper/95 backdrop-blur-sm flex items-center gap-2 px-3 md:px-4">
+      {/* STAGING banner — so a screenshot can never be mistaken for production (docs/STAGING.md). */}
+      {process.env.NEXT_PUBLIC_APP_ENV === "staging" && (
+        <span className="shrink-0 rounded bg-amber text-ink text-3xs font-bold uppercase tracking-wider px-2 py-0.5" title="Ye staging hai — demo data, koi customer nahi">Staging</span>
+      )}
       {/* Mobile hamburger */}
       <button
         type="button"

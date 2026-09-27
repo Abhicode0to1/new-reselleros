@@ -53,6 +53,12 @@ steps:
       # badalta SHA build cache nahi todta.
       - --build-arg=BUILD_SHA=$SHORT_SHA
       - --build-arg=BUILD_ID=$BUILD_ID
+      # Staging builds the same file with different substitutions (docs/STAGING.md). The
+      # defaults below are the production values, so the `deploy` trigger is unchanged.
+      - --build-arg=NEXT_PUBLIC_SUPABASE_URL=$_SUPABASE_URL
+      - --build-arg=NEXT_PUBLIC_SUPABASE_ANON_KEY=$_SUPABASE_ANON_KEY
+      - --build-arg=NEXT_PUBLIC_APP_URL=$_APP_URL
+      - --build-arg=NEXT_PUBLIC_APP_ENV=$_APP_ENV
       # ⚠️ YE FLAG LAGI HUI HAI PAR KABHI CHALI NAHI. 29 Aug 2026 par naapa: ek build ke
       # poore log me **ek bhi `CACHED` line nahi** — har layer har baar naye sire se banti
       # hai. Yahan pehle likha tha "Reuse the previous image's layers so a typical build is
@@ -86,7 +92,7 @@ steps:
     args:
       - run
       - deploy
-      - resellersos
+      - $_SERVICE
       - --image=$_IMAGE:$SHORT_SHA
       - --region=$_REGION
       - --platform=managed
@@ -99,6 +105,12 @@ steps:
 
 substitutions:
   _REGION: asia-southeast1
+  _SERVICE: resellersos
+  # Build-time public values. Production defaults; the staging trigger overrides all four.
+  _SUPABASE_URL: https://api.anutech.in
+  _SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9udHBucWpveXNqZ3Jsc3VrZWNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjc1NjcsImV4cCI6MjA5NDg0MzU2N30.tulYYDQSzq7IpEQCFbP7qjsSUxg4c-0ku5uO80-TKXI
+  _APP_URL: https://reselleros.anutech.in
+  _APP_ENV: ""
   # The same Artifact Registry path the current revision already runs from.
   _IMAGE: asia-south1-docker.pkg.dev/resellsubsos-prod/cloud-run-source-deploy/resellersos
 
