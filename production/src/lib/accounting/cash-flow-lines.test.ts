@@ -45,3 +45,24 @@ describe("totalsByLabel", () => {
     expect(out).toBe(lines.reduce((s, l) => s + l.debit, 0));
   });
 });
+
+describe("cash flow by activity (direct method)", () => {
+  const L = (over: Partial<CashFlowTxn>): CashFlowTxn => ({ id: "x", bank_account_id: "a", txn_date: "2026-08-10", description: null, debit: 0, credit: 0, matched_to_type: "expense", category: null, ...over });
+  it("classifies from the reconciliation, keeps transfers and unreconciled lines apart", async () => {
+    const { cashFlowByActivity, activityOf } = await import("./cash-flow-lines");
+    expect(activityOf({ matched_to_type: "payment", category: null })).toBe("operating");
+    expect(activityOf({ matched_to_type: "expense", category: "Equipment" })).toBe("investing");
+    expect(activityOf({ matched_to_type: "manual", category: null })).toBe("financing");
+    expect(activityOf({ matched_to_type: "transfer", category: null })).toBe("transfer");
+    expect(activityOf({ matched_to_type: null, category: "Software" })).toBe("unreconciled");
+    const f = cashFlowByActivity([
+      L({ id: "1", credit: 100_000, matched_to_type: "payment" }),
+      L({ id: "2", debit: 30_000, matched_to_type: "salary" }),
+      L({ id: "3", debit: 80_000, category: "Equipment" }),
+      L({ id: "4", credit: 500_000, matched_to_type: "manual" }),
+      L({ id: "5", debit: 10_000, matched_to_type: "transfer" }),
+      L({ id: "6", debit: 590, matched_to_type: null }),
+    ]);
+    expect(f.map((g) => [g.activity, g.net])).toEqual([["operating", 70_000], ["investing", -80_000], ["financing", 500_000], ["unreconciled", -590], ["transfer", -10_000]]);
+  });
+});

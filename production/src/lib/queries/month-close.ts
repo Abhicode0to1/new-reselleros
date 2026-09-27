@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toastError } from "@/lib/errors/toast-error";
 import { itcEligibility } from "@/lib/gst/itc";
-import { evaluateMonthClose, monthEndOf, type MonthClose, type MonthCloseFacts } from "@/lib/accounting/month-close";
+import { evaluateMonthClose, monthEndOf, MANUAL_STEPS, compliancePeriodKey, type MonthClose, type MonthCloseFacts } from "@/lib/accounting/month-close";
 
 function todayIso(): string {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -24,7 +24,7 @@ export function useMonthClose(period: string) {
       const [
         { data: bankAccounts }, { data: unmatched }, { data: emps }, { data: sal }, { data: expTds },
         { data: dues }, { data: inv }, { data: cn }, { data: dn }, { data: gstPay }, { data: drafts },
-        { data: exps }, { data: vendors }, { data: tenant }, { data: manual },
+        { data: exps }, { data: vendors }, { data: tenant }, { data: manual }, { data: filedLog },
       ] = await Promise.all([
         supabase.from("bank_accounts").select("id").eq("is_active", true).neq("account_type", "cash"),
         supabase.from("bank_transactions").select("id").in("source", ["csv_upload", "api_fetch"]).is("matched_to_type", null).gte("txn_date", from).lte("txn_date", to),
@@ -41,6 +41,7 @@ export function useMonthClose(period: string) {
         supabase.from("vendors").select("id, gstin"),
         supabase.from("tenants").select("books_locked_until").limit(1).maybeSingle(),
         supabase.from("month_close_checks").select("key, done_at, done_by").eq("period", period),
+        supabase.from("compliance_log").select("obligation_key, period_key, filed_date").in("obligation_key", MANUAL_STEPS.map((m) => m.complianceKey)),
       ]);
       const vendorGstin = new Map((vendors ?? []).map((v) => [v.id, v.gstin ?? null]));
       const blockedItcCount = (exps ?? []).filter((e) => !itcEligibility({
@@ -67,7 +68,14 @@ export function useMonthClose(period: string) {
         draftInvoices: (drafts ?? []).length,
         blockedItcCount,
         booksLockedUntil: (tenant as { books_locked_until?: string | null } | null)?.books_locked_until ?? null,
-        manual: Object.fromEntries((manual ?? []).map((m) => [m.key, { done_at: m.done_at, done_by: m.done_by }])),
+        manual: {
+          /* Filed on the Compliance Calendar counts; a tick here on top of it wins the date. */
+          ...Object.fromEntries(MANUAL_STEPS.flatMap((s) => {
+            const hit = (filedLog ?? []).find((f) => f.obligation_key === s.complianceKey && f.period_key === compliancePeriodKey(s.key, period));
+            return hit ? [[s.key, { done_at: hit.filed_date, done_by: null, via: "calendar" as const }]] : [];
+          })),
+          ...Object.fromEntries((manual ?? []).map((m) => [m.key, { done_at: m.done_at, done_by: m.done_by }])),
+        },
       };
       return { facts, close: evaluateMonthClose(facts) };
     },

@@ -42,14 +42,26 @@ export interface MonthCloseFacts {
   draftInvoices: number;          // still draft, dated on/before month end
   blockedItcCount: number;        // expenses this month whose GST is not credit
   booksLockedUntil: string | null;
-  manual: Record<string, { done_at: string; done_by: string | null } | undefined>;
+  manual: Record<string, { done_at: string; done_by: string | null; via?: "calendar" } | undefined>;
 }
 
-export const MANUAL_STEPS: { key: string; title: string; detail: string; href?: string; quarterly?: boolean }[] = [
-  { key: "gstr1_filed", title: "GSTR-1 file ho gaya", detail: "GST page se JSON banao, portal par upload, OTP se file — 11 tarikh tak.", href: "/accounting/gst" },
-  { key: "gstr3b_filed", title: "GSTR-3B file ho gaya", detail: "GST page ki worksheet se boxes bharo, tax pay karo (yahan challan upar auto dikhega), file — 20 tarikh tak.", href: "/accounting/gst" },
-  { key: "tds_return_filed", title: "TDS return (24Q / 26Q) file ho gaya", detail: "Quarter ke aakhri mahine par: Salary Register → 24Q working, Expenses → 26Q working, CA/RPU se file.", href: "/accounting/salary-register", quarterly: true },
+/** Each portal step also has a row on the Compliance Calendar (lib/compliance/obligations.ts);
+ *  marking it filed there counts here too — `complianceKey` + the calendar's period key. */
+export const MANUAL_STEPS: { key: string; title: string; detail: string; href?: string; quarterly?: boolean; complianceKey: string }[] = [
+  { key: "gstr1_filed", title: "GSTR-1 file ho gaya", detail: "GST page se JSON banao, portal par upload, OTP se file — 11 tarikh tak.", href: "/accounting/gst", complianceKey: "gst_gstr1" },
+  { key: "gstr3b_filed", title: "GSTR-3B file ho gaya", detail: "GST page ki worksheet se boxes bharo, tax pay karo (yahan challan upar auto dikhega), file — 20 tarikh tak.", href: "/accounting/gst", complianceKey: "gst_gstr3b" },
+  { key: "tds_return_filed", title: "TDS return (24Q / 26Q) file ho gaya", detail: "Quarter ke aakhri mahine par: Salary Register → 24Q working, Expenses → 26Q working, CA/RPU se file.", href: "/accounting/salary-register", quarterly: true, complianceKey: "tds_return" },
 ];
+
+/** The Compliance Calendar's period key for a step in a month: monthly GST = YYYY-MM; the
+ *  TDS return = "<fyStart>-q<n>" for the quarter the month closes. */
+export function compliancePeriodKey(stepKey: string, period: string): string {
+  if (stepKey !== "tds_return_filed") return period;
+  const [y, m] = period.split("-").map(Number);
+  const fy = m >= 4 ? y : y - 1;
+  const q = m >= 4 && m <= 6 ? 1 : m >= 7 && m <= 9 ? 2 : m >= 10 ? 3 : 4;
+  return `${fy}-q${q}`;
+}
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 
@@ -146,7 +158,7 @@ export function evaluateMonthClose(f: MonthCloseFacts): MonthClose {
   for (const m of MANUAL_STEPS) {
     if (m.quarterly && !isQuarterEnd(f.period)) continue;
     const rec = f.manual[m.key];
-    steps.push({ key: m.key, kind: "manual", title: m.title, detail: m.detail, status: rec ? "done" : "todo", href: m.href, doneAt: rec?.done_at ?? null });
+    steps.push({ key: m.key, kind: "manual", title: m.title, detail: m.detail + (rec?.via === "calendar" ? " (Compliance Calendar par filed mark hai.)" : ""), status: rec ? "done" : "todo", href: m.href, doneAt: rec?.done_at ?? null });
   }
 
   // 10. Lock
