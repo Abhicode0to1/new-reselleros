@@ -109,6 +109,24 @@ export default function TemplatesPage() {
   );
 }
 
+/**
+ * Template HTML in a sandboxed iframe, never in this page's DOM. Any team member can save a
+ * template (ctmpl_insert), so a template is untrusted HTML: an owner previewing one with a
+ * <script> in it would have run it in their own session. `sandbox` with no allowances
+ * blocks scripts, forms and same-origin access; the mail client the template is for
+ * blocks scripts too, so the preview stays faithful.
+ */
+function HtmlPreview({ html, title, className }: { html: string; title: string; className?: string }) {
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><style>
+    body{margin:16px;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#222;background:#fff}
+    p{margin:0 0 12px} ul{padding-left:20px} ol{padding-left:20px} a{color:#c2410c}
+  </style></head><body>${html}</body></html>`;
+  return (
+    <iframe sandbox="" srcDoc={doc} title={title}
+      className={cn("w-full rounded-lg border border-hairline bg-white", className)} />
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
@@ -144,8 +162,7 @@ function PreviewDialog({ t, onClose }: { t: CampaignTemplateRow; onClose: () => 
           <DialogDescription>Sample naam aur company ke saath. Asli mail mein har lead ka apna naam aata hai.</DialogDescription>
         </DialogHeader>
         <p className="text-sm"><span className="text-ink-3">Subject:</span> <b>{previewTemplate(t.subject)}</b></p>
-        <div className="rounded-lg border border-hairline bg-white p-4 text-sm text-[#222] max-h-[55vh] overflow-y-auto [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
-             dangerouslySetInnerHTML={{ __html: previewTemplate(t.body_html) }} />
+        <HtmlPreview html={previewTemplate(t.body_html)} title={`Preview: ${t.name}`} className="h-[55vh]" />
         <p className="text-2xs text-ink-3">Unsubscribe link bhejte waqt khud neeche judta hai.</p>
       </DialogContent>
     </Dialog>
@@ -216,8 +233,7 @@ function EditDialog({ editing, onClose }: { editing: NonNullable<Editing>; onClo
               <textarea value={html} onChange={(e) => setHtml(e.target.value)} rows={12}
                 className="w-full rounded-md border border-hairline bg-paper p-2 font-mono text-xs" aria-label="Mail HTML" />
             ) : (
-              <div className="rounded-lg border border-hairline bg-white p-4 text-sm text-[#222] min-h-[12rem] [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
-                   dangerouslySetInnerHTML={{ __html: previewTemplate(html) }} />
+              <HtmlPreview html={previewTemplate(html)} title="Template preview" className="h-[20rem]" />
             )}
           </div>
           <FormField label="Plain text (optional)" htmlFor="tp_text">
