@@ -266,8 +266,9 @@ begin
     raise exception 'FAIL PNL commissions: expected 2000/1 (cancelled 999 excluded), got %/%', r.commissions, r.commissions_count;
   end if;
 
+  -- S39: July = INV3 20000 − CN1 1000 + DN1 500 (headline P&L jaisa; pehle trend notes chhodta tha).
   if public.report_pnl_monthly('2026-04-01', '2027-03-31') <>
-     '[{"month":"2026-05","revenue":10000,"expenses":0},{"month":"2026-06","revenue":5000,"expenses":11800},{"month":"2026-07","revenue":20000,"expenses":20000},{"month":"2026-08","revenue":42373,"expenses":32680}]'::jsonb then
+     '[{"month":"2026-05","revenue":10000,"expenses":0},{"month":"2026-06","revenue":5000,"expenses":11800},{"month":"2026-07","revenue":19500,"expenses":20000},{"month":"2026-08","revenue":42373,"expenses":32680}]'::jsonb then
     raise exception 'FAIL PNL monthly: got %', public.report_pnl_monthly('2026-04-01', '2027-03-31');
   end if;
   begin
@@ -291,8 +292,9 @@ begin
   if not (j->'entries') @> '[{"voucher":"Refund","reference":"d1700000-0000-0000-0000-0000000fa003 · refunded","date":"2026-06-05","amount":3000}]'::jsonb then
     raise exception 'FAIL LEDGER refund line missing: %', j->'entries';
   end if;
-  if not (j->'entries') @> '[{"voucher":"Receipt","reference":"S17-RV2","date":"2026-07-02","narration":"bank_transfer"}]'::jsonb then
-    raise exception 'FAIL LEDGER P2 receipt (UTC day 2026-07-02, narration bank_transfer): %', j->'entries';
+  if not (j->'entries') @> '[{"voucher":"Receipt","reference":"S17-RV2","date":"2026-07-03","narration":"bank_transfer"}]'::jsonb then
+    -- S39: 2026-07-02 20:00 UTC = 3 Jul 01:30 IST — khata IST din dikhata hai (pehle UTC din 07-02).
+    raise exception 'FAIL LEDGER P2 receipt (IST day 2026-07-03, narration bank_transfer): %', j->'entries';
   end if;
   if not (j->'entries') @> '[{"voucher":"Receipt","reference":"S17-RV1","narration":"upi · UTR1"}]'::jsonb then
     raise exception 'FAIL LEDGER P1 narration: %', j->'entries';

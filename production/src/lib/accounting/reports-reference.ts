@@ -268,12 +268,20 @@ export function referencePnl(range: { from: string; to: string }, r: PnlRawRows,
 export function referencePnlMonthlyRows(
   inv: { invoice_date: string; amount: N; taxable_value: N; tax_rate: N }[],
   exp: { expense_date: string; amount: N }[],
+  /* S39: credit note us mahine ka revenue ghataata hai, debit note badhata hai — headline
+     referencePnl jaisa. (Pehle trend inhe chhod deta tha; ye niyam jaan-boojh kar badla gaya.) */
+  cn: { credit_date: string; taxable_value: N }[] = [],
+  dn: { debit_date: string; taxable_value: N }[] = [],
 ) {
   return {
-    revenue: inv.map((i) => ({
-      date: i.invoice_date,
-      amount: i.taxable_value ?? Math.round((i.amount ?? 0) * 100 / (100 + (i.tax_rate ?? 18))),
-    })),
+    revenue: [
+      ...inv.map((i) => ({
+        date: i.invoice_date,
+        amount: i.taxable_value ?? Math.round((i.amount ?? 0) * 100 / (100 + (i.tax_rate ?? 18))),
+      })),
+      ...cn.map((c) => ({ date: c.credit_date, amount: -(c.taxable_value ?? 0) })),
+      ...dn.map((d) => ({ date: d.debit_date, amount: d.taxable_value ?? 0 })),
+    ],
     expenses: exp.map((e) => ({ date: e.expense_date, amount: e.amount ?? 0 })),
   };
 }
@@ -282,6 +290,16 @@ export function referencePnlMonthlyRows(
 
 function isoDay(v: string | null | undefined): string | null {
   return v ? v.slice(0, 10) : null;
+}
+
+/** S39: timestamp (received_at / refunded_at) ka IST din. Pehle `.slice(0, 10)` UTC din deta
+ *  tha, to 00:00–05:30 IST ka payment pichhle din chadhta tha. Sirf timestamps ke liye —
+ *  `date` columns (invoice_date, credit_date) par isoDay hi sahi hai. */
+function istDay(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const t = Date.parse(v);
+  if (Number.isNaN(t)) return isoDay(v);
+  return new Date(t + 5.5 * 3600_000).toISOString().slice(0, 10);
 }
 
 export function referenceCustomerLedgerEntries(r: {
@@ -297,7 +315,7 @@ export function referenceCustomerLedgerEntries(r: {
     entries.push({ date: d, reference: i.id, voucher: "Sales", narration: null, amount: i.amount ?? 0, increasesLiability: true });
   }
   for (const p of r.pay) {
-    const received = isoDay(p.received_at);
+    const received = istDay(p.received_at);
     if (received) {
       entries.push({
         date: received, reference: p.receipt_voucher_no ?? p.id, voucher: "Receipt",
@@ -305,7 +323,7 @@ export function referenceCustomerLedgerEntries(r: {
         amount: p.amount ?? 0, increasesLiability: false,
       });
     }
-    const refunded = isoDay(p.refunded_at);
+    const refunded = istDay(p.refunded_at);
     if (p.status === "refunded" && refunded) {
       entries.push({
         date: refunded, reference: `${p.receipt_voucher_no ?? p.id} · refunded`, voucher: "Refund",

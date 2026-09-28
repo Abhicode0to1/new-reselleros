@@ -103,6 +103,8 @@ select json_build_object(
   'trend', json_build_object(
     'inv', (select coalesce(json_agg(json_build_object('invoice_date', invoice_date, 'amount', amount, 'taxable_value', taxable_value, 'tax_rate', tax_rate)), '[]') from public.invoices where invoice_date between '2026-04-01' and '2027-03-31' and status in ('pending','paid','overdue')),
     'exp', (select coalesce(json_agg(json_build_object('expense_date', expense_date, 'amount', amount)), '[]') from public.expenses where expense_date between '2026-04-01' and '2027-03-31'),
+    'cn', (select coalesce(json_agg(json_build_object('credit_date', credit_date, 'taxable_value', taxable_value)), '[]') from public.credit_notes where credit_date between '2026-04-01' and '2027-03-31'),
+    'dn', (select coalesce(json_agg(json_build_object('debit_date', debit_date, 'taxable_value', taxable_value)), '[]') from public.debit_notes where debit_date between '2026-04-01' and '2027-03-31'),
     'rpc', public.report_pnl_monthly('2026-04-01', '2027-03-31')
   ),
   'ledger', json_build_object(
@@ -127,7 +129,7 @@ function isLocal(u: string): boolean {
 type Dump = {
   bs: BsRawRows; bsRpc: BalanceSheetRpcRow;
   pnl: PnlRawRows; pnlRpc: PnlRpcRow;
-  trend: { inv: Parameters<typeof referencePnlMonthlyRows>[0]; exp: Parameters<typeof referencePnlMonthlyRows>[1]; rpc: { month: string; revenue: number; expenses: number }[] };
+  trend: { inv: Parameters<typeof referencePnlMonthlyRows>[0]; exp: Parameters<typeof referencePnlMonthlyRows>[1]; cn: NonNullable<Parameters<typeof referencePnlMonthlyRows>[2]>; dn: NonNullable<Parameters<typeof referencePnlMonthlyRows>[3]>; rpc: { month: string; revenue: number; expenses: number }[] };
   ledger: {
     inv: Parameters<typeof referenceCustomerLedgerEntries>[0]["inv"];
     pay: Parameters<typeof referenceCustomerLedgerEntries>[0]["pay"];
@@ -141,7 +143,11 @@ type Dump = {
 };
 
 function dump(): Dump {
-  const migration = readFileSync(join(ROOT, "supabase/migrations/20260928110000_report_functions.sql"), "utf8");
+  /* S17 + S39 (IST ledger dates, credit notes in the trend) — wahi kram jo production par lagega. */
+  const migration = [
+    "supabase/migrations/20260928110000_report_functions.sql",
+    "supabase/migrations/20260928190000_report_fixes_ist_ledger_trend_cn.sql",
+  ].map((p) => readFileSync(join(ROOT, p), "utf8")).join("\n");
   const testSql = readFileSync(join(ROOT, "supabase/tests/report_functions.test.sql"), "utf8");
   const fixture = testSql.split("-- FIXTURE:BEGIN")[1]?.split("-- FIXTURE:END")[0];
   if (!fixture) throw new Error("FIXTURE:BEGIN / FIXTURE:END markers missing from report_functions.test.sql");
@@ -226,7 +232,7 @@ run("S17 parity — report_* SQL functions reproduce the old TS numbers", () => 
 
   it("P&L monthly trend", () => {
     const today = "2027-03-31";
-    const legacy = referencePnlMonthlyRows(d!.trend.inv, d!.trend.exp);
+    const legacy = referencePnlMonthlyRows(d!.trend.inv, d!.trend.exp, d!.trend.cn, d!.trend.dn);
     const want = monthlySeries({ fyStartYear: 2026, ...legacy, cogsRatio: 0.3, today });
     const got = monthlySeries({
       fyStartYear: 2026, cogsRatio: 0.3, today,
