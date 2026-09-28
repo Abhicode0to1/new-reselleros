@@ -101,9 +101,16 @@ async function readInput(req: NextRequest): Promise<{ ok: true; value: unknown }
   }
 }
 
-export function withRoute<S extends z.ZodTypeAny | undefined = undefined>(opts: Options<S>, handler: Handler<S>) {
+/* Next 15: segment params arrive as a Promise (awaited below), and the route-type check
+   wants the second argument REQUIRED ({ params: Promise<…> }). The req-only overload keeps
+   tests and internal callers working; the last overload is the one Next checks. */
+type WrappedRoute = {
+  (req: NextRequest): Promise<Response>;
+  (req: NextRequest, ctx: { params: Promise<Record<string, string>> }): Promise<Response>;
+};
+
+export function withRoute<S extends z.ZodTypeAny | undefined = undefined>(opts: Options<S>, handler: Handler<S>): WrappedRoute {
   const tag = `[${opts.route}]`;
-  /* Next 15: the segment params arrive as a Promise — awaited below. */
   return async function route(req: NextRequest, ctx?: { params?: Promise<Record<string, string>> }): Promise<Response> {
     try {
       const supabase = createClient();
