@@ -20,6 +20,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { clientIp } from "@/lib/security/rate-limit";
 import { decryptSecret, isVaultConfigured } from "@/lib/crypto/vault";
 import { assessStrength } from "@/lib/vault/passwords";
 import { vaultDb } from "@/lib/vault/db";
@@ -67,7 +68,8 @@ export async function POST(
     customer_id: row.customer_id,
     user_id: authData.user.id,
     action: "view",
-    ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+    /* S20: XFF ki pehli entry client khud likhta hai — audit me wahi IP jo humari infra ne dekhi. */
+    ip_address: ((ip) => (ip === "unknown" ? null : ip))(clientIp(req.headers)),
     user_agent: req.headers.get("user-agent"),
   });
 
