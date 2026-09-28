@@ -978,6 +978,7 @@ export default function SubscriptionsPage() {
           body="Subscriptions are created automatically when an accepted quote moves to provisioning. Start by creating a quote."
           action={
             <Button asChild variant="primary" icon="file">
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- pre-existing plain <a> (full navigation), kept as-is by the Next 15 upgrade; eslint-plugin-next 15 now also scans app/ */}
               <a href="/quotes/new">Create a quote</a>
             </Button>
           }

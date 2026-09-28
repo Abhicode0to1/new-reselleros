@@ -16,24 +16,29 @@
 // initialised before any error in the app can be captured.
 import "@/lib/sentry";
 import { createServerClient } from "@supabase/ssr";
-import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
+import { cookies } from "next/headers";
 import type { Database } from "./database.types";
 
+/* Next 15: cookies() returns a Promise. createClient() stays SYNCHRONOUS (≈390 call sites
+   use `const supabase = createClient()`), and the await moves into the cookie callbacks —
+   @supabase/ssr accepts async getAll/setAll. cookies() is still read inside the same
+   request (every query runs within it), so behaviour is unchanged. */
 export function createClient() {
-  const cookieStore = (cookies() as unknown as UnsafeUnwrappedCookies);
+  const cookieStore = cookies();
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
+        async getAll() {
+          return (await cookieStore).getAll();
         },
-        setAll(cookiesToSet) {
+        async setAll(cookiesToSet) {
+          const store = await cookieStore;
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
+              store.set(name, value, options),
             );
           } catch {
             // Called from a Server Component — read-only cookies.

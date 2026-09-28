@@ -45,14 +45,11 @@ const nextConfig = {
     }
     return config;
   },
-  experimental: {
-    typedRoutes: true,
-    // Force-enable instrumentation hook. Next 14.0.4+ enables it by default,
-    // but in standalone output mode on Cloud Run we observed register() never
-    // firing (boot logs proved it). Setting this explicitly makes 14.2.15
-    // load instrumentation.ts reliably. Required for Sentry server init.
-    instrumentationHook: true,
-  },
+  /* Next 15.5: typedRoutes is stable and lives at the top level (was experimental.typedRoutes).
+     experimental.instrumentationHook is gone — instrumentation.ts is always loaded in Next 15,
+     and the flag only produced a "not needed anymore" warning. The Sentry side-effect import in
+     lib/supabase/server.ts stays as the belt-and-braces init path. */
+  typedRoutes: true,
   images: {
     /* Deep study 27 Sep 2026: next 14.2.35 carries an unauthenticated RCE advisory in the
        Image Optimization API (AVIF path). Until the Next 15/16 upgrade lands, serve images
