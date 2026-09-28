@@ -33,6 +33,7 @@ import {
   useEmailSuppressions, useRemoveSuppression,
 } from "@/lib/queries/marketing-hub";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { NavDirectory } from "@/components/layout/nav-directory";
 
 const GROUP_ORDER: ToolGroup[] = ["ads", "listings", "messaging", "email", "website", "social"];
 
@@ -48,13 +49,18 @@ export default function MarketingHubPage() {
   return (
     <div className="mx-auto max-w-[1240px] p-4 md:p-6 lg:p-8 space-y-6">
       <header>
-        <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Marketing &amp; Advertising</p>
+        <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Sell</p>
         <h1 className="font-serif text-3xl md:text-4xl leading-tight">Marketing Hub</h1>
         <p className="text-sm text-ink-3 mt-1 max-w-3xl">
           Business chalane ke liye jo marketing tools chahiye — har ek ka status, account, kaun sambhalta hai,
           mahine ka budget vs asli kharcha, aur app mein uska kaam kahan hota hai.
         </p>
       </header>
+
+      {/* S30: the fourteen marketing pages that used to be sidebar rows, in five groups.
+          Read from APP_NAV (the Hub's `directory`), so this list and the nav cannot drift —
+          it replaces the hand-kept QUICK list that stood here, which had nine of them. */}
+      <NavDirectory parentId="marketing-hub" />
 
       {tools.error ? (
         <Card className="p-4 text-sm text-red-600">{(tools.error as Error).message}</Card>
@@ -73,8 +79,6 @@ export default function MarketingHubPage() {
               warn={sum.overBudget.length > 0}
             />
           </div>
-
-          <QuickLinks />
 
           {GROUP_ORDER.map((g) => {
             const list = rows.filter((r) => r.group === g);
@@ -108,32 +112,6 @@ function Metric({ label, value, sub, warn }: { label: string; value: string; sub
       <p className="font-serif text-2xl leading-none text-ink">{value}</p>
       {sub && <p className="text-xs text-ink-2 mt-2 leading-relaxed">{sub}</p>}
     </Card>
-  );
-}
-
-const QUICK: { href: string; label: string; icon: string; hint: string }[] = [
-  { href: "/marketing/campaigns", label: "Campaign budgets", icon: "target", hint: "Budget, dates, target — kharcha vs leads" },
-  { href: "/marketing/links",   label: "Tracking links",  icon: "globe",   hint: "Har ad / post ka link — lead ka source khud lagega" },
-  { href: "/campaigns",         label: "Email campaigns", icon: "mail",    hint: "Leads ko offer mail" },
-  { href: "/coupons",           label: "Coupons",         icon: "ticket",  hint: "Offer ke discount code" },
-  { href: "/online-promos",     label: "Website offer",   icon: "sparkles",hint: "Site par offer ka banner" },
-  { href: "/marketing/whatsapp", label: "WhatsApp broadcast", icon: "whatsapp", hint: "Leads ko approved template" },
-  { href: "/marketing/reviews", label: "Google reviews",  icon: "award",   hint: "Khush customers se review maango" },
-  { href: "/marketing/spend",   label: "Spend",           icon: "wallet",  hint: "Marketing vs Advertising kharcha" },
-  { href: "/marketing/reports", label: "ROAS & CAC",      icon: "chart",   hint: "Kaunsa channel faayde ka" },
-];
-
-function QuickLinks() {
-  return (
-    <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
-      {QUICK.map((q) => (
-        <Link key={q.href} href={q.href as Route}
-          className="rounded-lg border border-hairline bg-paper px-3 py-2.5 hover:border-amber/60 hover:bg-amber-soft/20 transition-colors">
-          <div className="flex items-center gap-1.5 text-sm font-medium text-ink"><Icon name={q.icon} size={14} />{q.label}</div>
-          <div className="text-2xs text-ink-3 mt-0.5 leading-snug">{q.hint}</div>
-        </Link>
-      ))}
-    </div>
   );
 }
 

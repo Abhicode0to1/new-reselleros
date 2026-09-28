@@ -26,7 +26,7 @@ import { Command } from "cmdk";
 
 import { Dialog, DialogContent, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
-import { APP_NAV, filterNavForRole, type UserRole } from "@/lib/nav";
+import { APP_NAV, filterNavForRole, flattenNav, type UserRole } from "@/lib/nav";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { rupee, cn } from "@/lib/utils";
 // Real-data queries — Linear/Notion-style universal search. Each hook is
@@ -131,11 +131,11 @@ export function CommandPalette({
   const pageItems = React.useMemo(() => {
     const nav = filterNavForRole(APP_NAV, me?.role as UserRole | undefined, { canViewDeals: me?.canViewDeals });
     const seen = new Set<string>();
-    return nav.flatMap((section) =>
-      section.items
-        .filter((item) => !seen.has(item.href) && seen.add(item.href))
-        .map((item) => ({ ...item, section: section.section })),
-    );
+    /* flattenNav: accordion children and directory rows (S30) are pages too — P&L now
+       lives in the Reports directory, and must still come up when you type "P&L". */
+    return flattenNav(nav)
+      .filter(({ item }) => !seen.has(item.href) && seen.add(item.href))
+      .map(({ item, section }) => ({ ...item, section: section.section }));
   }, [me?.role, me?.canViewDeals]);
 
   const go = (href: string) => {

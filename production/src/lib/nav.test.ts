@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { getCrumb, getParentListHref, getSectionPrimaryHref, APP_NAV, allowedRoutesForRole, filterNavForRole, SCREEN_TITLES, sectionCrumb } from "./nav";
+import { getCrumb, getParentListHref, getSectionPrimaryHref, APP_NAV, allowedRoutesForRole, filterNavForRole, flattenNav, SCREEN_TITLES, sectionCrumb } from "./nav";
 
 describe("getCrumb", () => {
   it("returns the exact crumb for a known static route", () => {
@@ -31,7 +31,9 @@ describe("getCrumb", () => {
   });
 
   it("resolves a nested dynamic route to its known [id] parent", () => {
-    expect(getCrumb("/accounting/banking/some-account-id")).toEqual(["Accounting", "Banking", "Account"]);
+    // "Books" since S30 — the sidebar group Banking sits in. It said "Accounting", a
+    // section that no longer exists.
+    expect(getCrumb("/accounting/banking/some-account-id")).toEqual(["Books", "Banking", "Account"]);
   });
 
   it("falls back to the bare section path when no [id] entry exists", () => {
@@ -76,16 +78,16 @@ describe("getParentListHref", () => {
 
 describe("getSectionPrimaryHref", () => {
   it("resolves a real APP_NAV section name to its first item", () => {
-    expect(getSectionPrimaryHref("Home")).toBe("/dashboard");
-    expect(getSectionPrimaryHref("Sales & CRM")).toBe("/leads");
+    expect(getSectionPrimaryHref("Home")).toBe("/today");
+    expect(getSectionPrimaryHref("Sell")).toBe("/leads");
   });
 
   it("returns null for anything that is not a section name", () => {
     // Guards the misuse this replaced: a pathname is never a section name.
     expect(getSectionPrimaryHref("/quotes/Q-1")).toBeNull();
-    // Crumb sections are SHORT labels ("Sales"), not APP_NAV names ("Sales & CRM"),
-    // so crumb[0] is not a valid argument either.
-    expect(getSectionPrimaryHref("Sales")).toBeNull();
+    // A crumb can differ from its section name (Bill's crumb is "Billing"), so crumb[0]
+    // is not a valid argument either.
+    expect(getSectionPrimaryHref("Billing")).toBeNull();
     expect(getSectionPrimaryHref("Year-End")).toBeNull();
   });
 });
@@ -105,10 +107,9 @@ describe("getSectionPrimaryHref", () => {
 describe("APP_NAV ↔ app router", () => {
   const APP_DIR = path.join(__dirname, "..", "app", "(app)");
 
-  /** Every href in the nav tree, including accordion children. */
-  const hrefs = APP_NAV.flatMap((s) =>
-    s.items.flatMap((i) => [i.href, ...(i.children ?? []).map((c) => c.href)]),
-  ).filter((h): h is string => typeof h === "string" && h.startsWith("/"));
+  /** Every href in the nav tree, including accordion children and directory rows. */
+  const hrefs = flattenNav(APP_NAV).map((e) => e.item.href)
+    .filter((h): h is string => typeof h === "string" && h.startsWith("/"));
 
   it.each(hrefs)("%s has a page that actually renders", (href) => {
     // Route groups like (app) are not URL segments, so the href maps directly.
@@ -147,9 +148,7 @@ describe("APP_NAV ↔ app router", () => {
   it("keeps nav ids unique", () => {
     // React keys and the command palette both index on id; a duplicate silently
     // drops one of the two entries.
-    const ids = APP_NAV.flatMap((s) =>
-      s.items.flatMap((i) => [i.id, ...(i.children ?? []).map((c) => c.id)]),
-    );
+    const ids = flattenNav(APP_NAV).map((e) => e.item.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
@@ -210,22 +209,22 @@ describe("a page in the wrong nav section is unreachable, not just hidden", () =
    * So the rule is now stated against the OWNER, who sees the most of the app and is the
    * person these screens are for.
    */
+  /* S30: "the owner's own menu" now means what the owner can CLICK — a sidebar row, an
+     accordion child, or a row in the Reports directory. P&L, GST, TDS and Aging moved into
+     that directory; they did not leave the owner's reach, and this is what says so. */
+  const ownerClickable = () => new Set(flattenNav(filterNavForRole(APP_NAV, "owner")).map((e) => e.item.href));
+  const declaredAccounting = () => new Set(
+    flattenNav(APP_NAV).map((e) => e.item.href).filter((h) => h.startsWith("/accounting")),
+  );
+
   it("puts EVERY /accounting page in the owner's own menu, not merely in someone's", () => {
-    const ownerHrefs = new Set(
-      filterNavForRole(APP_NAV, "owner").flatMap((s) => s.items.map((i) => i.href)),
-    );
-    const declared = new Set(
-      APP_NAV.flatMap((s) => s.items.map((i) => i.href))
-        .filter((h) => h.startsWith("/accounting")),
-    );
-    const missing = [...declared].filter((h) => !ownerHrefs.has(h));
+    const ownerHrefs = ownerClickable();
+    const missing = [...declaredAccounting()].filter((h) => !ownerHrefs.has(h));
     expect(missing, `Not in the owner's menu: ${missing.join(", ")}`).toEqual([]);
   });
 
   it("names the three that were missing, so a revert is loud", () => {
-    const ownerHrefs = new Set(
-      filterNavForRole(APP_NAV, "owner").flatMap((s) => s.items.map((i) => i.href)),
-    );
+    const ownerHrefs = ownerClickable();
     for (const href of ["/accounting/gst", "/accounting/tds-receivable", "/accounting/aging"]) {
       expect(ownerHrefs, `${href} vanished from the owner menu again`).toContain(href);
     }
@@ -236,51 +235,30 @@ describe("a page in the wrong nav section is unreachable, not just hidden", () =
     const reachable = new Set(
       ACCOUNTING_ROLES.flatMap((r) => allowedRoutesForRole(r)),
     );
-    const declared = APP_NAV.flatMap((s) => s.items.map((i) => i.href))
-      .filter((h) => h.startsWith("/accounting"));
-    for (const href of new Set(declared)) expect(reachable).toContain(href);
+    for (const href of declaredAccounting()) expect(reachable).toContain(href);
   });
 });
 
 /**
  * ─── ONE SIDEBAR SECTION, ONE BREADCRUMB NAME ───────────────────────────────
  *
- * `SCREEN_TITLES` describes a structure `APP_NAV` already describes, and on 21 Sep 2026
- * the two had drifted far enough to be visibly wrong. Abhishek, on the subscriptions
- * page: "why it breadcrumb showing wrong". The sidebar said Billing & Subscriptions; the
- * breadcrumb said "Revenue > Subscriptions". Both were defensible names — the defect was
- * that its EIGHT pages used two of them, so Customers said "Billing" and Subscriptions
- * said "Revenue" from inside the same sidebar group.
+ * `SCREEN_TITLES` used to describe a structure `APP_NAV` already described, and on
+ * 21 Sep 2026 the two had drifted far enough to be visibly wrong. Abhishek, on the
+ * subscriptions page: "why it breadcrumb showing wrong". The sidebar said Billing &
+ * Subscriptions; the breadcrumb said "Revenue > Subscriptions".
  *
- * ─── WHY THIS DOES NOT DEMAND crumb === section ─────────────────────────────
- * The obvious test — first crumb must equal the sidebar heading — fails 61 pages, and
- * almost all of them are fine. "Sales" is a better breadcrumb than "Sales & CRM", and
- * Admin & Control deliberately splits into Settings / Admin / Help, which is genuinely
- * useful on a section that large.
- *
- * What is never right is a section disagreeing with ITSELF by accident. So the rule is:
- * one section, one crumb — unless the split is declared below, where somebody had to
- * decide it on purpose.
+ * That fix declared one crumb per section and tolerated a list of "deliberate splits"
+ * (Engage, Payroll, Me, Admin…). S30 removed the second copy instead: a nav page's crumb
+ * is now DERIVED from the section it sits in, so a section cannot disagree with itself,
+ * and there are no splits left to declare. What stays worth asserting is that the
+ * derivation is actually used, and the reported bug stays fixed.
  */
-const DELIBERATE_CRUMB_SPLITS: Record<string, string[]> = {
-  /* Large sections whose sub-groups are more useful to an operator than the section
-     heading would be. Each one is a decision, not a drift. */
-  "Home": ["Home", "Me", "My Attendance"],
-  /* /my-expenses is listed under Sales & CRM for reps, but it is about the rep's OWN
-     money — "Me" is right there and "Sales" would be misleading. */
-  "Sales & CRM": ["Sales", "Me"],
-  "Operations": ["Catalog", "Company Documents", "Engage", "Operations"],
-  "Accounting & Finance": ["Accounting", "Reports", "Compliance"],
-  "Admin & Control": ["Settings", "Admin", "Help"],
-  "Filing": ["Accounting", "Payroll"],
-};
-
 describe("breadcrumbs — one sidebar section, one name", () => {
   const sections = APP_NAV.map((sec) => ({
     name: sec.section,
     crumb: sectionCrumb(sec),
     crumbsInUse: [...new Set(
-      sec.items.map((i) => SCREEN_TITLES[i.href]?.[0]).filter((c): c is string => !!c),
+      flattenNav([sec]).map((e) => SCREEN_TITLES[e.item.href]?.[0]).filter((c): c is string => !!c),
     )],
   }));
 
@@ -290,35 +268,25 @@ describe("breadcrumbs — one sidebar section, one name", () => {
     expect(sections.some((s) => s.crumbsInUse.length > 0)).toBe(true);
   });
 
-  it("never lets one section use two breadcrumb names by accident", () => {
+  it("never lets one section use two breadcrumb names", () => {
     const split = sections
-      .filter((s) => s.crumbsInUse.length > 1)
-      .filter((s) => {
-        const allowed = DELIBERATE_CRUMB_SPLITS[s.name];
-        return !allowed || s.crumbsInUse.some((c) => !allowed.includes(c));
-      })
-      .map((s) => s.name + ": pages disagree — " + s.crumbsInUse.join(" vs "));
-
-    expect(
-      split,
-      "These sidebar sections use more than one breadcrumb name, and the split is not "
-      + "declared in DELIBERATE_CRUMB_SPLITS. Either give the section one crumb, or add "
-      + "it there with a reason: " + split.join(" | "),
-    ).toEqual([]);
+      .filter((s) => s.crumbsInUse.length !== 1 || s.crumbsInUse[0] !== s.crumb)
+      .map((s) => s.name + ": pages say " + s.crumbsInUse.join(" vs ") + ", section crumb is " + s.crumb);
+    expect(split).toEqual([]);
   });
 
-  it("keeps Billing & Subscriptions on a single crumb — the reported bug", () => {
-    const billing = sections.find((s) => s.name === "Billing & Subscriptions")!;
+  it("keeps the Billing group on a single crumb — the reported bug", () => {
+    const billing = sections.find((s) => s.name === "Bill")!;
     expect(billing.crumbsInUse).toEqual(["Billing"]);
     expect(billing.crumb).toBe("Billing");
   });
 
-  it("gives every sidebar page a breadcrumb", () => {
-    // A page reachable from the sidebar with no entry falls back to a generic crumb and
+  it("gives every nav page a breadcrumb", () => {
+    // A page reachable from the nav with no entry falls back to a generic crumb and
     // tells the operator nothing about where they are.
-    const missing = APP_NAV.flatMap((sec) => sec.items)
-      .filter((i) => !SCREEN_TITLES[i.href])
-      .map((i) => i.href);
-    expect(missing, "These sidebar pages have no breadcrumb: " + missing.join(", ")).toEqual([]);
+    const missing = flattenNav(APP_NAV)
+      .filter((e) => !SCREEN_TITLES[e.item.href])
+      .map((e) => e.item.href);
+    expect(missing, "These nav pages have no breadcrumb: " + missing.join(", ")).toEqual([]);
   });
 });

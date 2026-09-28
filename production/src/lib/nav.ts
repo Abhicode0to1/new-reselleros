@@ -1,10 +1,57 @@
 /**
- * Navigation config — single source of truth for sidebar + breadcrumbs.
+ * Navigation config — single source of truth for sidebar, route guard, command palette
+ * and breadcrumbs.
  *
  * Adding a new screen?
- * 1. Add an entry to APP_NAV
- * 2. Add a breadcrumb to SCREEN_TITLES
+ * 1. Add an entry to APP_NAV — as a sidebar row, an accordion `children` row, or a
+ *    `directory` row on its landing page (see below). Give it explicit `roles`.
+ * 2. Its breadcrumb is derived from where you put it. Only a page that is NOT in APP_NAV
+ *    (a detail page, a sub-page) needs an EXTRA_SCREENS entry.
  * 3. Create the page at src/app/(app)/[id]/page.tsx
+ *
+ * ─── S30 REGROUP, 28 Sep 2026 — WHAT CHANGED AND WHY ─────────────────────────
+ * Before: 10 sections, 81 rows, 9 duplicate hrefs (P&L, Balance Sheet, Cash Flow, GST,
+ * TDS, Aging and Ledger each in both "Filing" and "Accounting & Finance"; ESI & PF in
+ * "Filing" and "HR & Payroll"; Advances & Expenses in "Home" and "Sales & CRM"), three
+ * pages reachable only by URL (/activity, /purchases/inbox, /scorecard), and breadcrumbs
+ * naming sections that did not exist ("Engage", "Payroll", "Purchases", "Compliance").
+ *
+ * After: 7 groups — Home, Sell, Bill, Buy, Books, Team, Settings — with 43 sidebar rows,
+ * every href exactly once, and three ways for a page to be reachable:
+ *   • a sidebar row;
+ *   • an accordion `children` row under a sidebar row (collapsed until opened, or open
+ *     when you are on it) — used where the parent's page belongs to someone else, so no
+ *     page had to be edited;
+ *   • a `directory` row, rendered by <NavDirectory> on the parent's landing page — the
+ *     Reports directory (/reports, 9 reports) and the Marketing Hub (/marketing, 14
+ *     tools in 5 groups). Both landing pages are Pardeep's.
+ *
+ * WHAT DID NOT CHANGE, AND IS TESTED (nav-s30.test.ts, against a snapshot of the old
+ * file in __fixtures__/nav-before-s30.json):
+ *   • Every one of the 72 old hrefs is still reachable, for every role that could reach
+ *     it before — in its sidebar, an accordion, or a directory it can see.
+ *   • allowedRoutesForRole() — which middleware uses as the route guard — returns the SAME
+ *     set for every gated role. owner/manager gain only /today, /activity,
+ *     /purchases/inbox and /scorecard, and middleware does not gate those two roles anyway.
+ *   • Hrefs, ids, labels, icons and hints of every entry — with three exceptions: the
+ *     duplicate rows' ids are gone (acc-pnl, acc-bs, acc-cf, acc-gst, acc-tds, acc-esi,
+ *     acc-aging, acc-ledger, my-expenses-sales), "Reports Hub" is now "Reports" (it is
+ *     the directory), and the three orphans got rows.
+ *
+ * Also touched, minimally, because the tree now has depth: Sidebar (a section counts as
+ * active when you are on one of its directory pages), the command palette and /mobile
+ * (they list children and directory rows too).
+ *
+ * WHY ROLES NOW SIT ON EVERY ITEM: a section's `roles` used to narrow its items, so
+ * moving an item between sections silently changed who could open it. Sections no longer
+ * carry roles; each item states its own, copied from the effective roles it had before
+ * (section ∩ item, unioned across duplicates). Moving an item is now a pure move.
+ *
+ * WHY THESE GROUPS: they are the verbs of the business, in the order money moves —
+ * sell it, bill it, buy what it needs, book it, pay the team, configure the tool. "Home"
+ * holds the queues a person clears every day (Today, WhatsApp, Support, Activation).
+ * Customer/billing pages stay together under Bill exactly as Abhishek grouped them on
+ * 10 Sep; their breadcrumbs still read "Billing > …".
  */
 
 // Roles live in one place now — see src/lib/auth/roles.ts for why. Re-exported
@@ -26,8 +73,18 @@ export interface NavItem {
    * Use to lock down sales-only or owner-only entries. Filtered in Sidebar.tsx.
    */
   roles?: UserRole[];
-  /** Sub-links rendered as an accordion under this item (e.g. Reports → sub-reports). */
+  /** Sub-links rendered as an accordion under this item (e.g. Customers → Parent Accounts).
+   *  A child's roles must be a subset of its parent's — a child of a row you cannot see is
+   *  a row you cannot reach (nav-s30.test.ts checks this). */
   children?: NavItem[];
+  /**
+   * Pages listed on THIS item's landing page by <NavDirectory parentId={id} />, not in the
+   * sidebar (S30). They are still part of the route guard, the command palette and the
+   * breadcrumbs — only the sidebar row is saved. Same subset rule as `children`.
+   */
+  directory?: NavItem[];
+  /** Heading a directory row is grouped under on the landing page. */
+  group?: string;
   /** External URL — opens in a new tab (e.g. Google Drive) instead of in-app routing. */
   external?: boolean;
   /** Hover tooltip — a one-line hint so a data-entry user knows what belongs here. */
@@ -107,21 +164,76 @@ export function filterNavForRole(
   // "sales_senior" sees the same menu as "sales" (visibility), but is NEVER
   // gated on the deals entry — a senior seller always handles the pipeline.
   const visRole: UserRole = role === "sales_senior" ? "sales" : role;
+  const sees = (i: NavItem) => !i.roles || i.roles.includes(visRole);
+  /* children + directory are filtered too (S30). Before, nothing had children, so an
+     unfiltered accordion was harmless; now a child is a real route and must obey roles. */
+  const prune = (i: NavItem): NavItem => ({
+    ...i,
+    ...(i.children ? { children: i.children.filter(sees) } : {}),
+    ...(i.directory ? { directory: i.directory.filter(sees) } : {}),
+  });
   return nav
     .filter((s) => !s.roles || s.roles.includes(visRole))
     .map((s) => ({
       ...s,
-      items: s.items.filter((i) => !i.roles || i.roles.includes(visRole)),
+      items: s.items.filter(sees).map(prune),
     }))
     .filter((s) => s.items.length > 0);
+}
+
+/** An item and everything reachable through it: accordion children, then directory rows. */
+export function itemWithDescendants(item: NavItem): NavItem[] {
+  return [item, ...(item.children ?? []), ...(item.directory ?? [])];
+}
+
+/**
+ * Every entry of a nav tree, flat, with where it lives. The command palette, the mobile
+ * preview list and the breadcrumbs all read this, so a page moved into an accordion or a
+ * directory stays searchable and keeps a crumb.
+ */
+export interface FlatNavEntry {
+  item: NavItem;
+  section: NavSection;
+  /** The sidebar row it sits under, when it is a child or directory row. */
+  parent?: NavItem;
+  via: "sidebar" | "child" | "directory";
+}
+export function flattenNav(nav: NavSection[]): FlatNavEntry[] {
+  return nav.flatMap((section) =>
+    section.items.flatMap((item): FlatNavEntry[] => [
+      { item, section, via: "sidebar" },
+      ...(item.children ?? []).map((c): FlatNavEntry => ({ item: c, section, parent: item, via: "child" })),
+      ...(item.directory ?? []).map((d): FlatNavEntry => ({ item: d, section, parent: item, via: "directory" })),
+    ]),
+  );
+}
+
+/** Directory rows grouped by `group`, in first-appearance order (rows without one go
+ *  under "More"). What <NavDirectory> renders. */
+export function groupDirectory(items: NavItem[]): { group: string; items: NavItem[] }[] {
+  const out: { group: string; items: NavItem[] }[] = [];
+  for (const i of items) {
+    const g = i.group ?? "More";
+    const bucket = out.find((b) => b.group === g);
+    if (bucket) bucket.items.push(i);
+    else out.push({ group: g, items: [i] });
+  }
+  return out;
+}
+
+/** True when `pathname` is this item or one of its children / directory rows. */
+export function navItemContains(item: NavItem, pathname: string): boolean {
+  return itemWithDescendants(item).some((i) => pathname === i.href);
 }
 
 /**
  * The set of routes a given role + permission set is allowed to visit.
  * Anything outside this set is redirected to ROLE_HOME[role] by middleware.
+ * Includes accordion children and directory rows (S30) — a page moved off the sidebar
+ * must not become a page the guard bounces.
  */
 export function allowedRoutesForRole(role: UserRole, opts: NavFilterOpts = {}): string[] {
-  return filterNavForRole(APP_NAV, role, opts).flatMap((s) => s.items.map((i) => i.href));
+  return flattenNav(filterNavForRole(APP_NAV, role, opts)).map((e) => e.item.href);
 }
 
 /** Where each role lands by default (after login + on disallowed-route redirect). */
@@ -140,8 +252,8 @@ export const ROLE_HOME: Record<UserRole, string> = {
   support:      "/support",
   billing:      "/invoices",
   delivery:     "/projects",
-  // MUST have a matching APP_NAV entry that admits this role (see the Admin &
-  // Control section). ROLE_HOME and allowedRoutesForRole are two halves of one
+  // MUST have a matching APP_NAV entry that admits this role (Partners, in the
+  // Sell section). ROLE_HOME and allowedRoutesForRole are two halves of one
   // rule: a home the role is not allowed to visit makes middleware redirect to
   // it, disallow it, and redirect again — a login that ends in a loop.
   partner_agent: "/partners",
@@ -150,262 +262,236 @@ export const ROLE_HOME: Record<UserRole, string> = {
 // ============================================================
 // Internal app nav (the main sidebar for resellers)
 // ============================================================
-// Role conventions (applied to APP_NAV entries below):
-//   • Items without an explicit `roles` list → visible to owner + manager.
-//   • Sales-only users see ONLY the items explicitly tagged with "sales".
+// Role conventions (S30): EVERY item states its own `roles`; sections carry none. The
+// lists are the effective roles each href had before the regroup — see the header.
+//   • Sales-only users see ONLY the items explicitly tagged with "sales"
+//     (sales_senior sees what sales sees — filterNavForRole).
 //   • Lead Pipeline + Tasks include "sales" because that's the day-to-day
 //     surface for lead-only sellers (per Darshan's role at Excel Tech).
 // Zoho-Books-style navigation: a few top-level EXPANDABLE groups (icon + label
-// + chevron) instead of one long always-open wall. "Home" is a standalone row;
-// every other group starts collapsed and auto-opens when you're inside it.
-// Item hrefs are unchanged — only the grouping/labels changed — so routing +
-// allowed-routes stay identical.
+// + chevron) instead of one long always-open wall. Every group starts collapsed and
+// auto-opens when you're inside it.
+const OM: UserRole[] = ["owner", "manager"];
+const OMB: UserRole[] = ["owner", "manager", "billing"];
+/** Books: the accountant / CA reads every one of these. */
+const BOOKS: UserRole[] = ["owner", "manager", "billing", "accountant"];
+/** Everyone on the team except the external partner agent. */
+const STAFF: UserRole[] = ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"];
+
 export const APP_NAV: NavSection[] = [
   {
-    // Accountant / CA view — read-only compliance reports only.
-    section: "Filing",
-    icon: "file",
-    roles: ["accountant"],
-    items: [
-      { id: "acc-pnl",     href: "/accounting/pnl",            label: "P&L Report",     icon: "trending_up" },
-      { id: "acc-bs",      href: "/accounting/balance-sheet",  label: "Balance Sheet",  icon: "layout" },
-      { id: "acc-cf",      href: "/accounting/cash-flow",      label: "Cash Flow",      icon: "rupee" },
-      { id: "acc-gst",     href: "/accounting/gst",            label: "GST Reports",    icon: "file" },
-      { id: "acc-tds",     href: "/accounting/tds-receivable", label: "TDS Receivable", icon: "rupee" },
-      { id: "acc-esi",     href: "/accounting/esi-register",   label: "ESI & PF Register", icon: "file" },
-      { id: "acc-aging",   href: "/accounting/aging",          label: "Customer Aging", icon: "clock" },
-      /* Beside Customer Aging on purpose: aging answers "who owes me, across everyone",
-         the ledger answers "send me MY statement" for one party. Different questions,
-         adjacent in the menu so nobody builds a third page for the second one. */
-      { id: "acc-ledger",  href: "/accounting/ledger",         label: "Ledger (Khata)", icon: "file" },
-    ],
-  },
-  {
+    /* The queues a person clears every day. /today is the one list across all of them. */
     section: "Home",
     icon: "home",
     items: [
-      { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: ["owner", "manager", "billing"] },
       /* S29. owner/manager only for now: they bypass the middleware gate anyway, so adding
          it changes no other role's allowed routes. Opening it to more roles is a product
          call — today_inbox() already filters decisions by role, and RLS does the rest. */
-      { id: "today", href: "/today", label: "Today", icon: "inbox", roles: ["owner", "manager"], hint: "Har queue ka aaj ka kaam, ek list mein" },
-      { id: "my-attendance", href: "/attendance/me", label: "My Attendance", icon: "calendar", roles: ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"], hint: "Apni attendance khud mark karo — login hi identity proof hai." },
-      { id: "my-expenses", href: "/my-expenses", label: "Advances & Expenses", icon: "wallet", roles: ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"], hint: "Advance cash balances & mobile expense entries." },
+      { id: "today", href: "/today", label: "Today", icon: "inbox", roles: OM, hint: "Har queue ka aaj ka kaam, ek list mein" },
+      { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: OMB },
+      { id: "whatsapp",  href: "/whatsapp",        label: "WhatsApp Inbox",      icon: "whatsapp", roles: ["owner", "manager", "billing", "support", "delivery"] },
+      { id: "support",   href: "/support",         label: "Support Desk",        icon: "ticket",   roles: ["owner", "manager", "billing", "support", "delivery"] },
+      { id: "provisioning", href: "/provisioning", label: "Activation Queue", icon: "package", roles: ["owner", "manager", "support", "delivery"], hint: "Seats a customer has paid for that nobody has turned on yet." },
     ],
   },
   {
-    section: "Sales & CRM",
+    section: "Sell",
     icon: "target",
-    roles: ["owner", "manager", "sales", "billing"],
     items: [
       { id: "leads",           href: "/leads",            label: "Sales & Pipeline", icon: "target", roles: ["owner", "manager", "sales"] },
-      // /deals was referenced by ROLE_HOME.sales_senior and by the canViewDeals
-      // special case in filterNavForRole, but the ITEM never existed here. So
-      // allowedRoutesForRole could not return it, middleware bounced every
-      // sales_senior to /deals, found /deals disallowed, and bounced again —
-      // ERR_TOO_MANY_REDIRECTS on login, for that whole role. The id must stay
-      // "deals": the canViewDeals gate above matches on it.
       /* "Deal Pipeline" removed 17 Aug 2026. /leads now shows every OPEN lead
          whatever stage it reached, with the Board view for drag-drop, so there is
-         nothing left for a second entry to show. The ROUTE stays alive (bookmarks,
-         and it was the sales_senior landing until today) and resolves to the same
-         list — see deals/page.tsx.
-
-         The id must NOT be reused: nav.ts:71's old gate matched on it, and the
-         command palette flattens every item by id. */
+         nothing left for a second entry to show. The ROUTE stays alive (bookmarks)
+         and resolves to the same list — see deals/page.tsx. The id "deals" must NOT be
+         reused: the command palette flattens every item by id. */
       { id: "enquiries",       href: "/enquiries",        label: "Enquiries",     icon: "mail",   roles: ["owner", "manager", "sales"] },
       { id: "tasks",           href: "/tasks",            label: "Tasks",         icon: "clock",  roles: ["owner", "manager", "sales"] },
-      // Same destination as the Home entry above, deliberately listed twice for
-      // reach. The id must still differ: the command palette flattens every
-      // section into one list and indexes on id, so two entries sharing one id
-      // silently drop to a single result.
-      { id: "my-expenses-sales", href: "/my-expenses",    label: "Advances & Expenses", icon: "wallet", roles: ["owner", "manager", "sales"] },
-      /* Customers + Parent Accounts moved to Billing & Subscriptions (Abhishek,
-         10 Sep 2026): a customer is a company you bill, so it belongs beside the
-         quotes, invoices and payments that concern it. Sales & CRM keeps the part
-         that is still a prospect — Sales & Pipeline (leads), Enquiries, Referrals.
-
-         Contacts is GONE from the nav entirely. It was a second, disconnected
-         identity for a person — a flat address book with 0 rows, next to
-         `customers.contact_*` which the whole app actually read, next to a
-         `contact_persons` jsonb nobody filled. One fact in three places is how the
-         next person rings the wrong number. A customer's people now live ON the
-         customer (migration 20260910100000); somebody who is not a customer yet is
-         a LEAD, which already has a pipeline for exactly that. */
-      { id: "referrals",       href: "/referrals",        label: "Referrals",     icon: "award",  roles: ["owner", "manager"] },
-    ],
-  },
-  {
-    // Its own group rather than a line under Sales: marketing answers "where do
-    // leads come from and what does each cost", which is a different question
-    // from "what is in the pipeline" — and this group is where campaigns,
-    // channels and attribution will land as they get built.
-    //
-    // owner/manager only. It shows ad spend and CAC, which are the owner's
-    // numbers, not something a rep needs to open their day on.
-    section: "Marketing & Advertising",
-    icon: "chart",
-    roles: ["owner", "manager"],
-    items: [
-      /* 26 Sep 2026: the second marketing page landed (Spend — Marketing vs Advertising),
-         so the section header now shows and the report takes its real name, as the note
-         that stood here asked. */
-      { id: "marketing-hub",   href: "/marketing",         label: "Marketing Hub",  icon: "layout", roles: ["owner", "manager"], hint: "Kaunse tools chahiye, kaun sambhalta hai, budget vs kharcha" },
-      { id: "marketing-campaigns", href: "/marketing/campaigns", label: "Campaign budgets", icon: "target", roles: ["owner", "manager"], hint: "Har campaign ka budget, dates, target — kharcha aur leads ke saath" },
-      { id: "marketing-spend", href: "/marketing/spend",   label: "Spend",          icon: "wallet", roles: ["owner", "manager"] },
-      { id: "marketing-roas",  href: "/marketing/reports", label: "ROAS & CAC",     icon: "chart",  roles: ["owner", "manager"] },
-      { id: "marketing-links", href: "/marketing/links",   label: "Tracking links", icon: "globe",  roles: ["owner", "manager"], hint: "Har ad / post ka link — lead ka source khud lagega" },
-      /* These four were built and working but had no menu entry — reachable only from the
-         command palette or by URL (found 26 Sep 2026 while building the Hub). */
-      { id: "campaigns",       href: "/campaigns",         label: "Email campaigns", icon: "mail",    roles: ["owner", "manager"] },
-      { id: "email-templates", href: "/marketing/templates", label: "Email templates", icon: "file", roles: ["owner", "manager"] },
-      { id: "wa-broadcast",    href: "/marketing/whatsapp",  label: "WhatsApp broadcast", icon: "whatsapp", roles: ["owner", "manager"], hint: "Approved template se leads ko ek saath message" },
-      { id: "ad-platforms",    href: "/marketing/ads",      label: "Ad accounts (live)", icon: "trending_up", roles: ["owner", "manager"], hint: "Google Ads + Facebook ka kharcha campaign-wise, roz Google/Meta se" },
-      { id: "google-business", href: "/marketing/google-business", label: "Google Business Profile", icon: "map_pin", roles: ["owner", "manager"], hint: "Maps/Search par listing kitni dikhi, calls, reviews — Google se seedha" },
-      { id: "google-reviews",  href: "/marketing/reviews",   label: "Google reviews",  icon: "award", roles: ["owner", "manager"], hint: "Khush customers se Google review maango" },
-      { id: "coupons",         href: "/coupons",           label: "Coupons",         icon: "ticket",  roles: ["owner", "manager"] },
-      { id: "online-promos",   href: "/online-promos",     label: "Website offer banner", icon: "sparkles", roles: ["owner", "manager"] },
-      { id: "lead-gen",        href: "/lead-gen",          label: "Lead sources",    icon: "target",  roles: ["owner", "manager"] },
-      { id: "lead-finder",     href: "/marketing/lead-finder", label: "AI Lead Finder", icon: "sparkles", roles: ["owner", "manager"], hint: "Agent public web se aapke jaise customers dhoondhe — approve karo to lead" },
-    ],
-  },
-  {
-    section: "Billing & Subscriptions",
-    /* "Billing & Subscriptions" is right in the sidebar and too long for a breadcrumb.
-       Its eight pages used to be split between "Billing" and "Revenue" — two crumbs for
-       one sidebar group, which is what made "Revenue > Subscriptions" look wrong beside
-       a sidebar that clearly said Billing & Subscriptions. */
-    crumb: "Billing",
-    icon: "rupee",
-    roles: ["owner", "manager", "sales", "billing", "delivery", "support"],
-    items: [
-      { id: "customers",       href: "/customers",        label: "Customers",       icon: "users",   roles: ["owner", "manager", "billing"] },
-      { id: "customer-groups", href: "/customers/groups", label: "Parent Accounts", icon: "layout",  roles: ["owner", "manager"] },
-      { id: "quotes",        href: "/quotes",        label: "Quotes",            icon: "file",    roles: ["owner", "manager", "sales"] },
-      { id: "subscriptions", href: "/subscriptions", label: "Subscriptions",     icon: "refresh", roles: ["owner", "manager", "billing"] },
-      { id: "renewals",      href: "/renewals",      label: "Renewals",          icon: "clock",   roles: ["owner", "manager", "billing", "support"] },
-      { id: "invoices",      href: "/invoices",      label: "Invoices",          icon: "receipt", roles: ["owner", "manager", "billing"] },
-      { id: "payments",      href: "/payments",      label: "Payments Received", icon: "rupee",   roles: ["owner", "manager", "billing"] },
-      { id: "projects",      href: "/projects",      label: "Project Sales",     icon: "package", roles: ["owner", "manager", "sales", "delivery", "billing"] },
-    ],
-  },
-  {
-    section: "Operations",
-    icon: "package",
-    roles: ["owner", "manager", "billing", "support", "delivery"],
-    items: [
-      { id: "items",     href: "/items",           label: "Catalog & Products", icon: "package", roles: ["owner", "manager"] },
-      { id: "hosting-domains", href: "/hosting-domains", label: "Hosting & Domains", icon: "globe", roles: ["owner", "manager", "support"], hint: "Status of the DMS engine, and the way into its admin panel." },
-      { id: "provisioning", href: "/provisioning", label: "Activation Queue", icon: "package", roles: ["owner", "manager", "support", "delivery"], hint: "Seats a customer has paid for that nobody has turned on yet." },
-      { id: "documents", href: "/documents",       label: "Company Documents",  icon: "file",    roles: ["owner", "manager"] },
-      { id: "support",   href: "/support",         label: "Support Desk",        icon: "ticket" },
-      { id: "whatsapp",  href: "/whatsapp",        label: "WhatsApp Inbox",      icon: "whatsapp" },
-    ],
-  },
-  {
-    section: "Purchases & Vendors",
-    icon: "cart",
-    roles: ["owner", "manager", "billing"],
-    items: [
-      { id: "vendor-portal",   href: "/vendor-portal",             label: "Vendor Portal & Bids", icon: "sparkles", hint: "Vendor marketplace, wholesale license rate bids & PO sourcing." },
-      { id: "purchase-orders", href: "/purchase-orders",           label: "Purchase Orders",      icon: "cart" },
-      { id: "vendors",         href: "/accounting/vendors",        label: "Vendors Master",       icon: "users" },
-      { id: "bills",           href: "/accounting/bills",          label: "COGS Bills",           icon: "receipt" },
-      { id: "bill-payments",   href: "/accounting/bill-payments",  label: "Payments Made",        icon: "rupee" },
-      { id: "expenses",        href: "/accounting/expenses",       label: "Expenses",             icon: "rupee" },
-      /* Money paid to a vendor before the service (Facebook ad top-ups) and the month-end
-         invoices booked against it. Sits with Payments Made and Expenses because that is the
-         work it is; it had no menu entry at all before (Pardeep, 26 Sep 2026). */
-      { id: "prepaid",         href: "/accounting/prepaid",        label: "Prepaid / Advances",   icon: "wallet" },
-    ],
-  },
-  {
-    section: "Accounting & Finance",
-    icon: "chart",
-    roles: ["owner", "manager", "billing", "accountant"],
-    items: [
-      { id: "reports",             href: "/reports",                  label: "Reports Hub",         icon: "chart" },
-      { id: "acc-overview",        href: "/accounting",               label: "Accounting Overview", icon: "layout" },
-      { id: "acc-close",           href: "/accounting/close",         label: "Month-end Close",     icon: "check" },
-      { id: "banking",             href: "/accounting/banking",       label: "Banking",             icon: "rupee" },
-      /* The khata. It sits in BOTH this section and the accountant-only "Filing" one,
-         which is not a duplication mistake — P&L, Balance Sheet and Cash Flow already do
-         the same, and the command palette de-dupes by href (command-palette.tsx:122).
-         Adding it only to "Filing" made it invisible to the owner, who is exactly the
-         person a customer asks for a statement. */
-      { id: "ledger",              href: "/accounting/ledger",        label: "Ledger (Khata)",      icon: "file" },
-      /* These three lived ONLY in the accountant-only "Filing" section, so the owner —
-         the person who actually files the GST return and chases the money — had no menu
-         route to any of them. They were reachable (middleware exempts owner and manager,
-         middleware.ts:103) and reachable is not the same as findable: an owner who does
-         not know the URL simply does not have the feature.
-         GST Reports is the sharpest of the three. It is a monthly statutory deadline. */
-      { id: "acc-aging-owner",     href: "/accounting/aging",         label: "Customer Aging",      icon: "clock" },
-      { id: "pnl",                 href: "/accounting/pnl",           label: "P&L Report",          icon: "trending_up" },
-      { id: "balance-sheet",       href: "/accounting/balance-sheet", label: "Balance Sheet",       icon: "layout" },
-      { id: "cash-flow",           href: "/accounting/cash-flow",     label: "Cash Flow",           icon: "rupee" },
-      { id: "gst-owner",           href: "/accounting/gst",           label: "GST Reports",         icon: "file" },
-      { id: "tds-owner",           href: "/accounting/tds-receivable",label: "TDS Receivable",      icon: "rupee" },
-      { id: "itr",                 href: "/accounting/itr",           label: "Income Tax (ITR)",    icon: "file" },
-      { id: "compliance-calendar", href: "/compliance",               label: "Compliance Calendar", icon: "calendar" },
-    ],
-  },
-  {
-    section: "HR & Payroll",
-    icon: "users",
-    roles: ["owner", "manager", "billing"],
-    items: [
-      { id: "employees",         href: "/accounting/employees",       label: "Employees & Team",       icon: "users" },
-      { id: "attendance-reg",    href: "/accounting/attendance",      label: "Attendance Register",    icon: "calendar", hint: "Daily attendance logs, check-in/out & hours." },
-      { id: "leave-reg",         href: "/accounting/leave",           label: "Leave Register",         icon: "file",     hint: "Casual leave, sick leave & earned leave tracking." },
-      { id: "payroll",           href: "/accounting/payroll",         label: "Payroll Overview",       icon: "rupee" },
-      { id: "salary-register",   href: "/accounting/salary-register", label: "Salary & Payroll Register", icon: "receipt", hint: "Monthly salary slip register, CTC & net payouts." },
-      { id: "esi-register",      href: "/accounting/esi-register",    label: "ESI & PF Register",      icon: "file" },
-      { id: "emp-loans",         href: "/accounting/loans",           label: "Loans & Salary Advances",icon: "rupee" },
-    ],
-  },
-  {
-    section: "Admin & Control",
-    icon: "settings",
-    roles: ["owner", "manager", "billing", "partner_agent"],
-    items: [
-      { id: "settings",  href: "/settings",             label: "Settings",         icon: "settings", roles: ["owner", "manager", "billing"] },
-      // The ONLY entry partner_agent can see. It is also ROLE_HOME for that
+      /* Contacts is GONE from the nav entirely (10 Sep 2026): a customer's people live ON
+         the customer (migration 20260910100000); somebody who is not a customer yet is a
+         LEAD. */
+      {
+        /* Marketing answers "where do leads come from and what does each cost" — owner/
+           manager only, it shows ad spend and CAC. Fifteen sidebar rows became one: the
+           other fourteen are the Hub's directory, in five groups (S30). */
+        id: "marketing-hub",   href: "/marketing",         label: "Marketing Hub",  icon: "layout", roles: OM, hint: "Kaunse tools chahiye, kaun sambhalta hai, budget vs kharcha",
+        directory: [
+          { id: "marketing-campaigns", href: "/marketing/campaigns", label: "Campaign budgets", icon: "target", roles: OM, group: "Plan & spend", hint: "Har campaign ka budget, dates, target — kharcha aur leads ke saath" },
+          { id: "marketing-spend", href: "/marketing/spend",   label: "Spend",          icon: "wallet", roles: OM, group: "Plan & spend" },
+          { id: "marketing-roas",  href: "/marketing/reports", label: "ROAS & CAC",     icon: "chart",  roles: OM, group: "Plan & spend" },
+          { id: "campaigns",       href: "/campaigns",         label: "Email campaigns", icon: "mail",    roles: OM, group: "Campaigns" },
+          { id: "email-templates", href: "/marketing/templates", label: "Email templates", icon: "file", roles: OM, group: "Campaigns" },
+          { id: "wa-broadcast",    href: "/marketing/whatsapp",  label: "WhatsApp broadcast", icon: "whatsapp", roles: OM, group: "Campaigns", hint: "Approved template se leads ko ek saath message" },
+          { id: "ad-platforms",    href: "/marketing/ads",      label: "Ad accounts (live)", icon: "trending_up", roles: OM, group: "Ads & tracking", hint: "Google Ads + Facebook ka kharcha campaign-wise, roz Google/Meta se" },
+          { id: "marketing-links", href: "/marketing/links",   label: "Tracking links", icon: "globe",  roles: OM, group: "Ads & tracking", hint: "Har ad / post ka link — lead ka source khud lagega" },
+          { id: "lead-gen",        href: "/lead-gen",          label: "Lead sources",    icon: "target",  roles: OM, group: "Ads & tracking" },
+          { id: "google-business", href: "/marketing/google-business", label: "Google Business Profile", icon: "map_pin", roles: OM, group: "Reputation", hint: "Maps/Search par listing kitni dikhi, calls, reviews — Google se seedha" },
+          { id: "google-reviews",  href: "/marketing/reviews",   label: "Google reviews",  icon: "award", roles: OM, group: "Reputation", hint: "Khush customers se Google review maango" },
+          { id: "coupons",         href: "/coupons",           label: "Coupons",         icon: "ticket",  roles: OM, group: "Offers & new leads" },
+          { id: "online-promos",   href: "/online-promos",     label: "Website offer banner", icon: "sparkles", roles: OM, group: "Offers & new leads" },
+          { id: "lead-finder",     href: "/marketing/lead-finder", label: "AI Lead Finder", icon: "sparkles", roles: OM, group: "Offers & new leads", hint: "Agent public web se aapke jaise customers dhoondhe — approve karo to lead" },
+        ],
+      },
+      { id: "referrals",       href: "/referrals",        label: "Referrals",     icon: "award",  roles: OM },
+      // The ONLY entry partner_agent can see besides Help. It is also ROLE_HOME for that
       // role, so this line is what keeps their login from looping.
       { id: "partners",  href: "/partners",             label: "Partners",         icon: "award", roles: ["owner", "manager", "partner_agent"] },
-      // owner/manager only — these are customers' admin console passwords, and
-      // "billing" has no reason to reach a Google Admin login.
-      /* Added with the page, in the same commit, on purpose. Marketing, Backup and /team
-         were each found later as pages the app could render and nobody could click — /team
-         had a breadcrumb and exactly one link, buried in a dialog's help text. A brake
-         nobody can find is not a brake. */
-      { id: "automation", href: "/automation",          label: "Automation",       icon: "sparkles", roles: ["owner", "manager"], hint: "App khud kya bhejta hai — aur band karne ka switch" },
-      { id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: ["owner", "manager"] },
-      /* The owner's PRIVATE books — personal bank, drawings, net worth. Owner-only here,
-         but understand what this line does and does not do: middleware skips its role
-         guard entirely for `owner` AND `manager`, so this hides the menu item and nothing
-         more. The data is protected by RLS scoped to auth.uid(), proven by
-         supabase/tests/personal_vault_owner_isolation.test.sql. Note it is per-USER, not
-         per-role: this tenant has three owners and none of them may read another's. */
-      { id: "vault-personal", href: "/vault/personal",  label: "Private Vault",    icon: "wallet", roles: ["owner"], hint: "Aapke apne paise — team me kisi ko nahi dikhta" },
-      /* Third page found with no nav entry, after Marketing and Backup. /team
-         had a breadcrumb — so the app knew its NAME — and exactly one link in
-         the whole codebase, buried in the Add Task dialog's help text. It is
-         where teammates are invited, where a stranded colleague is claimed, and
-         where join requests are approved; none of that was reachable by
-         clicking. */
-      { id: "team",      href: "/team",                 label: "Team",             icon: "users", roles: ["owner", "manager"] },
-      /* Owner-only, and it had NO nav entry at all — the page existed, the
-         breadcrumb below knew its name, and nothing anywhere linked to it. So the
-         restore points and the data reset were reachable only by typing the URL.
-         A safety feature nobody can find is not a safety feature; this is the
-         same failure the Marketing group had. */
-      { id: "backup",    href: "/settings/backup",      label: "Backup & Restore", icon: "database", roles: ["owner"] },
-      /* The triage queue for bug reports the team files with Ctrl+Shift+B. Owner and
-         manager only: the reports name source files and quote whatever the reporter
-         typed, which regularly includes a customer's name and what went wrong for them. */
-      { id: "feedback",  href: "/admin/feedback",       label: "Feedback & AI Fixes", icon: "bug", roles: ["owner", "manager"] },
-      { id: "help",      href: "/help",                 label: "Help & Tutorial",  icon: "question" },
+    ],
+  },
+  {
+    /* Abhishek's grouping (10 Sep 2026) kept whole: a customer is a company you bill, so
+       it sits beside the quotes, invoices and payments that concern it. The crumb stays
+       "Billing" so every one of these pages reads exactly as it did. */
+    section: "Bill",
+    crumb: "Billing",
+    icon: "rupee",
+    items: [
+      {
+        id: "customers",       href: "/customers",        label: "Customers",       icon: "users",   roles: OMB,
+        children: [
+          { id: "customer-groups", href: "/customers/groups", label: "Parent Accounts", icon: "layout",  roles: OM },
+        ],
+      },
+      { id: "quotes",        href: "/quotes",        label: "Quotes",            icon: "file",    roles: ["owner", "manager", "sales"] },
+      { id: "subscriptions", href: "/subscriptions", label: "Subscriptions",     icon: "refresh", roles: OMB },
+      { id: "renewals",      href: "/renewals",      label: "Renewals",          icon: "clock",   roles: ["owner", "manager", "billing", "support"] },
+      { id: "invoices",      href: "/invoices",      label: "Invoices",          icon: "receipt", roles: OMB },
+      { id: "payments",      href: "/payments",      label: "Payments Received", icon: "rupee",   roles: OMB },
+      { id: "projects",      href: "/projects",      label: "Project Sales",     icon: "package", roles: ["owner", "manager", "sales", "delivery", "billing"] },
+      { id: "items",     href: "/items",           label: "Catalog & Products", icon: "package", roles: OM },
+    ],
+  },
+  {
+    section: "Buy",
+    icon: "cart",
+    items: [
+      /* Was reachable only by URL. It is a queue — order mails waiting to be booked — so
+         it leads the group. owner/manager only, so no gated role's routes change; whether
+         billing should have it is a product call. */
+      { id: "purchase-inbox",  href: "/purchases/inbox",           label: "Purchase Inbox",       icon: "inbox", roles: OM, hint: "Amazon & co. ke order mails — review karo, phir expense" },
+      {
+        id: "purchase-orders", href: "/purchase-orders",           label: "Purchase Orders",      icon: "cart", roles: OMB,
+        children: [
+          { id: "vendor-portal",   href: "/vendor-portal",             label: "Vendor Portal & Bids", icon: "sparkles", roles: OMB, hint: "Vendor marketplace, wholesale license rate bids & PO sourcing." },
+        ],
+      },
+      { id: "vendors",         href: "/accounting/vendors",        label: "Vendors Master",       icon: "users", roles: OMB },
+      { id: "bills",           href: "/accounting/bills",          label: "COGS Bills",           icon: "receipt", roles: OMB },
+      { id: "bill-payments",   href: "/accounting/bill-payments",  label: "Payments Made",        icon: "rupee", roles: OMB },
+      {
+        id: "expenses",        href: "/accounting/expenses",       label: "Expenses",             icon: "rupee", roles: OMB,
+        children: [
+          /* Money paid to a vendor before the service (Facebook ad top-ups) and the
+             month-end invoices booked against it (Pardeep, 26 Sep 2026). */
+          { id: "prepaid",         href: "/accounting/prepaid",        label: "Prepaid / Advances",   icon: "wallet", roles: OMB },
+        ],
+      },
+    ],
+  },
+  {
+    /* The accountant / CA's whole menu lives here now. Before S30 they had a separate
+       "Filing" section that repeated seven of these hrefs; the command palette de-duped
+       them and the sidebar did not. One list, one place. */
+    section: "Books",
+    icon: "chart",
+    items: [
+      { id: "acc-overview",        href: "/accounting",               label: "Accounting Overview", icon: "layout", roles: BOOKS },
+      { id: "banking",             href: "/accounting/banking",       label: "Banking",             icon: "rupee", roles: BOOKS },
+      /* The khata. The ledger answers "send me MY statement" for one party; Customer Aging
+         (in Reports) answers "who owes me, across everyone". The owner must see it — he is
+         exactly the person a customer asks for a statement (nav.test.ts). */
+      { id: "ledger",              href: "/accounting/ledger",        label: "Ledger (Khata)",      icon: "file", roles: BOOKS },
+      { id: "acc-close",           href: "/accounting/close",         label: "Month-end Close",     icon: "check", roles: BOOKS },
+      {
+        /* THE REPORTS DIRECTORY (S30). Every report is one click from this page, grouped.
+           GST Reports, TDS Receivable and Customer Aging were once missing from the
+           owner's menu entirely (nav.test.ts) — they are in this directory for every role
+           that had them, and /today surfaces the GST/TDS deadlines themselves. */
+        id: "reports",             href: "/reports",                  label: "Reports",             icon: "chart", roles: BOOKS,
+        directory: [
+          { id: "pnl",                 href: "/accounting/pnl",           label: "P&L Report",          icon: "trending_up", roles: BOOKS, group: "Financial statements" },
+          { id: "balance-sheet",       href: "/accounting/balance-sheet", label: "Balance Sheet",       icon: "layout", roles: BOOKS, group: "Financial statements" },
+          { id: "cash-flow",           href: "/accounting/cash-flow",     label: "Cash Flow",           icon: "rupee", roles: BOOKS, group: "Financial statements" },
+          { id: "gst-owner",           href: "/accounting/gst",           label: "GST Reports",         icon: "file", roles: BOOKS, group: "Tax" },
+          { id: "tds-owner",           href: "/accounting/tds-receivable",label: "TDS Receivable",      icon: "rupee", roles: BOOKS, group: "Tax" },
+          { id: "itr",                 href: "/accounting/itr",           label: "Income Tax (ITR)",    icon: "file", roles: BOOKS, group: "Tax" },
+          { id: "acc-aging-owner",     href: "/accounting/aging",         label: "Customer Aging",      icon: "clock", roles: BOOKS, group: "Receivables & registers" },
+          { id: "esi-register",        href: "/accounting/esi-register",  label: "ESI & PF Register",   icon: "file", roles: BOOKS, group: "Receivables & registers" },
+          /* Was reachable only by URL. Owner/manager: it is who-did-what across the team. */
+          { id: "activity",            href: "/activity",                 label: "Activity Log",        icon: "list", roles: OM, group: "Audit" },
+        ],
+      },
+      { id: "compliance-calendar", href: "/compliance",               label: "Compliance Calendar", icon: "calendar", roles: BOOKS },
+    ],
+  },
+  {
+    section: "Team",
+    icon: "users",
+    items: [
+      { id: "my-attendance", href: "/attendance/me", label: "My Attendance", icon: "calendar", roles: STAFF, hint: "Apni attendance khud mark karo — login hi identity proof hai." },
+      /* Was listed twice (Home and Sales & CRM) "for reach". Once is enough now that it
+         has a group every staff role can see; the mobile Quick Actions grid still puts it
+         first on a phone. */
+      { id: "my-expenses", href: "/my-expenses", label: "Advances & Expenses", icon: "wallet", roles: STAFF, hint: "Advance cash balances & mobile expense entries." },
+      {
+        id: "employees",         href: "/accounting/employees",       label: "Employees & Team",       icon: "users", roles: OMB,
+        children: [
+          /* Was reachable only by URL. */
+          { id: "scorecard",       href: "/scorecard",                  label: "Scorecards",             icon: "award", roles: OM },
+        ],
+      },
+      {
+        id: "attendance-reg",    href: "/accounting/attendance",      label: "Attendance Register",    icon: "calendar", roles: OMB, hint: "Daily attendance logs, check-in/out & hours.",
+        children: [
+          { id: "leave-reg",         href: "/accounting/leave",           label: "Leave Register",         icon: "file", roles: OMB, hint: "Casual leave, sick leave & earned leave tracking." },
+        ],
+      },
+      {
+        id: "payroll",           href: "/accounting/payroll",         label: "Payroll Overview",       icon: "rupee", roles: OMB,
+        children: [
+          { id: "salary-register",   href: "/accounting/salary-register", label: "Salary & Payroll Register", icon: "receipt", roles: OMB, hint: "Monthly salary slip register, CTC & net payouts." },
+          { id: "emp-loans",         href: "/accounting/loans",           label: "Loans & Salary Advances",icon: "rupee", roles: OMB },
+        ],
+      },
+      /* Where teammates are invited, a stranded colleague is claimed, and join requests are
+         approved. Found with no nav entry once already — keep it a sidebar row. */
+      { id: "team",      href: "/team",                 label: "Team",             icon: "users", roles: OM },
+    ],
+  },
+  {
+    section: "Settings",
+    icon: "settings",
+    items: [
+      {
+        id: "settings",  href: "/settings",             label: "Settings",         icon: "settings", roles: OMB,
+        children: [
+          /* Owner-only: restore points and the data reset. A safety feature nobody can
+             find is not a safety feature — it had no nav entry at all until Aug 2026. */
+          { id: "backup",    href: "/settings/backup",      label: "Backup & Restore", icon: "database", roles: ["owner"] },
+        ],
+      },
+      /* "App khud kya bhejta hai — aur band karne ka switch". A brake nobody can find is
+         not a brake. */
+      { id: "automation", href: "/automation",          label: "Automation",       icon: "sparkles", roles: OM, hint: "App khud kya bhejta hai — aur band karne ka switch" },
+      {
+        // owner/manager only — these are customers' admin console passwords.
+        id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: OM,
+        children: [
+          /* The owner's PRIVATE books. This hides the menu row and nothing more: middleware
+             skips its role guard for owner AND manager. The data is protected by RLS scoped
+             to auth.uid() (personal_vault_owner_isolation.test.sql), per USER not per role. */
+          { id: "vault-personal", href: "/vault/personal",  label: "Private Vault",    icon: "wallet", roles: ["owner"], hint: "Aapke apne paise — team me kisi ko nahi dikhta" },
+        ],
+      },
+      { id: "documents", href: "/documents",       label: "Company Documents",  icon: "file",    roles: OM },
+      { id: "hosting-domains", href: "/hosting-domains", label: "Hosting & Domains", icon: "globe", roles: ["owner", "manager", "support"], hint: "Status of the DMS engine, and the way into its admin panel." },
+      {
+        id: "help",      href: "/help",                 label: "Help & Tutorial",  icon: "question", roles: ["owner", "manager", "billing", "partner_agent"],
+        children: [
+          /* The triage queue for bug reports filed with Ctrl+Shift+B. Owner/manager: the
+             reports quote whatever the reporter typed, often a customer's name. */
+          { id: "feedback",  href: "/admin/feedback",       label: "Feedback & AI Fixes", icon: "bug", roles: OM },
+        ],
+      },
     ],
   },
 ];
@@ -428,119 +514,95 @@ export const CUSTOMER_NAV: NavSection[] = [
 ];
 
 // ============================================================
-// Breadcrumb titles — by URL path
+// Breadcrumb titles — by URL path, DERIVED from APP_NAV (S30)
 // ============================================================
-// NB: /leads + /deals share the same component (the /deals route file
-//     re-exports from /leads). The titles still need separate entries here.
-export const SCREEN_TITLES: Record<string, string[]> = {
-  "/dashboard":       ["Home", "Dashboard"],
-  "/today":           ["Home", "Today"],
-  "/hosting-domains": ["Operations", "Hosting & Domains"],
-  "/provisioning": ["Operations", "Activation Queue"],
-  "/leads":           ["Sales", "Leads"],
-  "/my-expenses":     ["Me", "Advances & Expenses"],
-  "/automation":      ["Admin", "Automation"],
-  "/vault":           ["Admin", "Password Vault"],
-  "/admin/feedback":  ["Admin", "Feedback & AI Fixes"],
-  "/vault/personal":  ["Admin", "Private Vault"],
-  "/marketing/reports": ["Marketing & Advertising", "ROAS & CAC"],
-  "/marketing/spend":   ["Marketing & Advertising", "Spend"],
-  "/marketing":         ["Marketing & Advertising", "Marketing Hub"],
-  "/marketing/links":   ["Marketing & Advertising", "Tracking links"],
-  "/marketing/campaigns": ["Marketing & Advertising", "Campaign budgets"],
-  "/marketing/templates": ["Marketing & Advertising", "Email templates"],
-  "/marketing/ads":      ["Marketing & Advertising", "Ad accounts (live)"],
-  "/marketing/lead-finder": ["Marketing & Advertising", "AI Lead Finder"],
-  "/marketing/google-business": ["Marketing & Advertising", "Google Business Profile"],
-  "/marketing/reviews":   ["Marketing & Advertising", "Google reviews"],
-  "/marketing/whatsapp":  ["Marketing & Advertising", "WhatsApp broadcast"],
-  "/enquiries":       ["Sales", "Enquiries"],
-  "/deals":           ["Sales", "Deal Pipeline"],
-  "/tasks":           ["Sales", "Tasks"],
-  "/customers":       ["Billing", "Customers"],
-  "/customers/groups":      ["Billing", "Parent Accounts"],
-  "/customers/groups/[id]": ["Billing", "Parent Accounts", "Detail"],
-  "/customers/new":   ["Billing", "Customers", "New"],
-  "/customers/[id]":  ["Billing", "Customers", "Profile"],
-  "/customers/[id]/edit": ["Billing", "Customers", "Edit"],
-  "/contacts":        ["Sales", "Contacts"],
-  "/contacts/[id]":   ["Sales", "Contacts", "Profile"],
-  "/referrals":       ["Sales", "Referrals"],
-  "/online-orders":   ["Billing", "Online Orders"],
-  "/quotes":          ["Billing", "Quotes"],
-  "/quotes/new":      ["Billing", "Quotes", "New"],
-  "/quotes/[id]":     ["Billing", "Quotes", "Detail"],
-  "/projects":        ["Billing", "Project Sales"],
-  "/projects/[id]":   ["Billing", "Project Sales", "Detail"],
-  "/payments":        ["Billing", "Payments Received"],
-  "/invoices":        ["Billing", "Invoices"],
-  "/invoices/[id]":   ["Billing", "Invoices", "Detail"],
-  "/subscriptions":   ["Billing", "Subscriptions"],
-  "/renewals":        ["Billing", "Renewals"],
-  "/vendor-portal":   ["Purchases", "Vendor Portal & Bids"],
-  "/purchase-orders": ["Purchases", "Purchase Orders"],
-  "/accounting/vendors":       ["Purchases", "Vendors"],
-  "/accounting/bills":         ["Purchases", "COGS Bills"],
-  "/accounting/bill-payments": ["Purchases", "Payments Made"],
-  "/accounting/expenses":      ["Purchases", "Expenses"],
-  "/accounting/reimbursements": ["Purchases", "Reimbursements"],
-  "/accounting":               ["Accounting", "Overview"],
-  "/accounting/saas-metrics":  ["Accounting", "SaaS Metrics"],
-  "/accounting/ledger":        ["Accounting", "Ledger"],
-  "/accounting/banking":       ["Accounting", "Banking"],
-  "/accounting/banking/[id]":  ["Accounting", "Banking", "Account"],
-  "/accounting/banking/rules": ["Accounting", "Banking", "Category Rules"],
-  "/accounting/banking/brs":   ["Accounting", "Banking", "Bank Reconciliation"],
-  "/accounting/close":         ["Accounting", "Month-end Close"],
-  "/accounting/business-loans": ["Accounting", "Business Loans"],
-  "/accounting/pnl":           ["Accounting", "P&L Report"],
-  "/accounting/balance-sheet": ["Accounting", "Balance Sheet"],
-  "/accounting/cash-flow":     ["Accounting", "Cash Flow"],
-  "/accounting/assets":        ["Accounting", "Assets & EMIs"],
-  "/accounting/prepaid":       ["Purchases", "Prepaid / Advances"],
-  "/accounting/profitability": ["Accounting", "Customer Margin"],
-  "/accounting/aging":         ["Accounting", "Customer Aging"],
-  "/accounting/esi-register":  ["Payroll", "ESI & PF Register"],
-  "/performance":              ["Payroll", "Team Performance"],
-  "/assessments":              ["Payroll", "Reasoning Tests"],
-  "/accounting/tds-receivable":          ["Accounting", "TDS Receivable"],
-  "/accounting/itr":                     ["Accounting", "Income Tax (ITR)"],
-  "/accounting/tds-receivable/year-end": ["Accounting", "TDS Receivable", "Year-End"],
-  "/accounting/gst":      ["Accounting", "GST Reports"],
-  "/compliance":            ["Compliance", "Compliance Calendar"],
-  "/compliance/roc":        ["Compliance", "ROC / MCA"],
-  "/compliance/gst":        ["Compliance", "GST Returns"],
-  "/compliance/income-tax": ["Compliance", "Income Tax & TDS"],
-  "/accounting/loans":         ["Payroll", "Loans & Advances"],
-  "/accounting/employees":     ["Payroll", "Employees"],
-  "/accounting/payroll":       ["Payroll", "Payroll Overview"],
-  "/accounting/salary-register": ["Payroll", "Salary Register"],
-  "/accounting/leave":         ["Payroll", "Leave Register"],
-  "/accounting/attendance":    ["Payroll", "Attendance Register"],
-  "/attendance/kiosk":         ["Payroll", "Attendance Kiosk"],
-  "/attendance/me":            ["My Attendance"],
-  "/activity":                 ["Reports", "Activity Log"],
-  "/scorecard":                ["Payroll", "Scorecards"],
-  "/whatsapp":        ["Engage", "WhatsApp Inbox"],
-  "/campaigns":       ["Marketing & Advertising", "Email campaigns"],
-  "/online-promos":   ["Marketing & Advertising", "Website offer banner"],
-  "/coupons":         ["Marketing & Advertising", "Coupons"],
-  "/reports":         ["Reports", "All Reports"],
-  "/reports/profit":  ["Reports", "Profit by product/service"],
-  "/reports/purchases": ["Reports", "Purchase report"],
-  "/purchases/inbox":   ["Purchases", "Purchase Inbox"],
-  "/support":         ["Engage", "Support"],
-  "/items":           ["Catalog"],
-  "/documents":       ["Company Documents", "Documents"],
-  "/settings":        ["Settings", "Settings"],
-  "/settings/backup": ["Settings", "Backup"],
-  "/team":            ["Settings", "Team"],
-  "/partners":        ["Settings", "Partners"],
-  "/lead-gen":        ["Marketing & Advertising", "Lead sources"],
-  "/mobile":          ["Settings", "Mobile (PWA)"],
-  "/setup":           ["Settings", "Setup Wizard"],
-  "/help":            ["Help", "Help & Tutorial"],
+// Until S30 this was a hand-kept second copy of the nav, and it named sections that did
+// not exist: /whatsapp and /support said "Engage", HR pages said "Payroll", purchases
+// said "Purchases", while the sidebar said otherwise. Now:
+//   • a sidebar or accordion row's crumb is [section crumb, label];
+//   • a directory row's crumb is [section crumb, parent label, label] — it tells you
+//     where to click to find the page again (Books › Reports › P&L Report);
+//   • a page NOT in APP_NAV declares only its own tail, and the head comes from the nav
+//     entry it sits under — by path (the nearest nav ancestor) or by an explicit `under`,
+//     which is either a nav href or a section name.
+// nav-s30.test.ts fails if any crumb starts with a name that is not a section's crumb.
+
+/** Pages that are not nav entries: detail pages, sub-pages, and routes kept alive for
+ *  bookmarks. `tail` is appended to the crumb of whatever they sit under. */
+const EXTRA_SCREENS: Record<string, { tail: string[]; under?: string }> = {
+  // NB: /leads + /deals share the same component (the /deals route file re-exports from
+  //     /leads). The titles still need separate entries.
+  "/deals":                  { tail: ["Deal Pipeline"], under: "/leads" },
+  "/contacts":               { tail: ["Contacts"], under: "/leads" },
+  "/contacts/[id]":          { tail: ["Contacts", "Profile"], under: "/leads" },
+  "/customers/groups/[id]":  { tail: ["Detail"] },
+  "/customers/new":          { tail: ["New"] },
+  "/customers/[id]":         { tail: ["Profile"] },
+  "/customers/[id]/edit":    { tail: ["Edit"] },
+  // Pawan's page; it has no nav row. Kept on the Billing crumb it always had.
+  "/online-orders":          { tail: ["Online Orders"], under: "Bill" },
+  "/quotes/new":             { tail: ["New"] },
+  "/quotes/[id]":            { tail: ["Detail"] },
+  "/projects/[id]":          { tail: ["Detail"] },
+  "/invoices/[id]":          { tail: ["Detail"] },
+  "/accounting/reimbursements": { tail: ["Reimbursements"], under: "/accounting/expenses" },
+  "/accounting/saas-metrics":   { tail: ["SaaS Metrics"], under: "/reports" },
+  "/accounting/profitability":  { tail: ["Customer Margin"], under: "/reports" },
+  "/accounting/banking/[id]":   { tail: ["Account"] },
+  "/accounting/banking/rules":  { tail: ["Category Rules"] },
+  "/accounting/banking/brs":    { tail: ["Bank Reconciliation"] },
+  "/accounting/business-loans": { tail: ["Business Loans"] },
+  "/accounting/assets":         { tail: ["Assets & EMIs"] },
+  "/accounting/tds-receivable/year-end": { tail: ["Year-End"] },
+  "/compliance/roc":         { tail: ["ROC / MCA"] },
+  "/compliance/gst":         { tail: ["GST Returns"] },
+  "/compliance/income-tax":  { tail: ["Income Tax & TDS"] },
+  "/performance":            { tail: ["Team Performance"], under: "Team" },
+  "/assessments":            { tail: ["Reasoning Tests"], under: "Team" },
+  "/attendance/kiosk":       { tail: ["Attendance Kiosk"], under: "Team" },
+  "/reports/profit":         { tail: ["Profit by product/service"] },
+  "/reports/purchases":      { tail: ["Purchase report"] },
+  "/mobile":                 { tail: ["Mobile (PWA)"], under: "Settings" },
+  "/setup":                  { tail: ["Setup Wizard"], under: "Settings" },
 };
+
+/** The crumb of every APP_NAV entry, from where it sits. */
+function navCrumbs(nav: NavSection[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const e of flattenNav(nav)) {
+    const head = sectionCrumb(e.section);
+    out[e.item.href] = e.via === "directory" && e.parent
+      ? [head, e.parent.label, e.item.label]
+      : [head, e.item.label];
+  }
+  return out;
+}
+
+function buildScreenTitles(nav: NavSection[]): Record<string, string[]> {
+  const fromNav = navCrumbs(nav);
+  const out: Record<string, string[]> = { ...fromNav };
+  for (const [path, { tail, under }] of Object.entries(EXTRA_SCREENS)) {
+    let head: string[] | undefined;
+    if (under) {
+      head = fromNav[under];
+      if (!head) {
+        const sec = nav.find((s) => s.section === under);
+        head = sec ? [sectionCrumb(sec)] : undefined;
+      }
+    } else {
+      // Nearest nav ancestor by path: /customers/[id]/edit → /customers.
+      const segs = path.split("/").filter(Boolean);
+      for (let i = segs.length - 1; i >= 1 && !head; i--) head = fromNav["/" + segs.slice(0, i).join("/")];
+    }
+    /* A typo in `under` must be loud, not a crumb that silently says "Dashboard". */
+    if (!head) throw new Error(`nav.ts EXTRA_SCREENS: ${path} sits under nothing in APP_NAV (under=${under ?? "by path"})`);
+    out[path] = [...head, ...tail];
+  }
+  return out;
+}
+
+/** Breadcrumb for every known path. Derived — edit APP_NAV / EXTRA_SCREENS, not this. */
+export const SCREEN_TITLES: Record<string, string[]> = buildScreenTitles(APP_NAV);
 
 /**
  * Get breadcrumb path for a URL.

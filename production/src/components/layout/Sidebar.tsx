@@ -23,7 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { APP_NAV, filterNavForRole, type UserRole, type NavItem } from "@/lib/nav";
+import { APP_NAV, filterNavForRole, navItemContains, type UserRole, type NavItem } from "@/lib/nav";
 import { useNavBadges } from "@/lib/hooks/useNavBadges";
 import { useCurrentUser, useIdentity } from "@/lib/hooks/useCurrentUser";
 import { roleLabel } from "@/lib/auth/roles";
@@ -131,9 +131,9 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
           );
           if (visibleItems.length === 0) return null;
 
-          const sectionActive = visibleItems.some(
-            (it) => pathname === it.href || it.children?.some((c) => pathname === c.href),
-          );
+          /* Directory rows (S30) count too: on /accounting/pnl the Books group is the one
+             that opens, because Reports is where that page lives. */
+          const sectionActive = visibleItems.some((it) => navItemContains(it, pathname));
 
           // Reusable link (plain item + accordion children).
           const renderLink = (it: NavItem, child = false) => {
