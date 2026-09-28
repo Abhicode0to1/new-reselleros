@@ -43,8 +43,11 @@ opens Attendance → "Lock to this network" once from the office after the deplo
 ## 1. Rate limit — shared store (optional, measure first)
 
 ```bash
-# 1. Apply the migration on Cloud SQL (as the migration role — same way as the other migrations).
-#    File: production/supabase/migrations/20260928140000_rate_limit_shared_store.sql
+# 1. Apply the migration on Cloud SQL, as the migration role (same as cloudsql/07):
+gcloud sql connect resellersos-db --user=postgres --database=resellersos --project=resellsubsos-prod
+#    resellersos=> SET ROLE resellersos_migration;
+#    resellersos=> \i production/supabase/migrations/20260928140000_rate_limit_shared_store.sql
+#    resellersos=> RESET ROLE;  notify pgrst, 'reload schema';
 # 2. Verify in a SEPARATE run (never in the same run as the DDL):
 #    production/supabase/tests/rate_limit_shared_store.test.sql  → must print PASS
 # 3. Turn it on:
