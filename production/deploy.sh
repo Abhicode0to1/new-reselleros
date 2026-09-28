@@ -51,6 +51,11 @@ echo "✓ Can reach $SERVICE in $PROJECT ($REGION)"
 
 echo "── Deploying (3–5 min) ────────────────────────────────────"
 # No pipe here — we must NOT mask gcloud's real exit code.
-gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" --quiet
+# --timeout=600: Cloud Scheduler gives each cron request --attempt-deadline=540s
+# (scripts/setup-cloud-scheduler.sh). Cloud Run's default request timeout is 300s, so a
+# long cron was cut off halfway and Scheduler retried it from the top. The service
+# timeout must be >= the scheduler deadline (S22; cloudbuild.yaml carries the same flag,
+# src/lib/ops/cloud-run-timeout.test.ts keeps the three in step).
+gcloud run deploy "$SERVICE" --source . --project "$PROJECT" --region "$REGION" --timeout=600 --quiet
 
 echo "✓ Deploy finished. Confirm the revision line above says 'serving 100 percent'."

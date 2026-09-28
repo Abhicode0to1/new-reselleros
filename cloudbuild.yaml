@@ -96,6 +96,9 @@ steps:
       - --image=$_IMAGE:$SHORT_SHA
       - --region=$_REGION
       - --platform=managed
+      # >= Cloud Scheduler's --attempt-deadline=540s (setup-cloud-scheduler.sh). The 300s
+      # default cut long crons off mid-run and Scheduler retried them from the top (S22).
+      - --timeout=600
       - --quiet
     # NOTE: no --set-env-vars here, deliberately. That flag REPLACES the whole set, and this
     # service carries eleven — including SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET and

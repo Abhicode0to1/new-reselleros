@@ -48,9 +48,15 @@ import { quoteAcceptUrl } from "@/lib/quotes/accept-link";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
 import { reportCron } from "@/lib/ops/cron-report";
+import { mapLimit, chunk, uniq } from "@/lib/ops/p-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/** S22: subscriptions processed at once (PDF + email per row). */
+const RENEWALS_CONCURRENCY = 5;
+/** S22: ids per `.in()` prefetch — keeps each request URL and response well bounded. */
+const PREFETCH_CHUNK = 200;
 
 /** Body shape returned to the caller — useful for ad-hoc inspection. */
 interface CronResult {
@@ -168,30 +174,75 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
     return NextResponse.json({ error: `subs fetch failed: ${subsErr.message}` }, { status: 500 });
   }
   result.total_active = subs?.length ?? 0;
+  const allSubs = subs ?? [];
 
-  for (const sub of subs ?? []) {
+  /* ── S22: look-ups fetched ONCE, not three round trips per subscription ──
+     This loop used to read the tenant, the tenant's ingest mailboxes and the customer
+     afresh for every subscription — three queries per row, for every active sub, on
+     every run, even though a run touches a handful of tenants. Same columns, same rows,
+     now keyed in maps. A failed prefetch fails the run (500, so Scheduler retries and
+     the health digest sees it) rather than silently skipping every subscription, which
+     is what a null tenant per row used to do. */
+  const tenantIds   = uniq(allSubs.map((s) => s.tenant_id));
+  const customerIds = uniq(allSubs.map((s) => s.customer_id).filter((x): x is string => Boolean(x)));
+
+  type TenantRow = { id: string; name: string; email: string | null; phone: string | null; gstin: string | null; address: string | null; grace_period_days: number | null; state_code: string | null; logo_url: string | null };
+  type CustomerRow = { id: string; name: string; contact_name: string | null; contact_email: string | null; gstin: string | null; contact_phone: string | null; state_code: string | null };
+
+  const tenantById = new Map<string, TenantRow>();
+  const ingestByTenant = new Map<string, { google_email: string | null }[]>();
+  const customerById = new Map<string, CustomerRow>();
+  try {
+    for (const ids of chunk(tenantIds, PREFETCH_CHUNK)) {
+      const [{ data: ts, error: tErr }, { data: boxes, error: bErr }] = await Promise.all([
+        supabase.from("tenants")
+          .select("id, name, email, phone, gstin, address, grace_period_days, state_code, logo_url")
+          .in("id", ids),
+        /* Wo mailbox jise app PADHTI hai. Reply-To wahi hona chahiye — 31 Aug 2026 ko
+           tenants.email par bheja gaya jawab kisi ko dikha hi nahi. lib/email/reply-to.ts. */
+        supabase.from("user_google_tokens").select("tenant_id, google_email").in("tenant_id", ids),
+      ]);
+      if (tErr) throw new Error(`tenants: ${tErr.message}`);
+      if (bErr) throw new Error(`user_google_tokens: ${bErr.message}`);
+      for (const t of (ts ?? []) as TenantRow[]) tenantById.set(t.id, t);
+      for (const b of boxes ?? []) {
+        const list = ingestByTenant.get(b.tenant_id) ?? [];
+        list.push({ google_email: b.google_email });
+        ingestByTenant.set(b.tenant_id, list);
+      }
+    }
+    for (const ids of chunk(customerIds, PREFETCH_CHUNK)) {
+      const { data: cs, error: cErr } = await supabase.from("customers")
+        .select("id, name, contact_name, contact_email, gstin, contact_phone, state_code")
+        .in("id", ids);
+      if (cErr) throw new Error(`customers: ${cErr.message}`);
+      for (const c of (cs ?? []) as CustomerRow[]) customerById.set(c.id, c);
+    }
+  } catch (e) {
+    return NextResponse.json({ error: `prefetch failed: ${(e as Error).message}` }, { status: 500 });
+  }
+
+  /* The logo is the same image for every renewal PDF a tenant sends in a run. */
+  const logoByTenant = new Map<string, ReturnType<typeof logoDataUri>>();
+  const tenantLogo = (tenantId: string, url: string | null | undefined) => {
+    let p = logoByTenant.get(tenantId);
+    if (!p) { p = logoDataUri(url); logoByTenant.set(tenantId, p); }
+    return p;
+  };
+
+  /* S22: RENEWALS_CONCURRENCY subscriptions at a time instead of strictly one by one.
+     Each row's own steps stay in order; rows never share state except the counters on
+     `result`, which JS mutates on one thread. Quote numbers come from
+     next_document_number(), an atomic upsert, so two rows of one tenant cannot collide. */
+  await mapLimit(allSubs, RENEWALS_CONCURRENCY, async (sub) => {
     try {
-      // ── Per-tenant info: grace_period + tenant email (for from-address fallback) ──
-      const { data: tenant } = await supabase
-        .from("tenants")
-        .select("name, email, phone, gstin, address, grace_period_days, state_code, logo_url")
-        .eq("id", sub.tenant_id)
-        .single();
-      /* Wo mailbox jise app PADHTI hai. Reply-To wahi hona chahiye — 31 Aug 2026 ko
-         tenants.email par bheja gaya jawab kisi ko dikha hi nahi. lib/email/reply-to.ts. */
-      const { data: ingestBoxes } = await supabase
-        .from("user_google_tokens").select("google_email").eq("tenant_id", sub.tenant_id);
+      const tenant = tenantById.get(sub.tenant_id) ?? null;
+      const ingestBoxes = ingestByTenant.get(sub.tenant_id) ?? [];
 
-      if (!tenant) continue;
+      if (!tenant) return;
 
       // ── Per-customer info — need email to actually send ──
-      const { data: customer } = sub.customer_id
-        ? await supabase
-            .from("customers")
-            .select("name, contact_name, contact_email, gstin, contact_phone, state_code")
-            .eq("id", sub.customer_id)
-            .single()
-        : { data: null };
+      const customer = sub.customer_id ? customerById.get(sub.customer_id) ?? null : null;
 
       // Decide cadence
       const decision = decideCadence({
@@ -225,7 +276,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
         result.suspends += 1;
         detail.emailStatus = "(suspended)";
         result.details.push(detail);
-        continue;
+        return;
       }
 
       // ── Daily idempotency: did we already attempt this (sub,step) today? ──
@@ -249,7 +300,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
               .eq("id", sub.id);
           }
           result.details.push(detail);
-          continue;
+          return;
         }
       }
 
@@ -303,7 +354,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
           result.emails_skipped += 1;
           result.errors.push({ subscription_id: sub.id, message: `No renewal quote for domain ${sub.domain}: the live renewal price could not be read.` });
           result.details.push(detail);
-          continue;
+          return;
         }
 
         const renewalQuoteId = quoteResult?.quoteId ?? null;
@@ -354,7 +405,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
           result.emails_skipped += 1;
           detail.emailStatus = "skipped — no email";
           result.details.push(detail);
-          continue;
+          return;
         }
 
         // 3. Render template
@@ -387,7 +438,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
         if (renewalQuote && lineItems.length > 0) {
           try {
             const blob = await renderQuotePDF({
-              tenantLogo:    await logoDataUri((tenant as { logo_url?: string | null }).logo_url),
+              tenantLogo:    await tenantLogo(sub.tenant_id, tenant.logo_url),
               tenantName:    tenant.name,
               tenantGstin:   tenant.gstin,
               tenantEmail:   tenant.email,
@@ -476,7 +527,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
         }
 
         result.details.push(detail);
-        continue;
+        return;
       }
 
       // ── No-op path: sync renewal_state if it drifted ─────────────
@@ -503,7 +554,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
         message:         (err as Error).message,
       });
     }
-  }
+  });
 
   return NextResponse.json(reportCron("renewals", result));
 }
