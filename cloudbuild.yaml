@@ -38,8 +38,31 @@
 #   report itself as unconfigured to every user.
 
 steps:
+  # 0. THE DEPLOY GATE (S18, Sep 2026). Typecheck + unit tests BEFORE the image is built, so
+  #    a red commit pushed to `deploy` fails here and never reaches Cloud Run. Until this
+  #    step existed, the only gate was .github/workflows/ci.yml, which runs in PARALLEL with
+  #    this build and could only report a broken deploy, not stop it.
+  #
+  #    `next build` in step 1 still catches what tsc cannot (typedRoutes — see ci.yml), so
+  #    the two together are the local gate (CLAUDE.md §25.2) minus lint; lint stays in CI.
+  #    No env or secret is needed: the unit tests are pure logic (vitest.config.ts) and CI
+  #    runs them the same way. node_modules made here does not enter the image —
+  #    production/.dockerignore excludes it and the Dockerfile runs its own `npm ci`.
+  #
+  #    Cost: roughly 2-3 minutes on E2_HIGHCPU_8 (npm ci ~45s, tsc ~50s, vitest ~35s).
+  #    To ship a hotfix while a test is red, fix or skip the test in a commit — do not
+  #    delete this step; a deploy that skips the gate is how 26 Aug happened.
+  - id: gate
+    name: node:20
+    dir: production
+    entrypoint: bash
+    args:
+      - -c
+      - npm ci --no-audit --no-fund && npx tsc --noEmit && npx vitest run
+
   # 1. Build the image, exactly as deploy.sh does today.
   - id: build
+    waitFor: [gate]
     name: gcr.io/cloud-builders/docker
     dir: production
     args:

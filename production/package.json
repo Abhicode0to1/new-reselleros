@@ -8,6 +8,7 @@
     "gate": "node --no-warnings scripts/gate.mjs",
     "start": "next start",
     "lint": "next lint",
+    "lint:ratchet": "node scripts/lint-ratchet.mjs",
     "typecheck": "tsc --noEmit",
     "backup:code": "node scripts/backup-code.mjs",
     "backup:db": "node scripts/backup-db.mjs ../../resellersos-backups",
