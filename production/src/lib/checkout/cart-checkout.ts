@@ -53,6 +53,7 @@ import { normalisePhone, splitName, type Registrant } from "@/lib/provisioning/d
 import { isTrialPlan, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 import { startHostingTrial } from "@/lib/hosting/start-trial";
 import { hostingLimitProblem } from "./hosting-limit";
+import { hostingRate } from "./hosting-prices";
 
 export const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
@@ -146,10 +147,9 @@ function repriceLine(sku: string | undefined, cycle: string | undefined, qty: nu
   if (h) {
     const tier = h[1];
     const t = HOSTING_TIERS.find((x) => x.name.toLowerCase() === tier);
-    if (!t) return null;
-    // Whole rupees — the money spine stores integers (CLAUDE.md §13); a fractional
-    // tier total like ₹599.88 would break the integer lead/quote columns.
-    const rate = Math.round(yearly ? t.yearlyTotal : t.monthly);
+    // The one rate DMS also shows (lib/checkout/hosting-prices.ts, /api/public/hosting-prices).
+    const rate = t ? hostingRate(tier, yearly) : null;
+    if (!t || rate === null) return null;
     // No `domain` on this line, on purpose: provisioning reads any line's `domain` as a
     // domain to REGISTER (lib/provisioning/products.ts). The subscription takes the
     // hosting domain from the quote instead.
