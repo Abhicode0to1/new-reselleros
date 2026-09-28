@@ -168,8 +168,8 @@ export function EmployeeDetailDrawer({
               <div className="rounded-md border border-amber/40 bg-amber-soft/25 p-3 mb-3">
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <label className="block text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Type</label>
-                    <select
+                    <label htmlFor="employee-detail-type" className="block text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Type</label>
+                    <select id="employee-detail-type"
                       value={docType}
                       onChange={(e) => setDocType(e.target.value)}
                       className="w-full rounded-md border border-hairline bg-paper px-2.5 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"

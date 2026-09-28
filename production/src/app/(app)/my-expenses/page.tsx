@@ -269,9 +269,9 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <FormField label="Category (Kharcha Kahan Huwa)" required>
+          <FormField htmlFor="my-expenses-category-kharcha-kahan-huwa" label="Category (Kharcha Kahan Huwa)" required>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-full h-11 text-sm">
+              <SelectTrigger id="my-expenses-category-kharcha-kahan-huwa" className="w-full h-11 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -285,8 +285,8 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
           </FormField>
 
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Spent Amount (₹)" required>
-              <Input
+            <FormField htmlFor="my-expenses-spent-amount" label="Spent Amount (₹)" required>
+              <Input id="my-expenses-spent-amount"
                 type="number"
                 placeholder="500"
                 className="h-11 text-base font-bold"
@@ -296,8 +296,8 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
               />
             </FormField>
 
-            <FormField label="Bill Date">
-              <Input
+            <FormField htmlFor="my-expenses-bill-date" label="Bill Date">
+              <Input id="my-expenses-bill-date"
                 type="date"
                 className="h-11 text-sm"
                 value={date}
@@ -307,8 +307,8 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
             </FormField>
           </div>
 
-          <FormField label="Vendor / Paid To (e.g. Uber / Auto / Cafe)">
-            <Input
+          <FormField htmlFor="my-expenses-vendor-paid-to-e" label="Vendor / Paid To (e.g. Uber / Auto / Cafe)">
+            <Input id="my-expenses-vendor-paid-to-e"
               placeholder="e.g. Auto fare to client office"
               className="h-11 text-sm"
               value={vendor}
@@ -316,8 +316,8 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
             />
           </FormField>
 
-          <FormField label="Notes / Description">
-            <Input
+          <FormField htmlFor="my-expenses-notes-description" label="Notes / Description">
+            <Input id="my-expenses-notes-description"
               placeholder="e.g. Visited Rohini client for Google Workspace demo"
               className="h-11 text-sm"
               value={description}
@@ -326,8 +326,8 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
           </FormField>
 
           {/* Mobile Camera / Photo Bill Upload */}
-          <FormField label="Upload Bill Receipt / Photo">
-            <input
+          <FormField htmlFor="my-expenses-receipt" label="Upload Bill Receipt / Photo">
+            <input id="my-expenses-receipt"
               type="file"
               accept="image/*,.pdf"
               capture="environment"

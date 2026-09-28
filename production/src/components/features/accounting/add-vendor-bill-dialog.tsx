@@ -514,14 +514,14 @@ export function AddVendorBillDialog({
                 </div>
                 {lines.map((l, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                    <Input wrapperClassName="col-span-12 sm:col-span-5" placeholder="e.g. Team plan - Premium"
+                    <Input aria-label="Item description" wrapperClassName="col-span-12 sm:col-span-5" placeholder="e.g. Team plan - Premium"
                       value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />
-                    <Input wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" min={0} step="any" placeholder="Qty"
+                    <Input aria-label="Qty" wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" min={0} step="any" placeholder="Qty"
                       value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} />
-                    <Input wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" step="any" placeholder="Unit"
+                    <Input aria-label="Unit" wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" step="any" placeholder="Unit"
                       value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} />
                     {/* Amount allows negatives — credit / unused-time lines are refunds. */}
-                    <Input wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" step="any" placeholder="Amount"
+                    <Input aria-label="Amount" wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" step="any" placeholder="Amount"
                       value={l.amount} onChange={(e) => setLine(i, { amount: e.target.value })} />
                     <button type="button" onClick={() => removeLine(i)} aria-label="Remove item"
                       className="col-span-3 sm:col-span-1 justify-self-center text-ink-3 hover:text-rose">
@@ -541,8 +541,8 @@ export function AddVendorBillDialog({
                   <div className="text-2xs text-amber-ink leading-snug max-w-[55%]">
                     Bill is in <b>{currency}</b>. Enter today's rate — the ₹ books use the converted amounts.
                   </div>
-                  <FormField label={`Exchange rate (₹ per 1 ${currency})`} required>
-                    <Input type="number" min={0} step="any" placeholder="e.g. 83.50"
+                  <FormField htmlFor="add-vendor-field" label={`Exchange rate (₹ per 1 ${currency})`} required>
+                    <Input id="add-vendor-field" type="number" min={0} step="any" placeholder="e.g. 83.50"
                       value={fxRate}
                       error={fxError ?? undefined}
                       onChange={(e) => { setFxRate(e.target.value); if (fxError) setFxError(null); }} />

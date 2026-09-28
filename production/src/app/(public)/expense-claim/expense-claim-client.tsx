@@ -349,8 +349,8 @@ function LogStep({
 
           {!editingId && (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink">Receipt photo (optional)</label>
-              <input
+              <label htmlFor="expense-claim-receipt" className="mb-1.5 block text-sm font-medium text-ink">Receipt photo (optional)</label>
+              <input id="expense-claim-receipt"
                 type="file" accept="image/*" capture="environment" onChange={onPhoto}
                 className="block w-full text-sm text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-paper-2 file:px-3 file:py-2 file:text-sm file:text-ink hover:file:bg-hairline"
               />

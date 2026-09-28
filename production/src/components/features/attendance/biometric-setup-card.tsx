@@ -85,7 +85,7 @@ export function BiometricSetupCard({ employees }: { employees: Emp[] }) {
                     <div className="text-[13px] text-ink truncate">{toTitleCase(e.name)}</div>
                     {e.designation && <div className="text-3xs text-ink-3 truncate">{e.designation}</div>}
                   </div>
-                  <Input
+                  <Input aria-label={`Biometric ID for ${e.name}`}
                     defaultValue={e.biometric_id ?? ""}
                     placeholder="e.g. 1"
                     className="w-28 h-8 text-sm"

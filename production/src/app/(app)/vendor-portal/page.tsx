@@ -611,8 +611,8 @@ function CreateAgreementModal({
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2 text-xs">
           <div>
-            <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Select Vendor / Supplier *</label>
-            <select
+            <label htmlFor="vendor-portal-select-vendor-supplier" className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Select Vendor / Supplier *</label>
+            <select id="vendor-portal-select-vendor-supplier"
               value={vendorName}
               onChange={(e) => setVendorName(e.target.value)}
               className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm font-semibold"
@@ -626,8 +626,8 @@ function CreateAgreementModal({
           </div>
 
           <div>
-            <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Agreement Type / Template *</label>
-            <select
+            <label htmlFor="vendor-portal-agreement-type-template" className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Agreement Type / Template *</label>
+            <select id="vendor-portal-agreement-type-template"
               value={type}
               onChange={(e) => {
                 const t = e.target.value as VendorAgreement["type"];
@@ -647,8 +647,8 @@ function CreateAgreementModal({
           </div>
 
           <div>
-            <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Contract Title *</label>
-            <Input
+            <label htmlFor="vendor-portal-contract-title" className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Contract Title *</label>
+            <Input id="vendor-portal-contract-title"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -658,8 +658,8 @@ function CreateAgreementModal({
 
           <div className="grid grid-cols-4 gap-3">
             <div>
-              <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Credit Days Lock</label>
-              <select
+              <label htmlFor="vendor-portal-credit-days-lock" className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Credit Days Lock</label>
+              <select id="vendor-portal-credit-days-lock"
                 value={creditDays}
                 onChange={(e) => setCreditDays(e.target.value)}
                 className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-xs font-semibold"
@@ -672,8 +672,8 @@ function CreateAgreementModal({
             </div>
 
             <div>
-              <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Price Freeze</label>
-              <select
+              <label htmlFor="vendor-portal-price-freeze" className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Price Freeze</label>
+              <select id="vendor-portal-price-freeze"
                 value={priceFreezeMonths}
                 onChange={(e) => setPriceFreezeMonths(e.target.value)}
                 className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-xs font-semibold"
@@ -685,8 +685,8 @@ function CreateAgreementModal({
             </div>
 
             <div>
-              <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">SLA Penalty %</label>
-              <Input
+              <label htmlFor="vendor-portal-sla-penalty" className="block font-bold text-ink-3 uppercase tracking-wider mb-1">SLA Penalty %</label>
+              <Input id="vendor-portal-sla-penalty"
                 type="number"
                 step="0.5"
                 value={slaPenalty}
@@ -696,8 +696,8 @@ function CreateAgreementModal({
             </div>
 
             <div>
-              <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Expiry Date</label>
-              <Input
+              <label htmlFor="vendor-portal-expiry-date" className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Expiry Date</label>
+              <Input id="vendor-portal-expiry-date"
                 type="date"
                 value={expiryDate}
                 onChange={(e) => setExpiryDate(e.target.value)}
@@ -707,8 +707,8 @@ function CreateAgreementModal({
           </div>
 
           <div>
-            <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Custom Clauses / Notes</label>
-            <textarea
+            <label htmlFor="vendor-portal-custom-clauses-notes" className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Custom Clauses / Notes</label>
+            <textarea id="vendor-portal-custom-clauses-notes"
               rows={3}
               placeholder="Enter special terms e.g. 5% rebate on >500 seats or Net 30 penalty clause..."
               value={notes}
@@ -973,10 +973,10 @@ function EditVendorCardModal({
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div>
-            <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+            <label htmlFor="vendor-portal-vendor-name" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
               Vendor Name
             </label>
-            <Input
+            <Input id="vendor-portal-vendor-name"
               value={vendorName}
               onChange={(e) => setVendorName(e.target.value)}
               className="bg-paper font-semibold"
@@ -1051,8 +1051,8 @@ function EditVendorCardModal({
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Starter (₹/usr/mo)</label>
-                        <Input
+                        <label htmlFor="vendor-portal-starter-usr-mo" className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Starter (₹/usr/mo)</label>
+                        <Input id="vendor-portal-starter-usr-mo"
                           type="number"
                           value={skuRates["Google Workspace Business Starter"] || "121"}
                           onChange={(e) => {
@@ -1067,8 +1067,8 @@ function EditVendorCardModal({
                         </span>
                       </div>
                       <div>
-                        <label className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Standard (₹/usr/mo)</label>
-                        <Input
+                        <label htmlFor="vendor-portal-standard-usr-mo" className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Standard (₹/usr/mo)</label>
+                        <Input id="vendor-portal-standard-usr-mo"
                           type="number"
                           value={skuRates["Google Workspace Business Standard"] || "650"}
                           onChange={(e) => {
@@ -1083,8 +1083,8 @@ function EditVendorCardModal({
                         </span>
                       </div>
                       <div>
-                        <label className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Plus (₹/usr/mo)</label>
-                        <Input
+                        <label htmlFor="vendor-portal-plus-usr-mo" className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Plus (₹/usr/mo)</label>
+                        <Input id="vendor-portal-plus-usr-mo"
                           type="number"
                           value={skuRates["Google Workspace Business Plus"] || "1260"}
                           onChange={(e) => {
@@ -1112,8 +1112,8 @@ function EditVendorCardModal({
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Basic (₹/usr/mo)</label>
-                        <Input
+                        <label htmlFor="vendor-portal-basic-usr-mo" className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Basic (₹/usr/mo)</label>
+                        <Input id="vendor-portal-basic-usr-mo"
                           type="number"
                           value={skuRates["Microsoft 365 Business Basic"] || "114"}
                           onChange={(e) => {
@@ -1128,8 +1128,8 @@ function EditVendorCardModal({
                         </span>
                       </div>
                       <div>
-                        <label className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Standard (₹/usr/mo)</label>
-                        <Input
+                        <label htmlFor="vendor-portal-standard-usr-mo-2" className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Standard (₹/usr/mo)</label>
+                        <Input id="vendor-portal-standard-usr-mo-2"
                           type="number"
                           value={skuRates["Microsoft 365 Business Standard"] || "660"}
                           onChange={(e) => {
@@ -1153,8 +1153,8 @@ function EditVendorCardModal({
                       <span>🔶</span> Zoho One License Rate
                     </span>
                     <div className="w-1/2">
-                      <label className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Zoho One (₹/usr/mo)</label>
-                      <Input
+                      <label htmlFor="vendor-portal-zoho-one-usr-mo" className="block text-3xs uppercase text-ink-3 font-semibold mb-0.5">Zoho One (₹/usr/mo)</label>
+                      <Input id="vendor-portal-zoho-one-usr-mo"
                         type="number"
                         value={skuRates["Zoho One License"] || "290"}
                         onChange={(e) => {
@@ -1176,11 +1176,11 @@ function EditVendorCardModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1 flex items-center justify-between">
+              <label htmlFor="vendor-portal-featured-primary-sku-auto" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1 flex items-center justify-between">
                 <span>Featured / Primary SKU *</span>
                 <span className="text-3xs text-primary font-bold">Auto-syncs rate</span>
               </label>
-              <select
+              <select id="vendor-portal-featured-primary-sku-auto"
                 value={productSku}
                 disabled={selectedProducts.length === 0}
                 onChange={(e) => {
@@ -1204,10 +1204,10 @@ function EditVendorCardModal({
             </div>
 
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              <label htmlFor="vendor-portal-wholesale-unit-rate-user" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                 Wholesale Unit Rate (₹ / user / mo) *
               </label>
-              <Input
+              <Input id="vendor-portal-wholesale-unit-rate-user"
                 type="number"
                 value={monthlyCost}
                 onChange={(e) => {
@@ -1228,10 +1228,10 @@ function EditVendorCardModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              <label htmlFor="vendor-portal-payment-credit-terms" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                 Payment Credit Terms *
               </label>
-              <select
+              <select id="vendor-portal-payment-credit-terms"
                 value={creditDays}
                 onChange={(e) => setCreditDays(e.target.value)}
                 className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm focus:border-amber"
@@ -1244,10 +1244,10 @@ function EditVendorCardModal({
             </div>
 
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              <label htmlFor="vendor-portal-provisioning-turnaround" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                 Provisioning Turnaround *
               </label>
-              <select
+              <select id="vendor-portal-provisioning-turnaround"
                 value={provisioningTime}
                 onChange={(e) => setProvisioningTime(e.target.value)}
                 className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm focus:border-amber"
@@ -1260,10 +1260,10 @@ function EditVendorCardModal({
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+            <label htmlFor="vendor-portal-special-margin-deal-support" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
               Special Margin Deal / Support Notes
             </label>
-            <textarea
+            <textarea id="vendor-portal-special-margin-deal-support"
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -2061,7 +2061,7 @@ export default function VendorPortalPage() {
             <div className="flex items-center gap-3 flex-wrap">
               {/* Live Search Bar */}
               <div className="relative min-w-[220px]">
-                <Input
+                <Input aria-label="Search vendor, SKU, contact"
                   placeholder="Search vendor, SKU, contact..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -2292,10 +2292,10 @@ export default function VendorPortalPage() {
           {/* Calculator Inputs */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-paper-2/60 border border-hairline rounded-xl">
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              <label htmlFor="vendor-portal-select-product-sku" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                 Select Product SKU
               </label>
-              <select
+              <select id="vendor-portal-select-product-sku"
                 value={calcSelectedSku}
                 onChange={(e) => setCalcSelectedSku(e.target.value)}
                 className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm font-semibold focus:border-amber"
@@ -2307,10 +2307,10 @@ export default function VendorPortalPage() {
             </div>
 
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              <label htmlFor="vendor-portal-client-selling-price-usr" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                 Client Selling Price (₹/usr/mo)
               </label>
-              <Input
+              <Input id="vendor-portal-client-selling-price-usr"
                 type="number"
                 value={calcSellingPrice}
                 onChange={(e) => setCalcSellingPrice(Number(e.target.value) || 0)}
@@ -2319,10 +2319,10 @@ export default function VendorPortalPage() {
             </div>
 
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              <label htmlFor="vendor-portal-total-seat-quantity" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                 Total Seat Quantity
               </label>
-              <Input
+              <Input id="vendor-portal-total-seat-quantity"
                 type="number"
                 value={calcQuantity}
                 onChange={(e) => setCalcQuantity(Number(e.target.value) || 0)}
@@ -2537,10 +2537,10 @@ export default function VendorPortalPage() {
 
           <form onSubmit={handleAddBid} className="space-y-4">
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              <label htmlFor="vendor-portal-vendor-sub-reseller-name" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                 Vendor / Sub-Reseller Name *
               </label>
-              <Input
+              <Input id="vendor-portal-vendor-sub-reseller-name"
                 required
                 placeholder="e.g. Redington India, Ingram Micro, Savex, Crayon..."
                 value={newVendorName}
@@ -2551,10 +2551,10 @@ export default function VendorPortalPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+                <label htmlFor="vendor-portal-vendor-partner-tier" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                   Vendor Partner Tier *
                 </label>
-                <select
+                <select id="vendor-portal-vendor-partner-tier"
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value as any)}
                   className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm focus:border-amber"
@@ -2566,10 +2566,10 @@ export default function VendorPortalPage() {
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+                <label htmlFor="vendor-portal-product-license-sku" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                   Product License SKU *
                 </label>
-                <select
+                <select id="vendor-portal-product-license-sku"
                   value={newProductSku}
                   onChange={(e) => setNewProductSku(e.target.value)}
                   className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm focus:border-amber font-semibold"
@@ -2586,10 +2586,10 @@ export default function VendorPortalPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+                <label htmlFor="vendor-portal-wholesale-unit-rate-usr" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                   Wholesale Unit Rate (₹/usr/mo) *
                 </label>
-                <Input
+                <Input id="vendor-portal-wholesale-unit-rate-usr"
                   required
                   type="number"
                   placeholder="e.g. 120"
@@ -2600,10 +2600,10 @@ export default function VendorPortalPage() {
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+                <label htmlFor="vendor-portal-payment-credit-terms-2" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                   Payment Credit Terms *
                 </label>
-                <select
+                <select id="vendor-portal-payment-credit-terms-2"
                   value={newCreditDays}
                   onChange={(e) => setNewCreditDays(e.target.value)}
                   className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm focus:border-amber"
@@ -2616,10 +2616,10 @@ export default function VendorPortalPage() {
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+                <label htmlFor="vendor-portal-provisioning-speed" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                   Provisioning Speed *
                 </label>
-                <select
+                <select id="vendor-portal-provisioning-speed"
                   value={newProvisioningTime}
                   onChange={(e) => setNewProvisioningTime(e.target.value)}
                   className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm focus:border-amber"
@@ -2632,10 +2632,10 @@ export default function VendorPortalPage() {
             </div>
 
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              <label htmlFor="vendor-portal-special-discount-notes-volume" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
                 Special Discount Notes / Volume Tiers
               </label>
-              <textarea
+              <textarea id="vendor-portal-special-discount-notes-volume"
                 rows={3}
                 placeholder="e.g. Extra 5% off for >100 licenses. Free migration support included."
                 value={newNotes}
@@ -2736,7 +2736,7 @@ export default function VendorPortalPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <Input
+                  <Input aria-label="Transfer token link"
                     readOnly
                     value={`https://admin.google.com/TransferToken?resellerId=${b.partnerId || "99182-IN"}`}
                     className="bg-paper text-xs font-mono"

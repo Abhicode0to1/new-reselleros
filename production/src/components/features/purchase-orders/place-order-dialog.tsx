@@ -173,7 +173,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
           Wholesale cost (₹/seat/month)
         </p>
         <div className="flex items-center gap-2 mb-1">
-          <Input
+          <Input aria-label="Wholesale cost per seat per month"
             type="number"
             min={0}
             value={unitCostPm}
@@ -194,7 +194,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
             <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
               Vendor order ID
             </p>
-            <Input
+            <Input aria-label="Vendor order ID"
               placeholder={po.vendor === "google" ? "e.g. GW-ORD-123456" : "Vendor's order reference"}
               value={vendorOrderId}
               onChange={(e) => setVendorOrderId(e.target.value)}
@@ -208,7 +208,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
         <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
           Notes
         </p>
-        <textarea
+        <textarea aria-label="Provisioning instructions, delivery date, contact at vendor, etc."
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           disabled={isTerminal}
@@ -288,7 +288,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
           {showAllocator && (
             <div className="border border-hairline rounded-md p-3 mb-2 bg-paper">
               <p className="text-xs font-medium text-ink mb-2">Allocate a vendor bill</p>
-              <select
+              <select aria-label="Vendor bill to allocate"
                 value={selectedBillId}
                 onChange={(e) => setSelectedBillId(e.target.value)}
                 className="w-full text-sm bg-paper border border-hairline rounded px-3 py-2 mb-2 focus:outline-none focus:ring-1 focus:ring-amber"
@@ -300,7 +300,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
                   </option>
                 ))}
               </select>
-              <Input
+              <Input aria-label="Amount to allocate (₹)"
                 type="number"
                 placeholder="Amount to allocate (₹)"
                 value={allocAmount}

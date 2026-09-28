@@ -846,7 +846,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                         autoFocus
                       />
                     )}
-                    <Input value={invTaxable} onChange={(e) => setInvTaxable(e.target.value)} type="number" min={0} placeholder="Taxable amount ₹ (ex-GST)" />
+                    <Input aria-label="Taxable amount ₹ (ex-GST)" value={invTaxable} onChange={(e) => setInvTaxable(e.target.value)} type="number" min={0} placeholder="Taxable amount ₹ (ex-GST)" />
                     <p className="text-3xs text-ink-3">GST customer ke place-of-supply se apne-aap lagega. {rupee(amount)} received ka taxable (÷1.18) prefill kiya — theek kar lena.</p>
                     <div className="flex gap-2 pt-1">
                       <Button
@@ -891,7 +891,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                       </span>
                     </label>
                   </div>
-                  <Input
+                  <Input aria-label="Ledger label"
                     value={creditLabel}
                     onChange={(e) => setCreditLabel(e.target.value)}
                     placeholder={creditKind === "capital" ? "Label (default: Owner's capital)" : "Label (default: Director's loan)"}
@@ -996,8 +996,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                     {EXPENSE_CATEGORIES.filter((c) => c !== "Salaries").map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <div className="grid grid-cols-2 gap-2">
-                    <Input value={bookVendor} onChange={(e) => setBookVendor(e.target.value)} placeholder="Vendor / payee (optional)" />
-                    <Input value={bookGst} onChange={(e) => setBookGst(e.target.value)} type="number" min={0} placeholder="GST paid ₹ (optional)" />
+                    <Input aria-label="Vendor / payee (optional)" value={bookVendor} onChange={(e) => setBookVendor(e.target.value)} placeholder="Vendor / payee (optional)" />
+                    <Input aria-label="GST paid ₹ (optional)" value={bookGst} onChange={(e) => setBookGst(e.target.value)} type="number" min={0} placeholder="GST paid ₹ (optional)" />
                   </div>
                 </div>
                 <Button
@@ -1165,7 +1165,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   </span>
                 </label>
               </div>
-              <Input
+              <Input aria-label="Person's name (e.g. Julie Rawat)"
                 value={advanceParty}
                 onChange={(e) => setAdvanceParty(e.target.value)}
                 placeholder="Person's name (e.g. Julie Rawat)"
@@ -1194,7 +1194,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 <p className="text-2xs text-ink-3 mb-2.5 leading-relaxed">
                   Paid more than the salary by mistake? Pick the salary — its balance is settled and the EXTRA is booked as a recoverable <b>advance</b> (recover it later via a salary deduction). No double cash-out — this line is the payment.
                 </p>
-                <select
+                <select aria-label="Salary to settle"
                   value={splitSalaryId}
                   onChange={(e) => setSplitSalaryId(e.target.value)}
                   className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-indigo/40 mb-2"

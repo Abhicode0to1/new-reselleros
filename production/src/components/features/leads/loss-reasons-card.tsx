@@ -77,7 +77,7 @@ export function LossReasonsCard({ leads }: { leads: readonly LossLead[] }) {
           <span className="text-xs font-normal text-ink-3">
             · {totalCount} deal{totalCount === 1 ? "" : "s"} · {rupee(totalValue, { compact: true })}
           </span>
-          <Icon name={open ? "chevron_up" : "chevron_down"} size={14} className="text-ink-4" />
+          <Icon name={open ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
         </button>
         <WindowPicker value={win} onChange={setWin} />
       </div>
@@ -96,14 +96,14 @@ export function LossReasonsCard({ leads }: { leads: readonly LossLead[] }) {
             {rows.map((r) => (
               <li key={r.code}>
                 <div className="flex items-baseline justify-between gap-3 text-xs">
-                  <span className={cn("truncate", r.code === "unrecorded" ? "text-ink-4 italic" : "text-ink font-medium")}>
+                  <span className={cn("truncate", r.code === "unrecorded" ? "text-ink-3 italic" : "text-ink font-medium")}>
                     {r.label}
                   </span>
                   <span className="shrink-0 tabular-nums text-ink-3">
-                    <span className={cn("font-semibold", r.code === "unrecorded" ? "text-ink-4" : "text-ink")}>
+                    <span className={cn("font-semibold", r.code === "unrecorded" ? "text-ink-3" : "text-ink")}>
                       {rupee(r.value, { compact: true })}
                     </span>
-                    <span className="ml-1.5 text-ink-4">· {r.count} ({r.pct}%)</span>
+                    <span className="ml-1.5 text-ink-3">· {r.count} ({r.pct}%)</span>
                   </span>
                 </div>
                 <div className="mt-1 h-1.5 rounded-full bg-paper-3 overflow-hidden">

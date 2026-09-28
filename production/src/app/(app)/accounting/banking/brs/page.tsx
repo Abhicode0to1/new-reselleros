@@ -81,18 +81,18 @@ export default function BrsPage() {
       <Card className="mb-6 p-3 md:p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Bank account</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink">
+            <label htmlFor="brs-bank-account" className="block text-xs font-medium text-ink-2 mb-1">Bank account</label>
+            <select id="brs-bank-account" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink">
               {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.bank_name}{a.account_number_last4 ? ` ····${a.account_number_last4}` : ""}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">As of</label>
-            <Input type="date" value={asOf} max={todayIso()} onChange={(e) => setAsOf(e.target.value)} />
+            <label htmlFor="brs-as-of" className="block text-xs font-medium text-ink-2 mb-1">As of</label>
+            <Input id="brs-as-of" type="date" value={asOf} max={todayIso()} onChange={(e) => setAsOf(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Bank statement ka closing balance (optional)</label>
-            <Input type="number" value={closing} onChange={(e) => setClosing(e.target.value)} placeholder="Statement PDF se" />
+            <label htmlFor="brs-bank-statement-ka-closing" className="block text-xs font-medium text-ink-2 mb-1">Bank statement ka closing balance (optional)</label>
+            <Input id="brs-bank-statement-ka-closing" type="number" value={closing} onChange={(e) => setClosing(e.target.value)} placeholder="Statement PDF se" />
           </div>
         </div>
       </Card>

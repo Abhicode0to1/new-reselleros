@@ -90,10 +90,10 @@ export default function TdsReceivablePage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">
+          <label htmlFor="tds-receivable-fiscal-year" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">
             Fiscal year
           </label>
-          <select
+          <select id="tds-receivable-fiscal-year"
             value={fy}
             onChange={(e) => setFy(e.target.value)}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper font-mono"

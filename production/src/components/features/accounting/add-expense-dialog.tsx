@@ -1028,7 +1028,7 @@ export function AddExpenseDialog({
                     <div key={i} className="rounded-md border border-hairline bg-paper p-2 space-y-2">
                       {/* Line 1: what it is + remove */}
                       <div className="flex items-center gap-2">
-                        <Input wrapperClassName="flex-1" placeholder="e.g. Laptop / A4 paper"
+                        <Input aria-label="Item description" wrapperClassName="flex-1" placeholder="e.g. Laptop / A4 paper"
                           value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />
                         <button type="button" onClick={() => removeLine(i)} aria-label="Remove item"
                           className="shrink-0 text-ink-3 hover:text-rose p-1">
@@ -1037,15 +1037,15 @@ export function AddExpenseDialog({
                       </div>
                       {/* Line 2: qty × unit = amount · category */}
                       <div className="grid grid-cols-12 gap-2 items-center">
-                        <Input wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" min={0} step="any" placeholder="Qty"
+                        <Input aria-label="Qty" wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" min={0} step="any" placeholder="Qty"
                           value={l.qty} onChange={(e) => setQtyUnit(i, { qty: e.target.value })} />
                         <span className="col-span-1 text-center text-ink-3 text-xs">×</span>
-                        <Input wrapperClassName="col-span-4 sm:col-span-2" className="text-right" type="number" step="any" placeholder={`Price ${isForeign ? currency : "₹"}`}
+                        <Input aria-label="Price" wrapperClassName="col-span-4 sm:col-span-2" className="text-right" type="number" step="any" placeholder={`Price ${isForeign ? currency : "₹"}`}
                           value={l.unit_price} onChange={(e) => setQtyUnit(i, { unit_price: e.target.value })} />
                         {/* Amount = qty×price (auto), editable; negatives allowed for credit lines */}
-                        <Input wrapperClassName="col-span-4 sm:col-span-3" className="text-right font-medium" type="number" step="any" placeholder={`Amount ${isForeign ? currency : "₹"}`}
+                        <Input aria-label="Amount" wrapperClassName="col-span-4 sm:col-span-3" className="text-right font-medium" type="number" step="any" placeholder={`Amount ${isForeign ? currency : "₹"}`}
                           value={l.amount} onChange={(e) => setLine(i, { amount: e.target.value })} />
-                        <select
+                        <select aria-label="Category"
                           className="col-span-12 sm:col-span-4 h-9 rounded-md border border-hairline bg-paper px-2 text-[13px] text-ink"
                           value={l.category || headerCategory}
                           onChange={(e) => setLine(i, { category: e.target.value })}

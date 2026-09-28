@@ -276,13 +276,13 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-end">
           <div>
             <div className="flex items-baseline justify-between gap-2">
-              <Label>Start from a template</Label>
+              <Label htmlFor="campaign-composer-start-from-a-template">Start from a template</Label>
               <span className="flex gap-3 text-2xs">
                 <button type="button" onClick={saveAsTemplate} disabled={saveTemplate.isPending} className="text-amber-ink hover:underline disabled:opacity-50">Save as template</button>
                 <Link href="/marketing/templates" className="text-ink-3 hover:text-ink hover:underline">Manage templates</Link>
               </span>
             </div>
-            <select
+            <select id="campaign-composer-start-from-a-template"
               value={selectedTemplateId}
               onChange={(e) => {
                 const id = e.target.value;
@@ -321,12 +321,12 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           <div className="border border-amber/40 bg-amber-soft/40 rounded-md p-3 space-y-2">
             <p className="text-xs font-semibold text-amber-ink">Tell the AI what you want</p>
             <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-2">
-              <Input
+              <Input aria-label="Describe the campaign for AI"
                 placeholder="e.g., Diwali special — 25% off Workspace Standard for SMBs, expiry 5 Nov"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
               />
-              <select
+              <select aria-label="Campaign category"
                 value={aiCategory}
                 onChange={(e) => setAiCategory(e.target.value as typeof aiCategory)}
                 className="text-sm bg-paper border border-hairline rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-amber"
@@ -391,7 +391,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                 </button>
               ))}
             </div>
-            <Input
+            <Input aria-label="Optional: filter by company or contact name"
               placeholder="Optional: filter by company or contact name…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -403,12 +403,12 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
         {/* Compose */}
         <div className="border-t border-hairline pt-3 space-y-2">
           <div>
-            <Label>Campaign name (internal)</Label>
-            <Input placeholder="e.g. May month-end sale" value={name} onChange={(e) => setName(e.target.value)} />
+            <Label htmlFor="campaign-composer-campaign-name-internal">Campaign name (internal)</Label>
+            <Input id="campaign-composer-campaign-name-internal" placeholder="e.g. May month-end sale" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
-            <Label>Subject *</Label>
-            <Input placeholder="🎉 Special offer for {{company}}" value={subject} onChange={(e) => setSubject(e.target.value)} />
+            <Label htmlFor="campaign-composer-subject">Subject *</Label>
+            <Input id="campaign-composer-subject" placeholder="🎉 Special offer for {{company}}" value={subject} onChange={(e) => setSubject(e.target.value)} />
           </div>
 
           {/* Body mode toggle */}
@@ -452,7 +452,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           )}
 
           {bodyMode === "html" && (
-            <textarea
+            <textarea aria-label="Email body (HTML source)"
               rows={14}
               value={bodyHtml}
               onChange={(e) => setBodyHtml(e.target.value)}
@@ -462,7 +462,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           )}
 
           {bodyMode === "text" && (
-            <textarea
+            <textarea aria-label="Email body (plain text)"
               rows={10}
               value={bodyText}
               onChange={(e) => setBodyText(e.target.value)}
@@ -497,8 +497,8 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           {offerEnabled && (
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <Label>Promo code *</Label>
-                <Input
+                <Label htmlFor="campaign-composer-promo-code">Promo code *</Label>
+                <Input id="campaign-composer-promo-code"
                   value={offerCode}
                   onChange={(e) => setOfferCode(e.target.value.toUpperCase())}
                   placeholder="e.g. MAY25"
@@ -509,12 +509,12 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                 )}
               </div>
               <div>
-                <Label>Discount %</Label>
-                <Input type="number" min={0} max={100} value={offerDiscount} onChange={(e) => setOfferDiscount(e.target.value)} className="font-mono" />
+                <Label htmlFor="campaign-composer-discount">Discount %</Label>
+                <Input id="campaign-composer-discount" type="number" min={0} max={100} value={offerDiscount} onChange={(e) => setOfferDiscount(e.target.value)} className="font-mono" />
               </div>
               <div>
-                <Label>Expires on</Label>
-                <Input type="date" value={offerExpires} onChange={(e) => setOfferExpires(e.target.value)} />
+                <Label htmlFor="campaign-composer-expires-on">Expires on</Label>
+                <Input id="campaign-composer-expires-on" type="date" value={offerExpires} onChange={(e) => setOfferExpires(e.target.value)} />
               </div>
             </div>
           )}

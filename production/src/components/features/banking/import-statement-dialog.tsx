@@ -482,8 +482,8 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
 
           {/* OR paste */}
           <div>
-            <label className="text-xs font-medium text-ink-2">Or paste CSV text</label>
-            <textarea
+            <label htmlFor="import-statement-or-paste-csv-text" className="text-xs font-medium text-ink-2">Or paste CSV text</label>
+            <textarea id="import-statement-or-paste-csv-text"
               rows={6}
               placeholder={"Date,Description,Debit,Credit,Balance\n28/05/2026,UPI/RAZORPAY/...,0,521088,..."}
               className="mt-1 w-full rounded-md border border-hairline bg-paper px-3 py-2 text-xs font-mono text-ink placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-amber resize-y"

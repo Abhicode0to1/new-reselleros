@@ -248,7 +248,7 @@ export function EmployeesTab() {
                         <div className="font-medium text-ink group-hover:text-amber-ink transition-colors">{toTitleCase(e.name)}</div>
                         <div className="text-2xs text-ink-3 mt-0.5 flex items-center gap-1.5 flex-wrap">
                           {employeeSubline(e) && <span>{employeeSubline(e)}</span>}
-                          {employeeSubline(e) && e.email && <span className="text-ink-4">·</span>}
+                          {employeeSubline(e) && e.email && <span className="text-ink-3">·</span>}
                           {e.email && <span className="font-mono text-ink-2">{e.email}</span>}
                         </div>
                       </td>
@@ -377,10 +377,10 @@ function EmployeeRowMenu({ e, onView, onOffer, onEdit, onDelete }: {
 }
 
 /** Compact labelled field wrapper for the employee form. */
-function Field({ label, required, children }: { label: React.ReactNode; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, children, htmlFor }: { label: React.ReactNode; required?: boolean; children: React.ReactNode; htmlFor?: string }) {
   return (
     <div className="min-w-0">
-      <label className="block text-xs font-medium text-ink-2 mb-1">
+      <label htmlFor={htmlFor} className="block text-xs font-medium text-ink-2 mb-1">
         {label}{required && <span className="text-rose"> *</span>}
       </label>
       {children}
@@ -518,31 +518,31 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
           {/* TAB 1: BASIC PROFILE */}
           {empTab === "basic" && (
             <section className="space-y-3">
-              <Field label="Full name" required>
-                <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="e.g. Abhishek Sharma" />
+              <Field htmlFor="payroll-full-name" label="Full name" required>
+                <Input id="payroll-full-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="e.g. Abhishek Sharma" />
               </Field>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Designation">
-                  <Input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="e.g. Sales Executive" />
+                <Field htmlFor="payroll-designation" label="Designation">
+                  <Input id="payroll-designation" value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="e.g. Sales Executive" />
                 </Field>
-                <Field label="Date of birth">
-                  <Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+                <Field htmlFor="payroll-date-of-birth" label="Date of birth">
+                  <Input id="payroll-date-of-birth" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
                 </Field>
-                <Field label="Mobile">
-                  <Input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. +91 98765 43210" />
+                <Field htmlFor="payroll-mobile" label="Mobile">
+                  <Input id="payroll-mobile" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. +91 98765 43210" />
                 </Field>
-                <Field label="Email">
-                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. name@company.com" />
+                <Field htmlFor="payroll-email" label="Email">
+                  <Input id="payroll-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. name@company.com" />
                 </Field>
-                <Field label="Joining date">
-                  <Input type="date" value={joined} onChange={(e) => setJoined(e.target.value)} />
+                <Field htmlFor="payroll-joining-date" label="Joining date">
+                  <Input id="payroll-joining-date" type="date" value={joined} onChange={(e) => setJoined(e.target.value)} />
                 </Field>
-                <Field label="Paid leave / year">
-                  <Input type="number" min={0} value={allowance} onChange={(e) => setAllowance(e.target.value)} />
+                <Field htmlFor="payroll-paid-leave-year" label="Paid leave / year">
+                  <Input id="payroll-paid-leave-year" type="number" min={0} value={allowance} onChange={(e) => setAllowance(e.target.value)} />
                 </Field>
               </div>
-              <Field label="Address">
-                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Residential address" />
+              <Field htmlFor="payroll-address" label="Address">
+                <Input id="payroll-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Residential address" />
               </Field>
             </section>
           )}
@@ -551,8 +551,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
           {empTab === "ctc" && (
             <section className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Annual CTC (₹/yr)">
-                  <Input
+                <Field htmlFor="payroll-annual-ctc-yr" label="Annual CTC (₹/yr)">
+                  <Input id="payroll-annual-ctc-yr"
                     type="number"
                     min={0}
                     placeholder="e.g. 600000"
@@ -560,8 +560,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                     onChange={(e) => setAnnualCtc(e.target.value)}
                   />
                 </Field>
-                <Field label="City HRA Standard">
-                  <select
+                <Field htmlFor="payroll-city-hra-standard" label="City HRA Standard">
+                  <select id="payroll-city-hra-standard"
                     value={isMetro ? "metro" : "nonmetro"}
                     onChange={(e) => setIsMetro(e.target.value === "metro")}
                     className={selectCls}
@@ -572,8 +572,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                 </Field>
               </div>
 
-              <Field label="Monthly Gross Salary (₹, Base for Pay Slip)">
-                <Input type="number" min={0} value={gross} onChange={(e) => setGross(e.target.value)} placeholder="e.g. 46997" />
+              <Field htmlFor="payroll-monthly-gross-salary-base" label="Monthly Gross Salary (₹, Base for Pay Slip)">
+                <Input id="payroll-monthly-gross-salary-base" type="number" min={0} value={gross} onChange={(e) => setGross(e.target.value)} placeholder="e.g. 46997" />
               </Field>
 
               {/* Custom Component Override Accordion Toggle */}
@@ -591,8 +591,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                   <div className="mt-3 p-3.5 bg-paper-2/90 border border-hairline rounded-2xl space-y-3 text-xs shadow-2xs">
                     <p className="text-3xs uppercase tracking-wider text-ink-3 font-bold">⚙️ Component Overrides &amp; Custom Allowances</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                      <Field label="Basic Salary %">
-                        <select
+                      <Field htmlFor="payroll-basic-salary" label="Basic Salary %">
+                        <select id="payroll-basic-salary"
                           value={basicPct}
                           onChange={(e) => { setBasicPct(Number(e.target.value)); setCustomBasic(""); }}
                           className={selectCls}
@@ -604,8 +604,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         </select>
                       </Field>
 
-                      <Field label="Custom Basic (₹/mo)">
-                        <Input
+                      <Field htmlFor="payroll-custom-basic-mo" label="Custom Basic (₹/mo)">
+                        <Input id="payroll-custom-basic-mo"
                           type="number"
                           min={0}
                           value={customBasic}
@@ -614,8 +614,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Custom HRA (₹/mo)">
-                        <Input
+                      <Field htmlFor="payroll-custom-hra-mo" label="Custom HRA (₹/mo)">
+                        <Input id="payroll-custom-hra-mo"
                           type="number"
                           min={0}
                           value={customHra}
@@ -624,8 +624,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Conveyance (₹/mo)">
-                        <Input
+                      <Field htmlFor="payroll-conveyance-mo" label="Conveyance (₹/mo)">
+                        <Input id="payroll-conveyance-mo"
                           type="number"
                           min={0}
                           value={customConveyance}
@@ -634,8 +634,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Medical (₹/mo)">
-                        <Input
+                      <Field htmlFor="payroll-medical-mo" label="Medical (₹/mo)">
+                        <Input id="payroll-medical-mo"
                           type="number"
                           min={0}
                           value={customMedical}
@@ -644,8 +644,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Special Allowance (₹/mo)">
-                        <Input
+                      <Field htmlFor="payroll-special-allowance-mo" label="Special Allowance (₹/mo)">
+                        <Input id="payroll-special-allowance-mo"
                           type="number"
                           min={0}
                           value={customSpecial}
@@ -654,8 +654,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Professional Tax (₹/mo)">
-                        <Input
+                      <Field htmlFor="payroll-professional-tax-mo" label="Professional Tax (₹/mo)">
+                        <Input id="payroll-professional-tax-mo"
                           type="number"
                           min={0}
                           value={customPt}
@@ -810,14 +810,14 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
           {empTab === "statutory" && (
             <section className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="PAN">
-                  <Input value={pan} onChange={(e) => setPan(e.target.value)} placeholder="e.g. ABCDE1234F" className="uppercase" maxLength={10} />
+                <Field htmlFor="payroll-pan" label="PAN">
+                  <Input id="payroll-pan" value={pan} onChange={(e) => setPan(e.target.value)} placeholder="e.g. ABCDE1234F" className="uppercase" maxLength={10} />
                 </Field>
-                <Field label="PF number">
-                  <Input value={pfNo} onChange={(e) => setPfNo(e.target.value)} placeholder="Optional" />
+                <Field htmlFor="payroll-pf-number" label="PF number">
+                  <Input id="payroll-pf-number" value={pfNo} onChange={(e) => setPfNo(e.target.value)} placeholder="Optional" />
                 </Field>
-                <Field label="ESI number">
-                  <Input value={esiNo} onChange={(e) => setEsiNo(e.target.value)} placeholder="Optional" />
+                <Field htmlFor="payroll-esi-number" label="ESI number">
+                  <Input id="payroll-esi-number" value={esiNo} onChange={(e) => setEsiNo(e.target.value)} placeholder="Optional" />
                 </Field>
               </div>
 
@@ -853,12 +853,12 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs font-medium text-ink-2 mb-1">Basic (₹/month)</label>
-                        <Input type="number" min={0} value={basicMonthly} onChange={(e) => setBasicMonthly(e.target.value)} placeholder={gross ? String(Math.round((Number(gross) || 0) * 0.5)) : "e.g. 15000"} />
+                        <label htmlFor="payroll-basic-month" className="block text-xs font-medium text-ink-2 mb-1">Basic (₹/month)</label>
+                        <Input id="payroll-basic-month" type="number" min={0} value={basicMonthly} onChange={(e) => setBasicMonthly(e.target.value)} placeholder={gross ? String(Math.round((Number(gross) || 0) * 0.5)) : "e.g. 15000"} />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-ink-2 mb-1">DA (₹/month)</label>
-                        <Input type="number" min={0} value={daMonthly} onChange={(e) => setDaMonthly(e.target.value)} />
+                        <label htmlFor="payroll-da-month" className="block text-xs font-medium text-ink-2 mb-1">DA (₹/month)</label>
+                        <Input id="payroll-da-month" type="number" min={0} value={daMonthly} onChange={(e) => setDaMonthly(e.target.value)} />
                       </div>
                     </div>
                     {basicMonthly.trim() !== "" && (Number(basicMonthly) || 0) + (Number(daMonthly) || 0) > (Number(gross) || 0) && (
@@ -869,16 +869,16 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-hairline pt-3">
-                <Field label="Emergency contact name">
-                  <Input value={ecName} onChange={(e) => setEcName(e.target.value)} placeholder="Name" />
+                <Field htmlFor="payroll-emergency-contact-name" label="Emergency contact name">
+                  <Input id="payroll-emergency-contact-name" value={ecName} onChange={(e) => setEcName(e.target.value)} placeholder="Name" />
                 </Field>
-                <Field label="Emergency phone">
-                  <Input inputMode="tel" value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} placeholder="+91 …" />
+                <Field htmlFor="payroll-emergency-phone" label="Emergency phone">
+                  <Input id="payroll-emergency-phone" inputMode="tel" value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} placeholder="+91 …" />
                 </Field>
               </div>
 
-              <Field label={<>Attendance Kiosk PIN {employee?.pin_hash ? <span className="text-emerald font-normal">· already set</span> : ""}</>}>
-                <Input inputMode="numeric" value={pin} onChange={(e) => setPinValue(e.target.value.replace(/\D/g, ""))}
+              <Field htmlFor="payroll-field" label={<>Attendance Kiosk PIN {employee?.pin_hash ? <span className="text-emerald font-normal">· already set</span> : ""}</>}>
+                <Input id="payroll-field" inputMode="numeric" value={pin} onChange={(e) => setPinValue(e.target.value.replace(/\D/g, ""))}
                   placeholder={employee?.pin_hash ? "Enter new 4–6 digits to reset" : "Set a 4–6 digit PIN"} maxLength={6} />
                 {!pinValid
                   ? <p className="mt-1 text-2xs text-rose">PIN must be 4–6 digits.</p>
@@ -1021,8 +1021,8 @@ export function PayrollTab() {
 
       <Card className="mb-4 p-3 md:p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
-          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
+          <label htmlFor="payroll-month" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
+          <input id="payroll-month" type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
           <Button
             variant="outline" size="sm" icon="rupee" className="ml-auto"
@@ -1614,8 +1614,8 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Salary to pay (₹)</label>
-              <Input type="number" min={0} value={gross} onChange={(e) => setGross(e.target.value)} />
+              <label htmlFor="payroll-salary-to-pay" className="block text-xs font-medium text-ink-2 mb-1">Salary to pay (₹)</label>
+              <Input id="payroll-salary-to-pay" type="number" min={0} value={gross} onChange={(e) => setGross(e.target.value)} />
               {!payPeriod.complete && (
                 <p className="text-2xs text-ink-3 mt-1">
                   {proratedDefault > 0
@@ -1633,8 +1633,8 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
               )}
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Pay from</label>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+              <label htmlFor="payroll-pay-from" className="block text-xs font-medium text-ink-2 mb-1">Pay from</label>
+              <select id="payroll-pay-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
                 {accounts.length === 0 && <option value="">Add an account in Banking</option>}
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
@@ -1645,8 +1645,8 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
             <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Earnings (on top of salary)</div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-ink-2 mb-1">Bonus / Incentive (₹)</label>
-                <Input type="number" min={0} value={bonus} onChange={(e) => setBonus(e.target.value)} />
+                <label htmlFor="payroll-bonus-incentive" className="block text-xs font-medium text-ink-2 mb-1">Bonus / Incentive (₹)</label>
+                <Input id="payroll-bonus-incentive" type="number" min={0} value={bonus} onChange={(e) => setBonus(e.target.value)} />
               </div>
             </div>
             <p className="text-2xs text-ink-3">One-time bonus/incentive for this month — added to net pay + the Salaries expense, shown separately on the payslip.</p>
@@ -1688,24 +1688,24 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-ink-2 mb-1">Unpaid leave (LOP) days</label>
-                <Input type="number" min={0} value={lopDays} onChange={(e) => onLopDays(e.target.value)} />
+                <label htmlFor="payroll-unpaid-leave-lop-days" className="block text-xs font-medium text-ink-2 mb-1">Unpaid leave (LOP) days</label>
+                <Input id="payroll-unpaid-leave-lop-days" type="number" min={0} value={lopDays} onChange={(e) => onLopDays(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink-2 mb-1">LOP amount (₹)</label>
-                <Input type="number" min={0} value={lopAmt} onChange={(e) => setLopAmt(e.target.value)} />
+                <label htmlFor="payroll-lop-amount" className="block text-xs font-medium text-ink-2 mb-1">LOP amount (₹)</label>
+                <Input id="payroll-lop-amount" type="number" min={0} value={lopAmt} onChange={(e) => setLopAmt(e.target.value)} />
               </div>
             </div>
             {advances.length > 0 && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-ink-2 mb-1">Advance recovery (₹)</label>
-                  <Input type="number" min={0} value={advAmt} onChange={(e) => setAdvAmt(e.target.value)} />
+                  <label htmlFor="payroll-advance-recovery" className="block text-xs font-medium text-ink-2 mb-1">Advance recovery (₹)</label>
+                  <Input id="payroll-advance-recovery" type="number" min={0} value={advAmt} onChange={(e) => setAdvAmt(e.target.value)} />
                   {advTooMuch && <p className="mt-1 text-2xs text-rose">Max {rupee(selectedAdv?.outstanding ?? 0)}.</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-ink-2 mb-1">From advance</label>
-                  <select value={advId} onChange={(e) => setAdvId(e.target.value)} className={selectCls}>
+                  <label htmlFor="payroll-from-advance" className="block text-xs font-medium text-ink-2 mb-1">From advance</label>
+                  <select id="payroll-from-advance" value={advId} onChange={(e) => setAdvId(e.target.value)} className={selectCls}>
                     {advances.map((a) => <option key={a.id} value={a.id}>{rupee(a.outstanding)} outstanding</option>)}
                   </select>
                 </div>
@@ -1714,22 +1714,22 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
             <p className="text-2xs text-ink-3 -mt-1">{tdsEstimate.note}{tdsEdited ? " (tumne badla)" : ""}</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-ink-2 mb-1">TDS (₹){!tdsEdited && <span className="text-emerald ml-1 font-normal">auto s.192</span>}</label>
-                <Input type="number" min={0} value={tds} onChange={(e) => { setTds(e.target.value); setTdsEdited(true); }} />
+                <label htmlFor="payroll-tds" className="block text-xs font-medium text-ink-2 mb-1">TDS (₹){!tdsEdited && <span className="text-emerald ml-1 font-normal">auto s.192</span>}</label>
+                <Input id="payroll-tds" type="number" min={0} value={tds} onChange={(e) => { setTds(e.target.value); setTdsEdited(true); }} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink-2 mb-1">
+                <label htmlFor="payroll-pf-employee" className="block text-xs font-medium text-ink-2 mb-1">
                   PF — employee (₹){employee.pf_applicable && !pfEdited && <span className="text-emerald ml-1 font-normal">auto 12%</span>}
                 </label>
-                <Input type="number" min={0} value={pf} onChange={(e) => { setPfEdited(true); setPf(e.target.value); }} />
+                <Input id="payroll-pf-employee" type="number" min={0} value={pf} onChange={(e) => { setPfEdited(true); setPf(e.target.value); }} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink-2 mb-1">
+                <label htmlFor="payroll-esi-employee" className="block text-xs font-medium text-ink-2 mb-1">
                   ESI — employee (₹){employee.esi_applicable && !esiEdited && <span className="text-emerald ml-1 font-normal">auto 0.75%</span>}
                 </label>
-                <Input type="number" min={0} value={esi} onChange={(e) => { setEsiEdited(true); setEsi(e.target.value); }} />
+                <Input id="payroll-esi-employee" type="number" min={0} value={esi} onChange={(e) => { setEsiEdited(true); setEsi(e.target.value); }} />
               </div>
-              <div><label className="block text-xs font-medium text-ink-2 mb-1">Other (₹)</label><Input type="number" min={0} value={other} onChange={(e) => setOther(e.target.value)} /></div>
+              <div><label htmlFor="payroll-other" className="block text-xs font-medium text-ink-2 mb-1">Other (₹)</label><Input id="payroll-other" type="number" min={0} value={other} onChange={(e) => setOther(e.target.value)} /></div>
             </div>
             {employee.esi_applicable ? (
               <div className="rounded bg-paper-2/50 px-2.5 py-2 text-2xs text-ink-2 space-y-0.5">
@@ -1764,8 +1764,8 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Pay date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="payroll-pay-date" className="block text-xs font-medium text-ink-2 mb-1">Pay date</label>
+            <Input id="payroll-pay-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             {/* Accrual (migration 20260927170000): the cost sits in the salary month, the cash on the pay date. */}
             <p className="mt-1 text-2xs text-ink-3">
               Kharcha <b>{period}</b> ke mahine mein book hoga{date.slice(0, 7) !== period ? ` (${period} ki aakhri tareekh par)` : ""}; bank se paisa {date ? formatDate(date) : "pay date"} ko niklega.
@@ -1930,12 +1930,12 @@ function HolidaysCard() {
       </div>
       <div className="flex flex-wrap items-end gap-2 mb-3">
         <div>
-          <label className="block text-2xs text-ink-3 mb-1">Date</label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
+          <label htmlFor="payroll-date" className="block text-2xs text-ink-3 mb-1">Date</label>
+          <Input id="payroll-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
         </div>
         <div className="flex-1 min-w-[160px]">
-          <label className="block text-2xs text-ink-3 mb-1">Name</label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Diwali, Independence Day" />
+          <label htmlFor="payroll-name" className="block text-2xs text-ink-3 mb-1">Name</label>
+          <Input id="payroll-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Diwali, Independence Day" />
         </div>
         <Button size="sm" variant="primary" icon="plus" onClick={add} disabled={!date || !name.trim() || create.isPending} loading={create.isPending}>Add</Button>
       </div>
@@ -2025,19 +2025,19 @@ function LeaveDialog({ employees, onClose }: { employees: Employee[]; onClose: (
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Employee</label>
-            <select value={empId} onChange={(e) => setEmpId(e.target.value)} className={selectCls}>
+            <label htmlFor="payroll-employee" className="block text-xs font-medium text-ink-2 mb-1">Employee</label>
+            <select id="payroll-employee" value={empId} onChange={(e) => setEmpId(e.target.value)} className={selectCls}>
               {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-ink-2 mb-1">From</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div><label className="block text-xs font-medium text-ink-2 mb-1">To</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+            <div><label htmlFor="payroll-from" className="block text-xs font-medium text-ink-2 mb-1">From</label><Input id="payroll-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+            <div><label htmlFor="payroll-to" className="block text-xs font-medium text-ink-2 mb-1">To</label><Input id="payroll-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Days</label>
-              <Input type="number" min={0.5} step={0.5} value={days} onChange={(e) => setDays(e.target.value)} />
+              <label htmlFor="payroll-days" className="block text-xs font-medium text-ink-2 mb-1">Days</label>
+              <Input id="payroll-days" type="number" min={0.5} step={0.5} value={days} onChange={(e) => setDays(e.target.value)} />
               {autoWorkingDays > 0 && autoWorkingDays !== daysN && (
                 <button type="button" onClick={() => setDays(String(autoWorkingDays))} className="mt-1 text-2xs text-amber-ink underline hover:no-underline">
                   Use {autoWorkingDays} working day{autoWorkingDays === 1 ? "" : "s"} (excl. Sun + holidays)
@@ -2045,8 +2045,8 @@ function LeaveDialog({ employees, onClose }: { employees: Employee[]; onClose: (
               )}
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Type</label>
-              <select value={type} onChange={(e) => setType(e.target.value as LeaveKind)} className={selectCls}>
+              <label htmlFor="payroll-type" className="block text-xs font-medium text-ink-2 mb-1">Type</label>
+              <select id="payroll-type" value={type} onChange={(e) => setType(e.target.value as LeaveKind)} className={selectCls}>
                 <option value="casual">Casual (paid)</option>
                 <option value="sick">Sick (paid)</option>
                 <option value="earned">Earned (paid)</option>
@@ -2078,8 +2078,8 @@ function LeaveDialog({ employees, onClose }: { employees: Employee[]; onClose: (
           )}
 
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <label htmlFor="payroll-note-optional" className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
+            <Input id="payroll-note-optional" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
@@ -2189,7 +2189,7 @@ function NetworkCard() {
             Puraani selfies is period ke baad apne-aap delete ho jaati hain (privacy / DPDP). Employee exit pe bhi delete.
           </p>
         </div>
-        <select
+        <select aria-label="Selfie retention period"
           value={d?.retentionDays ?? 180}
           onChange={(e) => setNet.mutate({ action: "set_retention", value: Number(e.target.value) })}
           className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
@@ -2256,8 +2256,8 @@ export function AttendanceTab() {
             <Icon name="arrow_left" size={15} /> All employees
           </button>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
-            <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
+            <label htmlFor="payroll-month-2" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
+            <input id="payroll-month-2" type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
               className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
           </div>
         </div>
@@ -2289,8 +2289,8 @@ export function AttendanceTab() {
 
       <Card className="mb-4 p-3 md:p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
-          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
+          <label htmlFor="payroll-month-3" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
+          <input id="payroll-month-3" type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
           <Button variant="primary" icon="external" className="ml-auto"
             onClick={() => window.open("/attendance/kiosk", "_blank", "noopener")}>
@@ -2491,8 +2491,8 @@ function AttendanceRegisterDialog({ employee, initialPeriod, onClose }: {
           </DialogDescription>
         </DialogHeader>
         <div className="mb-1 flex items-center gap-2">
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
-          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
+          <label htmlFor="payroll-month-4" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
+          <input id="payroll-month-4" type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
         </div>
         {attQ.isLoading
@@ -2624,13 +2624,13 @@ function PayDuesDialog({ payable, onClose }: { payable: number; onClose: () => v
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
-            <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <label htmlFor="payroll-amount" className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
+            <Input id="payroll-amount" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
             {tooMuch && <p className="mt-1 text-2xs text-rose">Can&apos;t exceed payable {rupee(payable)}.</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Type</label>
-            <select value={kind} onChange={(e) => setKind(e.target.value)} className={selectCls}>
+            <label htmlFor="payroll-type-2" className="block text-xs font-medium text-ink-2 mb-1">Type</label>
+            <select id="payroll-type-2" value={kind} onChange={(e) => setKind(e.target.value)} className={selectCls}>
               <option value="mixed">Mixed</option>
               <option value="tds">TDS</option>
               <option value="pf">PF</option>
@@ -2638,24 +2638,24 @@ function PayDuesDialog({ payable, onClose }: { payable: number; onClose: () => v
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+            <label htmlFor="payroll-paid-from" className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
+            <select id="payroll-paid-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="payroll-date-2" className="block text-xs font-medium text-ink-2 mb-1">Date</label>
+            <Input id="payroll-date-2" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           {/* Challan details — the 26Q / ECR quotes them; the payable can then be read month-wise. */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Kis mahine ka</label>
-              <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Period the challan paid for" />
+              <label htmlFor="payroll-kis-mahine-ka" className="block text-xs font-medium text-ink-2 mb-1">Kis mahine ka</label>
+              <Input id="payroll-kis-mahine-ka" type="month" value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Period the challan paid for" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Challan / CIN no.</label>
-              <Input value={challanNo} onChange={(e) => setChallanNo(e.target.value)} placeholder="optional" maxLength={40} />
+              <label htmlFor="payroll-challan-cin-no" className="block text-xs font-medium text-ink-2 mb-1">Challan / CIN no.</label>
+              <Input id="payroll-challan-cin-no" value={challanNo} onChange={(e) => setChallanNo(e.target.value)} placeholder="optional" maxLength={40} />
             </div>
           </div>
         </div>

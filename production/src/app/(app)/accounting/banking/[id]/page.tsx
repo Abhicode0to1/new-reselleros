@@ -477,10 +477,10 @@ function TransactionRow({
         )}
       </td>
       <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap font-medium text-rose">
-        {txn.debit > 0 ? rupee(txn.debit) : <span className="text-ink-4">—</span>}
+        {txn.debit > 0 ? rupee(txn.debit) : <span className="text-ink-3">—</span>}
       </td>
       <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap font-medium text-emerald">
-        {txn.credit > 0 ? rupee(txn.credit) : <span className="text-ink-4">—</span>}
+        {txn.credit > 0 ? rupee(txn.credit) : <span className="text-ink-3">—</span>}
       </td>
       <td className="px-4 py-3 text-right">
         {txn.matched_to_type === "transfer" ? (

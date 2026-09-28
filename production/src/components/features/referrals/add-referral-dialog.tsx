@@ -149,9 +149,9 @@ export function AddReferralDialog({ open, onOpenChange, customerId, customerName
                 <option value="fixed">Fixed ₹</option>
               </select>
               {basis === "percent" ? (
-                <Input type="text" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value.replace(/[^\d.]/g, ""))} placeholder="10" suffix="%" />
+                <Input aria-label="Commission percent" type="text" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value.replace(/[^\d.]/g, ""))} placeholder="10" suffix="%" />
               ) : (
-                <Input type="text" inputMode="numeric" prefix="₹" value={fixedAmount} onChange={(e) => setFixedAmount(e.target.value.replace(/[^\d]/g, ""))} placeholder="e.g. 5000" />
+                <Input aria-label="Commission amount" type="text" inputMode="numeric" prefix="₹" value={fixedAmount} onChange={(e) => setFixedAmount(e.target.value.replace(/[^\d]/g, ""))} placeholder="e.g. 5000" />
               )}
             </div>
             <p className="mt-1 text-2xs text-ink-3">

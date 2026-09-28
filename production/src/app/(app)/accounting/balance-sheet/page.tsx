@@ -632,12 +632,12 @@ function EditLineDialog({ item, onClose }: { item: BalanceSheetItem; onClose: ()
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Label</label>
-            <Input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
+            <label htmlFor="balance-sheet-label" className="block text-xs font-medium text-ink-2 mb-1">Label</label>
+            <Input id="balance-sheet-label" value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
-            <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <label htmlFor="balance-sheet-amount" className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
+            <Input id="balance-sheet-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
             <p className="mt-1 text-2xs text-ink-3">Negative allowed (e.g. depreciation, drawings).</p>
           </div>
         </div>

@@ -9,6 +9,7 @@
 import * as React from "react";
 
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -261,8 +262,9 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={onClose}>
-      <Card className="w-full max-w-xs p-5" onClick={(e) => e.stopPropagation()}>
+    // ui/dialog, not a hand-rolled overlay: focus stays on the keypad, Esc cancels (S36).
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent hideClose resizable={false} aria-describedby={undefined} className="gap-0 md:!max-w-xs">
         <div className="text-center mb-4">
           <video
             ref={videoRef}
@@ -282,7 +284,7 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
               <span className="text-3xs leading-tight">Tap for camera</span>
             </button>
           )}
-          <div className="font-serif text-2xl text-ink">{employee.name}</div>
+          <DialogTitle className="font-serif text-2xl text-ink">{employee.name}</DialogTitle>
           <div className="text-xs text-ink-3 mt-0.5">
             {camOn
               ? "Look at the camera & enter PIN"
@@ -313,7 +315,7 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
         )}
 
         <button onClick={onClose} className="mt-4 w-full text-center text-xs text-ink-3 hover:text-ink">Cancel</button>
-      </Card>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

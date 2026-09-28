@@ -305,8 +305,8 @@ function MonthRegister() {
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
-              <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
+              <label htmlFor="salary-register-month" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
+              <input id="salary-register-month" type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
                 className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
             </div>
             {rows.length > 0 && (
@@ -436,7 +436,7 @@ function EmployeeRegister({ employeeId }: { employeeId: string }) {
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Income tax (s.192) — FY {f16.fyLabel} · new regime</div>
             {fyOptions.length > 1 && (
-              <select value={fyStart} onChange={(e) => setFyPick(Number(e.target.value))} className="rounded-md border border-hairline bg-paper px-2 py-1 text-xs">
+              <select aria-label="Financial year" value={fyStart} onChange={(e) => setFyPick(Number(e.target.value))} className="rounded-md border border-hairline bg-paper px-2 py-1 text-xs">
                 {fyOptions.map((y) => <option key={y} value={y}>FY {fyLabelOf(y)}</option>)}
               </select>
             )}

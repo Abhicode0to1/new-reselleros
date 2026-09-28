@@ -903,7 +903,7 @@ function LeadsPageInner() {
 
         <div className="shrink-0 mb-3 flex items-center gap-2 flex-wrap">
           <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-sm">
-            <Input
+            <Input aria-label="Search leads & deals"
               prefix={<Icon name="search" size={14} />}
               placeholder="Search leads & deals…"
               value={search}
@@ -4691,7 +4691,7 @@ function LeadListView({
                 <td className={cn(GRID_TD_ATOM, "text-right")}>
                   {(() => {
                     const w = waitState(lead.created_at, firstReplies.get(lead.id) ?? null, nowForWait);
-                    if (w.kind === "unknown") return <span className="text-2xs text-ink-4">—</span>;
+                    if (w.kind === "unknown") return <span className="text-2xs text-ink-3">—</span>;
                     if (w.kind === "answered") {
                       return (
                         <span
@@ -4799,7 +4799,7 @@ function LeadListView({
                           title={a.title}
                           className={cn(
                             "shrink-0 rounded px-1 py-px text-3xs font-semibold tabular-nums leading-none",
-                            a.stale ? "bg-rose-soft text-rose-ink" : "text-ink-4",
+                            a.stale ? "bg-rose-soft text-rose-ink" : "text-ink-3",
                           )}
                         >
                           {a.days}d
@@ -4916,7 +4916,7 @@ function LeadListView({
                           )}>
                             {formatDate(lead.follow_up_date)}
                           </span>
-                        : <span className="text-ink-4 text-xs">—</span>
+                        : <span className="text-ink-3 text-xs">—</span>
                     }
                   />
                 </td>
@@ -4935,12 +4935,12 @@ function LeadListView({
                   {(() => {
                     const o = lead.owner_id ? ownerById.get(lead.owner_id) : undefined;
                     if (!lead.owner_id) {
-                      return <span className="text-2xs text-ink-4">Unassigned</span>;
+                      return <span className="text-2xs text-ink-3">Unassigned</span>;
                     }
                     if (!o) {
                       /* owner_id hai par us naam ka user nahi mila — nikala hua ya
                          deactivate kiya gaya member. Chup rehne se behtar hai kehna. */
-                      return <span className="text-2xs text-ink-4" title={lead.owner_id}>Unknown user</span>;
+                      return <span className="text-2xs text-ink-3" title={lead.owner_id}>Unknown user</span>;
                     }
                     return (
                       <span
@@ -5064,7 +5064,7 @@ function LeadListView({
                   }}
                 >
                   <Icon name={hidden.has(id) ? "square" : "check_circle"} size={14}
-                    className={hidden.has(id) ? "text-ink-4" : "text-emerald"} />
+                    className={hidden.has(id) ? "text-ink-3" : "text-emerald"} />
                   {id === "followup" ? "Follow-up" : id === "wait" ? "Wait" : id}
                 </DropdownMenuItem>
               ))}

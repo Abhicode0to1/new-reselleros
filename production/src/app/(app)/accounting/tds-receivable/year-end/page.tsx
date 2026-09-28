@@ -374,8 +374,8 @@ export default function TdsYearEndPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Fiscal year</label>
-          <select
+          <label htmlFor="year-end-fiscal-year" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Fiscal year</label>
+          <select id="year-end-fiscal-year"
             value={fy}
             onChange={(e) => setFy(e.target.value)}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper font-mono"

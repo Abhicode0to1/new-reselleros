@@ -55,7 +55,7 @@ export default function ReviewsPage() {
       <Card className={cn("p-4 space-y-2", !linkOk && "border-amber/40 bg-amber-soft/20")}>
         <p className="text-sm font-semibold text-ink">Aapka Google review link</p>
         <div className="flex gap-2 flex-wrap">
-          <Input className="flex-1 min-w-[260px]" placeholder="https://g.page/r/…/review" value={link} onChange={(e) => setLink(e.target.value)} />
+          <Input aria-label="Google review link" className="flex-1 min-w-[260px]" placeholder="https://g.page/r/…/review" value={link} onChange={(e) => setLink(e.target.value)} />
           <Button onClick={() => saveLink.mutate(link)} disabled={saveLink.isPending || (link.trim() !== "" && !isValidReviewLink(link))}>Save</Button>
         </div>
         {link.trim() !== "" && !isValidReviewLink(link) && <p className="text-2xs text-red-600">Poora https:// link daalo.</p>}
@@ -65,7 +65,7 @@ export default function ReviewsPage() {
       </Card>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <Input className="max-w-xs" placeholder="Customer dhoondho…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input aria-label="Customer dhoondho" className="max-w-xs" placeholder="Customer dhoondho…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <label className="flex items-center gap-1.5 text-sm text-ink-2">
           <input type="checkbox" checked={onlyNever} onChange={(e) => setOnlyNever(e.target.checked)} /> Sirf jinse kabhi nahi poocha
         </label>

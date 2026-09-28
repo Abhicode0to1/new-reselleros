@@ -128,7 +128,7 @@ export default function VendorsPage() {
 
       {(vendors ?? []).length > 0 && (
         <div className="mb-3 w-full sm:w-72">
-          <Input prefix={<Icon name="search" size={14} />} placeholder="Vendor name / GSTIN…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input aria-label="Vendor name / GSTIN" prefix={<Icon name="search" size={14} />} placeholder="Vendor name / GSTIN…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       )}
 
@@ -396,17 +396,17 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="Vendor name" required>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Google Cloud India / Rajesh Reseller" autoFocus />
+            <FormField htmlFor="vendors-vendor-name" label="Vendor name" required>
+              <Input id="vendors-vendor-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Google Cloud India / Rajesh Reseller" autoFocus />
             </FormField>
-            <FormField label="GSTIN (optional)">
-              <Input value={gstin} onChange={(e) => onGstinChange(e.target.value)} placeholder="e.g. 27ABCDE1234F1Z5" />
+            <FormField htmlFor="vendors-gstin-optional" label="GSTIN (optional)">
+              <Input id="vendors-gstin-optional" value={gstin} onChange={(e) => onGstinChange(e.target.value)} placeholder="e.g. 27ABCDE1234F1Z5" />
             </FormField>
           </div>
           {/* PAN decides the TDS rate (194C 1% for an individual, 2% for a company) and, when
               missing, forces 20% u/s 206AA — so it is asked for here, not guessed at 26Q time. */}
-          <FormField label="PAN (for TDS / 26Q)" hint={pan && !isPan(pan) ? "10 characters, e.g. ABCDE1234F" : deducteeTypeFromPan(pan) ? `${DEDUCTEE_LABEL[deducteeTypeFromPan(pan)!]} — TDS rate isi se tay hota hai` : "Bina PAN ke TDS 20% kaatna padta hai (s.206AA)"}>
-            <Input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} className="font-mono uppercase" />
+          <FormField htmlFor="vendors-pan-for-tds-26q" label="PAN (for TDS / 26Q)" hint={pan && !isPan(pan) ? "10 characters, e.g. ABCDE1234F" : deducteeTypeFromPan(pan) ? `${DEDUCTEE_LABEL[deducteeTypeFromPan(pan)!]} — TDS rate isi se tay hota hai` : "Bina PAN ke TDS 20% kaatna padta hai (s.206AA)"}>
+            <Input id="vendors-pan-for-tds-26q" value={pan} onChange={(e) => setPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} className="font-mono uppercase" />
           </FormField>
           {/* MSME: micro/small vendor ka bill 45 din (likhit agreement na ho to 15) me na chuke
               to s.43B(h) us saal deduction rok deta hai. Udyam bharne se Aging page flag karta hai. */}
@@ -462,40 +462,40 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <FormField label="Contact name"><Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="e.g. Rahul Sharma" /></FormField>
-            <FormField label="Email"><Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="e.g. name@vendor.com" /></FormField>
-            <FormField label="Phone"><Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="e.g. +91 98765 43210" /></FormField>
+            <FormField htmlFor="vendors-contact-name" label="Contact name"><Input id="vendors-contact-name" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="e.g. Rahul Sharma" /></FormField>
+            <FormField htmlFor="vendors-email" label="Email"><Input id="vendors-email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="e.g. name@vendor.com" /></FormField>
+            <FormField htmlFor="vendors-phone" label="Phone"><Input id="vendors-phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="e.g. +91 98765 43210" /></FormField>
           </div>
-          <FormField label="Address (optional)">
-            <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. 4th Floor, Tower B, Cyber City" />
+          <FormField htmlFor="vendors-address-optional" label="Address (optional)">
+            <Textarea id="vendors-address-optional" rows={2} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. 4th Floor, Tower B, Cyber City" />
           </FormField>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <FormField label="City">
-              <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Mumbai" />
+            <FormField htmlFor="vendors-city" label="City">
+              <Input id="vendors-city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Mumbai" />
             </FormField>
-            <FormField label="State (place of supply)">
+            <FormField htmlFor="vendors-state-place-of-supply" label="State (place of supply)">
               <Select value={state || "none"} onValueChange={(v) => setState(v === "none" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger id="vendors-state-place-of-supply"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— none —</SelectItem>
                   {STATE_NAMES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="PIN code">
-              <Input value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="e.g. 400001" />
+            <FormField htmlFor="vendors-pin-code" label="PIN code">
+              <Input id="vendors-pin-code" value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="e.g. 400001" />
             </FormField>
           </div>
-          <FormField label="Default category">
+          <FormField htmlFor="vendors-default-category" label="Default category">
             <Select value={category || "none"} onValueChange={(v) => setCategory(v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectTrigger id="vendors-default-category"><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">— none —</SelectItem>
                 {VENDOR_BILL_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label="Notes (optional)"><Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Reseller portal login, account manager" /></FormField>
+          <FormField htmlFor="vendors-notes-optional" label="Notes (optional)"><Input id="vendors-notes-optional" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Reseller portal login, account manager" /></FormField>
         </div>
         <DialogFooter>
           <Button type="button" variant="default" onClick={onClose}>Cancel</Button>

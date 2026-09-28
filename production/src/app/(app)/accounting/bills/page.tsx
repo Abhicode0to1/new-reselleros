@@ -124,21 +124,21 @@ export default function VendorBillsPage() {
       {/* ── Filter strip ────────────────────────────────────────── */}
       <Card className="mb-5 p-3 md:p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">From</label>
-          <input
+          <label htmlFor="bills-from" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">From</label>
+          <input id="bills-from"
             type="date"
             value={range.from}
             onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
           />
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">To</label>
-          <input
+          <label htmlFor="bills-to" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">To</label>
+          <input id="bills-to"
             type="date"
             value={range.to}
             onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
           />
-          <select
+          <select aria-label="Status filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
@@ -421,22 +421,22 @@ function PayBillDialog({ bill, onClose }: { bill: VendorBill; onClose: () => voi
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Amount (₹)" required>
-              <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+            <FormField htmlFor="bills-amount" label="Amount (₹)" required>
+              <Input id="bills-amount" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
             </FormField>
-            <FormField label="Date">
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <FormField htmlFor="bills-date" label="Date">
+              <Input id="bills-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </FormField>
           </div>
           {tooMuch && <p className="text-2xs text-rose">Outstanding {rupee(outstanding)} se zyada nahi.</p>}
-          <FormField label="Pay from">
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber">
+          <FormField htmlFor="bills-pay-from" label="Pay from">
+            <select id="bills-pay-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber">
               {accounts.length === 0 && <option value="">No accounts — add one in Banking</option>}
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </FormField>
-          <FormField label="Method">
-            <Input value={method} onChange={(e) => setMethod(e.target.value)} placeholder="bank transfer / UPI / cash" />
+          <FormField htmlFor="bills-method" label="Method">
+            <Input id="bills-method" aria-label="bank transfer / UPI / cash" value={method} onChange={(e) => setMethod(e.target.value)} placeholder="bank transfer / UPI / cash" />
           </FormField>
         </div>
         <DialogFooter>

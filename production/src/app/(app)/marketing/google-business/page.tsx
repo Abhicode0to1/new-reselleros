@@ -352,7 +352,7 @@ function ReviewRow({ r, ownerPhone, today }: { r: GbpReview; ownerPhone: string 
             </div>
           ) : open ? (
             <div className="mt-2 space-y-2">
-              <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} className="text-sm" />
+              <Textarea aria-label="Reply to review" value={text} onChange={(e) => setText(e.target.value)} rows={3} className="text-sm" />
               <div className="flex gap-2">
                 <Button size="sm" variant="primary" icon="send" onClick={() => reply.mutate({ reviewId: r.id, comment: text }, { onSuccess: () => setOpen(false) })} loading={reply.isPending} disabled={!text.trim()}>Post reply on Google</Button>
                 <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>

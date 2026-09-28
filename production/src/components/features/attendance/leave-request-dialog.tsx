@@ -79,9 +79,9 @@ export function LeaveRequestDialog({
         <form onSubmit={handleSubmit} className="space-y-4 my-2">
           {/* Request Type */}
           <div>
-            <Label className="text-xs font-semibold text-ink-2 mb-1.5 block">Request Type:</Label>
+            <Label htmlFor="leave-request-request-type" className="text-xs font-semibold text-ink-2 mb-1.5 block">Request Type:</Label>
             <Select value={leaveType} onValueChange={(v) => setLeaveType(v as LeaveType)}>
-              <SelectTrigger className="w-full text-xs bg-paper">
+              <SelectTrigger id="leave-request-request-type" className="w-full text-xs bg-paper">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent>
@@ -96,8 +96,8 @@ export function LeaveRequestDialog({
           {/* Date Range */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs font-semibold text-ink-2 mb-1.5 block">From Date:</Label>
-              <Input
+              <Label htmlFor="leave-request-from-date" className="text-xs font-semibold text-ink-2 mb-1.5 block">From Date:</Label>
+              <Input id="leave-request-from-date"
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
@@ -105,8 +105,8 @@ export function LeaveRequestDialog({
               />
             </div>
             <div>
-              <Label className="text-xs font-semibold text-ink-2 mb-1.5 block">To Date:</Label>
-              <Input
+              <Label htmlFor="leave-request-to-date" className="text-xs font-semibold text-ink-2 mb-1.5 block">To Date:</Label>
+              <Input id="leave-request-to-date"
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
@@ -117,8 +117,8 @@ export function LeaveRequestDialog({
 
           {/* Reason */}
           <div>
-            <Label className="text-xs font-semibold text-ink-2 mb-1.5 block">Reason / Details:</Label>
-            <textarea
+            <Label htmlFor="leave-request-reason-details" className="text-xs font-semibold text-ink-2 mb-1.5 block">Reason / Details:</Label>
+            <textarea id="leave-request-reason-details"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}

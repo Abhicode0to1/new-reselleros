@@ -121,8 +121,8 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <Label>Code *</Label>
-            <Input
+            <Label htmlFor="create-coupon-code">Code *</Label>
+            <Input id="create-coupon-code"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="e.g. SAVE10"
@@ -132,8 +132,8 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
             <p className="text-3xs text-ink-3 mt-1">A-Z, 0-9. Auto-uppercased.</p>
           </div>
           <div>
-            <Label>Description (internal)</Label>
-            <Input
+            <Label htmlFor="create-coupon-description-internal">Description (internal)</Label>
+            <Input id="create-coupon-description-internal"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g. Diwali Sale 2026"
@@ -173,8 +173,8 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
             </div>
           </div>
           <div>
-            <Label>{discountType === "percent" ? "Percent off" : "Rupees off"}</Label>
-            <Input
+            <Label htmlFor="create-coupon-field">{discountType === "percent" ? "Percent off" : "Rupees off"}</Label>
+            <Input id="create-coupon-field"
               type="number"
               min={1}
               max={discountType === "percent" ? 100 : undefined}
@@ -190,8 +190,8 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
 
         <div className="grid grid-cols-3 gap-3 mb-3">
           <div>
-            <Label>Min seats</Label>
-            <Input
+            <Label htmlFor="create-coupon-min-seats">Min seats</Label>
+            <Input id="create-coupon-min-seats"
               type="number"
               min={1}
               value={minSeats}
@@ -200,8 +200,8 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
             />
           </div>
           <div>
-            <Label>Max seats (optional)</Label>
-            <Input
+            <Label htmlFor="create-coupon-max-seats-optional">Max seats (optional)</Label>
+            <Input id="create-coupon-max-seats-optional"
               type="number"
               min={1}
               value={maxSeats}
@@ -211,8 +211,8 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
             />
           </div>
           <div>
-            <Label>Max uses (optional)</Label>
-            <Input
+            <Label htmlFor="create-coupon-max-uses-optional">Max uses (optional)</Label>
+            <Input id="create-coupon-max-uses-optional"
               type="number"
               min={1}
               value={maxRedemptions}
@@ -225,8 +225,8 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
 
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
-            <Label>Applies to tier</Label>
-            <select
+            <Label htmlFor="create-coupon-applies-to-tier">Applies to tier</Label>
+            <select id="create-coupon-applies-to-tier"
               value={tier}
               onChange={(e) => setTier(e.target.value as Tier)}
               className="w-full text-sm bg-paper border border-hairline rounded px-3 h-10 focus:outline-none focus:ring-1 focus:ring-amber"
@@ -237,8 +237,8 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
             </select>
           </div>
           <div>
-            <Label>Valid until (optional)</Label>
-            <Input
+            <Label htmlFor="create-coupon-valid-until-optional">Valid until (optional)</Label>
+            <Input id="create-coupon-valid-until-optional"
               type="date"
               value={validUntil}
               onChange={(e) => setValidUntil(e.target.value)}

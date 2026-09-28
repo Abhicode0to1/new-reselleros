@@ -222,30 +222,30 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
         <div className="space-y-3 max-h-[62vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-medium text-ink-2 mb-1">Item</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Motorcycle" autoFocus />
+              <label htmlFor="assets-item" className="block text-xs font-medium text-ink-2 mb-1">Item</label>
+              <Input id="assets-item" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Motorcycle" autoFocus />
             </div>
             <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-medium text-ink-2 mb-1">Category</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value as EmiCategory)} className={selectCls}>
+              <label htmlFor="assets-category" className="block text-xs font-medium text-ink-2 mb-1">Category</label>
+              <select id="assets-category" value={category} onChange={(e) => setCategory(e.target.value as EmiCategory)} className={selectCls}>
                 {(Object.keys(EMI_CATEGORY_LABEL) as EmiCategory[]).map((c) => <option key={c} value={c}>{EMI_CATEGORY_LABEL[c]}</option>)}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Total cost (₹)</label>
-              <Input type="number" min={1} value={total} onChange={(e) => setTotal(e.target.value)} placeholder="e.g. 500000" />
+              <label htmlFor="assets-total-cost" className="block text-xs font-medium text-ink-2 mb-1">Total cost (₹)</label>
+              <Input id="assets-total-cost" type="number" min={1} value={total} onChange={(e) => setTotal(e.target.value)} placeholder="e.g. 500000" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Down payment (₹)</label>
-              <Input type="number" min={0} value={down} onChange={(e) => setDown(e.target.value)} placeholder="e.g. 200000" />
+              <label htmlFor="assets-down-payment" className="block text-xs font-medium text-ink-2 mb-1">Down payment (₹)</label>
+              <Input id="assets-down-payment" type="number" min={0} value={down} onChange={(e) => setDown(e.target.value)} placeholder="e.g. 200000" />
             </div>
           </div>
           {downN > 0 && (
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Down payment from</label>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+              <label htmlFor="assets-down-payment-from" className="block text-xs font-medium text-ink-2 mb-1">Down payment from</label>
+              <select id="assets-down-payment-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
                 {accounts.length === 0 && <option value="">Add an account in Banking</option>}
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
@@ -253,21 +253,21 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">No. of EMIs</label>
-              <Input type="number" min={0} value={emiCount} onChange={(e) => setEmiCount(e.target.value)} />
+              <label htmlFor="assets-no-of-emis" className="block text-xs font-medium text-ink-2 mb-1">No. of EMIs</label>
+              <Input id="assets-no-of-emis" type="number" min={0} value={emiCount} onChange={(e) => setEmiCount(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
-              <Input type="number" min={0} value={emiTouched ? emiAmount : String(suggestedEmi || "")} onChange={(e) => { setEmiTouched(true); setEmiAmount(e.target.value); }} />
+              <label htmlFor="assets-emi-amount" className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
+              <Input id="assets-emi-amount" type="number" min={0} value={emiTouched ? emiAmount : String(suggestedEmi || "")} onChange={(e) => { setEmiTouched(true); setEmiAmount(e.target.value); }} />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Financier / lender (optional)</label>
-            <Input value={lender} onChange={(e) => setLender(e.target.value)} placeholder="e.g. HDFC Bank" />
+            <label htmlFor="assets-financier-lender-optional" className="block text-xs font-medium text-ink-2 mb-1">Financier / lender (optional)</label>
+            <Input id="assets-financier-lender-optional" value={lender} onChange={(e) => setLender(e.target.value)} placeholder="e.g. HDFC Bank" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Purchase date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="assets-purchase-date" className="block text-xs font-medium text-ink-2 mb-1">Purchase date</label>
+            <Input id="assets-purchase-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
           <div className="rounded-md bg-paper-2/50 p-3 text-sm space-y-1">
@@ -325,24 +325,24 @@ function PayEmiDialog({ purchase, onClose }: { purchase: EmiPurchase; onClose: (
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
-            <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <label htmlFor="assets-emi-amount-2" className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
+            <Input id="assets-emi-amount-2" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Of which interest (₹, optional)</label>
-            <Input type="number" min={0} value={interest} onChange={(e) => setInterest(e.target.value)} />
+            <label htmlFor="assets-of-which-interest-optional" className="block text-xs font-medium text-ink-2 mb-1">Of which interest (₹, optional)</label>
+            <Input id="assets-of-which-interest-optional" type="number" min={0} value={interest} onChange={(e) => setInterest(e.target.value)} />
             {tooMuchInt && <p className="mt-1 text-2xs text-rose">Interest can&apos;t exceed the EMI.</p>}
             {!tooMuchInt && tooMuchPrin && <p className="mt-1 text-2xs text-rose">Principal ({rupee(principal)}) exceeds outstanding {rupee(purchase.outstanding)}.</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+            <label htmlFor="assets-paid-from" className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
+            <select id="assets-paid-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="assets-date" className="block text-xs font-medium text-ink-2 mb-1">Date</label>
+            <Input id="assets-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="rounded-md bg-paper-2/50 p-3 text-sm space-y-1">
             <Row label="Principal (reduces loan)" value={rupee(Math.max(0, principal))} />

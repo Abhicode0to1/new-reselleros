@@ -212,7 +212,7 @@ export function PnLDrilldownDialog({ open, onOpenChange, kind, range, expenseCat
           <div className="px-5 pt-3 pb-2 flex items-center gap-2 border-b border-hairline">
             <div className="relative flex-1">
               <Icon name="search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" />
-              <input
+              <input aria-label="Search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search…"

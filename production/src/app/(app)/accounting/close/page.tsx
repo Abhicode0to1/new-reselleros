@@ -74,8 +74,8 @@ export default function MonthClosePage() {
           </p>
         </div>
         <div>
-          <label className="block text-xs font-medium text-ink-2 mb-1">Mahina</label>
-          <Input type="month" value={period} max={prevPeriod() > period ? prevPeriod() : period} onChange={(e) => setPeriod(e.target.value)} className="w-44" />
+          <label htmlFor="close-mahina" className="block text-xs font-medium text-ink-2 mb-1">Mahina</label>
+          <Input id="close-mahina" type="month" value={period} max={prevPeriod() > period ? prevPeriod() : period} onChange={(e) => setPeriod(e.target.value)} className="w-44" />
         </div>
       </div>
 

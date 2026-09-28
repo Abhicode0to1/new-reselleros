@@ -625,7 +625,7 @@ export default function ExpensesPage() {
           <input type="date" value={range.to} aria-label="To date"
             onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
             className="px-2 py-1 text-[13px] rounded-md border border-hairline bg-paper" />
-          <select value={catFilter}
+          <select aria-label="Category filter" value={catFilter}
             onChange={(e) => setCatFilter(e.target.value)}
             className="px-2 py-1 text-[13px] rounded-md border border-hairline bg-paper">
             <option value="">All categories</option>
@@ -633,7 +633,7 @@ export default function ExpensesPage() {
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
-          <select value={payeeFilter}
+          <select aria-label="Vendor / payee filter" value={payeeFilter}
             onChange={(e) => setPayeeFilter(e.target.value)}
             className="px-2 py-1 text-[13px] rounded-md border border-hairline bg-paper max-w-[180px]">
             <option value="">All vendors / payees</option>

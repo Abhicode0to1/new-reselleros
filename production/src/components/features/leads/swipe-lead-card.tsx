@@ -302,7 +302,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                   .filter((v): v is string => Boolean(v && v.trim()))
                   .map((v, i) => (
                     <span key={v} className="min-w-0 max-w-full truncate text-xs text-ink-3" title={v}>
-                      {i > 0 && <span className="text-ink-4"> · </span>}
+                      {i > 0 && <span className="text-ink-3"> · </span>}
                       {v}
                     </span>
                   ))}

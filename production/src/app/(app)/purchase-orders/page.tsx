@@ -170,7 +170,7 @@ export default function PurchaseOrdersPage() {
             ))}
           </div>
           <div className="w-72">
-            <Input
+            <Input aria-label="PO, customer, domain, vendor order ID"
               prefix={<Icon name="search" size={14} />}
               placeholder="PO, customer, domain, vendor order ID…"
               value={search}

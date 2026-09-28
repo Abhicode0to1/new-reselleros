@@ -294,11 +294,11 @@ export default function ProfitabilityPage() {
             })}
           </div>
           <div className="flex items-center gap-2 ml-auto flex-wrap">
-            <input type="date" value={range.from}
+            <input aria-label="From date" type="date" value={range.from}
               onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
               className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
             <span className="text-xs text-ink-3">to</span>
-            <input type="date" value={range.to}
+            <input aria-label="To date" type="date" value={range.to}
               onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
               className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
           </div>
