@@ -67,7 +67,13 @@ export async function runLeadFinder(admin: Admin, tenantId: string, profileId: s
 
   try {
     const cfg = await resolveGeminiConfig(admin, tenantId);
-    if (!cfg.apiKey) throw new Error("Gemini API key nahi hai — Settings → Integrations → AI mein daalo.");
+    if (!cfg.apiKey) {
+      // dev:local blanks every live key on purpose (scripts/dev-local.mjs), so on a laptop
+      // "go to Settings" sends people hunting for a key that was switched off deliberately.
+      throw new Error(process.env.NEXT_PUBLIC_APP_ENV === "local"
+        ? "Local mode (dev:local) mein AI band hai — live keys jaan-boojh kar band hoti hain. AI test karna ho to isi local app ki Settings → Integrations → AI mein apni Gemini key daalo."
+        : "Gemini API key nahi hai — Settings → Integrations → AI mein daalo.");
+    }
     const p: FinderProfile = { name: profile.name, cities: profile.cities, industries: profile.industries, company_size: profile.company_size, products: profile.products, must_have: profile.must_have, exclude: profile.exclude, daily_limit: profile.daily_limit };
     const known = await knownDomains(admin, tenantId);
 
