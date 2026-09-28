@@ -33,6 +33,8 @@ export const SECRET_COLUMNS = [
   // one bill, one domain reputation, and one tenant's spam complaint degrading
   // delivery for all of them.
   "resend_api_key",
+  // S34 — IndiaMART Lead Manager CRM key (migration 20260928151000).
+  "indiamart_crm_key",
 ] as const;
 
 const SECRET_SET = new Set<string>(SECRET_COLUMNS);

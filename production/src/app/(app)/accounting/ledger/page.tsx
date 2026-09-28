@@ -49,6 +49,7 @@ import {
   ledgerWhatsAppText, ledgerWhatsAppUrl, LEDGER_CSV_HEADERS,
 } from "@/lib/accounting/ledger-export";
 import { downloadCSV } from "@/lib/csv";
+import TallyDaybookButton from "@/components/features/accounting/tally-daybook-button";
 import { localDateISO } from "@/lib/leads/outcomes";
 
 /** The FY we are in now — the default window, because that is what a CA asks for. */
@@ -257,6 +258,10 @@ function LedgerPageInner() {
               <option value="month">This month</option>
             </select>
           </div>
+
+          {/* S34 — poori company ka day book (Sales + Receipt + Payment vouchers) is period ka.
+              Party chunne ki zaroorat nahi, isliye party wale buttons se alag. */}
+          <TallyDaybookButton period={period} companyName={me?.tenantName ?? ""} />
 
           {selected && statement && (
             <div className="flex items-center gap-1.5 ml-auto">

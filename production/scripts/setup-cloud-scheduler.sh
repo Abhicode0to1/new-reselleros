@@ -79,6 +79,10 @@ JOBS=(
   "resellersos-gbp-sync|30 2 * * *|/api/cron/gbp-sync|Google Business Profile reviews + performance sync"
   "resellersos-ads-sync|0 3 * * *|/api/cron/ads-sync|Google Ads + Meta Ads daily spend sync"
   "resellersos-lead-finder|30 3 * * *|/api/cron/lead-finder|AI Lead Finder — nightly prospect discovery"
+  # S34. Every 15 min, 08:00–21:45 IST — IndiaMART asks for >= 5 min between calls per key,
+  # and an enquiry answered within the hour is the one that converts. Harmless before any
+  # company saves a key: the route returns `disabled: true` without calling IndiaMART.
+  "resellersos-indiamart-leads|*/15 8-21 * * *|/api/cron/indiamart-leads|IndiaMART Lead Manager pull → leads"
   "resellersos-attendance-retention|0 2 * * *|/api/cron/attendance-retention|Erase attendance face images past retention"
   # Midnight IST, before the other jobs touch anything — a restore point of the
   # day that just ended, not of a day already half-modified by the 09:00 renewal
