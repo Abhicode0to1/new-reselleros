@@ -411,12 +411,12 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
           {/* MSME: micro/small vendor ka bill 45 din (likhit agreement na ho to 15) me na chuke
               to s.43B(h) us saal deduction rok deta hai. Udyam bharne se Aging page flag karta hai. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="Udyam no. (MSME, optional)" hint={udyamBad ? "Format: UDYAM-SS-00-0000000" : "MSME vendor ho to — 45-din payment rule track hota hai"}>
-              <Input value={udyam} onChange={(e) => setUdyam(e.target.value.toUpperCase())} placeholder="UDYAM-DL-01-0012345" maxLength={19} className="font-mono uppercase" />
+            <FormField htmlFor="vendors-udyam" label="Udyam no. (MSME, optional)" hint={udyamBad ? "Format: UDYAM-SS-00-0000000" : "MSME vendor ho to — 45-din payment rule track hota hai"}>
+              <Input id="vendors-udyam" value={udyam} onChange={(e) => setUdyam(e.target.value.toUpperCase())} placeholder="UDYAM-DL-01-0012345" maxLength={19} className="font-mono uppercase" />
             </FormField>
-            <FormField label="MSME category" hint={msmeCategory === "medium" ? "Medium par 43B(h) nahi lagta" : "Udyam certificate par likha hota hai"}>
+            <FormField htmlFor="vendors-msme-category" label="MSME category" hint={msmeCategory === "medium" ? "Medium par 43B(h) nahi lagta" : "Udyam certificate par likha hota hai"}>
               <Select value={msmeCategory || "none"} onValueChange={(v) => setMsmeCategory(v === "none" ? "" : (v as "micro" | "small" | "medium"))} disabled={!udyam.trim()}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger id="vendors-msme-category"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— not set —</SelectItem>
                   <SelectItem value="micro">Micro</SelectItem>

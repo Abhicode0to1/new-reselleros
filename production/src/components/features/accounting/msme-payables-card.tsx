@@ -36,7 +36,7 @@ export function MsmePayablesCard() {
           <div className="text-right">
             <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Past {MSME_LIMIT_DAYS} days</div>
             <div className={`font-serif text-2xl ${s.overDue > 0 ? "text-rose" : "text-ink"}`}>{rupee(s.overDue)}</div>
-            <div className="text-2xs text-ink-3">of {rupee(s.due)} due to MSME vendors</div>
+            <div className="text-xs text-ink-3">of {rupee(s.due)} due to MSME vendors</div>
           </div>
         )}
       </div>
@@ -69,7 +69,7 @@ export function MsmePayablesCard() {
                 <tr key={`${r.source}-${r.doc_id}`}>
                   <td className="py-2 pr-3">
                     <div className="font-medium text-ink">{r.vendor_name}</div>
-                    <div className="text-2xs text-ink-3 font-mono">
+                    <div className="text-xs text-ink-3 font-mono">
                       {r.udyam}{r.msme_category ? ` · ${r.msme_category}` : " · category not set — treated as covered"}
                     </div>
                   </td>

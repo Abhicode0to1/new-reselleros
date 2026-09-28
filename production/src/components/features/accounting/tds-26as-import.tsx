@@ -126,7 +126,7 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
                     checked={picked.has(m.receivable.id)}
                     onChange={(e) => setPicked((s) => { const n = new Set(s); if (e.target.checked) n.add(m.receivable.id); else n.delete(m.receivable.id); return n; })}
                   />
-                  <span className="flex-1 min-w-0 truncate">{m.receivable.customer_name} · <span className="font-mono text-2xs">{m.entry.tan}</span></span>
+                  <span className="flex-1 min-w-0 truncate">{m.receivable.customer_name} · <span className="font-mono text-xs">{m.entry.tan}</span></span>
                   <span className="text-ink-3 text-xs">{formatDate(m.entry.date)}{m.dayGap > 0 ? ` (±${m.dayGap}d)` : ""}</span>
                   <span className="font-mono">{rupee(m.receivable.tds_amount)}</span>
                 </label>
@@ -195,7 +195,7 @@ function Bucket({ tone, title, help, children }: {
   return (
     <section className="rounded-lg border border-hairline p-3">
       <div className="flex items-center gap-2 mb-1"><Badge kind={tone}>{title}</Badge></div>
-      <p className="text-2xs text-ink-3 mb-2">{help}</p>
+      <p className="text-xs text-ink-3 mb-2">{help}</p>
       <div className="divide-y divide-hairline">{children}</div>
     </section>
   );
@@ -208,7 +208,7 @@ function EntryBucket({ tone, title, entries, help }: {
     <Bucket tone={tone} title={`${title} (${entries.length})`} help={help}>
       {entries.map((e, i) => (
         <div key={`${e.tan}-${e.date}-${i}`} className="flex gap-3 py-1 text-sm">
-          <span className="flex-1 truncate">{e.deductorName ?? "—"} · <span className="font-mono text-2xs">{e.tan}</span>{e.booking ? ` · ${e.booking}` : ""}</span>
+          <span className="flex-1 truncate">{e.deductorName ?? "—"} · <span className="font-mono text-xs">{e.tan}</span>{e.booking ? ` · ${e.booking}` : ""}</span>
           <span className="text-ink-3">{formatDate(e.date)}</span>
           <span className="font-mono">{inr(e.tdsPaise)}</span>
         </div>

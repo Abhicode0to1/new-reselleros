@@ -107,7 +107,7 @@ export default function TrialBalancePage() {
                         <tr key={`${g}-${r.head}`} className={cn(g === "Difference" && "bg-amber-soft/20")}>
                           <td className="px-4 py-2">
                             <div className="text-ink">{r.head}{g === "Difference" && <Badge kind="warning" className="ml-2">derived</Badge>}</div>
-                            <div className="text-2xs text-ink-3">{r.source}</div>
+                            <div className="text-xs text-ink-3">{r.source}</div>
                           </td>
                           <td className="px-4 py-2 text-right font-mono">{r.debit ? rupee(r.debit) : ""}</td>
                           <td className="px-4 py-2 text-right font-mono">{r.credit ? rupee(r.credit) : ""}</td>
