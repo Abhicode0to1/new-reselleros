@@ -285,6 +285,11 @@ This was a live bug: "arrived today" showed nothing and "overdue" silently swall
 leads due today. Use `localDateISO()` from `lib/leads/outcomes.ts`, which formats from
 local date parts.
 
+**Since S21 (28 Sep 2026): use `@/lib/dates/ist`** — `istToday()`, `toIstDate(d)`, `fyBounds()`,
+`monthBounds()`, `addDaysISO()`, `formatIstDate()`. `localDateISO()` is only right in a browser
+set to IST; on Cloud Run (UTC) it is the same bug. In Pardeep's areas ESLint now fails a raw
+`toISOString().slice(0, 10)`.
+
 ---
 
 ## 7. Errors and blocks must say what to do next (CLAUDE.md §24)
@@ -1412,6 +1417,13 @@ adding an LLM, a wait, a cost and a failure mode.
 
 ## L31. Registering ONE more table in the generated Database type can collapse all of it
 *23 Aug 2026, adding `document_series` for the invoice-issue dialog.*
+
+> **S21 update (28 Sep 2026):** the collapse was a property of the HAND-WRITTEN type. The
+> Database type is now generated (`database.generated.ts`, all 152 tables incl.
+> `document_series`, with real `Relationships`) plus a thin overlay, and `tsc` is clean with
+> no depth errors. New tables need no untyped client — regenerate with
+> `node scripts/check-db-types.mjs --write`. The existing untyped handles (lib/ai/*,
+> api/invoices/series, …) still work; converting them is follow-up, owner by owner.
 
 `document_series` was missing from `src/lib/supabase/database.types.ts`, so reading
 `last_number` did not typecheck. The obvious fix — declare the Row type and add one line

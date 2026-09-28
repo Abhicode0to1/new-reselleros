@@ -85,7 +85,7 @@ export function useDisburseAdvance() {
       const supabase = createClient();
       const tenant_id = await getTenantId();
 
-      const { data, error } = await (supabase.from("expenses" as any) as any)
+      const { data, error } = await supabase.from("expenses")
         .insert({
           id: crypto.randomUUID(),
           tenant_id,
@@ -155,7 +155,7 @@ export function useSettleAdvance() {
   return useMutation({
     mutationFn: async (advance_id: string) => {
       const supabase = createClient();
-      const { error } = await (supabase.from("expenses" as any) as any)
+      const { error } = await supabase.from("expenses")
         .update({ notes: "[SETTLED] Employee advance closed", updated_at: new Date().toISOString() })
         .eq("id", advance_id);
 

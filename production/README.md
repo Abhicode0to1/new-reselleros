@@ -88,6 +88,24 @@ edited, renamed or out-of-order migration). Migrations are applied to production
 real history of production, but they cannot build a database from empty. A fresh database
 comes from `supabase/baseline.sql`, which `npm run setup` handles for you.
 
+**DB types are generated (S21).** After a migration, regenerate and commit them in the same
+commit:
+
+```bash
+node scripts/check-db-types.mjs --write   # needs the local supabase stack (npx supabase start)
+node scripts/check-db-types.mjs           # check only: exit 1 if the committed types are stale
+```
+
+It builds a throwaway database (`types_check_<pid>`) in the local docker Postgres from
+`baseline.sql` + every migration, runs the stack's own postgres-meta generator, diffs against
+`src/lib/supabase/database.generated.ts` (never edit that by hand), and drops the database. It
+never touches the shared local `postgres` database beyond a schema-only read of `auth`/`storage`,
+and never uses `--linked`. Not wired into CI — CI has no docker supabase stack.
+Import types from `@/lib/supabase/database.types` as before: that file is a thin overlay for what
+the generator cannot express (CHECK-constrained text unions, jsonb shapes, RPC return shapes).
+`OverlayCheck` in it fails `tsc` if an overlay entry names a column/table/function that no
+longer exists.
+
 ---
 
 ## 📂 What's in this folder

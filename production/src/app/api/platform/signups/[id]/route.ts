@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isPlatformAdmin } from "@/lib/platform";
+import type { TablesUpdate } from "@/lib/supabase/database.types";
 
 // DELETE handler: Delete reseller workspace
 export async function DELETE(
@@ -83,7 +84,7 @@ export async function PATCH(
 
   const admin = createAdminClient();
 
-  const updates: Record<string, any> = {};
+  const updates: TablesUpdate<"tenants"> = {};
   if (name !== undefined) updates.name = name.trim();
   if (tier !== undefined) updates.tier = tier;
   if (gstin !== undefined) updates.gstin = gstin ? gstin.trim().toUpperCase() : null;
@@ -95,7 +96,7 @@ export async function PATCH(
 
   const { data: updatedTenant, error: updateErr } = await admin
     .from("tenants")
-    .update(updates as any)
+    .update(updates)
     .eq("id", tenantId)
     .select()
     .single();

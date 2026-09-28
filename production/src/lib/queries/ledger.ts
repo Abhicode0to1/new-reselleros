@@ -119,7 +119,7 @@ export function useLedgerVendors() {
     queryKey: ["ledger", "vendors"],
     queryFn: async (): Promise<LedgerVendor[]> => {
       const supabase = createClient();
-      const res = await supabase.rpc("report_ledger_vendors", {});
+      const res = await supabase.rpc("report_ledger_vendors");   // no-arg fn: generated Args = never
       return ledgerVendorsFromRpc(rpcValueOrThrow<Omit<LedgerVendor, "isPayroll">[]>(res, "report_ledger_vendors"));
     },
     staleTime: 60_000,

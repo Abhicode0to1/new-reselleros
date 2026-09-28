@@ -14,10 +14,8 @@ import { requireTenantId } from "@/lib/queries/require-tenant";
 import { isMarketingCategory } from "@/lib/marketing/ad-channels";
 import type { ToolState, ToolStatus } from "@/lib/marketing/tool-catalog";
 
-/* These tables are newer than the generated types (database.types.ts is shared and kept
-   minimal), so they are read through an untyped handle with the row shape stated here. */
-type Untyped = { from: (t: string) => any };  // eslint-disable-line @typescript-eslint/no-explicit-any
-const db = () => createClient() as unknown as Untyped & ReturnType<typeof createClient>;
+/* S21: marketing_tools / tracking_links / email_suppressions ab generated types me hain — typed client. */
+const db = () => createClient();
 
 const TOOLS_KEY = ["marketing-tools"] as const;
 const LINKS_KEY = ["tracking-links"] as const;

@@ -14,11 +14,12 @@ describe("inbox list columns", () => {
   });
 
   it("still carries every other column the page reads", () => {
-    /* Every key of InboundEmailRow except body_html — read from the type itself so a new
-       column added there and forgotten here fails this test. */
-    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
-    const block = /export type InboundEmailRow = \{([\s\S]*?)\n\};/.exec(types)![1];
-    const keys = [...block.matchAll(/^\s{2}([a-z_]+)\s*:/gm)].map((m) => m[1]);
+    /* Every column of inbound_emails except body_html — read from the GENERATED types (S21:
+       InboundEmailRow is now an alias of it) so a new column added by a migration and
+       forgotten here fails this test. */
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.generated.ts"), "utf8");
+    const block = /\n {6}inbound_emails: \{\n {8}Row: \{([\s\S]*?)\n {8}\}/.exec(types)![1];
+    const keys = [...block.matchAll(/^\s{10}([a-z_]+)\s*:/gm)].map((m) => m[1]);
     expect(keys.length).toBeGreaterThan(20);
     expect(cols.sort()).toEqual(keys.filter((k) => k !== "body_html").sort());
   });
