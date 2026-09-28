@@ -765,9 +765,14 @@ with Razorpay before the first live mandate.
       yearly and ₹118 · ₹295 · ₹441 monthly; cart Subtotal ₹600 · GST ₹108 · Total ₹708; the
       running server refuses ₹599.88 with `409 PRICE_CHANGED`. A successful payment was NOT
       run, because that creates a Razorpay order.
-- [ ] **DMS still holds a COPY of ResellerOS's hosting prices** (`config/hosting-plans.ts`,
-      pinned equal to `LANDING_PLANS` by a DMS test). Reading them over the engine API would
-      remove the copy.
+- [x] **DONE 28 Sep 2026 (owner: "Read prices live from ResellerOS"; ResellerOS `3c6b01f6`, DMS
+      `46092c10`).** ResellerOS publishes `GET /api/public/hosting-prices`, computed by the same
+      `hostingRate` its checkout charges with; DMS's `config/hosting-plans.ts` carries no price and
+      every DMS price (Buy cards, trial line, checkout after-trial figure, cart upsell, upgrade
+      estimate, admin seeding) reads the live table, with no fallback — without it nothing is priced.
+      The provisioner's price → package guess was removed with it. **Browser-verified locally:** the
+      Buy dialog shows ₹600 + GST = ₹708 yearly and ₹100 + GST = ₹118 monthly for Starter, from one
+      200 on `/api/v1/public/hosting-prices`. The "prices unavailable" state is unit-tested only.
 - [ ] **Existing DMS Razorpay hosting plans and subscriptions** (`hostingplans.razorpayPlans`)
       still carry the old amounts. DMS no longer creates new ones, and there are no live
       customers (decision 6), but any test subscription left in the Razorpay dashboard should
@@ -1311,7 +1316,10 @@ new design's guards assume they are fixed.
       route is exactly the L3 shape (a second run is not idempotent) and it needs its own
       thinking.
 
-- [ ] **Domain renewal has no checkout, so the Renew button cannot work** —
+- [x] **CLOSED 28 Sep 2026 — superseded.** The DMS route below was deleted (round 4), a domain renewal is
+      priced by ResellerOS at ResellerClub's live price (`lib/domains/renewal.ts`) and, since today, paid
+      inside the DMS panel (`/api/dms/renewal-order`). Original entry, kept for history:
+      **Domain renewal has no checkout, so the Renew button cannot work** —
       `app/api/domains/renew/route.ts`, `components/DomainRenewalModal.tsx` **[verified]**
       Consequence of the fix above, and the reason it is safe: the route now demands a
       verified payment, and **nothing in the app can produce one for a domain renewal.**
