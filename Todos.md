@@ -772,7 +772,10 @@ with Razorpay before the first live mandate.
       estimate, admin seeding) reads the live table, with no fallback — without it nothing is priced.
       The provisioner's price → package guess was removed with it. **Browser-verified locally:** the
       Buy dialog shows ₹600 + GST = ₹708 yearly and ₹100 + GST = ₹118 monthly for Starter, from one
-      200 on `/api/v1/public/hosting-prices`. The "prices unavailable" state is unit-tested only.
+      200 on `/api/v1/public/hosting-prices`. **"Prices unavailable" browser-verified 28 Sep** with ResellerOS
+      stopped: DMS's price read answers 503, the dialog says prices could not be loaded, all three cards read
+      "Price not available right now" with no ₹ figure, and Buy and the trial are disabled; prices return as
+      soon as ResellerOS answers (a failure is not cached).
 - [ ] **Existing DMS Razorpay hosting plans and subscriptions** (`hostingplans.razorpayPlans`)
       still carry the old amounts. DMS no longer creates new ones, and there are no live
       customers (decision 6), but any test subscription left in the Razorpay dashboard should
@@ -1953,8 +1956,9 @@ Consequences accepted with the decision:
       stops on solid buttons, which have no token. Two regressions were caught by the screenshots and fixed:
       a mid-grey button fill mapped to a light token (white text lost contrast), and the script rewrote two
       comments that record OLD class names (restored in `fc1d13ac`; the script now leaves such comments alone).
-      Not seen on screen: coloured states that need data this local account lacks (DNS records, orders,
-      tickets). Original entry follows.
+      Not seen on screen: coloured states that need data this local account lacks (DNS records, orders).
+      **Tickets seen 28 Sep:** two local test tickets (domain, technical) — list and detail readable, the
+      category hues distinct as intended, no page errors; the tickets were deleted afterwards. Original entry follows.
 - **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
       · [x] **Customer panel (`app/dashboard`) converted 28 Sep 2026 (DMS `8590e845`).** 156 lines in 12
         files, by one mapping: green → emerald, red → rose, amber/yellow/orange → amber, blue/indigo/
