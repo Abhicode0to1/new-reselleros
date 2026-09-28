@@ -158,6 +158,7 @@ describe("every writer of a sent quote is accounted for", () => {
     "send-quote-dialog.tsx":     "response type from the send API; the ROUTE does the writing",
     "send.ts":                   "email delivery status, not a quote",
     "client.ts":                 "WhatsApp message status, not a quote",
+    "whatsapp-reminders.server.ts": "S28 WhatsApp reminder LOG status, not a quote",
     "database.types.ts":         "generated types",
   };
 

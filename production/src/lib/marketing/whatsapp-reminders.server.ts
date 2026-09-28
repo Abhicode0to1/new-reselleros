@@ -13,6 +13,7 @@
  * `.eq("tenant_id", …)`, and that line is the boundary.
  */
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendWhatsApp } from "@/lib/whatsapp/client";
 import { WhatsAppNotConfiguredError } from "@/lib/whatsapp/send-failure";
@@ -174,8 +175,8 @@ export function createReminderSender(deps: ReminderDeps = defaultDeps()): Remind
 
 /* ─── The real store ─────────────────────────────────────────────────────── */
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- untyped handle, see header */
-type Untyped = { from: (t: string) => any };
+/* Schema-less client: same untyped handle as lib/contacts/primary.ts (see header). */
+type Untyped = Pick<SupabaseClient, "from">;
 
 export function supabaseReminderStore(admin: ReturnType<typeof createAdminClient>): ReminderStore {
   const db = admin as unknown as Untyped;
@@ -229,7 +230,6 @@ export function supabaseReminderStore(admin: ReturnType<typeof createAdminClient
     },
   };
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function defaultDeps(): ReminderDeps {
   const admin = createAdminClient();
