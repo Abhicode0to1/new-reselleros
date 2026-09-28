@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { rupee, cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 interface LeadsRightRailProps {
   leads: Lead[];
@@ -66,7 +67,7 @@ export function LeadsRightRail({
   className,
 }: LeadsRightRailProps) {
   const isBelow = orientation === "below";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const open  = leads.filter((l) => l.stage !== "won" && l.stage !== "lost");
 
   // ── Today's plan ─────────────────────────────────────

@@ -38,6 +38,7 @@ import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { itcEligibility } from "@/lib/gst/itc";
 import { tdsDecision, panFromGstin } from "@/lib/accounting/tds-deductor";
 import { TDS_SECTION_RATES } from "@/lib/accounting/tds-rates";
+import { istToday } from "@/lib/dates/ist";
 
 const CATEGORIES = ["Marketing", "Advertising", "Software / SaaS", "Hosting", "Subscriptions", "Other"];
 const METHODS = ["bank_transfer", "upi", "card", "cheque", "cash"];
@@ -234,7 +235,7 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
   const { data: accounts } = useBankAccounts();
   const activeAccounts = (accounts ?? []).filter((a) => a.is_active !== false);
   const { data: vendors } = useVendors();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const [vendor, setVendor] = React.useState("");
   const [vendorId, setVendorId] = React.useState<string | null>(null);
   const [vendorOpen, setVendorOpen] = React.useState(false);
@@ -384,7 +385,7 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
 
 function ConsumeDialog({ advance, onClose }: { advance: PrepaidAdvance; onClose: () => void }) {
   const consume = useConsumePrepaidAdvance();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const [amount, setAmount] = React.useState(String(advance.balance));
   const [gst, setGst] = React.useState("");
   const [date, setDate] = React.useState(today);

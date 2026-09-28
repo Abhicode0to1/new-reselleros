@@ -36,6 +36,7 @@ import {
   type TdsReceivable,
   type TdsStatus,
 } from "@/lib/queries/tds-receivable";
+import { istToday } from "@/lib/dates/ist";
 
 const STATUS_COLOR: Record<TdsStatus, "rose" | "emerald" | "amber" | "slate" | "indigo"> = {
   pending_cert:  "rose",
@@ -169,7 +170,7 @@ function reconcile(rows26AS: ParsedRow[], systemRows: TdsReceivable[]): MatchRes
 // ────────────────────────────────────────────────────────────────
 
 export default function TdsYearEndPage() {
-  const currentFY = fiscalYearFromDate(new Date().toISOString().slice(0, 10));
+  const currentFY = fiscalYearFromDate(istToday());
   const [fy, setFy] = React.useState<string>(currentFY);
   const { data: rows = [], isLoading } = useTdsReceivables({ fiscalYear: fy });
 
@@ -272,7 +273,7 @@ export default function TdsYearEndPage() {
       return;
     }
     downloadCSV(
-      `tds-${fy}-${new Date().toISOString().slice(0, 10)}.csv`,
+      `tds-${fy}-${istToday()}.csv`,
       [
         "TDS ID", "Date", "Customer", "TAN", "Section", "Rate %",
         "Pre-GST", "TDS amount", "Net paid", "Fiscal year",
@@ -340,7 +341,7 @@ export default function TdsYearEndPage() {
     }
     try {
       const supabase = createClient();
-      const today = new Date().toISOString().slice(0, 10);
+      const today = istToday();
       const { error } = await supabase
         .from("tds_receivable")
         .update({

@@ -30,6 +30,7 @@ import type { Lead } from "@/lib/supabase/database.types";
 import type { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import type { SalesFolder } from "@/lib/leads/folders";
 import type { StageMeta } from "@/lib/leads/stage-meta";
+import { istToday } from "@/lib/dates/ist";
 
 type TeamMember = NonNullable<ReturnType<typeof useTeamTree>["data"]>[number];
 type Priority = "low" | "medium" | "high";
@@ -231,7 +232,7 @@ export function LeadsToolbar({
                 <Icon name="download" size={14} className="text-ink-3" /> Import CSV
               </DropdownMenuItem>
               {/* Data-portability (audit B7): saari leads, jaisi darj hain. */}
-              <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => { downloadCSV(`leads-${new Date().toISOString().slice(0, 10)}.csv`, [...LEADS_CSV_HEADERS], leadsCsvRows(leads ?? [])); toast.success(`Exported ${(leads ?? []).length} leads to CSV`); }}>
+              <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => { downloadCSV(`leads-${istToday()}.csv`, [...LEADS_CSV_HEADERS], leadsCsvRows(leads ?? [])); toast.success(`Exported ${(leads ?? []).length} leads to CSV`); }}>
                 <Icon name="upload" size={14} className="text-ink-3" /> Export CSV
               </DropdownMenuItem>
               <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => setCampaignOpen(true)}>

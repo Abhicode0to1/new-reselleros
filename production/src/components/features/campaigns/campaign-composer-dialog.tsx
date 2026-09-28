@@ -25,6 +25,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { CampaignTemplateRow } from "@/lib/supabase/database.types";
 import Link from "next/link";
 import { useSaveTemplate, unknownVariables } from "@/lib/queries/campaign-templates";
+import { addDaysISO, istToday } from "@/lib/dates/ist";
 
 interface Props {
   open: boolean;
@@ -82,9 +83,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
   const [offerCode, setOfferCode]         = React.useState("");
   const [offerDiscount, setOfferDiscount] = React.useState("10");
   const [offerExpires, setOfferExpires]   = React.useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 14);
-    return d.toISOString().slice(0, 10);
+    return addDaysISO(istToday(), 14);
   });
 
   // AI generator state

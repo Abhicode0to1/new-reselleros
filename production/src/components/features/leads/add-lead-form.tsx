@@ -61,6 +61,7 @@ import { sourceOptions } from "@/lib/leads/lead-sources";
 import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
 import { useCustomers } from "@/lib/queries/customers";
 import type { Lead, LeadPriority } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 const STAGES = [
   { value: "new",     label: "New" },
@@ -1161,7 +1162,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               <Input
                 id="follow_up_date"
                 type="date"
-                min={new Date().toISOString().slice(0, 10)}
+                min={istToday()}
                 {...register("follow_up_date")}
               />
               <p className="mt-1 text-xs text-ink-3">

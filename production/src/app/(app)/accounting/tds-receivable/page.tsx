@@ -35,6 +35,7 @@ import {
 } from "@/lib/queries/tds-receivable";
 import { TdsDetailDialog } from "@/components/features/accounting/tds-detail-dialog";
 import { Tds26asImport } from "@/components/features/accounting/tds-26as-import";
+import { istToday } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Status color mapping
@@ -54,7 +55,7 @@ const STATUS_COLOR: Record<TdsStatus, "rose" | "emerald" | "amber" | "slate" | "
 // ────────────────────────────────────────────────────────────────
 
 export default function TdsReceivablePage() {
-  const currentFY = fiscalYearFromDate(new Date().toISOString().slice(0, 10));
+  const currentFY = fiscalYearFromDate(istToday());
   const [fy, setFy] = React.useState<string>(currentFY);
   const [activeTab, setActiveTab] = React.useState<TdsStatus | "all">("all");
   const [selected, setSelected]   = React.useState<TdsReceivable | null>(null);

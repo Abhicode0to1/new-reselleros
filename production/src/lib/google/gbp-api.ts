@@ -20,6 +20,7 @@ import {
   GBP_METRICS, GBP_METRIC_LAG_DAYS, GBP_METRIC_REFRESH_DAYS, GBP_METRIC_BACKFILL_DAYS,
   metricRowsFromPayload, starToNumber, type PerformancePayload,
 } from "@/lib/marketing/gbp";
+import { istToday, addDaysISO } from "@/lib/dates/ist";
 
 type Admin = SupabaseClient<Database>;
 
@@ -152,7 +153,7 @@ function ymd(iso: string): { year: number; month: number; day: number } {
   return { year: y, month: m, day: d };
 }
 function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10);
+  return addDaysISO(iso, n);
 }
 
 /** `location` = "locations/{id}". Google caps one call at 18 months, so the caller chunks. */
@@ -181,7 +182,7 @@ export interface GbpSyncResult { locations: number; reviews: number; metricRows:
 export async function syncTenantGbp(admin: Admin, userId: string, tenantId: string, trigger: "manual" | "cron" | "connect"): Promise<GbpSyncResult> {
   const { data: run } = await admin.from("gbp_sync_runs").insert({ tenant_id: tenantId, trigger }).select("id").single();
   const result: GbpSyncResult = { locations: 0, reviews: 0, metricRows: 0, errors: [] };
-  const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);   // IST calendar day
+  const today = istToday();   // IST calendar day
   try {
     const token = await getFreshGbpAccessToken(admin, userId);
     const accounts = await listAccounts(token);
@@ -246,13 +247,10 @@ export async function syncTenantGbp(admin: Admin, userId: string, tenantId: stri
     // review-request flow reads it, if the owner never pasted one by hand.
     const { data: firstLoc } = await admin.from("gbp_locations").select("new_review_uri").eq("tenant_id", tenantId).not("new_review_uri", "is", null).limit(1).maybeSingle();
     if (firstLoc?.new_review_uri) {
-      // marketing_tools is newer than the shared generated types (same untyped handle lib/queries/marketing-hub.ts uses).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      type Untyped = { from: (t: string) => any };
-      const tools = (admin as unknown as Untyped).from("marketing_tools");
-      const { data: tool } = await tools.select("review_link").eq("tenant_id", tenantId).eq("tool_key", "google-business").maybeSingle();
-      if (!(tool as { review_link?: string | null } | null)?.review_link) {
-        await (admin as unknown as Untyped).from("marketing_tools").upsert(
+      // marketing_tools ab generated types me hai (S21) — typed client; tenant filter wahi.
+      const { data: tool } = await admin.from("marketing_tools").select("review_link").eq("tenant_id", tenantId).eq("tool_key", "google-business").maybeSingle();
+      if (!tool?.review_link) {
+        await admin.from("marketing_tools").upsert(
           { tenant_id: tenantId, tool_key: "google-business", name: "Google Business Profile", status: "active", review_link: firstLoc.new_review_uri, updated_at: new Date().toISOString() },
           { onConflict: "tenant_id,tool_key" },
         );

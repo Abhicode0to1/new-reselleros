@@ -45,6 +45,7 @@ import { netProfitView } from "@/lib/accounting/pnl-bound";
 import { ProjectMarginCard } from "@/components/features/accounting/project-margin-card";
 import { ProjectCostDialog } from "@/components/features/accounting/project-cost-dialog";
 import { ExpenseReportCard } from "@/components/features/accounting/expense-report-card";
+import { utcDateISO } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Range helpers — all IST-safe (Indian FY runs Apr 1 → Mar 31)
@@ -56,7 +57,7 @@ function istToday(): Date {
 }
 
 function yyyymmdd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return utcDateISO(d);
 }
 
 /** Indian fiscal year start (Apr 1) of the FY containing `d`. */

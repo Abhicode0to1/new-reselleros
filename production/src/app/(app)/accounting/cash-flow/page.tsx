@@ -26,6 +26,7 @@ import { Icon } from "@/components/ui/icon";
 import { CashFlowMonthSheet } from "@/components/features/accounting/cash-flow-month-sheet";
 import { cashFlowByActivity, type CashFlowTxn } from "@/lib/accounting/cash-flow-lines";
 import { monthRows, runway as computeRunway, type MonthRow } from "@/lib/accounting/cash-flow-summary";
+import { utcDateISO } from "@/lib/dates/ist";
 
 type RangeKey = "month" | "fy" | "12m" | "all";
 
@@ -35,7 +36,7 @@ function fyStart(d: Date): Date {
 }
 function rangeBounds(key: RangeKey): { from: string | null; to: string | null; label: string } {
   const now = new Date(Date.now() + 5.5 * 3600 * 1000);
-  const iso = (dt: Date) => dt.toISOString().slice(0, 10);
+  const iso = utcDateISO;   // `now` pehle se IST-shifted hai
   const today = iso(now);
   if (key === "month") return { from: iso(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))), to: today, label: "This month" };
   if (key === "fy")    return { from: iso(fyStart(now)), to: today, label: "This financial year" };

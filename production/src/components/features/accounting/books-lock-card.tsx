@@ -19,6 +19,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useUpdateTenant } from "@/lib/queries/tenant";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { formatDate } from "@/lib/utils";
+import { istToday } from "@/lib/dates/ist";
 
 const KEY = ["books-lock"] as const;
 
@@ -45,7 +46,7 @@ export function BooksLockCard() {
   const [draft, setDraft] = React.useState<string>("");
   React.useEffect(() => { if (lock.data !== undefined) setDraft(lock.data ?? ""); }, [lock.data]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const current = lock.data ?? null;
 
   async function save(next: string | null) {

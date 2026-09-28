@@ -12,6 +12,8 @@
  * refuses to offer it while an earlier step is red.
  */
 
+import { utcDateISO } from "@/lib/dates/ist";
+
 export type StepKind = "auto" | "manual";
 export type StepStatus = "done" | "todo" | "na" | "warn";
 
@@ -73,7 +75,7 @@ export function isQuarterEnd(period: string): boolean {
 
 export function monthEndOf(period: string): string {
   const [y, m] = period.split("-").map(Number);
-  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  return utcDateISO(new Date(Date.UTC(y, m, 0)));
 }
 
 export interface MonthClose {

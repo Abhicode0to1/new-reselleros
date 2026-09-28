@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateTask } from "@/lib/queries/tasks";
+import { istToday } from "@/lib/dates/ist";
 
 export type LeaveType = "cl" | "sl" | "wfh" | "regularization";
 
@@ -32,8 +33,8 @@ export function LeaveRequestDialog({
 }: LeaveRequestDialogProps) {
   const createTask = useCreateTask();
   const [leaveType, setLeaveType] = React.useState<LeaveType>("cl");
-  const [fromDate, setFromDate] = React.useState(() => new Date().toISOString().slice(0, 10));
-  const [toDate, setToDate] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [fromDate, setFromDate] = React.useState(() => istToday());
+  const [toDate, setToDate] = React.useState(() => istToday());
   const [reason, setReason] = React.useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {

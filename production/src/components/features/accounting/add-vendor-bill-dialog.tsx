@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useCreateVendorBill, uploadBillAttachment, VENDOR_BILL_CATEGORIES } from "@/lib/queries/vendor-bills";
 import { useVendors, ensureVendor } from "@/lib/queries/vendors";
+import { istToday } from "@/lib/dates/ist";
 
 const schema = z.object({
   vendor_name:  z.string().min(2, "Vendor name required"),
@@ -99,7 +100,7 @@ export function AddVendorBillDialog({
   onCreated?: (billId: string) => void;
 }) {
   const create = useCreateVendorBill();
-  const today  = new Date().toISOString().slice(0, 10);
+  const today  = istToday();
 
   // Vendor master autocomplete — pick an existing supplier (fills GSTIN +
   // category) or type a new name (auto-added to Vendors on save).

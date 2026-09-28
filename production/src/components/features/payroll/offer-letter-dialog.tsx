@@ -21,9 +21,10 @@ import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { rupee, formatDate } from "@/lib/utils";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 const DEFAULT_TERMS =

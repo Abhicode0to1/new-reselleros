@@ -23,6 +23,7 @@ import { StatStrip } from "@/components/shared/stat-strip";
 import { Icon } from "@/components/ui/icon";
 import { rupee, formatDate } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { utcDateISO } from "@/lib/dates/ist";
 
 type RangeKey = "month" | "fy" | "12m" | "all";
 
@@ -47,7 +48,7 @@ function fyStart(d: Date): Date {
 
 function rangeBounds(key: RangeKey): { from: string | null; to: string | null; label: string } {
   const now = new Date(Date.now() + 5.5 * 3600 * 1000); // IST
-  const iso = (dt: Date) => dt.toISOString().slice(0, 10);
+  const iso = utcDateISO;   // `now` pehle se IST-shifted hai
   const todayIso = iso(now);
   if (key === "month") {
     const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));

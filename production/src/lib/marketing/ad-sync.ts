@@ -8,17 +8,18 @@ import type { Database } from "@/lib/supabase/database.types";
 import { AD_REFRESH_DAYS, AD_BACKFILL_DAYS, type AdSpendRow } from "@/lib/marketing/ad-platforms";
 import { getFreshGoogleAdsAccessToken, fetchCampaignSpend } from "@/lib/google/google-ads-api";
 import { fetchMetaCampaignSpend } from "@/lib/meta/meta-ads-api";
+import { istToday, addDaysISO } from "@/lib/dates/ist";
 
 type Admin = SupabaseClient<Database>;
 
 export interface AdSyncResult { accounts: number; rowsWritten: number; errors: string[] }
 
-function addDays(iso: string, n: number): string { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function addDays(iso: string, n: number): string { return addDaysISO(iso, n); }
 
 export async function syncTenantAds(admin: Admin, tenantId: string, trigger: "manual" | "cron" | "connect"): Promise<AdSyncResult> {
   const { data: run } = await admin.from("ad_sync_runs").insert({ tenant_id: tenantId, trigger }).select("id").single();
   const result: AdSyncResult = { accounts: 0, rowsWritten: 0, errors: [] };
-  const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
+  const today = istToday();
   try {
     const { data: accounts, error } = await admin.from("ad_accounts").select("*").eq("tenant_id", tenantId).eq("enabled", true);
     if (error) throw new Error(error.message);

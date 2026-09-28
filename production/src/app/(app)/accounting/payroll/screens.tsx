@@ -54,28 +54,18 @@ import { EmployeeDetailDrawer } from "@/components/features/payroll/employee-det
 import { OfferLetterDialog } from "@/components/features/payroll/offer-letter-dialog";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { SalaryBreakdownDialog } from "@/components/features/accounting/salary-breakdown-dialog";
+import { istToday as todayISO, istMonth as currentPeriod, monthBounds, addDaysISO, fyBounds, utcDateISO } from "@/lib/dates/ist";
 
-function todayISO(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-function currentPeriod(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 7); // YYYY-MM
-}
 /** Previous month (YYYY-MM) — payroll is usually run for the month just ended. */
 function prevPeriod(): string {
-  const d = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  d.setUTCDate(1);
-  d.setUTCMonth(d.getUTCMonth() - 1);
-  return d.toISOString().slice(0, 7);
+  return addDaysISO(monthBounds(currentPeriod()).start, -1).slice(0, 7);
 }
 function fmtTimeIST(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
 }
 function fyStartISO(): string {
-  const d = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  const y = d.getUTCMonth() < 3 ? d.getUTCFullYear() - 1 : d.getUTCFullYear();
-  return `${y}-04-01`;
+  return fyBounds().start;
 }
 
 /**
@@ -987,7 +977,7 @@ export function PayrollTab() {
         ? new Date(e.joining_date + "T00:00:00Z") : monthStart;
       let expected = 0;
       for (const d = new Date(rangeStart); d <= rangeEnd; d.setUTCDate(d.getUTCDate() + 1)) {
-        const iso = d.toISOString().slice(0, 10);
+        const iso = utcDateISO(d);
         if (d.getUTCDay() !== 0 && !holidaySet.has(iso)) expected++;
       }
       return { present: presentByEmp.get(e.id)?.size ?? 0, expected };
@@ -1566,7 +1556,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
     nationalHolidaysForYear(yy).forEach((d) => holidaySet.add(d));
     let expected = 0, sundays = 0, holidays = 0;
     for (const d = new Date(rangeStart); d <= rangeEnd; d.setUTCDate(d.getUTCDate() + 1)) {
-      const iso = d.toISOString().slice(0, 10);
+      const iso = utcDateISO(d);
       if (d.getUTCDay() === 0) sundays++;            // weekly off — paid, never LOP
       else if (holidaySet.has(iso)) holidays++;      // Sunday/holiday clash counts once as Sunday
       else expected++;                                // working day
@@ -2004,7 +1994,7 @@ function LeaveDialog({ employees, onClose }: { employees: Employee[]; onClose: (
     [Number(from.slice(0, 4)), Number(to.slice(0, 4))].forEach((y) => nationalHolidaysForYear(y).forEach((d) => holidaySet.add(d)));
     let n = 0;
     for (const d = new Date(from + "T00:00:00Z"); d <= new Date(to + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1)) {
-      const iso = d.toISOString().slice(0, 10);
+      const iso = utcDateISO(d);
       if (d.getUTCDay() !== 0 && !holidaySet.has(iso)) n++;
     }
     return n;

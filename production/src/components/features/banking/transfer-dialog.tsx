@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useRecordTransfer, type BankAccountRow } from "@/lib/queries/bank";
+import { istToday } from "@/lib/dates/ist";
 
 const schema = z.object({
   amount:  z.coerce.number().int().min(1, "Amount required"),
@@ -67,7 +68,7 @@ export function TransferDialog({ open, onOpenChange, accounts, defaultFromId, de
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { amount: 0, txnDate: new Date().toISOString().slice(0, 10), note: "" },
+    defaultValues: { amount: 0, txnDate: istToday(), note: "" },
   });
 
   React.useEffect(() => {
@@ -77,7 +78,7 @@ export function TransferDialog({ open, onOpenChange, accounts, defaultFromId, de
       const firstCash = accounts.find((a) => a.account_type === "cash");
       setFromId(defaultFromId ?? firstBank?.id ?? "");
       setToId(defaultToId ?? firstCash?.id ?? "");
-      reset({ amount: 0, txnDate: new Date().toISOString().slice(0, 10), note: "" });
+      reset({ amount: 0, txnDate: istToday(), note: "" });
     }
   }, [open, accounts, defaultFromId, defaultToId, reset]);
 

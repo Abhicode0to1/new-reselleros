@@ -38,6 +38,7 @@ import { Icon } from "@/components/ui/icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { rupee, cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 export type LeadsDueFilter = "all" | "today" | "overdue" | "hot";
 
@@ -80,7 +81,7 @@ export function LeadsInsightBand({
   onToggleStage,
 }: LeadsInsightBandProps) {
   // Time bounds — computed once per render (data set is small).
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const monthStartDate = new Date();
   monthStartDate.setDate(1);
   monthStartDate.setHours(0, 0, 0, 0);

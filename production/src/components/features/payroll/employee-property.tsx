@@ -15,8 +15,9 @@ import { rupee, formatDate, cn } from "@/lib/utils";
 import { useEmployeeAssets, useIssueEmployeeAsset, useReturnEmployeeAsset, useDeleteEmployeeAsset, useOffboardingFacts, type EmployeeAsset } from "@/lib/queries/employee-assets";
 import { useFixedAssets } from "@/lib/queries/fixed-assets";
 import { ASSET_KINDS, RETURN_LABEL, holdings, offboardingChecklist, type AssetKind, type ReturnCondition } from "@/lib/payroll/employee-assets";
+import { istToday } from "@/lib/dates/ist";
 
-function todayIso(): string { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10); }
+function todayIso(): string { return istToday(); }
 
 export function EmployeeProperty({ employee }: { employee: { id: string; name: string; is_active: boolean } }) {
   const { data: rows } = useEmployeeAssets(employee.id);

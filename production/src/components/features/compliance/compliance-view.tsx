@@ -30,6 +30,7 @@ import {
 import {
   useComplianceLog, toFiledMap, useMarkComplianceFiled, useUnmarkComplianceFiled,
 } from "@/lib/queries/compliance";
+import { istToday } from "@/lib/dates/ist";
 
 const STATUS_META: Record<ComplianceStatus, { label: string; cls: string; icon: string }> = {
   overdue:  { label: "Overdue",  cls: "bg-rose/10 text-rose",          icon: "alert" },
@@ -285,7 +286,7 @@ function MarkFiledDialog({
   onClose: () => void;
   onSubmit: (vals: { filedDate: string; reference: string; notes: string }) => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const [filedDate, setFiledDate] = React.useState(today);
   const [reference, setReference] = React.useState("");
   const [notes, setNotes] = React.useState("");

@@ -30,6 +30,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
 import type { LeadsDueFilter } from "./leads-insight-band";
+import { istToday } from "@/lib/dates/ist";
 
 interface LeadsTodayStripProps {
   leads: Lead[];
@@ -38,7 +39,7 @@ interface LeadsTodayStripProps {
 }
 
 export function LeadsTodayStrip({ leads, dueFilter, onFilterDue }: LeadsTodayStripProps) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const open  = leads.filter((l) => l.stage !== "won" && l.stage !== "lost");
 
   // ── Counts ─────────────────────────────────────────────────

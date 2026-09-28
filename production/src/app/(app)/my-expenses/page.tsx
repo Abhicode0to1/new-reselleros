@@ -28,9 +28,10 @@ import { useEmployeeAdvances, useRecordAdvanceExpense, type EmployeeAdvance } fr
 import { EXPENSE_CATEGORIES } from "@/lib/queries/expenses";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 export default function MyExpensesPage() {

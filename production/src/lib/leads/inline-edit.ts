@@ -9,6 +9,8 @@
  */
 
 /** Money is whole rupees everywhere in this codebase (see docs/ACCOUNTING-AUDIT). */
+import { utcDateISO } from "@/lib/dates/ist";
+
 export type ParseResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: string };
@@ -72,7 +74,7 @@ export function parseFollowUpDate(raw: string): ParseResult<string | null> {
   const d = new Date(`${s}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return { ok: false, error: "That date doesn't exist" };
   // Round-trip guards against 2026-02-31, which Date happily rolls forward.
-  if (d.toISOString().slice(0, 10) !== s) return { ok: false, error: "That date doesn't exist" };
+  if (utcDateISO(d) !== s) return { ok: false, error: "That date doesn't exist" };
   return { ok: true, value: s };
 }
 

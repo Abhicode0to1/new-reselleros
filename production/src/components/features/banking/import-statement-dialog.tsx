@@ -43,6 +43,7 @@ import { directionOf } from "@/lib/banking/categorise";
 import { EXPENSE_CATEGORIES, suggestCategory } from "@/lib/queries/expenses";
 import { suggestForLine } from "@/lib/banking/categorise";
 import { rupee, formatDate } from "@/lib/utils";
+import { toIstDate } from "@/lib/dates/ist";
 
 interface Props {
   open: boolean;
@@ -119,7 +120,7 @@ function parseDate(input: string): string | null {
   }
   // Try Date.parse fallback
   const d = new Date(s);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  if (!isNaN(d.getTime())) return toIstDate(d);   // "28 Sep 2026" = local midnight; UTC slice din peeche le jata
   return null;
 }
 

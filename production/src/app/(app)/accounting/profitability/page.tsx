@@ -27,6 +27,7 @@ import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { primaryContactsFor } from "@/lib/contacts/primary";
+import { utcDateISO } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Range helpers (Indian FY = Apr 1 → Mar 31)
@@ -36,7 +37,7 @@ function istToday(): Date {
   return new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
 }
 function yyyymmdd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return utcDateISO(d);
 }
 function fiscalYearStart(d: Date): Date {
   const yr = d.getUTCFullYear();

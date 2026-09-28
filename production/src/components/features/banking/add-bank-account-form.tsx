@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useCreateBankAccount, useUpdateBankAccount, type BankAccountRow } from "@/lib/queries/bank";
+import { istToday } from "@/lib/dates/ist";
 
 // Indian IFSC pattern: 4 alphabetic (bank) + 0 + 6 alphanumeric (branch).
 // Example: HDFC0001234. Case-insensitive when typed; we uppercase on submit.
@@ -104,7 +105,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
     defaultValues: {
       account_type:         "current",
       opening_balance:      0,
-      opening_balance_date: new Date().toISOString().slice(0, 10),
+      opening_balance_date: istToday(),
     },
   });
 
@@ -132,7 +133,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
       reset({
         account_type:         "current",
         opening_balance:      0,
-        opening_balance_date: new Date().toISOString().slice(0, 10),
+        opening_balance_date: istToday(),
       });
       setBankName("");
       setAccountType("current");
@@ -304,7 +305,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
                 <Input
                   id="opening_balance_date"
                   type="date"
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={istToday()}
                   error={errors.opening_balance_date?.message}
                   {...register("opening_balance_date")}
                 />

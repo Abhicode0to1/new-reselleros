@@ -14,6 +14,7 @@
  * Ye file sirf FAISLE rakhti hai — naam kya ho, khidki kya ho, kya galti maani jaye. Network
  * ka kaam route me hai, taaki ye sab bina kisi upload ke test ho sake.
  */
+import { IST_OFFSET_MS } from "@/lib/dates/ist";
 
 /** Bucket ek doosre REGION me hai (asia-south2 / Delhi), jabki DB aur app dono Mumbai me. */
 export const OFFSITE_BUCKET = "resellsubsos-prod-offsite-backups";
@@ -22,7 +23,6 @@ export const OFFSITE_BUCKET = "resellsubsos-prod-offsite-backups";
  *  patla hai — retry, thoda late scheduler, ya ek dheema sweep aur khidki khaali. */
 export const OFFSITE_WINDOW_HOURS = 20;
 
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 /**
  * Object ka naam — IST ki tareekh par, UTC par NAHI.

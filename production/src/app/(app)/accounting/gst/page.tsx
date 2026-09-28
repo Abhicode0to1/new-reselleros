@@ -34,6 +34,7 @@ import { computeGstr3b, gstr3bRows, type Heads } from "@/lib/gst/gstr3b";
 import { parseGstr2b, reconcile2b, type Reconciliation } from "@/lib/gst/gstr2b";
 import { createClient } from "@/lib/supabase/client";
 import { Term } from "@/components/shared/term";
+import { utcDateISO } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Date range helpers — month default (most common GST filing cadence)
@@ -43,7 +44,7 @@ function istToday(): Date {
   return new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
 }
 function yyyymmdd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return utcDateISO(d);
 }
 
 interface DateRange { from: string; to: string; label: string }

@@ -52,6 +52,7 @@ import { mapLimit, chunk, uniq } from "@/lib/ops/p-limit";
 import { createReminderSender } from "@/lib/marketing/whatsapp-reminders.server";
 import { renewalReminderKind } from "@/lib/marketing/whatsapp-reminders";
 import { rupee } from "@/lib/utils";
+import { istToday, toIstDate, addDaysISO } from "@/lib/dates/ist";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -149,7 +150,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
   // not to renew, the subscription lapses to 'expired'. Idempotent (only touches
   // 'active' rows) and non-destructive — a later renewal payment still revives
   // it via record_payment's roll-forward (which sets status='active').
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = istToday();
   const { data: lapsedRows, error: lapseErr } = await supabase
     .from("subscriptions")
     .update({ status: "expired" })
@@ -257,7 +258,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
       const decision = decideCadence({
         renewalDate:  sub.renewal_date!,
         graceDays:    tenant.grace_period_days ?? 0,
-        currentState: (sub.renewal_state ?? "pending") as any,
+        currentState: sub.renewal_state ?? "pending",
         /* The TERM picks the ladder, not the invoice frequency. An annual plan paid
            monthly is invoiced twelve times and renews once, and it needs the 30-day
            runway; a flex-monthly plan renews every month and would be buried by it. */
@@ -688,9 +689,7 @@ async function planOnly(
       // the operator the engine is alive and when it will speak.
       const firstTrigger = CADENCE_TRIGGERS[0].daysOut;
       if (decision.daysUntilRenewal > firstTrigger) {
-        const wakes = new Date(sub.renewal_date!);
-        wakes.setDate(wakes.getDate() - firstTrigger);
-        const iso = wakes.toISOString().slice(0, 10);
+        const iso = addDaysISO(sub.renewal_date!, -firstTrigger);
         if (!nextActionOn || iso < nextActionOn) nextActionOn = iso;
       }
       continue;
@@ -730,7 +729,7 @@ async function planOnly(
 
   return {
     dry_run:            true,
-    evaluated_for:      asOf.toISOString().slice(0, 10),
+    evaluated_for:      toIstDate(asOf),
     email_mode:         isEmailConfigured() ? "real" : "stub",
     subscriptions_seen: subs.length,
     eligible:           eligible.length,

@@ -20,10 +20,11 @@ import { rupee, formatDate } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import { useMoneyOut } from "@/lib/queries/payments-made";
 import { summarisePaidOut, paidOutCsvRows, PAID_OUT_CSV_HEADERS, GROUP_LABEL, type PaidGroup } from "@/lib/accounting/payments-made";
+import { istToday } from "@/lib/dates/ist";
 
 type Tab = "all" | PaidGroup;
 const TABS: Tab[] = ["all", "vendors", "salaries", "statutory", "advances", "other", "unreconciled"];
-function todayIso(): string { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10); }
+function todayIso(): string { return istToday(); }
 
 export default function PaymentsMadePage() {
   const { data, isLoading, error } = useMoneyOut();

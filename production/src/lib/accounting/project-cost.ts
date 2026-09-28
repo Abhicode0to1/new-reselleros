@@ -28,6 +28,7 @@
  * Whole rupees in and out; rounded once per allocation line.
  */
 import { monthsActiveInPeriod } from "./pnl";
+import { utcDateISO } from "@/lib/dates/ist";
 
 /** Expense categories that are payroll — the pool labour can be moved out of. */
 export const SALARY_CATEGORIES: ReadonlySet<string> = new Set(["Salaries", "Director's Remuneration"]);
@@ -132,7 +133,7 @@ export function allocationEnd(start: string, months: number): string {
   const extraDays = Math.round((months - whole) * 30.44);
   d.setUTCMonth(d.getUTCMonth() + whole);
   d.setUTCDate(d.getUTCDate() + extraDays - 1);
-  return d.toISOString().slice(0, 10);
+  return utcDateISO(d);
 }
 
 export function projectCostForPeriod(input: {

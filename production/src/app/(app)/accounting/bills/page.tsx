@@ -46,16 +46,13 @@ import { InboundBillsQueue } from "@/components/features/accounting/inbound-bill
 import { BillDetailDialog } from "@/components/features/accounting/bill-detail-dialog";
 import { DocViewerDialog } from "@/components/features/documents/doc-viewer-dialog";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { istToday, fyBounds } from "@/lib/dates/ist";
 
 /** Current financial year (Apr 1 → today), IST-safe, in YYYY-MM-DD. Defaulting
  *  to the FY (not just this month) so a freshly-added bill dated in an earlier
  *  month still shows — "this month" silently hid past-dated bills. */
 function thisFYRange(): { from: string; to: string } {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-  const y   = ist.getUTCFullYear();
-  const fyStartYear = ist.getUTCMonth() < 3 ? y - 1 : y;   // Apr = month index 3
-  return { from: `${fyStartYear}-04-01`, to: ist.toISOString().slice(0, 10) };
+  return { from: fyBounds().start, to: istToday() };
 }
 
 const STATUS_COLOR: Record<string, "rose" | "emerald" | "amber" | "slate"> = {
@@ -381,7 +378,7 @@ function BillActions({ bill, onPay, onDelete }: { bill: VendorBill; onPay: () =>
 }
 
 function todayISO() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 // ─── Record a payment against a vendor bill ─────────────────────────────────

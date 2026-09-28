@@ -34,12 +34,13 @@ import {
   useGbpStatus, useGbpLocations, useGbpReviews, useGbpMetrics, useGbpSyncRuns, useGbpSync, useGbpReply, type GbpReview,
 } from "@/lib/queries/gbp";
 import { useCompanyName, useReviewLink, useSaveReviewLink } from "@/lib/queries/marketing-hub";
+import { istToday, addDaysISO } from "@/lib/dates/ist";
 
 type Range = 28 | 90 | 365;
 type ReviewTab = "all" | "unanswered" | "low";
 
-function todayIso(): string { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10); }
-function addDays(iso: string, n: number): string { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function todayIso(): string { return istToday(); }
+function addDays(iso: string, n: number): string { return addDaysISO(iso, n); }
 const num = (n: number) => n.toLocaleString("en-IN");
 
 /* Google's redirect lands here with ?gbp=<status>; say it once and clean the URL. */

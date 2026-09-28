@@ -29,12 +29,13 @@ import {
 } from "@/lib/marketing/ad-platforms";
 import { useAdsStatus, useAdSpend, useBookedAdSpendByMonth, useLeadsByCampaign, useAdSyncRuns, useAdsSync, useToggleAdAccount, type AdsStatus } from "@/lib/queries/ads";
 import { useMarketingTools } from "@/lib/queries/marketing-hub";
+import { istToday, addDaysISO } from "@/lib/dates/ist";
 
 type Range = 7 | 30 | 90;
 type PlatformFilter = "all" | AdPlatform;
 
-function todayIso(): string { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10); }
-function addDays(iso: string, n: number): string { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function todayIso(): string { return istToday(); }
+function addDays(iso: string, n: number): string { return addDaysISO(iso, n); }
 const num = (n: number) => n.toLocaleString("en-IN");
 
 const MSG: Record<string, { ok: boolean; text: string }> = {

@@ -33,9 +33,10 @@ import {
 import { useEmployees } from "@/lib/queries/payroll";
 import { rupee, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 export default function ReimbursementsPage() {

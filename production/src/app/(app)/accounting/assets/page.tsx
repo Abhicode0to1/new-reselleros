@@ -27,9 +27,10 @@ import {
   useEmiPurchases, useRecordEmiPurchase, useRecordEmiPayment, useEmiPayments,
   EMI_CATEGORY_LABEL, type EmiPurchase, type EmiCategory,
 } from "@/lib/queries/emi";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 const selectCls = "w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber";
 

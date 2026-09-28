@@ -41,6 +41,7 @@ import { useCreateVendorBill } from "@/lib/queries/vendor-bills";
 import { useAllocateBillToPO } from "@/lib/queries/purchase-orders";
 import { rupee } from "@/lib/utils";
 import type { PurchaseOrderRow } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 const schema = z.object({
   vendor_name:  z.string().min(2, "Vendor name required"),
@@ -74,7 +75,7 @@ interface Props {
 export default function CreateBillFromPODialog({ po, open, onOpenChange }: Props) {
   const createBill = useCreateVendorBill();
   const allocate   = useAllocateBillToPO();
-  const today      = new Date().toISOString().slice(0, 10);
+  const today      = istToday();
 
   // Suggested monthly amount = total / term_months (most resellers bill monthly)
   const suggestedMonthly = Math.round(po.total_cost / Math.max(1, po.term_months));

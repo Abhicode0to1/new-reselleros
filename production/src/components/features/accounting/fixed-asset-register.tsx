@@ -20,8 +20,9 @@ import { useFixedAssets, useCreateFixedAsset, useDisposeFixedAsset, useDeleteFix
 import { useEmiPurchases } from "@/lib/queries/emi";
 import { useEmployeeAssets } from "@/lib/queries/employee-assets";
 import { BLOCKS, depreciationSchedule, depreciationInFy, bookValueNow, registerSummary, fyStartOf, fyLabel, type AssetBlock } from "@/lib/accounting/depreciation";
+import { istToday } from "@/lib/dates/ist";
 
-function todayIso(): string { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10); }
+function todayIso(): string { return istToday(); }
 
 export function FixedAssetRegister() {
   const { data: assets, isLoading } = useFixedAssets();

@@ -51,11 +51,7 @@ import {
   type ExpenseClaim,
 } from "@/lib/queries/expense-claims";
 import { toast } from "sonner";
-
-function todayISO(): string {
-  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  return ist.toISOString().slice(0, 10);
-}
+import { istToday as todayISO } from "@/lib/dates/ist";
 
 const METHOD_LABEL: Record<LoanRepaymentMethod, string> = {
   cash: "Cash", bank: "Bank transfer", salary_deduction: "Salary deduction", expense: "Spent (expense)",

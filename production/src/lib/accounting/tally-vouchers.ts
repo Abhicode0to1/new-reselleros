@@ -22,6 +22,7 @@
  */
 import { gstSplit } from "@/lib/gst/gstr1";
 import { tallyDate, xmlEscape } from "./ledger-export";
+import { toIstDate } from "@/lib/dates/ist";
 
 export interface TallyLedgerNames {
   sales: string;
@@ -160,7 +161,7 @@ const inPeriod = (d: string | null | undefined, from: string, to: string) =>
 export function istDay(ts: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(ts)) return ts;
   const t = Date.parse(ts);
-  return Number.isNaN(t) ? ts.slice(0, 10) : new Date(t + 330 * 60_000).toISOString().slice(0, 10);
+  return Number.isNaN(t) ? ts.slice(0, 10) : toIstDate(t);
 }
 
 export interface InvoiceForTally {

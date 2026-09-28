@@ -17,9 +17,10 @@ import { useBankAccounts, useBankTransactions } from "@/lib/queries/bank";
 import { buildBrs, brsRows, type BrsLine } from "@/lib/banking/brs";
 import { downloadCSV } from "@/lib/csv";
 import { rupee, formatDate } from "@/lib/utils";
+import { istToday } from "@/lib/dates/ist";
 
 function todayIso(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 export default function BrsPage() {

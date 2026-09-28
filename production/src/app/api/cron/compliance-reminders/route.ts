@@ -34,6 +34,7 @@ import { dueReminders, renderReminder, type PlannedReminder } from "@/lib/compli
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { reportCron } from "@/lib/ops/cron-report";
+import { toIstDate } from "@/lib/dates/ist";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -85,7 +86,7 @@ async function handle(req: Request) {
   const supabase = createAdminClient();
   const result: RunResult = {
     ran_at: new Date().toISOString(),
-    evaluated_for: today.toISOString().slice(0, 10),
+    evaluated_for: toIstDate(today),
     dry_run: dry,
     email_mode: isEmailConfigured() ? "real" : "stub",
     tenants: 0, reminders_due: 0, sent: 0, skipped_already_sent: 0, no_recipients: 0,

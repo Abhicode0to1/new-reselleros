@@ -56,6 +56,7 @@ import { heatScore, heatBadge } from "@/lib/leads/heat-score";
 import { decideSwipe, SWIPE_TRIGGER_PX } from "@/lib/leads/swipe-gesture";
 import { chipsForStage, type LeadOutcome } from "@/lib/leads/outcomes";
 import type { Lead } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 // LEAD_STAGES mirrors the array in leads/page.tsx — kept here as a small
 // constant to avoid coupling the swipe card to that file's internals. If
@@ -547,7 +548,7 @@ function followUpLabel(
   date: string | null,
 ): { text: string; tone: "rose" | "amber" | "ink-3" } | null {
   if (!date) return null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   if (date <  today)  return { text: "Overdue", tone: "rose"  };
   if (date === today) return { text: "Today",   tone: "amber" };
   const d = new Date(date);

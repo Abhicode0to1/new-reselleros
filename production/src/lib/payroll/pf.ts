@@ -1,3 +1,4 @@
+import { istToday } from "@/lib/dates/ist";
 /**
  * PF (Employees' Provident Fund / EPF) — statutory retirement contribution.
  *
@@ -39,7 +40,7 @@ export const PF_EPS_RATE      = 0.0833; // employer's pension share, on the capp
 /** The PF wage ceiling for a salary month. Accepts a period (YYYY-MM) or a date
  *  (YYYY-MM-DD); defaults to today. */
 export function pfWageCeiling(periodOrDate?: string | null): number {
-  const key = (periodOrDate ?? new Date().toISOString().slice(0, 10)).slice(0, 10);
+  const key = (periodOrDate ?? istToday()).slice(0, 10);
   const on = key.length === 7 ? `${key}-01` : key;
   let ceiling = PF_WAGE_CEILINGS[0].ceiling;
   for (const row of PF_WAGE_CEILINGS) if (row.from <= on) ceiling = row.ceiling;

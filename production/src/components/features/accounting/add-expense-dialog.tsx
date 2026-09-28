@@ -56,6 +56,7 @@ import { toast } from "sonner";
 import { uploadBillAttachment } from "@/lib/queries/vendor-bills";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { expenseCategoryError } from "@/lib/accounting/expense-category";
+import { istToday } from "@/lib/dates/ist";
 
 const CURRENCY_OPTIONS = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD", "CAD"] as const;
 
@@ -102,7 +103,7 @@ export function AddExpenseDialog({
   const create = useCreateExpense();
   const update = useUpdateExpense();
   const isEdit = Boolean(expense);
-  const today  = new Date().toISOString().slice(0, 10);
+  const today  = istToday();
   const { data: bankAccounts } = useBankAccounts();
   const cashAccounts = (bankAccounts ?? []).filter((a) => a.account_type === "cash");
   const bankOnlyAccounts = (bankAccounts ?? []).filter((a) => a.account_type !== "cash");

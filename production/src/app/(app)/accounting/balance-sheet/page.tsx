@@ -40,6 +40,7 @@ import {
 } from "@/lib/queries/balance-sheet";
 import type { BalanceSheetSection } from "@/lib/supabase/database.types";
 import { usePnL, BOOKS_START } from "@/lib/queries/pnl";
+import { istToday } from "@/lib/dates/ist";
 
 export default function BalanceSheetPage() {
   const { data: auto, isLoading: autoLoading } = useBalanceSheetAuto();
@@ -68,7 +69,7 @@ export default function BalanceSheetPage() {
   const [addOpen, setAddOpen] = React.useState(false);
   const [editItem, setEditItem] = React.useState<BalanceSheetItem | null>(null);
   const [retainedInfoOpen, setRetainedInfoOpen] = React.useState(false);
-  const today = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const today = istToday();
 
   const loading = autoLoading || itemsLoading;
 

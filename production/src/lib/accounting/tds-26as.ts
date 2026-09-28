@@ -23,6 +23,7 @@
  * Isliye yahan andar paise (integer) me ginte hain aur milaan ₹1 ki chhoot se hota hai
  * (s.288B rounding) — ek hi jagah, ek hi unit.
  */
+import { utcDateISO } from "@/lib/dates/ist";
 
 export type BookingStatus = "F" | "P" | "U" | "O" | "M" | "Z" | null;
 
@@ -79,7 +80,7 @@ export function parseIndianDate(raw: string | null | undefined): string | null {
 function valid(y: string, mo: string, d: string): string | null {
   const iso = `${y}-${mo}-${d}`;
   const t = new Date(`${iso}T00:00:00Z`);
-  return Number.isNaN(t.getTime()) || t.toISOString().slice(0, 10) !== iso ? null : iso;
+  return Number.isNaN(t.getTime()) || utcDateISO(t) !== iso ? null : iso;
 }
 
 /** "1,500.00" → 150000 paise. Khaali / "-" → null. Ajeeb text → null (0 nahi). */

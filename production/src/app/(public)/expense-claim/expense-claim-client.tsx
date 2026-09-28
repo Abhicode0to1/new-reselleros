@@ -22,9 +22,10 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 import { EXPENSE_CATEGORIES } from "@/lib/queries/expenses";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 type Session = { employeeId: string; employeeName: string; pin: string; remaining: number };

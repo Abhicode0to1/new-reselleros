@@ -17,6 +17,7 @@
  * Times are IST on both sides — IndiaMART is an Indian service and QUERY_TIME has no zone.
  */
 import { normalizeWaPhone } from "@/lib/marketing/whatsapp-broadcast";
+import { IST_OFFSET_MS } from "@/lib/dates/ist";
 
 export const INDIAMART_ENDPOINT = "https://mapi.indiamart.com/wservce/crm/crmListing/v2/";
 /** IndiaMART refuses a window longer than this (docs: 7 days). */
@@ -27,7 +28,6 @@ export const OVERLAP_MINUTES = 10;
 export const RATE_LIMIT_BACKOFF_MINUTES = 15;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const IST_OFFSET_MS = 330 * 60_000;
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** A moment as IndiaMART wants it: IST, `DD-Mon-YYYY HH:MM:SS`. */

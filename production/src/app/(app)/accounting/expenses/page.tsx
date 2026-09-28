@@ -37,6 +37,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { groupExpenses, type GroupBy } from "@/lib/accounting/expense-groups";
 import { panFromGstin } from "@/lib/accounting/tds-deductor";
+import { istToday } from "@/lib/dates/ist";
 
 type DateRange = { from: string; to: string };
 
@@ -187,7 +188,7 @@ export default function ExpensesPage() {
   // Bulk "Mark paid" — selected expense ids + the batch dialog.
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [bulkPayOpen, setBulkPayOpen] = React.useState(false);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const router = useRouter();
 
   // Row click: payroll/statutory postings open in Payroll (their source); every

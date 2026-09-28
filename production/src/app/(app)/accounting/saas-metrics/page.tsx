@@ -45,6 +45,7 @@ import { downloadCSV } from "@/lib/csv";
 import { printReport, reportFilename } from "@/lib/reports/print";
 import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { toIstDate } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Data hook
@@ -258,7 +259,7 @@ function useSaasMetrics() {
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
-      const thirtyDaysAgoDate = thirtyDaysAgo.toISOString().slice(0, 10);
+      const thirtyDaysAgoDate = toIstDate(thirtyDaysAgo);
 
       const newSubs30d   = all.filter((s) => s.start_date >= thirtyDaysAgoDate);
       const churnedSubs30d = all.filter((s) =>

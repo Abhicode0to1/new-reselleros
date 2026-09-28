@@ -8,6 +8,8 @@
  * payload → row parsers live here so they are tested without an account.
  */
 
+import { addDaysISO } from "@/lib/dates/ist";
+
 export type AdPlatform = "google-ads" | "meta-ads";
 
 export const PLATFORM_LABEL: Record<AdPlatform, string> = { "google-ads": "Google Ads", "meta-ads": "Facebook / Instagram Ads" };
@@ -37,7 +39,7 @@ export interface AdSpendRow {
 }
 
 function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10);
+  return addDaysISO(iso, n);
 }
 const r2 = (n: number) => Math.round(n * 100) / 100;
 

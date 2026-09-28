@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { reportCron } from "@/lib/ops/cron-report";
+import { istToday, addDaysISO } from "@/lib/dates/ist";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,12 +44,12 @@ async function handle(req: Request): Promise<NextResponse<RetentionResult | { er
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
 
   // IST today, for the cutoff date math.
-  const istToday = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+  const today = istToday();
 
   for (const s of settings ?? []) {
     result.tenants += 1;
     const days = s.selfie_retention_days ?? 180;
-    const cutoff = new Date(new Date(istToday + "T00:00:00Z").getTime() - days * 86400000).toISOString().slice(0, 10);
+    const cutoff = addDaysISO(today, -days);
     try {
       // Rows past retention with a selfie, OR selfies of inactive employees.
       const { data: inactive } = await supabase

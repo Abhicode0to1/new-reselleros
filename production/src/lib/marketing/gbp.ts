@@ -9,6 +9,8 @@
  */
 
 /** OAuth scope for every Business Profile API (accounts, locations, reviews, performance). */
+import { addDaysISO } from "@/lib/dates/ist";
+
 export const GBP_SCOPE = "https://www.googleapis.com/auth/business.manage";
 
 /** Performance API daily metrics we fetch, in the order the page shows them. */
@@ -94,9 +96,7 @@ export interface PeriodComparison {
 }
 
 function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
+  return addDaysISO(iso, n);
 }
 function pct(cur: number, prev: number): number | null {
   if (prev <= 0) return null;

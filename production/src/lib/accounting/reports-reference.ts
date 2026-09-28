@@ -23,6 +23,7 @@ import { buildPnl } from "@/lib/accounting/pnl";
 import { buildExpenseReport } from "@/lib/accounting/expense-report";
 import { projectCostForPeriod } from "@/lib/accounting/project-cost";
 import type { PnLNumbers, PnlMasters } from "@/lib/accounting/pnl-assemble";
+import { toIstDate } from "@/lib/dates/ist";
 
 type N = number | null;
 
@@ -299,7 +300,7 @@ function istDay(v: string | null | undefined): string | null {
   if (!v) return null;
   const t = Date.parse(v);
   if (Number.isNaN(t)) return isoDay(v);
-  return new Date(t + 5.5 * 3600_000).toISOString().slice(0, 10);
+  return toIstDate(t);
 }
 
 export function referenceCustomerLedgerEntries(r: {
