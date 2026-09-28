@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { requireTenantId } from "@/lib/queries/require-tenant";
 import { toastError } from "@/lib/errors/toast-error";
 import { leadNotes, type MxProvider } from "@/lib/leads/lead-finder";
+import { readContact } from "@/lib/leads/lead-contacts";
 
 export const FINDER_KEY = ["lead-finder"] as const;
 
@@ -63,6 +64,8 @@ export interface FinderCandidate {
   source_url: string | null; mx_provider: MxProvider | null; on_workspace: boolean | null; site_https: boolean | null; site_status: number | null;
   site_note: string | null; score: number | null; product: string | null; fit_reason: string | null; pitch: string | null;
   status: "new" | "approved" | "rejected" | "converted"; lead_id: string | null; created_at: string;
+  /** holds signals.contact — email/phone read from the company's own site */
+  signals: unknown;
 }
 
 export function useFinderCandidates() {
@@ -70,7 +73,7 @@ export function useFinderCandidates() {
     queryKey: [...FINDER_KEY, "candidates"],
     queryFn: async (): Promise<FinderCandidate[]> => {
       const { data, error } = await createClient().from("lead_finder_candidates")
-        .select("id, profile_id, company, domain, website, city, description, source_url, mx_provider, on_workspace, site_https, site_status, site_note, score, product, fit_reason, pitch, status, lead_id, created_at")
+        .select("id, profile_id, company, domain, website, city, description, source_url, mx_provider, on_workspace, site_https, site_status, site_note, score, product, fit_reason, pitch, status, lead_id, created_at, signals")
         .order("score", { ascending: false, nullsFirst: false }).limit(1000);
       if (error) throw error;
       return (data ?? []) as FinderCandidate[];
@@ -109,6 +112,25 @@ export function useRunFinder() {
   });
 }
 
+/** Read published email/phone from the candidates' own sites — ids, or the 25 best never checked. */
+export function useFindContacts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { ids?: string[]; force?: boolean } = {}) => {
+      const res = await fetch("/api/leads/finder/contacts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error ?? "Contact check failed");
+      return body as { checked: number; found: number };
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: FINDER_KEY }); qc.invalidateQueries({ queryKey: ["leads"] });
+      if (r.checked === 0) toast.success("Sab companies ka contact pehle hi check ho chuka hai");
+      else toast.success(`${r.checked} websites padhi — ${r.found} ka contact mila`);
+    },
+    onError: (e) => toastError(e),
+  });
+}
+
 /** Approve → a lead in Sales & Pipeline (source ai-finder), candidate marked converted. */
 export function useApproveCandidate() {
   const qc = useQueryClient();
@@ -117,10 +139,12 @@ export function useApproveCandidate() {
       const supabase = createClient();
       const tenantId = await requireTenantId(supabase);
       const { data: auth } = await supabase.auth.getUser();
+      const contact = readContact(c.signals);
       const leadId = "L-" + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1000).toString(36).toUpperCase();
       const { error } = await supabase.from("leads").insert({
         id: leadId, tenant_id: tenantId, company: c.company, domain: c.domain, stage: "new", source: "ai-finder",
         plan: c.product === "workspace" ? "Google Workspace" : null,
+        contact_email: contact?.email ?? null, contact_phone: contact?.phone ?? null,
         notes: leadNotes(c), created_by: auth?.user?.id ?? null,
       });
       if (error) throw error;

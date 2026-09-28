@@ -1,0 +1,56 @@
+import { describe, expect, it } from "vitest";
+import { cleanEmail, cleanPhone, extractContacts, pickEmail, pickPhone, readContact } from "./lead-contacts";
+
+describe("cleanPhone — Indian numbers only", () => {
+  it.each([
+    ["+91 98765 43210", "+919876543210"],
+    ["098765-43210", "+919876543210"],
+    ["9876543210", "+919876543210"],
+    ["0091 9876543210", "+919876543210"],
+    ["011-23456789", "01123456789"],
+    ["0124 4567890", "01244567890"],
+    ["+91 11 2345 6789", "01123456789"],
+    ["1800 123 4567", "18001234567"],
+  ])("%s → %s", (raw, want) => expect(cleanPhone(raw)).toBe(want));
+
+  it.each(["12345", "+1 415 555 0100", "5876543210", "2019-2020"])("rejects %s", (raw) => expect(cleanPhone(raw)).toBeNull());
+});
+
+describe("cleanEmail", () => {
+  it("keeps a real address, drops mailto and query", () => expect(cleanEmail("mailto:Info@Firm.co.in?subject=hi")).toBe("info@firm.co.in"));
+  it.each(["logo@2x.png", "noreply@firm.com", "user@example.com", "abc@sentry.io", "not-an-email"])("drops %s", (e) => expect(cleanEmail(e)).toBeNull());
+});
+
+describe("extractContacts", () => {
+  const html = `
+    <html><head><style>.a{}</style><script>var x="bot@tracker.js"</script></head><body>
+    <a href="mailto:hello@webagency.in">site by agency</a>
+    <p>Write to info [at] glsconsultant [dot] com or call <a href="tel:+919811122233">+91 98111 22233</a></p>
+    <p>Office: 0124-4567890 · GSTIN 06AABCG1234F1Z5 · PIN 122001</p>
+    <img src="logo@2x.png">
+    </body></html>`;
+  const got = extractContacts(html, "glsconsultant.com");
+
+  it("finds mailto, tel, obfuscated email and landline", () => {
+    expect(got.emails).toContain("info@glsconsultant.com");
+    expect(got.phones).toEqual(expect.arrayContaining(["+919811122233", "01244567890"]));
+  });
+  it("puts the company's own domain before the agency's", () => expect(got.emails[0]).toBe("info@glsconsultant.com"));
+  it("does not read scripts, image names, GSTIN or PIN as contacts", () => {
+    expect(got.emails.join()).not.toMatch(/tracker|2x\.png/);
+    expect(got.phones.every((p) => p !== "122001")).toBe(true);
+  });
+});
+
+describe("pick", () => {
+  it("prefers own-domain role address", () =>
+    expect(pickEmail(["rahul@gmail.com", "rahul@firm.in", "info@firm.in"], "firm.in")).toBe("info@firm.in"));
+  it("prefers a mobile over landline and toll-free", () =>
+    expect(pickPhone(["18001234567", "01123456789", "+919876543210"])).toBe("+919876543210"));
+  it("returns null for nothing", () => { expect(pickEmail([], "x.in")).toBeNull(); expect(pickPhone([])).toBeNull(); });
+});
+
+describe("readContact", () => {
+  it("reads the stored block", () => expect(readContact({ contact: { email: "a@b.in", phone: null, emails: [], phones: [], source_url: null, checked_at: "2026-09-28" } })?.email).toBe("a@b.in"));
+  it("null when never checked", () => { expect(readContact({ mx_hosts: [] })).toBeNull(); expect(readContact(null)).toBeNull(); });
+});

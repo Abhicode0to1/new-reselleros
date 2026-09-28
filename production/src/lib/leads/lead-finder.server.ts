@@ -1,7 +1,9 @@
 /**
  * AI Lead Finder — the run. Discovery (Gemini + Google Search grounding) → dedupe against
  * leads, customers and earlier candidates → public signals (MX via DNS-over-HTTPS, website
- * fetch) → baseline score + AI wording → lead_finder_candidates. Nothing touches `leads`.
+ * fetch, published contacts from the company's own site) → baseline score + AI wording →
+ * lead_finder_candidates. A run never touches `leads`; only enrichCandidateContacts fills an
+ * already-approved lead's empty email/phone.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
@@ -11,6 +13,7 @@ import {
   discoveryPrompt, parseDiscovery, mxProvider, siteNote, baselineScore, scoringPrompt, mergeScores,
   type FinderProfile, type DiscoveredCompany, type ScoreInput, type SiteAudit, type MxProvider,
 } from "@/lib/leads/lead-finder";
+import { CONTACT_PATHS, extractContacts, pickEmail, pickPhone, readContact, type ContactResult } from "@/lib/leads/lead-contacts";
 
 type Admin = SupabaseClient<Database>;
 
@@ -33,6 +36,74 @@ async function probe(url: string): Promise<{ ok: boolean; status: number | null;
     }
     return { ok: res.ok, status: res.status, server: res.headers.get("server"), generator, title };
   } catch { return { ok: false, status: null, server: null, generator: null, title: null }; }
+}
+
+const UA = { "user-agent": "Mozilla/5.0 (compatible; ResellerOS-LeadFinder/1.0)" };
+
+async function fetchHtml(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(6000), headers: UA });
+    if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html")) return null;
+    return (await res.text()).slice(0, 200_000);
+  } catch { return null; }
+}
+
+/** Read the company's own site — home, then contact/about pages — for published contacts. At most 4 fetches. */
+export async function findContacts(domain: string, website?: string | null): Promise<ContactResult> {
+  const emails: string[] = [], phones: string[] = [];
+  let source: string | null = null;
+  const take = (html: string, url: string) => {
+    const got = extractContacts(html, domain);
+    const before = emails.length + phones.length;
+    for (const e of got.emails) if (!emails.includes(e)) emails.push(e);
+    for (const ph of got.phones) if (!phones.includes(ph)) phones.push(ph);
+    if (!source && emails.length + phones.length > before) source = url;
+  };
+
+  // Home page; a site with no working HTTPS is tried once over HTTP.
+  let base = `https://${domain}`;
+  let home = website || base;
+  let html = await fetchHtml(home);
+  if (!html) { base = `http://${domain}`; home = base; html = await fetchHtml(home); }
+  if (html) take(html, home);
+  else return { email: null, phone: null, emails: [], phones: [], source_url: null, checked_at: new Date().toISOString() };
+
+  // Then up to 3 contact/about pages, stopping once we have both an email and a phone.
+  for (const path of CONTACT_PATHS.slice(0, 3)) {
+    if (emails.length && phones.length) break;
+    const url = base + path;
+    const page = await fetchHtml(url);
+    if (page) take(page, url);
+  }
+  return { email: pickEmail(emails, domain), phone: pickPhone(phones), emails: emails.slice(0, 5), phones: phones.slice(0, 5), source_url: source, checked_at: new Date().toISOString() };
+}
+
+/**
+ * Contacts for candidates found before this step existed (or re-check one). Fills the
+ * lead too when the candidate was already approved and the lead has no email/phone yet.
+ */
+export async function enrichCandidateContacts(admin: Admin, tenantId: string, opts: { ids?: string[]; limit?: number; force?: boolean } = {}): Promise<{ checked: number; found: number }> {
+  let q = admin.from("lead_finder_candidates").select("id, domain, website, signals, lead_id").eq("tenant_id", tenantId).neq("status", "rejected");
+  if (opts.ids?.length) q = q.in("id", opts.ids);
+  const { data } = await q.order("score", { ascending: false }).limit(200);
+  const todo = (data ?? []).filter((c) => opts.force || !readContact(c.signals)).slice(0, opts.limit ?? 25);
+  let found = 0;
+  for (let i = 0; i < todo.length; i += 4) {
+    await Promise.all(todo.slice(i, i + 4).map(async (c) => {
+      const contact = await findContacts(c.domain, c.website);
+      if (contact.email || contact.phone) found++;
+      const signals = { ...((c.signals as Record<string, unknown>) ?? {}), contact };
+      await admin.from("lead_finder_candidates").update({ signals: signals as never }).eq("id", c.id).eq("tenant_id", tenantId);
+      if (c.lead_id && (contact.email || contact.phone)) {
+        const { data: lead } = await admin.from("leads").select("contact_email, contact_phone").eq("id", c.lead_id).eq("tenant_id", tenantId).maybeSingle();
+        const patch: { contact_email?: string; contact_phone?: string } = {};
+        if (lead && !lead.contact_email && contact.email) patch.contact_email = contact.email;
+        if (lead && !lead.contact_phone && contact.phone) patch.contact_phone = contact.phone;
+        if (Object.keys(patch).length) await admin.from("leads").update(patch).eq("id", c.lead_id).eq("tenant_id", tenantId);
+      }
+    }));
+  }
+  return { checked: todo.length, found };
 }
 
 async function auditSite(domain: string): Promise<SiteAudit> {
@@ -91,13 +162,13 @@ export async function runLeadFinder(admin: Admin, tenantId: string, profileId: s
 
     // Signals, a few at a time (DNS + two fetches each).
     const inputs: ScoreInput[] = [];
-    const extras: { mx_hosts: string[] | null; site: SiteAudit }[] = [];
+    const extras: { mx_hosts: string[] | null; site: SiteAudit; contact: ContactResult }[] = [];
     for (let i = 0; i < batch.length; i += 5) {
       const chunk = batch.slice(i, i + 5);
-      const sig = await Promise.all(chunk.map(async (c) => ({ mx: await mxLookup(c.domain), site: await auditSite(c.domain) })));
+      const sig = await Promise.all(chunk.map(async (c) => ({ mx: await mxLookup(c.domain), site: await auditSite(c.domain), contact: await findContacts(c.domain, c.website) })));
       chunk.forEach((c, k) => {
         inputs.push({ company: c.company, domain: c.domain, city: c.city ?? null, description: c.description ?? null, mx: sig[k].mx.provider, site: sig[k].site, products: p.products });
-        extras.push({ mx_hosts: sig[k].mx.hosts, site: sig[k].site });
+        extras.push({ mx_hosts: sig[k].mx.hosts, site: sig[k].site, contact: sig[k].contact });
       });
     }
 
@@ -111,7 +182,7 @@ export async function runLeadFinder(admin: Admin, tenantId: string, profileId: s
       company: inp.company, domain: inp.domain, website: batch[k].website ?? `https://${inp.domain}`, city: inp.city, description: inp.description, source_url: batch[k].source_url ?? null,
       mx_provider: inp.mx, on_workspace: inp.mx === "google" ? true : inp.mx === "unknown" ? null : false,
       site_https: inp.site.https, site_status: inp.site.status, site_note: inp.site.note,
-      signals: { mx_hosts: extras[k].mx_hosts, server: extras[k].site.server ?? null, generator: extras[k].site.generator ?? null },
+      signals: { mx_hosts: extras[k].mx_hosts, server: extras[k].site.server ?? null, generator: extras[k].site.generator ?? null, contact: extras[k].contact },
       score: scores[k].score, product: scores[k].product, fit_reason: scores[k].fit_reason, pitch: scores[k].pitch,
     }));
     if (rows.length) {
