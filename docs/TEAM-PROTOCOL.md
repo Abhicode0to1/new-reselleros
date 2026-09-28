@@ -67,6 +67,31 @@ Deploy · apply migrations to production · touch Cloud billing, secrets or OAut
 push to or merge another person's branch · mark a task `done` · delete board data.
 These stay with the humans, however obvious they look.
 
+## Every person's own morning digest (set up once, then nobody has to chase anyone)
+
+Each of us runs a scheduled Claude task on our own machine that reads the board every
+morning and tells **us** what is waiting — so no one has to message anyone to say "your card
+is open". Set it up once in the Claude app: **Scheduled → New task**, schedule weekdays
+09:30, folder = your checkout of this repo, and paste this prompt (change `<me>` to
+`abhishek` or `pawan`):
+
+```
+Morning digest for <me> on ResellerOS. READ AND REPORT ONLY: no code edits, no commits,
+no pushes, no status changes, no messages. Reply in Hinglish.
+Board: https://claude.ai/artifact/2E442MT5zCLxm2oE1Lipos (use the ArtifactData tool).
+1. tasks where owner in [<me>, "sab"] and status in [open, doing, blocked, review]:
+   list by priority (P0 first) with id, title and days since createdAt/statusAt.
+2. tasks where from = <me> and status = review: these wait for MY check ("Done jab").
+3. changes whose affects contains <me> and acked has no <me>: one line each.
+4. messages from the last 24h in #general, #deploy and my area channel, and any @<Name>.
+5. git fetch; how many commits pardeep-sir has that my branch does not
+   (git log --oneline HEAD..origin/pardeep-sir | wc -l) — if > 0, say "merge karo".
+Then suggest the one task I should pick first today. At most 15 lines.
+```
+
+Pardeep's own digest also prepares a short ready-to-send message for each person when
+something of theirs is stuck, so a reminder costs one copy-paste, not a written message.
+
 ## Autonomy levels (what the human can hand over)
 
 | level | the agent may | example |
