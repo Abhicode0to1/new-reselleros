@@ -1,4 +1,4 @@
-# Team protocol — three people, three Claude sessions, one repo
+# Team protocol — the team, their Claude sessions, one repo
 
 *27 Sep 2026. For every Claude Code session (and any other agent) working in this repo.
 Read it at the start of a session; it is short on purpose.*
@@ -14,9 +14,9 @@ Collections:
 
 | collection | one doc = | key fields |
 |---|---|---|
-| `tasks` | one piece of work, id `R-nnn` (someone asked another area) or `Snn` (roadmap) | `kind` request/roadmap · `owner` pardeep/abhishek/pawan/sab · `from` · `priority` p0–p3 · `bucket` · `title` · `why` · `fix` · `where` · `doneWhen` · `status` · `commits[]` · `dependsOn[]` · `outcome` · `updatedAt` |
+| `tasks` | one piece of work, id `R-nnn` (someone asked another area) or `Snn` (roadmap) | `kind` request/roadmap · `owner` pardeep/abhishek/pawan/hitesh/sab · `from` · `priority` p0–p3 · `bucket` · `title` · `why` · `fix` · `where` · `doneWhen` · `status` · `commits[]` · `dependsOn[]` · `outcome` · `updatedAt` |
 | `changes` | one thing others must know (a migration, a changed RPC signature, a new env var, a data note) | `at` · `owner` (who changed it) · `title` · `body_html` · `affects[]` (owners) · `migrations[]` · `commit` · `acked{}` |
-| `messages` | a chat message | `ch` general/requests/roadmap/deploy/accounting/billing/customer · `text` · `by` · `at` |
+| `messages` | a chat message | `ch` general/requests/roadmap/deploy/accounting/billing/customer/qa · `text` · `by` · `at` |
 
 **Statuses:** `open` → `doing` → `review` → `done` (or `blocked`, `declined`). An agent may move
 a task to `doing` and to `review`. **Only a human moves it to `done`** (or `declined`), after
@@ -24,6 +24,19 @@ checking the `doneWhen` line.
 
 Ownership of code is in [`OWNERS.json`](../OWNERS.json) (repo root). `node production/scripts/areas.mjs`
 tells you whose area a branch touched.
+
+## Testing (Hitesh, QA) — 28 Sep 2026
+
+Hitesh Baghel tests the app's user flows on the online **test** environment (never production)
+and files what he finds. His guide is [`docs/qa/README.md`](qa/README.md); his area is
+`production/e2e/` and `docs/qa/` on branch `hitesh-qa` — he does not change app code.
+
+- A bug is an `R-nnn` request: `owner` = the area owner of that page, `from: "hitesh"`,
+  title `Bug: …`, with URL, steps, expected, actual, screenshot.
+- The owner's agent fixes it like any request and sets `review`. Hitesh retests on the test
+  environment and posts `R-nnn retest pass` / `retest fail: …` in `#qa`. A human (Pardeep)
+  then sets `done`. **A fix that touches a page Hitesh reported is not `done` without his retest.**
+- Agents: when you move a `from: "hitesh"` task to `review`, say in `#qa` what to retest and where.
 
 ## Session start (every time, before any code)
 
@@ -73,7 +86,7 @@ Each of us runs a scheduled Claude task on our own machine that reads the board 
 morning and tells **us** what is waiting — so no one has to message anyone to say "your card
 is open". Set it up once in the Claude app: **Scheduled → New task**, schedule weekdays
 09:30, folder = your checkout of this repo, and paste this prompt (change `<me>` to
-`abhishek` or `pawan`):
+`abhishek`, `pawan` or `hitesh`):
 
 ```
 Morning digest for <me> on ResellerOS. READ AND REPORT ONLY: no code edits, no commits,
