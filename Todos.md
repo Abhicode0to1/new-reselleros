@@ -84,6 +84,15 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       records the confirmation and holds (`HOSTING_TRIAL_LIVE` off). Upgrade request from inside DMS →
       lead `L-MUIB5W2J`, a repeat returns the same lead. No email provider locally, so every send is
       logged `failed` ("No email provider is configured") — nothing reached a real inbox.
+- [x] **Rerun after the Next 15 / React 19 merge, LOCAL, 28 Sep 2026** (ResellerOS `9054977f`): panel
+      purchase → `/api/dms/panel-order` 200, `order_ThMHrdiN1YY47f` / `Q-2222-2026-27-0020`, ₹708 →
+      Razorpay test netbanking paid → panel shows "Payment received" → signed webhook 200 → quote
+      accepted/received, notes "Ordered from your hosting control panel.", lead `L-MUKVBRL6` won, one
+      ₹708 payment, the SAME customer reused (two Starter subscriptions now), provisioning queued and held
+      → DMS Invoices lists both paid orders, PDF 200 `application/pdf`, ₹600 + ₹54 + ₹54. The panel page
+      logged 21 console errors, including a 503 on some resource that was not identified (most of them are
+      Razorpay/Stripe iframe noise: "Refused to get unsafe header"). Trial not rerun: this test customer
+      has already had one, so it is correctly refused.
 - [ ] **Found by the end-to-end run:**
       - [x] **FIXED 28 Sep 2026 (DMS `caa634ae`):** bill links on the server address now move to
         `NEXT_PUBLIC_RESELLEROS_URL`; browser-checked, the Invoices page's PDF link opens (200,
@@ -94,8 +103,12 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
         answers 200 on `localhost`). It works in production only if `RESELLEROS_SERVER_URL` is also the
         public address. Fix: DMS should rewrite links to ResellerOS's PUBLIC origin
         (`NEXT_PUBLIC_RESELLEROS_URL`), or ResellerOS should build them from its own public URL.
-      - The panel's "Payment received" message was not observed: the script's last screenshot was taken
-        while Razorpay was still showing its own "redirecting in 2 seconds". Unit-tested only.
+      - [x] **Observed 28 Sep 2026 (rerun below):** the panel's "Payment received" message, naming the bill
+        (`Q-2222-2026-27-0020`) and saying it is on the Invoices page. On 26 Sep the script's last
+        screenshot was taken while Razorpay was still showing its own "redirecting in 2 seconds".
+      - The paid order's PDF still reads as a QUOTATION ("Valid until", "Payment terms: Net 7 days")
+        although it is paid. `lib/pdf/QuotePDF.tsx` / `build-props.ts` are Abhishek's; not raised on the
+        board (owner, 28 Sep: leave the board tasks).
       - Renew and upgrade BUTTONS were not clicked: they need a DMS hosting account, and none exists while
         provisioning is off. The upgrade ENDPOINT was exercised from inside DMS.
       - Local owner alerts go to `pardeep@anutech.in` (the local tenant's owner). Harmless while no email
@@ -465,23 +478,22 @@ registration queue picks up renewals.
     details.
   - DMS `84b5ae33`: a scan test fails if anything outside a named allow-list can create a Razorpay
     order, subscription or capture.
-- [ ] **Left open by rounds 2-3 (needs an owner go-ahead):**
+- [x] **Left open by rounds 2-3 — all closed by rounds 4-10** (checked in the DMS code, 28 Sep 2026):
   - Multi-year domain registration and a cart with two hosting plans can no longer be bought in DMS,
     because `panel-order` takes one year and one `domain`. Widen the contract if they are wanted.
-  - DMS `app/api/admin/hosting/packages/route.ts:303,312` still creates Razorpay PLANS when an admin
-    edits package prices. That is not a payment, but it writes to DMS's Razorpay account.
-  - Dead in DMS, kept for now: `app/api/domains/renew` (nothing can reach it), `createCompletedOrder`,
-    and `lib/razorpay.ts` `createCustomer` / `createRecurringTokenOrder` (used only by the gated Tokens
-    live harness).
-  - An in-panel TRIAL has no ResellerOS renewal quote, so its convert button says to contact support.
-  - `process-service-expiry` reminders quote `service.price`, a DMS figure (around L243).
-    `renewal-payment-dunning` still chases old DMS renewal orders.
+  - [x] DMS `app/api/admin/hosting/packages/route.ts` no longer creates Razorpay plans (DMS `c1e52acd`).
+  - [x] Deleted (round 4, DMS `9bc63716`): `app/api/domains/renew`, `createCompletedOrder`, and
+    `lib/razorpay.ts` `createCustomer` / `createRecurringTokenOrder`.
+  - [x] An in-panel trial now starts in ResellerOS (`/api/dms/start-trial`, owner 26 Sep: "Move it to
+    ResellerOS"), so the conversion is quoted and billed here.
+  - [x] `process-service-expiry` reminders point to the ResellerOS quote (DMS `812462ec`); the old DMS
+    renewal dunning is switched off (round 4).
   - [x] ResellerOS `/api/v1` lookup fixed (26 Sep 2026): the email is matched literally
     (`lib/api/v1-email-match.ts`; the pattern is escaped, then the email must be equal ignoring case),
     and a database error answers 500 `server_error`, not 404, on customers, quotes, invoices, payments
     and subscriptions.
-  - DMS integration e2e `purchase-to-invoice` / `verify-path-purchase` have been red since
-    `06a9546b` (a ₹999 Starter price gives 409). They are not in the gate.
+  - [x] DMS integration e2e `purchase-to-invoice` / `verify-path-purchase` no longer exist (deleted with
+    the DMS payment code); `npm run test:int` is 194 passed / 1 skipped (DMS `e4792ce1`).
 
 ### Decision 27 — "Start free trial" goes straight to the cart (24 Sep 2026)
 
