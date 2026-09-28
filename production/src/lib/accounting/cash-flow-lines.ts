@@ -39,6 +39,46 @@ export function lineLabel(t: Pick<CashFlowTxn, "matched_to_type" | "category">):
 
 export type LabelTotal = { label: string; amount: number; count: number };
 
+/* ── Cash flow statement, direct method (27 Sep 2026) ────────────────────────
+   The three activities a CA wants the month's cash sorted into. Classified from how
+   the line was reconciled, never from its narration:
+     operating — the business itself: customer receipts, vendor bills, expenses, salaries,
+                 statutory, advances to vendors
+     investing — buying assets: an expense in the Equipment category (the fixed asset
+                 register takes it from there)
+     financing — money in/out of the owner and lenders: lines marked reconciled by hand are
+                 the capital / director-loan / loan bookings (book_bank_credit, loans), so
+                 they sit here and the label says so
+   Transfers between own accounts cancel and are left out; unreconciled lines are shown
+   apart, because a statement that quietly guesses them is not a statement. */
+export type Activity = "operating" | "investing" | "financing" | "transfer" | "unreconciled";
+
+export function activityOf(t: Pick<CashFlowTxn, "matched_to_type" | "category">): Activity {
+  switch (t.matched_to_type) {
+    case null:       return "unreconciled";
+    case "transfer": return "transfer";
+    case "manual":   return "financing";
+    case "expense":  return t.category === "Equipment" ? "investing" : "operating";
+    default:         return "operating";
+  }
+}
+
+export interface ActivityFlow { activity: Activity; label: string; cashIn: number; cashOut: number; net: number; count: number }
+export const ACTIVITY_LABEL: Record<Activity, string> = {
+  operating: "Operating activities", investing: "Investing activities (assets)", financing: "Financing (capital, loans — hand-marked lines)",
+  transfer: "Transfers between own accounts (excluded)", unreconciled: "Not reconciled — book these first",
+};
+
+export function cashFlowByActivity(lines: readonly CashFlowTxn[]): ActivityFlow[] {
+  const order: Activity[] = ["operating", "investing", "financing", "unreconciled", "transfer"];
+  const m = new Map<Activity, ActivityFlow>(order.map((a) => [a, { activity: a, label: ACTIVITY_LABEL[a], cashIn: 0, cashOut: 0, net: 0, count: 0 }]));
+  for (const t of lines) {
+    const g = m.get(activityOf(t))!;
+    g.cashIn += t.credit || 0; g.cashOut += t.debit || 0; g.net = g.cashIn - g.cashOut; g.count += 1;
+  }
+  return order.map((a) => m.get(a)!).filter((g) => g.count > 0);
+}
+
 /** Totals by label for one side (out = debits, in = credits), biggest first. */
 export function totalsByLabel(lines: CashFlowTxn[], side: "out" | "in"): LabelTotal[] {
   const m = new Map<string, LabelTotal>();

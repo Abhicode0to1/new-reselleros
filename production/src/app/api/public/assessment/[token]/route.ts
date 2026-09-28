@@ -9,7 +9,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { AssessmentQuestion, PublicQuestion } from "@/lib/assessments/grade";
 
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const admin = createAdminClient();
   const { data: test, error } = await admin
     .from("assessments")

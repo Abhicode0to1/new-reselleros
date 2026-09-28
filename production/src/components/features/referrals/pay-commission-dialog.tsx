@@ -17,6 +17,7 @@ import { rupee } from "@/lib/utils";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { usePayCommission } from "@/lib/queries/referral-commissions";
 import type { CommissionWithPartner } from "@/lib/queries/referral-commissions";
+import { istToday } from "@/lib/dates/ist";
 
 interface Props {
   open: boolean;
@@ -28,7 +29,7 @@ const selectCls =
   "w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40";
 
 function todayIST(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 export function PayCommissionDialog({ open, onOpenChange, commission }: Props) {
@@ -104,7 +105,7 @@ export function PayCommissionDialog({ open, onOpenChange, commission }: Props) {
           </div>
 
           {commission.tds_amount > 0 && (
-            <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-2xs text-amber-ink leading-relaxed">
+            <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-xs text-amber-ink leading-relaxed">
               ₹{commission.tds_amount.toLocaleString("en-IN")} TDS aapke paas rahega — usse govt ko deposit karna hoga (challan).
             </div>
           )}

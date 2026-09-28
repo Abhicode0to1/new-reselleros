@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isPlatformAdmin } from "@/lib/platform";
+import type { TablesUpdate } from "@/lib/supabase/database.types";
 
 const ANUTECH_PRIMARY_TENANT_ID = "fbb976f1-9090-4f10-9726-0901bd144e42";
 
@@ -95,7 +96,7 @@ export async function PATCH(request: Request) {
 
   if (!id) return NextResponse.json({ error: "Missing ticket ID" }, { status: 400 });
 
-  const updates: Record<string, any> = {};
+  const updates: TablesUpdate<"support_tickets"> = {};
   if (status) updates.status = status;
   if (resolution_note !== undefined) updates.resolution_note = resolution_note;
   if (status === "resolved" || status === "closed") {
@@ -104,7 +105,7 @@ export async function PATCH(request: Request) {
 
   const { data: updated, error } = await client
     .from("support_tickets")
-    .update(updates as any)
+    .update(updates)
     .eq("id", id)
     .select()
     .single();

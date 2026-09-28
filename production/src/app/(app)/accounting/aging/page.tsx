@@ -27,6 +27,7 @@ import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { primaryContactsFor } from "@/lib/contacts/primary";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { MsmePayablesCard } from "@/components/features/accounting/msme-payables-card";
 
 // ────────────────────────────────────────────────────────────────
 // Aggregation hook
@@ -237,7 +238,7 @@ export default function AgingPage() {
                     <td className="px-4 py-3">
                       <div className="font-medium text-ink">{r.customerName}</div>
                       {(r.contactEmail || r.contactPhone) && (
-                        <div className="text-2xs text-ink-3 mt-0.5">
+                        <div className="text-xs text-ink-3 mt-0.5">
                           {r.contactEmail ?? r.contactPhone}
                         </div>
                       )}
@@ -301,7 +302,7 @@ export default function AgingPage() {
                     <div className="font-medium text-ink leading-tight">{r.customerName}</div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(r.total)}</div>
                   </div>
-                  <div className="grid grid-cols-4 gap-1.5 text-2xs mb-3">
+                  <div className="grid grid-cols-4 gap-1.5 text-xs mb-3">
                     <Mini label="Current" value={r.buckets.current} />
                     <Mini label="31–60"   value={r.buckets.b30}    tone={r.buckets.b30   > 0 ? "amber" : undefined} />
                     <Mini label="61–90"   value={r.buckets.b60}    tone={r.buckets.b60   > 0 ? "amber" : undefined} />
@@ -340,6 +341,9 @@ export default function AgingPage() {
           </ul>
         </>
       )}
+
+      {/* Payables side: MSME vendors ka 45-din (s.43B(h)) flag — S33. */}
+      <MsmePayablesCard />
     </div>
   );
 }

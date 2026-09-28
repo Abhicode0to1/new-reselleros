@@ -173,7 +173,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
           Wholesale cost (₹/seat/month)
         </p>
         <div className="flex items-center gap-2 mb-1">
-          <Input
+          <Input aria-label="Wholesale cost per seat per month"
             type="number"
             min={0}
             value={unitCostPm}
@@ -183,7 +183,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
           />
           <span className="text-xs text-ink-3 whitespace-nowrap">₹/seat/mo</span>
         </div>
-        <p className="text-2xs text-ink-3 mb-4">
+        <p className="text-xs text-ink-3 mb-4">
           Total order value: <b className="text-ink-2 tabular-nums">{rupee(totalCost)}</b>
           {" "}({rupee(unitCostNum)} × {po.seats} seats × {po.term_months} months)
         </p>
@@ -194,7 +194,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
             <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
               Vendor order ID
             </p>
-            <Input
+            <Input aria-label="Vendor order ID"
               placeholder={po.vendor === "google" ? "e.g. GW-ORD-123456" : "Vendor's order reference"}
               value={vendorOrderId}
               onChange={(e) => setVendorOrderId(e.target.value)}
@@ -208,7 +208,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
         <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
           Notes
         </p>
-        <textarea
+        <textarea aria-label="Provisioning instructions, delivery date, contact at vendor, etc."
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           disabled={isTerminal}
@@ -224,7 +224,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
               <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold">
                 Linked vendor bills
               </p>
-              <p className="text-2xs text-ink-3 mt-0.5">
+              <p className="text-xs text-ink-3 mt-0.5">
                 Match Google's monthly invoices to this PO for real cost tracking
               </p>
             </div>
@@ -288,7 +288,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
           {showAllocator && (
             <div className="border border-hairline rounded-md p-3 mb-2 bg-paper">
               <p className="text-xs font-medium text-ink mb-2">Allocate a vendor bill</p>
-              <select
+              <select aria-label="Vendor bill to allocate"
                 value={selectedBillId}
                 onChange={(e) => setSelectedBillId(e.target.value)}
                 className="w-full text-sm bg-paper border border-hairline rounded px-3 py-2 mb-2 focus:outline-none focus:ring-1 focus:ring-amber"
@@ -300,7 +300,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
                   </option>
                 ))}
               </select>
-              <Input
+              <Input aria-label="Amount to allocate (₹)"
                 type="number"
                 placeholder="Amount to allocate (₹)"
                 value={allocAmount}
@@ -353,14 +353,14 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
                       {" · "}
                       <span className="font-mono">{a.vendor_bill?.bill_no ?? "(no ref)"}</span>
                     </p>
-                    <p className="text-ink-3 text-3xs">
+                    <p className="text-ink-3 text-xs">
                       Bill date: {a.vendor_bill ? formatDate(a.vendor_bill.bill_date) : "—"}
                       {" · "}Total: {a.vendor_bill ? rupee(a.vendor_bill.total) : "—"}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-medium text-ink tabular-nums">{rupee(a.allocated_amount)}</p>
-                    <p className="text-3xs text-ink-3">allocated</p>
+                    <p className="text-xs text-ink-3">allocated</p>
                   </div>
                   {!isTerminal && (
                     <IconButton
@@ -383,7 +383,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
           )}
 
           {allocsQ.data && allocsQ.data.length === 0 && !showAllocator && (
-            <p className="text-2xs text-ink-3 italic">
+            <p className="text-xs text-ink-3 italic">
               No vendor bills matched yet. When Google sends its monthly invoice, match it here.
             </p>
           )}

@@ -205,12 +205,45 @@ export function buildLedger(
 ): LedgerStatement {
   assertWholeRupees(allEntries);
 
-  const sorted = [...allEntries].sort(compareEntries);
-
-  const before = sorted.filter((e) => e.date < period.from);
-  const within = sorted.filter((e) => e.date >= period.from && e.date <= period.to);
+  const before = allEntries.filter((e) => e.date < period.from);
+  const within = allEntries.filter((e) => e.date >= period.from && e.date <= period.to);
 
   const openingBalance = before.reduce((b, e) => b + signedEffect(e), 0);
+  return buildLedgerFromWindow(kind, openingBalance, within, period);
+}
+
+/**
+ * Wahi statement, jab opening balance pehle se jud kar aaye.
+ *
+ * S17 (28 Sep 2026): `report_party_ledger` RPC window se pehle ka signed jod SQL me
+ * karta hai aur sirf window ki entries bhejta hai — poori history browser me laane ki
+ * zaroorat nahi. `buildLedger` bhi isi se banta hai, isliye dono raaston ka
+ * sort / running balance / Dr-Cr ek hi code hai.
+ *
+ * `windowEntries` me sirf period ke andar ki entries honi chahiye; bahar ki aayi to
+ * loudly fail — warna closing balance chup-chaap galat hota.
+ */
+export function buildLedgerFromWindow(
+  kind: LedgerKind,
+  openingBalance: number,
+  windowEntries: readonly LedgerEntry[],
+  period: LedgerPeriod,
+): LedgerStatement {
+  assertWholeRupees(windowEntries);
+  if (!Number.isInteger(openingBalance)) {
+    throw new Error(
+      `Opening balance ${openingBalance} is not a whole number of rupees — money is stored in whole rupees, so this looks like paise.`,
+    );
+  }
+  const stray = windowEntries.find((e) => e.date < period.from || e.date > period.to);
+  if (stray) {
+    throw new Error(
+      `Ledger entry ${stray.reference} (${stray.date}) is outside ${period.from} – ${period.to}. ` +
+      `Only the window's entries belong here; earlier ones go into the opening balance.`,
+    );
+  }
+
+  const within = [...windowEntries].sort(compareEntries);
 
   let balance = openingBalance;
   let totalDebit = 0, totalCredit = 0, totalBilled = 0, totalSettled = 0;

@@ -26,7 +26,7 @@ export function ProjectMarginCard({ result, periodLabel }: { result: ProjectCost
     <Card className="p-5 md:p-6 mb-6">
       <div className="mb-4">
         <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Project margin</h2>
-        <p className="text-2xs text-ink-3 mt-0.5">
+        <p className="text-xs text-ink-3 mt-0.5">
           {periodLabel} · revenue from project milestones − salary of the people on the project − project expenses.
           This cost is part of “Cost of goods” above, not operating expenses.
         </p>
@@ -49,16 +49,16 @@ export function ProjectMarginCard({ result, periodLabel }: { result: ProjectCost
                 <tr key={p.projectId}>
                   <td className="px-1 py-2 min-w-0">
                     <Link href={`/projects/${p.projectId}`} className="text-ink hover:underline">{p.title}</Link>
-                    {p.customerName && <div className="text-2xs text-ink-3 truncate">{p.customerName}</div>}
+                    {p.customerName && <div className="text-xs text-ink-3 truncate">{p.customerName}</div>}
                   </td>
                   <td className="px-1 py-2 text-right text-ink">
-                    {p.revenue > 0 ? rupee(p.revenue) : <span className="text-2xs text-ink-3">not invoiced</span>}
+                    {p.revenue > 0 ? rupee(p.revenue) : <span className="text-xs text-ink-3">not invoiced</span>}
                   </td>
                   <td className="px-1 py-2 text-right text-rose">{p.labour > 0 ? `− ${rupee(p.labour)}` : "—"}</td>
                   <td className="px-1 py-2 text-right text-rose hidden sm:table-cell">{p.direct > 0 ? `− ${rupee(p.direct)}` : "—"}</td>
                   <td className={`px-1 py-2 text-right font-medium ${p.margin >= 0 ? "text-emerald" : "text-rose"}`}>
                     {p.margin < 0 ? `− ${rupee(-p.margin)}` : rupee(p.margin)}
-                    {p.marginPct !== null && <span className="text-2xs text-ink-3 ml-1">{p.marginPct}%</span>}
+                    {p.marginPct !== null && <span className="text-xs text-ink-3 ml-1">{p.marginPct}%</span>}
                   </td>
                 </tr>
               ))}
@@ -81,19 +81,19 @@ export function ProjectMarginCard({ result, periodLabel }: { result: ProjectCost
       {/* A project with salary spent but nothing invoiced yet is work in progress, not a
           loss-making project — said so, so the red margin is read correctly. */}
       {result.byProject.some((p) => p.revenue === 0 && p.labour + p.direct > 0) && (
-        <p className="mt-3 text-2xs text-ink-3 leading-snug">
+        <p className="mt-3 text-xs text-ink-3 leading-snug">
           “Not invoiced” — salary was spent on this project in the period but no milestone was invoiced yet.
           It shows as a negative margin until the milestone is billed.
         </p>
       )}
       {result.capped && (
-        <p className="mt-2 text-2xs text-amber-ink leading-snug">
+        <p className="mt-2 text-xs text-amber-ink leading-snug">
           Allocated salary ({rupee(result.labourAllocated)}) is more than the salary booked in this period
           ({rupee(result.salaryPool)}), so each project&apos;s salary has been scaled down to what was booked.
         </p>
       )}
       {result.undated > 0 && (
-        <p className="mt-2 text-2xs text-amber-ink leading-snug">
+        <p className="mt-2 text-xs text-amber-ink leading-snug">
           {result.undated} labour allocation{result.undated === 1 ? " has" : "s have"} no start date (on the allocation or the project),
           so {result.undated === 1 ? "it is" : "they are"} not counted in any period.
         </p>

@@ -9,18 +9,13 @@
 import * as React from "react";
 
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import { useEmployees, useAttendance, useMarkAttendance, useAttendanceNetwork, type Employee } from "@/lib/queries/payroll";
-
-function istToday(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-function istPeriod(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 7);
-}
+import { istToday, istMonth as istPeriod } from "@/lib/dates/ist";
 function fmtTime(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
@@ -55,7 +50,7 @@ export default function AttendanceKioskPage() {
       <div className="mb-6 text-center relative">
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Attendance</h1>
         <p className="text-sm text-ink-3 mt-1">Tap your name and enter your PIN to check in or out.</p>
-        <div className="mt-2 flex items-center justify-center gap-3 text-2xs">
+        <div className="mt-2 flex items-center justify-center gap-3 text-xs">
           {locked ? (
             <span className={cn("inline-flex items-center gap-1", offNetwork ? "text-rose" : "text-emerald")}>
               <Icon name={offNetwork ? "alert" : "lock"} size={12} />
@@ -97,7 +92,7 @@ export default function AttendanceKioskPage() {
                 )}
               >
                 <div className="font-medium text-ink leading-tight">{e.name}</div>
-                <div className="text-2xs mt-2">
+                <div className="text-xs mt-2">
                   {done ? (
                     <span className="text-ink-3">In {fmtTime(a!.check_in)} · Out {fmtTime(a!.check_out)}</span>
                   ) : inOnly ? (
@@ -159,7 +154,7 @@ function PresenceCodeBanner() {
           <div className="font-mono text-4xl md:text-5xl font-bold tracking-[0.25em] tabular-nums text-ink">
             {code ?? "······"}
           </div>
-          <div className="text-2xs text-ink-3 mt-1">refreshes in {secs}s</div>
+          <div className="text-xs text-ink-3 mt-1">refreshes in {secs}s</div>
         </div>
       </div>
     </Card>
@@ -261,8 +256,9 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={onClose}>
-      <Card className="w-full max-w-xs p-5" onClick={(e) => e.stopPropagation()}>
+    // ui/dialog, not a hand-rolled overlay: focus stays on the keypad, Esc cancels (S36).
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent hideClose resizable={false} aria-describedby={undefined} className="gap-0 md:!max-w-xs">
         <div className="text-center mb-4">
           <video
             ref={videoRef}
@@ -279,10 +275,10 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
               className="mx-auto mb-3 flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3 hover:border-amber/50 hover:text-amber-ink"
             >
               <Icon name="eye" size={22} />
-              <span className="text-3xs leading-tight">Tap for camera</span>
+              <span className="text-xs leading-tight">Tap for camera</span>
             </button>
           )}
-          <div className="font-serif text-2xl text-ink">{employee.name}</div>
+          <DialogTitle className="font-serif text-2xl text-ink">{employee.name}</DialogTitle>
           <div className="text-xs text-ink-3 mt-0.5">
             {camOn
               ? "Look at the camera & enter PIN"
@@ -313,7 +309,7 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
         )}
 
         <button onClick={onClose} className="mt-4 w-full text-center text-xs text-ink-3 hover:text-ink">Cancel</button>
-      </Card>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

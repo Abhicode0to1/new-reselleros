@@ -22,13 +22,15 @@ import {
 } from "@/components/ui/dialog";
 import { rupee, formatDate } from "@/lib/utils";
 import { useBankAccounts } from "@/lib/queries/bank";
+import { FixedAssetRegister } from "@/components/features/accounting/fixed-asset-register";
 import {
   useEmiPurchases, useRecordEmiPurchase, useRecordEmiPayment, useEmiPayments,
   EMI_CATEGORY_LABEL, type EmiPurchase, type EmiCategory,
 } from "@/lib/queries/emi";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 const selectCls = "w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber";
 
@@ -98,7 +100,7 @@ export default function AssetsPage() {
                         {p.name}
                         <Badge kind="muted">{EMI_CATEGORY_LABEL[p.category]}</Badge>
                       </div>
-                      {p.lender && <div className="text-2xs text-ink-3 font-normal">{p.lender}</div>}
+                      {p.lender && <div className="text-xs text-ink-3 font-normal">{p.lender}</div>}
                     </td>
                     <td className="px-4 py-3 text-ink-2">{formatDate(p.purchased_on)}</td>
                     <td className="px-4 py-3 text-right font-mono text-ink-2">{rupee(p.total_cost)}</td>
@@ -129,11 +131,11 @@ export default function AssetsPage() {
                 <Card className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="font-medium text-ink leading-tight">
-                      {p.name} <span className="text-3xs font-normal text-ink-3">· {EMI_CATEGORY_LABEL[p.category]}</span>
+                      {p.name} <span className="text-xs font-normal text-ink-3">· {EMI_CATEGORY_LABEL[p.category]}</span>
                     </div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(p.outstanding)}</div>
                   </div>
-                  <div className="text-2xs text-ink-3 mb-2">
+                  <div className="text-xs text-ink-3 mb-2">
                     {formatDate(p.purchased_on)} · {rupee(p.total_cost)} cost · {p.emisPaid}{p.emi_count ? `/${p.emi_count}` : ""} EMIs paid
                   </div>
                   <div className="flex items-center justify-between">
@@ -153,6 +155,8 @@ export default function AssetsPage() {
           </ul>
         </>
       )}
+
+      <FixedAssetRegister />
 
       <FAB icon="plus" label="Purchase" onClick={() => setAddOpen(true)} ariaLabel="Record purchase" />
       {addOpen && <PurchaseDialog onClose={() => setAddOpen(false)} />}
@@ -219,30 +223,30 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
         <div className="space-y-3 max-h-[62vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-medium text-ink-2 mb-1">Item</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Motorcycle" autoFocus />
+              <label htmlFor="assets-item" className="block text-xs font-medium text-ink-2 mb-1">Item</label>
+              <Input id="assets-item" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Motorcycle" autoFocus />
             </div>
             <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-medium text-ink-2 mb-1">Category</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value as EmiCategory)} className={selectCls}>
+              <label htmlFor="assets-category" className="block text-xs font-medium text-ink-2 mb-1">Category</label>
+              <select id="assets-category" value={category} onChange={(e) => setCategory(e.target.value as EmiCategory)} className={selectCls}>
                 {(Object.keys(EMI_CATEGORY_LABEL) as EmiCategory[]).map((c) => <option key={c} value={c}>{EMI_CATEGORY_LABEL[c]}</option>)}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Total cost (₹)</label>
-              <Input type="number" min={1} value={total} onChange={(e) => setTotal(e.target.value)} placeholder="e.g. 500000" />
+              <label htmlFor="assets-total-cost" className="block text-xs font-medium text-ink-2 mb-1">Total cost (₹)</label>
+              <Input id="assets-total-cost" type="number" min={1} value={total} onChange={(e) => setTotal(e.target.value)} placeholder="e.g. 500000" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Down payment (₹)</label>
-              <Input type="number" min={0} value={down} onChange={(e) => setDown(e.target.value)} placeholder="e.g. 200000" />
+              <label htmlFor="assets-down-payment" className="block text-xs font-medium text-ink-2 mb-1">Down payment (₹)</label>
+              <Input id="assets-down-payment" type="number" min={0} value={down} onChange={(e) => setDown(e.target.value)} placeholder="e.g. 200000" />
             </div>
           </div>
           {downN > 0 && (
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Down payment from</label>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+              <label htmlFor="assets-down-payment-from" className="block text-xs font-medium text-ink-2 mb-1">Down payment from</label>
+              <select id="assets-down-payment-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
                 {accounts.length === 0 && <option value="">Add an account in Banking</option>}
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
@@ -250,21 +254,21 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">No. of EMIs</label>
-              <Input type="number" min={0} value={emiCount} onChange={(e) => setEmiCount(e.target.value)} />
+              <label htmlFor="assets-no-of-emis" className="block text-xs font-medium text-ink-2 mb-1">No. of EMIs</label>
+              <Input id="assets-no-of-emis" type="number" min={0} value={emiCount} onChange={(e) => setEmiCount(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
-              <Input type="number" min={0} value={emiTouched ? emiAmount : String(suggestedEmi || "")} onChange={(e) => { setEmiTouched(true); setEmiAmount(e.target.value); }} />
+              <label htmlFor="assets-emi-amount" className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
+              <Input id="assets-emi-amount" type="number" min={0} value={emiTouched ? emiAmount : String(suggestedEmi || "")} onChange={(e) => { setEmiTouched(true); setEmiAmount(e.target.value); }} />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Financier / lender (optional)</label>
-            <Input value={lender} onChange={(e) => setLender(e.target.value)} placeholder="e.g. HDFC Bank" />
+            <label htmlFor="assets-financier-lender-optional" className="block text-xs font-medium text-ink-2 mb-1">Financier / lender (optional)</label>
+            <Input id="assets-financier-lender-optional" value={lender} onChange={(e) => setLender(e.target.value)} placeholder="e.g. HDFC Bank" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Purchase date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="assets-purchase-date" className="block text-xs font-medium text-ink-2 mb-1">Purchase date</label>
+            <Input id="assets-purchase-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
           <div className="rounded-md bg-paper-2/50 p-3 text-sm space-y-1">
@@ -273,7 +277,7 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
             <div className="flex items-center justify-between pt-1 border-t border-hairline font-semibold text-ink">
               <span>Loan (financed)</span><span className="font-mono">{rupee(financed)}</span>
             </div>
-            {emiN > 0 && countN > 0 && <p className="text-2xs text-ink-3">≈ {rupee(emiN)} × {countN} EMIs</p>}
+            {emiN > 0 && countN > 0 && <p className="text-xs text-ink-3">≈ {rupee(emiN)} × {countN} EMIs</p>}
           </div>
         </div>
         <DialogFooter>
@@ -322,24 +326,24 @@ function PayEmiDialog({ purchase, onClose }: { purchase: EmiPurchase; onClose: (
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
-            <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <label htmlFor="assets-emi-amount-2" className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
+            <Input id="assets-emi-amount-2" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Of which interest (₹, optional)</label>
-            <Input type="number" min={0} value={interest} onChange={(e) => setInterest(e.target.value)} />
-            {tooMuchInt && <p className="mt-1 text-2xs text-rose">Interest can&apos;t exceed the EMI.</p>}
-            {!tooMuchInt && tooMuchPrin && <p className="mt-1 text-2xs text-rose">Principal ({rupee(principal)}) exceeds outstanding {rupee(purchase.outstanding)}.</p>}
+            <label htmlFor="assets-of-which-interest-optional" className="block text-xs font-medium text-ink-2 mb-1">Of which interest (₹, optional)</label>
+            <Input id="assets-of-which-interest-optional" type="number" min={0} value={interest} onChange={(e) => setInterest(e.target.value)} />
+            {tooMuchInt && <p className="mt-1 text-xs text-rose">Interest can&apos;t exceed the EMI.</p>}
+            {!tooMuchInt && tooMuchPrin && <p className="mt-1 text-xs text-rose">Principal ({rupee(principal)}) exceeds outstanding {rupee(purchase.outstanding)}.</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+            <label htmlFor="assets-paid-from" className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
+            <select id="assets-paid-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="assets-date" className="block text-xs font-medium text-ink-2 mb-1">Date</label>
+            <Input id="assets-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="rounded-md bg-paper-2/50 p-3 text-sm space-y-1">
             <Row label="Principal (reduces loan)" value={rupee(Math.max(0, principal))} />
@@ -380,7 +384,7 @@ function EmiHistoryDialog({ purchase, onClose }: { purchase: EmiPurchase; onClos
               <div key={h.id} className="flex items-start justify-between gap-3 rounded-md border border-hairline px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-ink">{rupee(h.amount)}</div>
-                  <div className="text-2xs text-ink-3">
+                  <div className="text-xs text-ink-3">
                     {formatDate(h.paid_on)}
                     {h.bank_account_id ? ` · ${acctName.get(h.bank_account_id) ?? "account"}` : ""}
                     {" · "}{rupee(h.principal_part)} principal{h.interest_part > 0 ? ` + ${rupee(h.interest_part)} interest` : ""}

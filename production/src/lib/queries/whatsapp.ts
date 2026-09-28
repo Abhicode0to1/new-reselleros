@@ -11,10 +11,12 @@
 
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as React from "react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import type { WhatsAppMessageRow } from "@/lib/supabase/database.types";
+import type { Json, WhatsAppMessageRow } from "@/lib/supabase/database.types";
+import { flattenPages } from "@/lib/queries/keyset";
 
 /** One contact's last message + count of inbound messages we haven't
  *  marked read yet (treat anything inbound as unread for first cut). */
@@ -26,49 +28,61 @@ export interface WhatsAppConversation {
   message_count:    number;
 }
 
-export function useWhatsAppConversations() {
-  return useQuery({
-    queryKey: ["whatsapp", "conversations"],
-    queryFn: async (): Promise<WhatsAppConversation[]> => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("whatsapp_messages")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
+/** The keyset cursor for list_whatsapp_threads(), exactly as the server returned it. */
+export interface WhatsAppThreadCursor {
+  last_at: string;
+  contact_phone: string;
+}
 
-      // Group by contact, keep the newest as "last_message".
-      const byPhone = new Map<string, WhatsAppConversation>();
-      for (const m of (data ?? []) as WhatsAppMessageRow[]) {
-        const c = byPhone.get(m.contact_phone);
-        if (!c) {
-          byPhone.set(m.contact_phone, {
-            contact_phone:   m.contact_phone,
-            last_message:    m,
-            last_inbound_at: m.direction === "inbound" ? m.created_at : null,
-            unread_count:    m.direction === "inbound" ? 1 : 0,
-            message_count:   1,
-          });
-        } else {
-          c.message_count++;
-          if (m.direction === "inbound") {
-            c.unread_count++;
-            if (!c.last_inbound_at || m.created_at > c.last_inbound_at) {
-              c.last_inbound_at = m.created_at;
-            }
-          }
-        }
-      }
-      // Sort by recency of any message — last_message is already the newest per contact
-      return [...byPhone.values()].sort(
-        (a, b) => b.last_message.created_at.localeCompare(a.last_message.created_at),
-      );
+export interface WhatsAppThreadPage {
+  rows: WhatsAppConversation[];
+  next_cursor: WhatsAppThreadCursor | null;
+}
+
+/** Conversations per page. Enough to fill the rail; "Load more" fetches the next page. */
+export const WHATSAPP_THREADS_PAGE = 50;
+
+/**
+ * The inbox's conversations, one row per contact, in keyset pages (S37).
+ *
+ * ─── WHAT THIS REPLACED ─────────────────────────────────────────────────────
+ * It fetched the newest 500 MESSAGES and grouped them in the browser. So a contact whose
+ * last message was the 501st did not exist in the inbox at all, and every unread and
+ * message count was a count of that window, not of the conversation. list_whatsapp_threads()
+ * (migration 20260928200000) groups over ALL of the tenant's messages in the database and
+ * returns one page of conversations, newest activity first — the same shape and the same
+ * order as before, without the window.
+ *
+ * `data` is the flattened list, so the page reads it exactly as it read the old array. A
+ * poll refetches every loaded page in order, each from the previous page's fresh cursor.
+ */
+export function useWhatsAppConversations() {
+  const q = useInfiniteQuery({
+    queryKey: ["whatsapp", "conversations"],
+    initialPageParam: null as WhatsAppThreadCursor | null,
+    queryFn: async ({ pageParam }): Promise<WhatsAppThreadPage> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("list_whatsapp_threads", {
+        p_cursor: pageParam as unknown as Json,
+        p_limit: WHATSAPP_THREADS_PAGE,
+      });
+      if (error) throw error;
+      const page = (data ?? { rows: [], next_cursor: null }) as unknown as WhatsAppThreadPage;
+      return { rows: page.rows ?? [], next_cursor: page.next_cursor ?? null };
     },
+    getNextPageParam: (last) => last.next_cursor,
     // Realtime poll — 15s feels live enough without hammering Supabase
     refetchInterval: 15_000,
   });
+  const data = React.useMemo(
+    () => (q.data ? flattenPages(q.data.pages, (c) => c.contact_phone) : undefined),
+    [q.data],
+  );
+  return { ...q, data };
 }
+
+/** How many of the latest messages one thread poll loads. */
+export const WHATSAPP_THREAD_MAX = 200;
 
 export function useWhatsAppThread(contactPhone: string | null) {
   return useQuery({
@@ -76,15 +90,20 @@ export function useWhatsAppThread(contactPhone: string | null) {
     enabled:  Boolean(contactPhone),
     queryFn: async (): Promise<WhatsAppMessageRow[]> => {
       const supabase = createClient();
+      /* S16: bounded. This polls every 10s and used to fetch the WHOLE history with
+         this number each time. Newest WHATSAPP_THREAD_MAX first, then flipped back to
+         oldest-first, which is the order the thread renders in. */
       const { data, error } = await supabase
         .from("whatsapp_messages")
         .select("*")
         .eq("contact_phone", contactPhone!)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(WHATSAPP_THREAD_MAX);
       if (error) throw error;
-      return (data ?? []) as WhatsAppMessageRow[];
+      return ((data ?? []) as WhatsAppMessageRow[]).reverse();
     },
     refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 }
 

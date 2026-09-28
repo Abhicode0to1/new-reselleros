@@ -27,6 +27,7 @@ import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { primaryContactsFor } from "@/lib/contacts/primary";
+import { utcDateISO } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Range helpers (Indian FY = Apr 1 → Mar 31)
@@ -36,7 +37,7 @@ function istToday(): Date {
   return new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
 }
 function yyyymmdd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return utcDateISO(d);
 }
 function fiscalYearStart(d: Date): Date {
   const yr = d.getUTCFullYear();
@@ -294,11 +295,11 @@ export default function ProfitabilityPage() {
             })}
           </div>
           <div className="flex items-center gap-2 ml-auto flex-wrap">
-            <input type="date" value={range.from}
+            <input aria-label="From date" type="date" value={range.from}
               onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
               className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
             <span className="text-xs text-ink-3">to</span>
-            <input type="date" value={range.to}
+            <input aria-label="To date" type="date" value={range.to}
               onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
               className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
           </div>
@@ -441,7 +442,7 @@ export default function ProfitabilityPage() {
                           </Link>
                         ) : r.customerName}
                       </div>
-                      <div className="text-2xs text-ink-3 mt-0.5">
+                      <div className="text-xs text-ink-3 mt-0.5">
                         {r.quoteCount} {r.quoteCount === 1 ? "quote" : "quotes"} · {r.seatCount} seats
                       </div>
                     </div>
@@ -449,7 +450,7 @@ export default function ProfitabilityPage() {
                       {r.marginPct.toFixed(1)}%
                     </Badge>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-2xs mb-2">
+                  <div className="grid grid-cols-3 gap-2 text-xs mb-2">
                     <div>
                       <div className="text-ink-3 uppercase tracking-wider">Revenue</div>
                       <div className="font-mono text-ink">{rupee(r.revenue)}</div>
@@ -499,7 +500,7 @@ function KPI({
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>
-      {hint && <div className="text-3xs text-ink-3 mt-1">{hint}</div>}
+      {hint && <div className="text-xs text-ink-3 mt-1">{hint}</div>}
     </Card>
   );
 }

@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useCreateVendorBill, uploadBillAttachment, VENDOR_BILL_CATEGORIES } from "@/lib/queries/vendor-bills";
 import { useVendors, ensureVendor } from "@/lib/queries/vendors";
+import { istToday } from "@/lib/dates/ist";
 
 const schema = z.object({
   vendor_name:  z.string().min(2, "Vendor name required"),
@@ -99,7 +100,7 @@ export function AddVendorBillDialog({
   onCreated?: (billId: string) => void;
 }) {
   const create = useCreateVendorBill();
-  const today  = new Date().toISOString().slice(0, 10);
+  const today  = istToday();
 
   // Vendor master autocomplete — pick an existing supplier (fills GSTIN +
   // category) or type a new name (auto-added to Vendors on save).
@@ -366,7 +367,7 @@ export function AddVendorBillDialog({
                 <Icon name="sparkles" size={18} className="text-amber-ink shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-ink">Bill upload karo — AI khud bhar dega</p>
-                  <p className="text-2xs text-ink-3">Photo (JPG/PNG) ya PDF · fields nikaal ke form bhar dega, aap check karke Save karo</p>
+                  <p className="text-xs text-ink-3">Photo (JPG/PNG) ya PDF · fields nikaal ke form bhar dega, aap check karke Save karo</p>
                 </div>
               </div>
               <Button type="button" variant="primary" size="sm" icon="upload" loading={reading} onClick={() => fileRef.current?.click()}>
@@ -381,17 +382,17 @@ export function AddVendorBillDialog({
               />
             </div>
             {aiNote && (
-              <p className="mt-2 flex items-center gap-1.5 text-2xs text-emerald">
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald">
                 <Icon name="check_circle" size={12} /> {aiNote}
               </p>
             )}
             {aiError && (
-              <p className="mt-2 flex items-center gap-1.5 text-2xs text-rose">
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-rose">
                 <Icon name="alert" size={12} /> {aiError}
               </p>
             )}
             {attachFile && !aiNote && (
-              <p className="mt-2 flex items-center gap-1.5 text-2xs text-ink-2">
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-2">
                 <Icon name="file" size={12} /> {attachFile.name} — bill ke saath attach hoga
               </p>
             )}
@@ -407,7 +408,7 @@ export function AddVendorBillDialog({
                 key={p.name}
                 type="button"
                 onClick={() => applyVendorPreset(i)}
-                className="text-2xs px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper-2 transition-colors"
+                className="text-xs px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper-2 transition-colors"
               >
                 {p.name.split(" ")[0]}
               </button>
@@ -449,7 +450,7 @@ export function AddVendorBillDialog({
                           className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2"
                         >
                           <span className="text-ink truncate">{v.name}</span>
-                          {v.gstin && <span className="text-3xs text-ink-3 font-mono shrink-0">{v.gstin}</span>}
+                          {v.gstin && <span className="text-xs text-ink-3 font-mono shrink-0">{v.gstin}</span>}
                         </button>
                       ))}
                     </div>
@@ -488,7 +489,7 @@ export function AddVendorBillDialog({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-3xs text-ink-3 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               Categories starting with <code>COGS-</code> count as cost of goods sold in the P&L.
             </p>
           </FormField>
@@ -502,7 +503,7 @@ export function AddVendorBillDialog({
               <Button type="button" variant="ghost" size="sm" icon="plus" onClick={addLine}>Add item</Button>
             </div>
             {lines.length === 0 ? (
-              <p className="text-2xs text-ink-3">No items yet — upload a bill to auto-fill, or add rows manually.</p>
+              <p className="text-xs text-ink-3">No items yet — upload a bill to auto-fill, or add rows manually.</p>
             ) : (
               <div className="space-y-2">
                 <div className="hidden sm:grid grid-cols-12 gap-2 text-3xs uppercase tracking-wider text-ink-3">
@@ -514,14 +515,14 @@ export function AddVendorBillDialog({
                 </div>
                 {lines.map((l, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                    <Input wrapperClassName="col-span-12 sm:col-span-5" placeholder="e.g. Team plan - Premium"
+                    <Input aria-label="Item description" wrapperClassName="col-span-12 sm:col-span-5" placeholder="e.g. Team plan - Premium"
                       value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />
-                    <Input wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" min={0} step="any" placeholder="Qty"
+                    <Input aria-label="Qty" wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" min={0} step="any" placeholder="Qty"
                       value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} />
-                    <Input wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" step="any" placeholder="Unit"
+                    <Input aria-label="Unit" wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" step="any" placeholder="Unit"
                       value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} />
                     {/* Amount allows negatives — credit / unused-time lines are refunds. */}
-                    <Input wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" step="any" placeholder="Amount"
+                    <Input aria-label="Amount" wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" step="any" placeholder="Amount"
                       value={l.amount} onChange={(e) => setLine(i, { amount: e.target.value })} />
                     <button type="button" onClick={() => removeLine(i)} aria-label="Remove item"
                       className="col-span-3 sm:col-span-1 justify-self-center text-ink-3 hover:text-rose">
@@ -538,11 +539,11 @@ export function AddVendorBillDialog({
             {isForeign && (
               <div className="mb-3 rounded-md bg-amber-soft/40 p-2.5">
                 <div className="flex flex-wrap items-end gap-3">
-                  <div className="text-2xs text-amber-ink leading-snug max-w-[55%]">
+                  <div className="text-xs text-amber-ink leading-snug max-w-[55%]">
                     Bill is in <b>{currency}</b>. Enter today's rate — the ₹ books use the converted amounts.
                   </div>
-                  <FormField label={`Exchange rate (₹ per 1 ${currency})`} required>
-                    <Input type="number" min={0} step="any" placeholder="e.g. 83.50"
+                  <FormField htmlFor="add-vendor-field" label={`Exchange rate (₹ per 1 ${currency})`} required>
+                    <Input id="add-vendor-field" type="number" min={0} step="any" placeholder="e.g. 83.50"
                       value={fxRate}
                       error={fxError ?? undefined}
                       onChange={(e) => { setFxRate(e.target.value); if (fxError) setFxError(null); }} />
@@ -566,11 +567,11 @@ export function AddVendorBillDialog({
             </div>
             <div className="flex flex-wrap gap-1.5 mt-3">
               <button type="button" onClick={applyGST18Intra}
-                className="text-2xs px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper transition-colors">
+                className="text-xs px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper transition-colors">
                 Intra-state GST 18% (CGST 9 + SGST 9)
               </button>
               <button type="button" onClick={applyGST18Inter}
-                className="text-2xs px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper transition-colors">
+                className="text-xs px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper transition-colors">
                 Inter-state GST 18% (IGST 18)
               </button>
             </div>
@@ -586,7 +587,7 @@ export function AddVendorBillDialog({
               )}
             </div>
             {isForeign && rate > 0 && Number(watch("total")) > 0 && (
-              <p className="mt-1 text-2xs text-emerald">
+              <p className="mt-1 text-xs text-emerald">
                 ≈ ₹{Math.round(Number(watch("total")) * rate).toLocaleString("en-IN")} in books (@ ₹{rate}/{currency})
               </p>
             )}

@@ -32,6 +32,7 @@ import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
 import { downloadWhatsAppMedia } from "@/lib/whatsapp/media";
 import { transcribeVoiceNote } from "@/lib/voice/stt";
 import { decideVoiceNote, isTranscribable, voiceContextNote } from "@/lib/voice/voice-note";
+import { isStopMessage } from "@/lib/marketing/whatsapp-broadcast";
 
 /* Envelope sender + trading name for anything the AI sales agent sends off the back of a
    WhatsApp message. Mirrors the inbound-email webhook so one reseller cannot end up sending
@@ -216,6 +217,20 @@ export async function POST(req: NextRequest) {
         });
         // unique constraint on (tenant, wamid) — Meta retries are harmless
         if (!insertErr) messagesStored++;
+
+        /* ── STOP → opt-out (migration 20260926230000) ─────────────────────────
+           A reply of STOP (or the template's "Stop promotions" quick-reply button) puts the
+           number on whatsapp_opt_outs, and Marketing → WhatsApp broadcasts skip it from then
+           on. The sales agent does not answer it — replying "Sure, how can I help?" to a
+           STOP is exactly what gets a number reported. The message is stored above, so the
+           Inbox still shows it. */
+        if (!insertErr && isStopMessage(text ?? m.button?.text ?? null)) {
+          const { error: optErr } = await (admin as unknown as { from: (t: string) => any })  // eslint-disable-line @typescript-eslint/no-explicit-any
+            .from("whatsapp_opt_outs")
+            .upsert({ tenant_id: tenantId, phone: `+${m.from}`, reason: "stop" }, { onConflict: "tenant_id,phone", ignoreDuplicates: true });
+          if (optErr) console.error("[/api/webhooks/whatsapp] opt-out not recorded:", optErr);
+          continue;
+        }
 
         /* ── Hand it to the AI sales agent ─────────────────────────────────────
            GATED ON `!insertErr`, and that single condition is the whole idempotency

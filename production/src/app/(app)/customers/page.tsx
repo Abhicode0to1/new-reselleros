@@ -16,7 +16,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
-import { useProjectReceivablesByCustomer } from "@/lib/queries/projects";
+import { useProjectReceivablesByCustomer, useProjectSales } from "@/lib/queries/projects";
+import { customerPortfolioStatus, countsAsNoBusiness, projectValue, type ProjectLike } from "@/lib/customers/portfolio-status";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useOutstandingReceivables } from "@/lib/queries/payments";
 import { ImportCustomersDialog } from "@/components/features/customers/import-customers-dialog";
@@ -53,12 +54,18 @@ import { rupee, cn, cleanDisplayName, phoneSuffixOf } from "@/lib/utils";
 
 // Saved-view segments (Zoho-style) — compact filters over already-loaded data
 // (receivables + unused credit + subscriptions).
-type ViewCtx = { amount: number; credit: number; hasSub: boolean };
+/* R-005: `projects` joined this in Sep 2026. A reseller who also sells custom software
+   had those customers reading as dead accounts, because every filter here asked only
+   about subscriptions. */
+type ViewCtx = { amount: number; credit: number; hasSub: boolean; projects: readonly ProjectLike[] };
 const VIEW_DEFS: { id: string; label: string; test: (x: ViewCtx) => boolean }[] = [
   { id: "all",        label: "All",              test: () => true },
   { id: "unpaid",     label: "Has receivables",  test: (x) => x.amount > 0 },
   { id: "subscribed", label: "With subscriptions", test: (x) => x.hasSub },
-  { id: "nosub",      label: "No subscription",  test: (x) => !x.hasSub },
+  { id: "projects",   label: "With projects",    test: (x) => x.projects.length > 0 },
+  /* Reads as "dead accounts", so a customer mid-build must not be in it —
+     `countsAsNoBusiness` is the tested rule, shared with the row pill. */
+  { id: "nosub",      label: "No business",      test: (x) => countsAsNoBusiness({ hasActiveSub: x.hasSub, projects: x.projects }) },
   { id: "credit",     label: "Has credit",       test: (x) => x.credit > 0 },
 ];
 
@@ -100,14 +107,10 @@ function customerSubline(c: CustomerLike): string {
   return c.domain || c.contact_email || c.state || "";
 }
 
-// Subscription status pill — maps 1:1 to the segment filters so the visible
-// tags and the filter counts always agree.
-function subStatus(hasActiveSub: boolean, archived: boolean):
-  { label: string; kind: "success" | "muted"; dot: boolean } {
-  if (archived) return { label: "Inactive", kind: "muted", dot: false };
-  if (hasActiveSub) return { label: "Active", kind: "success", dot: true };
-  return { label: "No subscription", kind: "muted", dot: false };
-}
+/* The row pill moved to `lib/customers/portfolio-status.ts` (R-005) so it and the
+   segment filters cannot disagree about what a customer is — the tags and the counts
+   are now the same tested function. The local `subStatus` it replaced knew only about
+   subscriptions. */
 
 export default function CustomersPage() {
   const { data: customers, isLoading, error, refetch } = useCustomers();
@@ -115,6 +118,9 @@ export default function CustomersPage() {
   const { data: outstanding } = useOutstandingReceivables();
   const { data: creditsByCustomer = {} } = useOpenCreditsByCustomer();
   const { data: projRecv = {} } = useProjectReceivablesByCustomer();
+  /* R-005. Already fetched for the Project Sales page, so this is a cache hit in
+     practice rather than a new round trip. */
+  const { data: allProjects } = useProjectSales();
 
   // customer_id → outstanding = subscription dues + project invoiced-but-unpaid,
   // so project receivables show on the list too (matches the customer 360 page).
@@ -203,6 +209,19 @@ export default function CustomersPage() {
     return map;
   }, [subscriptions]);
 
+  // customer_id -> that customer's projects, any status. The status buckets live in
+  // portfolio-status.ts; this only groups.
+  const projectsByCustomer = React.useMemo(() => {
+    const map = new Map<string, ProjectLike[]>();
+    for (const p of allProjects ?? []) {
+      if (!p.customer_id) continue;
+      const list = map.get(p.customer_id);
+      if (list) list.push(p); else map.set(p.customer_id, [p]);
+    }
+    return map;
+  }, [allProjects]);
+  const NO_PROJECTS: readonly ProjectLike[] = React.useMemo(() => [], []);
+
   // Workspace keyword filter removed 2026-08-13 — RLS already scopes to tenant.
   const customersByWorkspace = React.useMemo(() => customers ?? [], [customers]);
 
@@ -212,11 +231,11 @@ export default function CustomersPage() {
     const m: Record<string, number> = Object.fromEntries(VIEW_DEFS.map((v) => [v.id, 0]));
     for (const c of customersByWorkspace) {
       const out = outstandingByCustomer.get(c.id);
-      const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id) };
+      const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS };
       for (const v of VIEW_DEFS) if (v.test(ctx)) m[v.id]++;
     }
     return m;
-  }, [customersByWorkspace, outstandingByCustomer, creditsByCustomer, subsByCustomer]);
+  }, [customersByWorkspace, outstandingByCustomer, creditsByCustomer, subsByCustomer, projectsByCustomer, NO_PROJECTS]);
 
   /* Who serves which customers, so the search box below can find a customer by the
      person rather than only by the company. One fetch, shared with Subscriptions
@@ -229,7 +248,7 @@ export default function CustomersPage() {
     // Active by default; the Archived toggle swaps to show only inactive ones.
     if ((c.is_active === false) !== showArchived) return false;
     const out = outstandingByCustomer.get(c.id);
-    const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id) };
+    const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS };
     if (!activeView.test(ctx)) return false;
     if (!search.trim()) return true;
     const s = search.toLowerCase().trim();
@@ -422,11 +441,29 @@ export default function CustomersPage() {
   const totalARR = totalMRR * 12;
   const totalReceivables = customersByWorkspace.reduce((sum, c) => sum + (outstandingByCustomer.get(c.id)?.amount ?? 0), 0);
 
+  /* Contract value of WON project work across the portfolio (R-005). */
+  const totalProjectValue = React.useMemo(
+    () => projectValue(allProjects ?? []),
+    [allProjects],
+  );
+
   const stats: React.ComponentProps<typeof StatStrip>["items"] = [];
   if (!isLoading && customers) {
     stats.push({ label: "Customers", value: total });
     if (totalMRR > 0) stats.push({ label: "Monthly revenue", value: rupee(totalMRR, { compact: true }) });
     if (totalARR > 0) stats.push({ label: "Yearly revenue", value: rupee(totalARR, { compact: true }) });
+    /* R-005. Kept OUT of Monthly/Yearly revenue on purpose — those are recurring
+       figures, and a one-off build is not recurring. Folding a ₹10.8L ERP into "Yearly
+       revenue" would make the next year's forecast wrong by the whole amount. Won
+       projects only; a quotation in a portfolio total is a number nobody agreed to. */
+    if (totalProjectValue > 0) {
+      stats.push({
+        label: "Project value",
+        value: rupee(totalProjectValue, { compact: true }),
+        onClick: () => setView("projects"),
+        active: view === "projects",
+      });
+    }
     stats.push({
       label: "To collect",
       value: rupee(totalReceivables, { compact: true }),
@@ -708,7 +745,20 @@ export default function CustomersPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <p className="font-medium text-ink truncate">{cleanDisplayName(c.display_name || c.name)}</p>
-                        {subsByCustomer.has(c.id) && <Badge kind="success" size="sm" dot>Active</Badge>}
+                        {/* Same rule as the desktop table (R-005) — a project client
+                            must not read as a dead account on a phone either. The plain
+                            "No subscription" state stays badge-less, as it was, so this
+                            adds a label only where there is something to say. */}
+                        {(() => {
+                          const m = customerPortfolioStatus({
+                            hasActiveSub: subsByCustomer.has(c.id),
+                            projects:     projectsByCustomer.get(c.id) ?? NO_PROJECTS,
+                            archived:     c.is_active === false,
+                          });
+                          return m.label === "No subscription"
+                            ? null
+                            : <Badge kind={m.kind} size="sm" dot={m.dot}>{m.label}</Badge>;
+                        })()}
                       </div>
                       <p className="text-2xs text-ink-3 truncate mt-0.5">
                         {customerSubline(c) || "—"}
@@ -806,7 +856,11 @@ export default function CustomersPage() {
                     const days = outInfo?.days ?? 0;
                     const credit = creditsByCustomer[c.id] ?? 0;
                     const mrr = subsByCustomer.get(c.id)?.mrr ?? 0;
-                    const st = subStatus(subsByCustomer.has(c.id), c.is_active === false);
+                    const st = customerPortfolioStatus({
+                      hasActiveSub: subsByCustomer.has(c.id),
+                      projects:     projectsByCustomer.get(c.id) ?? NO_PROJECTS,
+                      archived:     c.is_active === false,
+                    });
                     const primaryName = cleanDisplayName(c.display_name || c.name);
                     return (
                       <tr

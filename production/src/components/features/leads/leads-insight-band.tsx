@@ -38,6 +38,7 @@ import { Icon } from "@/components/ui/icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { rupee, cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 export type LeadsDueFilter = "all" | "today" | "overdue" | "hot";
 
@@ -80,7 +81,7 @@ export function LeadsInsightBand({
   onToggleStage,
 }: LeadsInsightBandProps) {
   // Time bounds — computed once per render (data set is small).
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const monthStartDate = new Date();
   monthStartDate.setDate(1);
   monthStartDate.setHours(0, 0, 0, 0);
@@ -234,7 +235,7 @@ export function LeadsInsightBand({
                   type="button"
                   onClick={() => onToggleStage(stage)}
                   className={cn(
-                    "inline-flex items-center gap-1.5 text-3xs text-ink-3 hover:text-ink transition-colors",
+                    "inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink transition-colors",
                     isDimmed && "opacity-50",
                   )}
                 >
@@ -248,7 +249,7 @@ export function LeadsInsightBand({
             {/* Total ₹ pipeline at the end of the legend. Shows aggregate value
                 across all visible stages — useful at a glance for owners. */}
             {pulseTotal > totalCount && (
-              <span className="inline-flex items-center gap-1.5 text-3xs text-ink-3 ml-auto">
+              <span className="inline-flex items-center gap-1.5 text-xs text-ink-3 ml-auto">
                 <span>Total</span>
                 <span className="font-serif text-ink tabular-nums text-sm">{rupee(pulseTotal, { compact: true })}</span>
               </span>

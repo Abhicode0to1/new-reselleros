@@ -21,6 +21,7 @@
  */
 "use client";
 
+import { projectQuotationView } from "@/lib/projects/quotation-view";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -191,7 +192,10 @@ export function CustomerProfile({ customerId, variant = "page", onClose }: Custo
     // Project milestone receipts — show as Payment rows so they're not invisible.
     ...projPayments.map((p) => ({ date: p.received_at, type: "Payment" as const, ref: p.reference?.trim() || p.project_title, amount: p.amount, status: p.bank_txn_id ? "reconciled" : "received", onClick: undefined as (() => void) | undefined })),
     ...allQuotes.map((q) => ({ date: q.created_date, type: "Quote" as const, ref: q.id, amount: q.amount, status: q.status, onClick: () => router.push(`/quotes/${q.id}` as never) })),
-    ...allProjects.map((p) => ({ date: p.created_at, type: "Project" as const, ref: p.title, amount: p.total_amount, status: p.status, onClick: () => router.push(`/projects/${p.id}` as never) })),
+    /* R-006: the status reads in QUOTE language ("Quotation" / "Accepted" / "Declined")
+       because this row is the project's quotation as well as the project. The raw
+       `quoted` / `active` wording made no sense under a Quotes heading. */
+    ...allProjects.map((p) => ({ date: p.created_at, type: "Project" as const, ref: p.title, amount: p.total_amount, status: projectQuotationView(p.status, p.accepted_at).label, onClick: () => router.push(`/projects/${p.id}` as never) })),
   ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
   // Hierarchical view (the "All" tab): Project → its invoices → their receipts,
@@ -211,7 +215,7 @@ export function CustomerProfile({ customerId, variant = "page", onClose }: Custo
   for (const pr of allProjects) {
     const projKey = `proj:${pr.id}`;
     const projDue = Math.max(0, (pr.total_amount ?? 0) - (pr.paid ?? 0));
-    hierRows.push({ key: projKey, parentKey: null, indent: 0, date: pr.created_at, type: "Project", ref: pr.title, amount: pr.total_amount, status: pr.status, due: projDue > 0 ? projDue : undefined, onClick: () => router.push(`/projects/${pr.id}` as never) });
+    hierRows.push({ key: projKey, parentKey: null, indent: 0, date: pr.created_at, type: "Project", ref: pr.title, amount: pr.total_amount, status: projectQuotationView(pr.status, pr.accepted_at).label, due: projDue > 0 ? projDue : undefined, onClick: () => router.push(`/projects/${pr.id}` as never) });
     for (const i of allInvoices.filter((iv) => invoiceProject[iv.id]?.projectId === pr.id)) {
       usedInv.add(i.id);
       const pPaid = invoicePaid[i.id] ?? 0;
@@ -303,18 +307,24 @@ export function CustomerProfile({ customerId, variant = "page", onClose }: Custo
     Invoice: "info", Payment: "success", Refund: "danger", Quote: "muted", Project: "warning",
   };
 
-  // Transactions segment filter — view invoices / quotes / payments separately.
+  /* Transactions segment filter — invoices / quotes / payments each on their own.
+     R-006: "Quotes" counts PROJECT rows too. A project's quotation lives on
+     `project_sales` and never reaches the `quotes` table, so this tab was empty for a
+     software client who had very much been quoted — the owner reads that as "no quote
+     was ever made". The project row is not copied anywhere; it appears under two
+     segments, which is true of it. */
+  const isQuoteish = (type: string) => type === "Quote" || type === "Project";
   const txnInFilter = (type: string) =>
     txnFilter === "all" ? true
     : txnFilter === "invoices" ? type === "Invoice"
-    : txnFilter === "quotes"   ? type === "Quote"
+    : txnFilter === "quotes"   ? isQuoteish(type)
     : txnFilter === "payments" ? (type === "Payment" || type === "Refund")
     : txnFilter === "projects" ? type === "Project"
     : true;
   const txnSegments = [
     { id: "all" as const,      label: "All",      n: txns.length },
     { id: "invoices" as const, label: "Invoices", n: txns.filter((t) => t.type === "Invoice").length },
-    { id: "quotes" as const,   label: "Quotes",   n: txns.filter((t) => t.type === "Quote").length },
+    { id: "quotes" as const,   label: "Quotes",   n: txns.filter((t) => isQuoteish(t.type)).length },
     { id: "payments" as const, label: "Payments", n: txns.filter((t) => t.type === "Payment" || t.type === "Refund").length },
     { id: "projects" as const, label: "Projects", n: txns.filter((t) => t.type === "Project").length },
   ].filter((s) => s.id === "all" || s.n > 0);

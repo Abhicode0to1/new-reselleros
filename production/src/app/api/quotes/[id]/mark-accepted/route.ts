@@ -25,7 +25,8 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: authData } = await supabase.auth.getUser();
   if (!authData?.user) {

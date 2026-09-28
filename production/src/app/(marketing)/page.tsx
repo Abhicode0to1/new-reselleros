@@ -55,11 +55,12 @@ const SUITES: { name: string; prefix: string; desc: string }[] = [
   { name: "Zoho Workplace", prefix: "Zoho", desc: "Mail plus Writer, Sheet and Show — the cheapest full suite, billed in rupees." },
 ];
 
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: { preview?: string };
-}) {
+export default async function HomePage(
+  props: {
+    searchParams: Promise<{ preview?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (user && searchParams.preview !== "1") redirect("/dashboard");

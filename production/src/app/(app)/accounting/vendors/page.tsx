@@ -39,6 +39,9 @@ import { VENDOR_BILL_CATEGORIES } from "@/lib/queries/vendor-bills";
 import { rupee, formatDate, GST_STATE_BY_CODE, gstStateFromGstin, foreignAmount, formatForeignAmount } from "@/lib/utils";
 import { newestFirst } from "@/lib/sort/newest-first";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
+import { panFromGstin, isPan, deducteeTypeFromPan, DEDUCTEE_LABEL } from "@/lib/accounting/tds-deductor";
+import { UDYAM_RE } from "@/lib/accounting/msme";
+import { toast } from "sonner";
 
 const VENDOR_SUPPLIED_PRODUCTS = [
   "Google Workspace & GCP",
@@ -125,7 +128,7 @@ export default function VendorsPage() {
 
       {(vendors ?? []).length > 0 && (
         <div className="mb-3 w-full sm:w-72">
-          <Input prefix={<Icon name="search" size={14} />} placeholder="Vendor name / GSTIN…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input aria-label="Vendor name / GSTIN" prefix={<Icon name="search" size={14} />} placeholder="Vendor name / GSTIN…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       )}
 
@@ -171,9 +174,10 @@ export default function VendorsPage() {
                     >
                       <td className="px-4 py-2.5 align-top">
                         <div className="font-medium text-ink leading-snug">{v.name}</div>
-                        {v.gstin && <div className="text-2xs text-ink-3 font-mono">{v.gstin}</div>}
-                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-2xs text-ink-3">{r}</div> : null; })()}
-                        {v.contact_email && <div className="text-2xs text-ink-3 truncate">{v.contact_email}</div>}
+                        {v.gstin && <div className="text-xs text-ink-3 font-mono">{v.gstin}</div>}
+                        {v.udyam && <Badge kind="info" size="sm" className="mt-0.5" title={v.udyam}>MSME{v.msme_category ? ` · ${v.msme_category}` : ""}</Badge>}
+                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-xs text-ink-3">{r}</div> : null; })()}
+                        {v.contact_email && <div className="text-xs text-ink-3 truncate">{v.contact_email}</div>}
                       </td>
 
                       <td className="px-4 py-2.5 align-top">
@@ -195,7 +199,7 @@ export default function VendorsPage() {
                       <td className="px-4 py-2.5 text-right tabular-nums align-top">
                         {v.totalSpend > 0 ? rupee(v.totalSpend) : "—"}
                         {v.billCurrency && v.totalBilled > 0 && (
-                          <div className="text-3xs text-ink-3">{formatForeignAmount(v.billCurrency, v.foreignBilled)} COGS</div>
+                          <div className="text-xs text-ink-3">{formatForeignAmount(v.billCurrency, v.foreignBilled)} COGS</div>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums align-top">
@@ -203,7 +207,7 @@ export default function VendorsPage() {
                           ? <span className="font-serif text-[15px] font-semibold text-rose">{rupee(v.outstanding)}</span>
                           : <span className="text-emerald">✓</span>}
                         {v.billCurrency && v.outstanding > 0 && (
-                          <div className="text-3xs font-normal text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
+                          <div className="text-xs font-normal text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
                         )}
                       </td>
                       <td className="px-2 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
@@ -232,16 +236,16 @@ export default function VendorsPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="font-medium text-ink truncate">{v.name}</div>
-                        {v.gstin && <div className="text-2xs text-ink-3 font-mono truncate">{v.gstin}</div>}
-                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-2xs text-ink-3 truncate">{r}</div> : null; })()}
-                        <div className="text-2xs text-ink-3 mt-0.5">{v.docCount} {v.docCount === 1 ? "entry" : "entries"} · {rupee(v.totalSpend, { compact: true })} spent</div>
+                        {v.gstin && <div className="text-xs text-ink-3 font-mono truncate">{v.gstin}</div>}
+                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-xs text-ink-3 truncate">{r}</div> : null; })()}
+                        <div className="text-xs text-ink-3 mt-0.5">{v.docCount} {v.docCount === 1 ? "entry" : "entries"} · {rupee(v.totalSpend, { compact: true })} spent</div>
                       </div>
                       <div className="text-right shrink-0">
                         {v.outstanding > 0
                           ? <span className="font-serif text-lg text-rose">{rupee(v.outstanding, { compact: true })}</span>
                           : <span className="text-emerald text-sm">✓ clear</span>}
                         {v.billCurrency && v.outstanding > 0 && (
-                          <div className="text-3xs text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
+                          <div className="text-xs text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
                         )}
                       </div>
                     </div>
@@ -296,7 +300,8 @@ function VendorActions({
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={onView}><Icon name="eye" size={15} /> View details & ledger</DropdownMenuItem>
 
-        <Link href={"/vendor-portal" as never} passHref legacyBehavior>
+        {/* Was /vendor-portal — a demo screen taken down in S35. A PO is the real way to buy. */}
+        <Link href={"/purchase-orders" as never} passHref legacyBehavior>
           <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer text-primary font-semibold">
             <Icon name="cart" size={15} /> Buy products / Place PO
           </DropdownMenuItem>
@@ -321,7 +326,12 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
   const [city, setCity] = React.useState(vendor?.city ?? "");
   const [state, setState] = React.useState(vendor?.state ?? "");
   const [pincode, setPincode] = React.useState(vendor?.pincode ?? "");
+  const [pan, setPan] = React.useState(vendor?.pan ?? "");
   const [category, setCategory] = React.useState(vendor?.default_category ?? "");
+  /* MSME (S33): Udyam + category se s.43B(h) ka 45-din flag chalta hai (Customer Aging page). */
+  const [udyam, setUdyam] = React.useState(vendor?.udyam ?? "");
+  const [msmeCategory, setMsmeCategory] = React.useState<"micro" | "small" | "medium" | "">(vendor?.msme_category ?? "");
+  const udyamBad = !!udyam.trim() && !UDYAM_RE.test(udyam.trim().toUpperCase());
   const [notes, setNotes] = React.useState(() => {
     if (!vendor?.notes) return "";
     return vendor.notes.replace(/\[Supplied Products: .*?\]/, "").trim();
@@ -337,6 +347,9 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
     setGstin(raw);
     const { name: stName } = gstStateFromGstin(raw);
     if (stName) setState((prev) => (prev ? prev : stName));
+    /* The PAN is inside the GSTIN — fill it unless one was typed. */
+    const p = panFromGstin(raw);
+    if (p) setPan((prev) => (prev ? prev : p));
   };
 
   const fillFromGst = (v: import("@/lib/supabase/database.types").GstinVerification) => {
@@ -350,6 +363,12 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
 
   const submit = async () => {
     if (!name.trim()) return;
+    if (udyamBad) {
+      toast.error("Udyam number sahi nahi hai", {
+        description: "Format UDYAM-SS-00-0000000 hota hai (jaise UDYAM-DL-01-0012345). Vendor ke Udyam certificate se dekh kar bharein, ya khaali chhod dein.",
+      });
+      return;
+    }
     try {
       const prodTagStr = selectedProducts.length > 0 ? `[Supplied Products: ${selectedProducts.join(", ")}]` : "";
       const cleanNotes = notes.trim();
@@ -359,6 +378,10 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
         id: vendor?.id, name: name.trim(), gstin: gstin || null, defaultCategory: category || null,
         contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null,
         address: address || null, city: city || null, state: state || null, pincode: pincode || null,
+        pan: pan.trim().toUpperCase() || null,
+        udyam: udyam.trim().toUpperCase() || null,
+        /* Category Udyam ke bina nahi (DB bhi yahi kehta hai). */
+        msmeCategory: udyam.trim() && msmeCategory ? msmeCategory : null,
         notes: finalNotes || null,
       });
       onClose();
@@ -374,11 +397,34 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="Vendor name" required>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Google Cloud India / Rajesh Reseller" autoFocus />
+            <FormField htmlFor="vendors-vendor-name" label="Vendor name" required>
+              <Input id="vendors-vendor-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Google Cloud India / Rajesh Reseller" autoFocus />
             </FormField>
-            <FormField label="GSTIN (optional)">
-              <Input value={gstin} onChange={(e) => onGstinChange(e.target.value)} placeholder="e.g. 27ABCDE1234F1Z5" />
+            <FormField htmlFor="vendors-gstin-optional" label="GSTIN (optional)">
+              <Input id="vendors-gstin-optional" value={gstin} onChange={(e) => onGstinChange(e.target.value)} placeholder="e.g. 27ABCDE1234F1Z5" />
+            </FormField>
+          </div>
+          {/* PAN decides the TDS rate (194C 1% for an individual, 2% for a company) and, when
+              missing, forces 20% u/s 206AA — so it is asked for here, not guessed at 26Q time. */}
+          <FormField htmlFor="vendors-pan-for-tds-26q" label="PAN (for TDS / 26Q)" hint={pan && !isPan(pan) ? "10 characters, e.g. ABCDE1234F" : deducteeTypeFromPan(pan) ? `${DEDUCTEE_LABEL[deducteeTypeFromPan(pan)!]} — TDS rate isi se tay hota hai` : "Bina PAN ke TDS 20% kaatna padta hai (s.206AA)"}>
+            <Input id="vendors-pan-for-tds-26q" value={pan} onChange={(e) => setPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} className="font-mono uppercase" />
+          </FormField>
+          {/* MSME: micro/small vendor ka bill 45 din (likhit agreement na ho to 15) me na chuke
+              to s.43B(h) us saal deduction rok deta hai. Udyam bharne se Aging page flag karta hai. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FormField htmlFor="vendors-udyam" label="Udyam no. (MSME, optional)" hint={udyamBad ? "Format: UDYAM-SS-00-0000000" : "MSME vendor ho to — 45-din payment rule track hota hai"}>
+              <Input id="vendors-udyam" value={udyam} onChange={(e) => setUdyam(e.target.value.toUpperCase())} placeholder="UDYAM-DL-01-0012345" maxLength={19} className="font-mono uppercase" />
+            </FormField>
+            <FormField htmlFor="vendors-msme-category" label="MSME category" hint={msmeCategory === "medium" ? "Medium par 43B(h) nahi lagta" : "Udyam certificate par likha hota hai"}>
+              <Select value={msmeCategory || "none"} onValueChange={(v) => setMsmeCategory(v === "none" ? "" : (v as "micro" | "small" | "medium"))} disabled={!udyam.trim()}>
+                <SelectTrigger id="vendors-msme-category"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— not set —</SelectItem>
+                  <SelectItem value="micro">Micro</SelectItem>
+                  <SelectItem value="small">Small</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                </SelectContent>
+              </Select>
             </FormField>
           </div>
           <GstinVerifyCard gstin={gstin} noPersist onFillForm={fillFromGst} />
@@ -413,44 +459,44 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
                 );
               })}
             </div>
-            <p className="text-2xs text-ink-3">Select products this vendor offers so you can buy & source licenses from them.</p>
+            <p className="text-xs text-ink-3">Select products this vendor offers so you can buy & source licenses from them.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <FormField label="Contact name"><Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="e.g. Rahul Sharma" /></FormField>
-            <FormField label="Email"><Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="e.g. name@vendor.com" /></FormField>
-            <FormField label="Phone"><Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="e.g. +91 98765 43210" /></FormField>
+            <FormField htmlFor="vendors-contact-name" label="Contact name"><Input id="vendors-contact-name" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="e.g. Rahul Sharma" /></FormField>
+            <FormField htmlFor="vendors-email" label="Email"><Input id="vendors-email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="e.g. name@vendor.com" /></FormField>
+            <FormField htmlFor="vendors-phone" label="Phone"><Input id="vendors-phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="e.g. +91 98765 43210" /></FormField>
           </div>
-          <FormField label="Address (optional)">
-            <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. 4th Floor, Tower B, Cyber City" />
+          <FormField htmlFor="vendors-address-optional" label="Address (optional)">
+            <Textarea id="vendors-address-optional" rows={2} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. 4th Floor, Tower B, Cyber City" />
           </FormField>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <FormField label="City">
-              <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Mumbai" />
+            <FormField htmlFor="vendors-city" label="City">
+              <Input id="vendors-city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Mumbai" />
             </FormField>
-            <FormField label="State (place of supply)">
+            <FormField htmlFor="vendors-state-place-of-supply" label="State (place of supply)">
               <Select value={state || "none"} onValueChange={(v) => setState(v === "none" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger id="vendors-state-place-of-supply"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— none —</SelectItem>
                   {STATE_NAMES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="PIN code">
-              <Input value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="e.g. 400001" />
+            <FormField htmlFor="vendors-pin-code" label="PIN code">
+              <Input id="vendors-pin-code" value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="e.g. 400001" />
             </FormField>
           </div>
-          <FormField label="Default category">
+          <FormField htmlFor="vendors-default-category" label="Default category">
             <Select value={category || "none"} onValueChange={(v) => setCategory(v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectTrigger id="vendors-default-category"><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">— none —</SelectItem>
                 {VENDOR_BILL_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label="Notes (optional)"><Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Reseller portal login, account manager" /></FormField>
+          <FormField htmlFor="vendors-notes-optional" label="Notes (optional)"><Input id="vendors-notes-optional" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Reseller portal login, account manager" /></FormField>
         </div>
         <DialogFooter>
           <Button type="button" variant="default" onClick={onClose}>Cancel</Button>
@@ -475,7 +521,7 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {vendor.name}
-            {vendor.gstin && <span className="font-mono text-2xs text-ink-3">{vendor.gstin}</span>}
+            {vendor.gstin && <span className="font-mono text-xs text-ink-3">{vendor.gstin}</span>}
             {(() => { const r = vendorRegion(vendor.gstin); return r ? <span className="text-2xs font-normal text-ink-3 rounded-full bg-paper-2 px-2 py-0.5">{r}</span> : null; })()}
           </DialogTitle>
           <DialogDescription>
@@ -530,15 +576,15 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
                   >
                     <div className="min-w-0">
                       <p className="text-sm text-ink truncate">{b.bill_no || b.id} <span className="text-ink-3">· {b.category}</span>{(b.line_items?.length ?? 0) > 0 && <span className="text-ink-3"> · {b.line_items.length} items</span>}</p>
-                      <p className="text-2xs text-ink-3">{formatDate(b.bill_date)}</p>
+                      <p className="text-xs text-ink-3">{formatDate(b.bill_date)}</p>
                     </div>
                     <div className="text-right shrink-0">
                       {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? (
-                        <p className="font-mono text-sm font-semibold text-ink">{fx} <span className="text-3xs font-normal text-ink-3">({rupee(b.total)})</span></p>
+                        <p className="font-mono text-sm font-semibold text-ink">{fx} <span className="text-xs font-normal text-ink-3">({rupee(b.total)})</span></p>
                       ) : (
                         <p className="font-mono text-sm font-semibold text-ink">{rupee(b.total)}</p>
                       ); })()}
-                      <p className={`text-3xs ${out > 0 ? "text-rose" : "text-emerald"}`}>{out > 0 ? `${rupee(out)} due` : "paid"}</p>
+                      <p className={`text-xs ${out > 0 ? "text-rose" : "text-emerald"}`}>{out > 0 ? `${rupee(out)} due` : "paid"}</p>
                     </div>
                   </li>
                 );
@@ -560,11 +606,11 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
                   >
                     <div className="min-w-0">
                       <p className="text-sm text-ink truncate">{e.category}{e.description ? <span className="text-ink-3"> · {e.description}</span> : ""}</p>
-                      <p className="text-2xs text-ink-3">{formatDate(e.expense_date)}</p>
+                      <p className="text-xs text-ink-3">{formatDate(e.expense_date)}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-mono text-sm font-semibold text-ink">{fx ? <>{fx} <span className="text-3xs font-normal text-ink-3">({rupee(e.amount)})</span></> : rupee(e.amount)}</p>
-                      {e.gst_paid > 0 && (() => { const gfx = foreignAmount(e.currency, e.gst_paid, e.fx_rate); return <p className="text-3xs text-emerald">+{gfx ?? rupee(e.gst_paid)} GST{gfx ? ` (${rupee(e.gst_paid)})` : ""}</p>; })()}
+                      <p className="font-mono text-sm font-semibold text-ink">{fx ? <>{fx} <span className="text-xs font-normal text-ink-3">({rupee(e.amount)})</span></> : rupee(e.amount)}</p>
+                      {e.gst_paid > 0 && (() => { const gfx = foreignAmount(e.currency, e.gst_paid, e.fx_rate); return <p className="text-xs text-emerald">+{gfx ?? rupee(e.gst_paid)} GST{gfx ? ` (${rupee(e.gst_paid)})` : ""}</p>; })()}
                     </div>
                   </li>
                   );
@@ -578,7 +624,7 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button asChild variant="primary" icon="cart" className="w-full sm:w-auto font-bold">
-            <Link href={"/vendor-portal" as never}>🛒 Buy Products from {vendor.name}</Link>
+            <Link href={"/purchase-orders" as never}>🛒 Buy Products from {vendor.name}</Link>
           </Button>
           <Button variant="ghost" icon="edit" onClick={onEdit}>Edit vendor</Button>
         </DialogFooter>

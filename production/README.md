@@ -1,8 +1,12 @@
 # ResellerOS — Production
 
-The complete operating system for Indian cloud resellers.
+The operating system for Indian cloud resellers (Google Workspace, Microsoft 365, Zoho):
+leads → quotes → subscriptions → GST invoices → payments → accounting, multi-tenant.
 
-**Status:** Week 1 — Foundation. Component library + design system + scaffolding done. Auth + DB + screens coming.
+**Status (Sep 2026):** live in production for ANUTECH DIGITAL PVT LTD. ~150 pages, ~190 API
+routes, 124 timestamped migrations on top of `supabase/baseline.sql`, ~440 unit-test files
+(Vitest) and 85 SQL regression tests. Wrong numbers here become wrong invoices to real
+customers — read [`../AGENTS.md`](../AGENTS.md) before your first change.
 
 ---
 
@@ -26,16 +30,24 @@ npm run setup
 ```
 
 `npm run setup` checks your prerequisites, starts a **local database on your own
-machine**, and loads the real production schema into it — 87 tables, 133 functions, 286
-policies, and no customer data. If something is missing it stops and tells you what,
-rather than failing later with a Postgres error.
+machine**, and loads the production schema into it (baseline + migrations, no customer
+data). If something is missing it stops and tells you what, rather than failing later with
+a Postgres error.
 
-Your database is yours alone. Nothing you do touches production or anyone else's work.
+Your database is yours alone. ⚠️ A `.env.local` copied from someone else may point at
+**production** — check `NEXT_PUBLIC_SUPABASE_URL` before running anything.
+
+**`npm run dev:local` (S8)** removes that risk without touching `.env.local`: it points the
+app at the local Supabase from `supabase status` (and refuses anything that is not
+localhost), and blanks every other `.env.local` key except a short allowlist — Razorpay,
+Resend, Gupshup, Vapi/Retell, Google reseller, GST IRP, Gemini are all off, so nothing leaves
+the laptop. The topbar shows a **Local** badge. See `scripts/dev-local.mjs`.
 
 ### Daily
 
 ```bash
-npm run dev          # the app          → http://localhost:3000
+npm run dev:local    # the app on YOUR local DB, live keys off → http://localhost:3001  (use this)
+npm run dev          # the app with whatever .env.local says    → http://localhost:3000
 npm run db:studio    # browse your DB   → http://localhost:54323
 npm run db:stop      # stop the DB      (it keeps running otherwise)
 ```
@@ -43,14 +55,24 @@ npm run db:stop      # stop the DB      (it keeps running otherwise)
 ### Before pushing
 
 ```bash
-npm run typecheck && npm run test && npm run lint
+npm run gate         # build, typecheck, unit tests, lint — in the right order
+npm run lint:ratchet # lint warnings may not grow (lint-baseline.json)
 ```
 
-Lint **warnings** are fine; lint **errors** are not. Baseline: **1492 tests passing**.
+CI (`.github/workflows/ci.yml`) runs all of these plus a migration-order check, and every
+step is blocking. Lint **errors** fail; lint **warnings** fail only when a rule has more
+than its baseline — fix some, run `node scripts/lint-ratchet.mjs --update`, commit the
+smaller numbers.
 
-Then open a pull request into `main`. You cannot push to `main` directly — it is
-protected, and CI must be green before anything merges. That is deliberate: on a feature
-branch CI does not run at all, which is how four unit tests once sat broken for months.
+### How code reaches production
+
+- Each person works on their own branch (`OWNERS.json`: `pardeep-sir`, `abhishek-pre-merge`,
+  `pawan-api-system`) and pushes only to it. Cross-area needs go on the team board — see
+  [`../docs/TEAM-PROTOCOL.md`](../docs/TEAM-PROTOCOL.md).
+- A push to the `deploy` branch triggers Cloud Build (`../cloudbuild.yaml`): **gate** (npm ci,
+  tsc, vitest) → Docker build → Cloud Run `resellersos` in `asia-southeast1`. A red gate
+  never deploys.
+- Something broke after a deploy: [`../docs/ROLLBACK.md`](../docs/ROLLBACK.md).
 
 ### Database changes
 
@@ -58,18 +80,31 @@ branch CI does not run at all, which is how four unit tests once sat broken for 
 npm run migration:new -- add_customer_credit_limit
 ```
 
-Timestamp-named, so two people writing a migration on the same day cannot collide.
+Timestamp-named, so two people writing a migration on the same day cannot collide. Never
+edit a migration that is already on a shared branch — write a new one (CI fails on an
+edited, renamed or out-of-order migration). Migrations are applied to production by a human.
 
-⚠️ **Do not build a database from `supabase/migrations-archive/`.** Those 218 files are
-the real history of production, but they cannot build a database from empty — several
-tables were created directly in prod and only captured in git under a *higher* number
-than the migration that uses them. The full story is in that folder's README. A fresh
-database comes from `supabase/baseline.sql`, which `npm run setup` handles for you.
+⚠️ **Do not build a database from `supabase/migrations-archive/`.** Those files are the
+real history of production, but they cannot build a database from empty. A fresh database
+comes from `supabase/baseline.sql`, which `npm run setup` handles for you.
 
-📖 **Read [`AGENTS.md`](../AGENTS.md) before your first change.** It is short, and every
-rule in it is there because it cost somebody something — starting with the fact that
-**money is stored in whole rupees, not paise**, which the docs claimed the opposite of
-until 14 Aug 2026.
+**DB types are generated (S21).** After a migration, regenerate and commit them in the same
+commit:
+
+```bash
+node scripts/check-db-types.mjs --write   # needs the local supabase stack (npx supabase start)
+node scripts/check-db-types.mjs           # check only: exit 1 if the committed types are stale
+```
+
+It builds a throwaway database (`types_check_<pid>`) in the local docker Postgres from
+`baseline.sql` + every migration, runs the stack's own postgres-meta generator, diffs against
+`src/lib/supabase/database.generated.ts` (never edit that by hand), and drops the database. It
+never touches the shared local `postgres` database beyond a schema-only read of `auth`/`storage`,
+and never uses `--linked`. Not wired into CI — CI has no docker supabase stack.
+Import types from `@/lib/supabase/database.types` as before: that file is a thin overlay for what
+the generator cannot express (CHECK-constrained text unions, jsonb shapes, RPC return shapes).
+`OverlayCheck` in it fails `tsc` if an overlay entry names a column/table/function that no
+longer exists.
 
 ---
 
@@ -77,111 +112,58 @@ until 14 Aug 2026.
 
 ```
 production/
-├── CLAUDE.md             # Project memory for Claude Code (READ THIS)
-├── README.md             # You are here
-├── package.json          # Dependencies
-├── tailwind.config.ts    # Design tokens
-├── next.config.mjs       # Next.js config
-├── tsconfig.json         # TypeScript strict config
-├── components.json       # shadcn/ui config
-├── .env.example          # Environment template (copy to .env.local)
-├── src/
-│   ├── app/              # Next.js pages (App Router)
-│   │   ├── globals.css   # Design tokens (HSL CSS variables)
-│   │   ├── layout.tsx    # Root layout (fonts, metadata)
-│   │   ├── page.tsx      # Landing page
-│   │   └── dev/
-│   │       └── components/page.tsx  # Visual showcase
-│   ├── components/
-│   │   └── ui/           # Production components (Button, Card, Badge, Icon)
-│   └── lib/
-│       ├── utils.ts      # cn(), rupee(), formatDate, etc.
-│       └── types.ts      # Shared TypeScript types
-└── public/               # Static assets (images, icons)
+├── CLAUDE.md             # Long-form conventions for Claude Code (rules: ../AGENTS.md wins)
+├── src/app/              # Next.js App Router: (app) staff screens, (public), (auth), api/
+├── src/components/       # ui/ primitives, layout/, features/<area>/
+├── src/lib/              # domain logic per area (accounting, gst, invoices, payments…)
+├── supabase/
+│   ├── baseline.sql      # schema a fresh DB is built from
+│   ├── migrations/       # YYYYMMDDHHMMSS_name.sql, applied in order
+│   ├── tests/            # SQL regression tests (npm run test:sql -- --local)
+│   └── cloudsql/         # the Cloud SQL + self-hosted Supabase setup (ADR 0001)
+├── scripts/              # gate, lint ratchet, migration checks, backups, ops tools
+├── e2e/                  # Playwright
+└── Dockerfile            # the image Cloud Build ships
 ```
 
----
-
-## ✅ What's already built (Week 1, Day 1)
-
-| Component | Status | File |
-|---|---|---|
-| **Project scaffolding** | ✅ | `package.json`, configs |
-| **Design tokens** | ✅ | `src/app/globals.css` |
-| **Tailwind config** | ✅ | `tailwind.config.ts` |
-| **Type system** | ✅ | `tsconfig.json` (strict) |
-| **Utility library** | ✅ | `src/lib/utils.ts` |
-| **Type definitions** | ✅ | `src/lib/types.ts` |
-| **Button** | ✅ | `src/components/ui/button.tsx` |
-| **Card** | ✅ | `src/components/ui/card.tsx` |
-| **Badge** | ✅ | `src/components/ui/badge.tsx` |
-| **Icon** | ✅ | `src/components/ui/icon.tsx` |
-| **Showcase page** | ✅ | `/dev/components` |
-
----
-
-## 📅 What's coming (Week 1, rest of week)
-
-| Component | Status |
-|---|---|
-| Skeleton (loading placeholder) | Pending |
-| EmptyState | Pending |
-| GeminiCard (AI suggestion) | Pending |
-| ActivityTimeline | Pending |
-| Input, Select, Textarea | Pending |
-| KPI tile | Pending |
-| Avatar | Pending |
-| Tabs | Pending |
-| Toast (sonner integration) | Pending |
-| CommandPalette (cmdk) | Pending |
-| NotificationPanel | Pending |
+Decisions and their reasons: [`../docs/adr/`](../docs/adr/).
 
 ---
 
 ## 🔧 Stack at a glance
 
-| Layer | Choice | Why |
-|---|---|---|
-| Framework | Next.js 14 App Router | Server components, fast, Vercel-native |
-| Language | TypeScript strict | Type safety, no `any` |
-| Styling | Tailwind CSS | Fast iteration, consistent design |
-| Components | shadcn/ui base + custom | Accessible, copy-paste ownership |
-| Database | Supabase (Postgres) | Multi-tenant with RLS, realtime |
-| Auth | Supabase Auth | Email + Google OAuth |
-| State (server) | TanStack Query v5 | Caching, optimistic updates |
-| State (forms) | React Hook Form + Zod | Type-safe forms |
-| Charts | Recharts | Production-grade charting |
-| Animation | Framer Motion | Micro-interactions |
-| i18n | next-intl | Hindi + English support |
-| Email | Resend | Transactional emails |
-| Payments | Razorpay | India payment gateway |
-| Hosting | Vercel | Auto preview deploys |
-| Monitoring | Sentry + Plausible | Errors + analytics |
-| Testing | Vitest + Playwright | Unit + E2E |
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 14 App Router, TypeScript strict |
+| UI | Tailwind CSS + shadcn/ui (Radix) primitives |
+| Data | Postgres 17 on **Cloud SQL**, reached through a **self-hosted Supabase data plane** (PostgREST, GoTrue, Storage) at `api.anutech.in` — [ADR 0001](../docs/adr/0001-database-on-cloud-sql.md) |
+| Auth | GoTrue (Supabase Auth): email + Google OAuth; tenant isolation by RLS |
+| State | TanStack Query v5; React Hook Form + Zod |
+| Payments | Razorpay |
+| Hosting | Google Cloud Run (`asia-southeast1`), built by Cloud Build |
+| Monitoring | Sentry, Cloud Monitoring uptime check on `/api/version` |
+| Testing | Vitest (unit), SQL regression tests, Playwright (E2E) |
+
+Hosting & domain management is **not** in this repo — it is DMS, a separate app
+(see `../AGENTS.md` §0).
 
 ---
 
-## 🧠 Working with Claude Code
+## 🧹 Housekeeping notes
 
-This project is designed for AI-assisted development. Claude Code reads `CLAUDE.md` automatically and follows conventions.
+**Dependencies that nothing imports (28 Sep 2026, S25).** Checked by grepping `src/`,
+`scripts/`, `e2e/`, `tests/` and the config files. Not removed yet: taking them out of
+`package.json` without regenerating `package-lock.json` breaks `npm ci` in CI and Cloud
+Build. To remove, on a machine with the real `node_modules`:
 
-### Recommended workflow
+```bash
+npm uninstall @radix-ui/react-progress @radix-ui/react-scroll-area @radix-ui/react-toggle \
+  @tanstack/react-query-devtools @testing-library/jest-dom @vitejs/plugin-react \
+  prettier-plugin-tailwindcss
+```
 
-1. **Open Claude Code** in this directory (`production/`)
-2. **Give a specific task**: *"Port the Lead Pipeline screen from `../prototype/screens/leads.jsx` to `src/app/(app)/leads/page.tsx`. Use Supabase + TanStack Query."*
-3. **Claude generates code** following all conventions
-4. **You test locally**: `npm run dev`
-5. **You commit + push**: Vercel auto-deploys preview
-6. **Repeat**
-
-### Tips for best Claude Code results
-
-- **Be specific**: "Port screen X" → better than "do some frontend work"
-- **Reference prototype**: Claude reads `../prototype/` for UX reference
-- **Show, don't tell**: Paste error messages, screenshots, file paths
-- **Iterate small**: One component or page at a time, not 10
-- **Always review**: AI generates drafts; you own the merge button
-- **Update CLAUDE.md**: When a new convention emerges, add it
+then run the gate. (`prettier-plugin-tailwindcss` is unused only because there is no
+Prettier config loading it — add one instead if you want class sorting.)
 
 ---
 
@@ -192,14 +174,13 @@ This project is designed for AI-assisted development. Claude Code reads `CLAUDE.
 | `npm install` fails | Make sure Node.js 20+, try `npm cache clean --force` then retry |
 | `Cannot find module '@/...'` | Restart TS server in VS Code: Cmd+Shift+P → "Restart TS Server" |
 | Tailwind classes not working | Restart dev server (`Ctrl+C` then `npm run dev`) |
-| Dark mode looks broken | We haven't built dark theme polish yet — coming in Phase 4 |
+| `tsc` errors in `.next/types` during a build | Don't run `tsc` and `next build` at the same time — `npm run gate` orders them |
 | Type errors | Run `npm run typecheck` — fix all errors before committing |
 
 ---
 
 ## 📚 Learn the stack (recommended reading)
 
-If new to any of these (~half a day each):
 - [Next.js App Router docs](https://nextjs.org/docs/app)
 - [shadcn/ui](https://ui.shadcn.com/)
 - [TanStack Query](https://tanstack.com/query/latest)
@@ -208,15 +189,13 @@ If new to any of these (~half a day each):
 
 ---
 
-## 📞 Project contacts
+## 📞 Who owns what
 
-| Question | Owner |
-|---|---|
-| Architecture / security | Tech Lead (P1) |
-| Backend integrations | P3 |
-| Tests / deployment | P4 |
-| Product / business | Pardeep |
-| AI usage best practices | `CLAUDE.md` in this folder |
+See [`../OWNERS.json`](../OWNERS.json): **Pardeep** — accounting, compliance, CRM/leads,
+marketing, payroll, infra & CI; **Abhishek** — billing & subscriptions (customers, quotes,
+invoices, payments); **Pawan** — customer-facing pages, checkout, public API. Shared files
+(migrations, `package.json`, layout, the rulebooks) — smallest change that works, plus a
+`changes` note on the board.
 
 ---
 

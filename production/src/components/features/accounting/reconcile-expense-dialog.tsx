@@ -85,7 +85,7 @@ export function ReconcileExpenseDialog({ expense, onClose }: { expense: Expense;
         ) : (
           <>
           {close.length === 0 && !showOthers && (
-            <div className="rounded-md border border-amber/40 bg-amber-soft/30 px-3 py-2.5 text-2xs text-ink-2 leading-relaxed">
+            <div className="rounded-md border border-amber/40 bg-amber-soft/30 px-3 py-2.5 text-xs text-ink-2 leading-relaxed">
               <b className="text-ink">No bank line for {rupee(expense.amount)}.</b> None of the unreconciled bank debits is within{" "}
               {rupee(tolerance)} of this expense. Import the statement that covers {formatDate(expense.expense_date)}, or — if
               this was paid in cash or from another account — leave it unreconciled.
@@ -107,7 +107,7 @@ export function ReconcileExpenseDialog({ expense, onClose }: { expense: Expense;
                         </span>
                       )}
                     </div>
-                    <div className="text-2xs text-ink-3 truncate">
+                    <div className="text-xs text-ink-3 truncate">
                       {formatDate(t.txn_date)} · {t.account_name}{t.description ? ` · ${t.description}` : ""}
                     </div>
                   </div>
@@ -123,7 +123,7 @@ export function ReconcileExpenseDialog({ expense, onClose }: { expense: Expense;
             <button
               type="button"
               onClick={() => setShowOthers((s) => !s)}
-              className="mt-1 text-2xs text-amber-ink hover:underline"
+              className="mt-1 text-xs text-amber-ink hover:underline"
             >
               {showOthers
                 ? "Hide lines whose amount doesn't match"

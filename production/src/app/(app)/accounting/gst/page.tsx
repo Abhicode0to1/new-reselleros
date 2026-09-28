@@ -16,7 +16,6 @@
 "use client";
 
 import * as React from "react";
-import { SAAS_HSN } from "@/lib/gst/hsn";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -26,11 +25,16 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
 import { expenseGstHeads } from "@/lib/accounting/gst-heads";
+import { splitItc, itcEligibility, type ItcSplit } from "@/lib/gst/itc";
 import { gstPaidForPeriods } from "@/lib/accounting/tax-payments";
 import { useTaxPayments } from "@/lib/queries/tax-payments";
-import { rupee, formatDate, GST_STATE_BY_CODE } from "@/lib/utils";
+import { rupee, formatDate } from "@/lib/utils";
+import { buildGstr1, gstr1Csv, gstr1Json, gstSplit, hsnLines, GSTR1_HEADERS } from "@/lib/gst/gstr1";
+import { computeGstr3b, gstr3bRows, type Heads } from "@/lib/gst/gstr3b";
+import { parseGstr2b, reconcile2b, type Reconciliation } from "@/lib/gst/gstr2b";
 import { createClient } from "@/lib/supabase/client";
 import { Term } from "@/components/shared/term";
+import { utcDateISO } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Date range helpers — month default (most common GST filing cadence)
@@ -40,7 +44,7 @@ function istToday(): Date {
   return new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
 }
 function yyyymmdd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return utcDateISO(d);
 }
 
 interface DateRange { from: string; to: string; label: string }
@@ -85,7 +89,9 @@ interface OutputRow {
   gst:          number;        // total GST (persisted, else reverse-derived)
   taxRate:      number;        // GST rate %
   interState:   boolean;       // true → IGST; false → CGST + SGST
-  docType?:     "invoice" | "credit_note" | "debit_note";  // credit/debit notes net the output tax
+  docType:      "invoice" | "credit_note" | "debit_note";  // credit/debit notes net the output tax
+  /** Per-line HSN/SAC share of the taxable value (catalogue item's `hsn`). See lib/gst/gstr1.ts. */
+  lines?:       { hsn: string; description?: string; taxable: number }[];
 }
 interface InputRow {
   source:       "bill" | "expense";
@@ -103,6 +109,8 @@ interface InputRow {
   cgst:         number;
   sgst:         number;
   category:     string;
+  /** Bill / invoice number as entered — the key GSTR-2B matching uses (lib/gst/gstr2b.ts). */
+  billNo:       string | null;
 }
 interface GstReport {
   outputRows:    OutputRow[];
@@ -112,8 +120,16 @@ interface GstReport {
   inputTotal:    number;
   inputGST:      number;
   netLiability:  number;
+  /** Expense GST that is NOT credit (kaccha bill, no vendor GSTIN, s.17(5)) — lib/gst/itc.ts. Not in inputRows. */
+  blockedItc:    ItcSplit;
+  /** The s.17(5) part of that, by head — reported gross in 3B 4(A)(5) and reversed in 4(B)(1). */
+  blocked17Heads: Heads[];
+  /** Imported services under reverse charge this period (expenses.rcm) — 3B 3.1(d) / 4(A)(3). */
+  rcmRows:       { id: string; vendor: string; date: string; amount: number; tax: number }[];
   sellerStateCode: string | null;   // your own state — place of supply for intra-state B2C
   sellerState:     string | null;
+  /** Company GSTIN from Settings — the Portal JSON is refused without it. */
+  sellerGstin:     string | null;
 }
 
 function useGstReport(range: DateRange) {
@@ -125,7 +141,7 @@ function useGstReport(range: DateRange) {
       // ── Output: invoices issued in the period ─────────────────────
       const { data: invoices, error: invErr } = await supabase
         .from("invoices")
-        .select("id, amount, invoice_date, customer_name, customer_id, status, taxable_value, tax_amount, tax_rate, inter_state")
+        .select("id, amount, invoice_date, customer_name, customer_id, status, taxable_value, tax_amount, tax_rate, inter_state, line_items")
         .gte("invoice_date", range.from)
         .lte("invoice_date", range.to)
         .in("status", ["pending", "paid", "overdue"]);
@@ -160,9 +176,22 @@ function useGstReport(range: DateRange) {
 
       // Seller's own state (place of supply for intra-state B2C). RLS scopes to own tenant.
       const { data: tenantRow } = await supabase
-        .from("tenants").select("state_code, state").limit(1).maybeSingle();
+        .from("tenants").select("state_code, state, gstin").limit(1).maybeSingle();
       const sellerStateCode = tenantRow?.state_code ?? null;
       const sellerState = tenantRow?.state ?? null;
+      const sellerGstin = tenantRow?.gstin?.trim() || null;
+
+      /* Per-line SAC for the HSN table (27 Sep 2026). Invoice lines carry the catalogue
+         item's id; the item carries its `hsn`. A line with no item, or an item with no
+         code, is the SaaS SAC — the same default the invoice printed. */
+      type Line = { item_id?: string; name?: string; qty?: number; rate?: number };
+      const linesOf = (raw: unknown): Line[] => (Array.isArray(raw) ? raw as Line[] : []);
+      const itemIds = Array.from(new Set((invoices ?? []).flatMap((i) => linesOf(i.line_items).map((l) => l.item_id)).filter((x): x is string => !!x)));
+      const hsnByItem = new Map<string, string | null>();
+      if (itemIds.length) {
+        const { data: items } = await supabase.from("items").select("id, hsn").in("id", itemIds);
+        for (const it of items ?? []) hsnByItem.set(it.id, it.hsn ?? null);
+      }
 
       const outputRows: OutputRow[] = (invoices ?? []).map((i) => {
         const amount       = i.amount ?? 0;
@@ -185,6 +214,9 @@ function useGstReport(range: DateRange) {
           taxRate,
           interState:    i.inter_state ?? false,
           docType:       "invoice",
+          lines:         hsnLines(taxableValue, linesOf(i.line_items).map((l) => ({
+            hsn: l.item_id ? hsnByItem.get(l.item_id) : null, description: l.name, weight: (l.qty ?? 0) * (l.rate ?? 0),
+          }))),
         };
       });
 
@@ -212,7 +244,7 @@ function useGstReport(range: DateRange) {
       // ── Input: vendor bills + GST-paying expenses ─────────────────
       const { data: bills } = await supabase
         .from("vendor_bills")
-        .select("id, bill_date, vendor_name, vendor_gstin, subtotal, cgst, sgst, igst, total, category")
+        .select("id, bill_date, vendor_name, vendor_gstin, subtotal, cgst, sgst, igst, total, category, bill_no")
         .gte("bill_date", range.from)
         .lte("bill_date", range.to);
 
@@ -221,6 +253,7 @@ function useGstReport(range: DateRange) {
         assumed: false,
         source:       "bill",
         id:           b.id,
+        billNo:       b.bill_no ?? null,
         date:         b.bill_date,
         vendor:       b.vendor_name,
         vendorGstin:  b.vendor_gstin ?? null,
@@ -234,10 +267,32 @@ function useGstReport(range: DateRange) {
 
       const { data: expenses } = await supabase
         .from("expenses")
-        .select("id, expense_date, vendor_name, amount, gst_paid, igst, cgst, sgst, category")
+        .select("id, expense_date, vendor_name, vendor_id, bill_type, amount, gst_paid, igst, cgst, sgst, category, bill_no")
         .gte("expense_date", range.from)
         .lte("expense_date", range.to)
         .gt("gst_paid", 0);
+
+      /* Reverse charge (migration 20260927220000): the buyer's own IGST on imported services. */
+      const { data: rcmExp } = await supabase
+        .from("expenses")
+        .select("id, expense_date, vendor_name, amount, rcm_tax")
+        .gte("expense_date", range.from).lte("expense_date", range.to).eq("rcm", true);
+      const rcmRows = (rcmExp ?? []).map((e) => ({ id: e.id, vendor: e.vendor_name ?? "—", date: e.expense_date, amount: e.amount ?? 0, tax: e.rcm_tax ?? 0 }));
+
+      /* ── Sirf wahi GST credit hai jo credit ho SAKTA hai (27 Sep 2026) ─────────
+         Pehle har `gst_paid > 0` kharcha ITC mein jaata tha — kaccha bill, bina GSTIN wala
+         vendor, staff ka khana sab. GSTR-2B mein wo kabhi nahi milte, aur 17(5) wale claim
+         hi nahi ho sakte. Ab lib/gst/itc.ts tay karta hai; jo credit nahi bana wo
+         `blockedItc` mein wajah ke saath dikhta hai. */
+      const { data: vendorRows } = await supabase.from("vendors").select("id, gstin");
+      const vendorGstinOf = new Map((vendorRows ?? []).map((v) => [v.id, v.gstin ?? null]));
+      const withGstin = (expenses ?? []).map((e) => ({ ...e, vendorGstin: e.vendor_id ? vendorGstinOf.get(e.vendor_id) ?? null : null }));
+      const blockedItc = splitItc(withGstin);
+      const claimable = withGstin.filter((e) => itcEligibility(e).eligible);
+      /* s.17(5) blocked rows keep their heads: 3B wants them in 4(A)(5) and again in 4(B)(1). */
+      const blocked17Heads: Heads[] = withGstin
+        .filter((e) => (itcEligibility(e).reason ?? "").includes("17(5)"))
+        .map((e) => { const h = expenseGstHeads(e); return { igst: h.igst, cgst: h.cgst, sgst: h.sgst }; });
 
       /* ── Ab MAANA nahi jata jab NAAPA hua maujood ho (29 Aug 2026) ──────────
          Yahan pehle har kharche par ye chalta tha:
@@ -257,15 +312,16 @@ function useGstReport(range: DateRange) {
          Ab batwara `expenses` me hi rakha jata hai (migration 20260829180000), aur faisla
          `expenseGstHeads` karta hai — jahan bill se aaya ho wahan wahi, jahan na ho wahan
          maan kar bhi SAAF likh kar. */
-      const inputRowsExpenses: InputRow[] = (expenses ?? []).map((e) => {
+      const inputRowsExpenses: InputRow[] = claimable.map((e) => {
         const g = e.gst_paid ?? 0;
         const h = expenseGstHeads(e);
         return {
           source:       "expense" as const,
           id:           e.id,
+          billNo:       e.bill_no ?? null,
           date:         e.expense_date,
           vendor:       e.vendor_name ?? "—",
-          vendorGstin:  null,
+          vendorGstin:  e.vendorGstin,
           taxableValue: (e.amount ?? 0) - g,
           gst:          g,
           igst:         h.igst,
@@ -288,163 +344,21 @@ function useGstReport(range: DateRange) {
       const inputGST     = inputRows.reduce((s, r) => s + r.gst, 0);
       const netLiability = outputGST - inputGST;
 
-      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability, sellerStateCode, sellerState };
+      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability, blockedItc, blocked17Heads, rcmRows, sellerStateCode, sellerState, sellerGstin };
     },
   });
 }
 
-// Split total GST into heads by place of supply. Inter-state → all IGST;
-// intra-state → CGST + SGST (halves, remainder into SGST so they sum exactly).
-function gstSplit(r: { gst: number; interState: boolean }): { cgst: number; sgst: number; igst: number } {
-  if (r.interState) return { cgst: 0, sgst: 0, igst: r.gst };
-  const cgst = Math.round(r.gst / 2);
-  return { cgst, sgst: r.gst - cgst, igst: 0 };
-}
+// GSTR-1 sections (B2B / B2CL / B2CS / CDNR / CDNUR / HSN) — lib/gst/gstr1.ts.
+// Notes are signed rows here, so the page totals net; the builder puts them in
+// their own tables with positive values, the way the portal wants them.
+const toGstr1Doc = (r: OutputRow) => ({
+  id: r.invoiceId, date: r.invoiceDate, docType: r.docType, customerName: r.customerName,
+  customerGstin: r.customerGstin, customerStateCode: r.customerStateCode, customerState: r.customerState,
+  amount: r.amount, taxableValue: r.taxableValue, gst: r.gst, taxRate: r.taxRate, interState: r.interState, lines: r.lines,
+});
 
-// ────────────────────────────────────────────────────────────────
-// GSTR-1 · GST Offline Tool export (B2B / B2CL / B2CS / HSN)
-// ────────────────────────────────────────────────────────────────
-// The GST Offline Tool imports one CSV per section. We build the standard
-// section templates from the period's invoices so the owner can import → generate
-// JSON → upload on the portal → file with OTP (no re-typing, no credentials).
-
-const B2CL_THRESHOLD = 250000;                         // inter-state B2C "large" invoice-value cutoff (₹)
-/* One source for the SAC this business sells under — it used to be written out
-   here, in the invoice table and across the marketing pages, which is two copies too
-   many for a compliance value. See lib/gst/hsn.ts. */
-const DEFAULT_HSN = SAAS_HSN;
-const DEFAULT_HSN_DESC = "Information technology software services";
-
-/**
- * GST state codes → names. Place of Supply must be "code-Name", e.g. `27-Maharashtra`.
- *
- * ─── THIS WAS A SECOND COPY, AND THE TWO HAD ALREADY DRIFTED ────────────────
- * A 38-entry literal lived here while `GST_STATE_BY_CODE` in lib/utils.ts held the
- * canonical 38. Same count, different membership — diffed on 17 Aug 2026:
- *
- *   25  this copy said "Daman and Diu"; canonical had dropped it, correctly. Code 25 was
- *       merged into 26 in Jan 2020, so a POS of "25-Daman and Diu" is a state the portal
- *       no longer recognises.
- *   99  canonical has "Centre Jurisdiction"; this copy had NOTHING. A customer under
- *       central jurisdiction therefore produced `GST_STATE_NAMES["99"] → undefined`, and
- *       posFor() emitted **"99-"** — a malformed Place of Supply, in a CSV going to the
- *       GST portal, in a filed return.
- *
- * Neither drift was introduced by a careless edit; they are what two copies of a
- * regulatory table do over time. Importing the canonical one is the fix, and it is the
- * same lesson as dunningRank(): the ordering (or the table) lives once, in the module
- * that owns it.
- */
-const GST_STATE_NAMES = GST_STATE_BY_CODE;
-
-// GST Offline Tool date format: DD-MMM-YYYY.
-function gstDate(isoStr: string): string {
-  const [y, m, d] = isoStr.slice(0, 10).split("-");
-  const mon = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(m)];
-  return `${d}-${mon}-${y}`;
-}
-
-// Resolve Place of Supply for a row → { code, name } or null if genuinely unknown.
-// B2B is authoritative from the GSTIN's first 2 digits; else the customer's state;
-// else (intra-state B2C) the seller's own state.
-function posFor(
-  r: OutputRow, sellerStateCode: string | null, sellerState: string | null,
-): { code: string; name: string } | null {
-  if (r.customerGstin && r.customerGstin.length >= 2) {
-    const code = r.customerGstin.slice(0, 2);
-    return { code, name: GST_STATE_NAMES[code] ?? r.customerState ?? "" };
-  }
-  if (r.customerStateCode) {
-    const code = r.customerStateCode.padStart(2, "0");
-    return { code, name: r.customerState ?? GST_STATE_NAMES[code] ?? "" };
-  }
-  if (!r.interState && sellerStateCode) {
-    const code = sellerStateCode.padStart(2, "0");
-    return { code, name: sellerState ?? GST_STATE_NAMES[code] ?? "" };
-  }
-  return null;
-}
-
-const GSTR1_HEADERS = {
-  b2b:  ["GSTIN/UIN of Recipient", "Receiver Name", "Invoice Number", "Invoice date", "Invoice Value", "Place Of Supply", "Reverse Charge", "Applicable % of Tax Rate", "Invoice Type", "E-Commerce GSTIN", "Rate", "Taxable Value", "Cess Amount"],
-  b2cl: ["Invoice Number", "Invoice date", "Invoice Value", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"],
-  b2cs: ["Type", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"],
-  hsn:  ["HSN", "Description", "UQC", "Total Quantity", "Total Value", "Rate", "Taxable Value", "Integrated Tax Amount", "Central Tax Amount", "State/UT Tax Amount", "Cess Amount"],
-};
-
-interface Gstr1Sections {
-  b2b: (string | number)[][];
-  b2cl: (string | number)[][];
-  b2cs: (string | number)[][];
-  hsn: (string | number)[][];
-  skipped: number;      // B2C invoices with no resolvable place of supply
-  notesCount: number;   // credit/debit notes (belong under CDNR, not built here)
-}
-
-function buildGstr1Sections(rows: OutputRow[], sellerStateCode: string | null, sellerState: string | null): Gstr1Sections {
-  // Only plain invoices go into B2B/B2C; credit/debit notes belong in CDNR/CDNUR.
-  const invoices = rows.filter((r) => r.docType === "invoice");
-  const b2b: (string | number)[][] = [];
-  const b2cl: (string | number)[][] = [];
-  const b2csMap = new Map<string, { pos: string; rate: number; taxable: number }>();
-  const hsnMap = new Map<string, { rate: number; taxable: number; igst: number; cgst: number; sgst: number; total: number }>();
-  let skipped = 0;
-
-  for (const r of invoices) {
-    const pos = posFor(r, sellerStateCode, sellerState);
-    const posStr = pos ? `${pos.code}-${pos.name}` : "";
-    const s = gstSplit(r);
-
-    // HSN summary — every invoice contributes (default HSN for SaaS).
-    const hk = `${DEFAULT_HSN}|${r.taxRate}`;
-    const h = hsnMap.get(hk) ?? { rate: r.taxRate, taxable: 0, igst: 0, cgst: 0, sgst: 0, total: 0 };
-    h.taxable += r.taxableValue; h.igst += s.igst; h.cgst += s.cgst; h.sgst += s.sgst; h.total += r.amount;
-    hsnMap.set(hk, h);
-
-    if (r.customerGstin) {
-      b2b.push([r.customerGstin, r.customerName, r.invoiceId, gstDate(r.invoiceDate), r.amount, posStr, "N", "", "Regular", "", r.taxRate, r.taxableValue, 0]);
-    } else if (!pos) {
-      skipped++;
-    } else if (r.interState && r.amount > B2CL_THRESHOLD) {
-      b2cl.push([r.invoiceId, gstDate(r.invoiceDate), r.amount, posStr, "", r.taxRate, r.taxableValue, 0, ""]);
-    } else {
-      const key = `${posStr}|${r.taxRate}`;
-      const cur = b2csMap.get(key) ?? { pos: posStr, rate: r.taxRate, taxable: 0 };
-      cur.taxable += r.taxableValue;
-      b2csMap.set(key, cur);
-    }
-  }
-
-  const b2cs = [...b2csMap.values()].map((v) => ["OE", v.pos, "", v.rate, v.taxable, 0, ""]);
-  const hsn = [...hsnMap.values()].map((h) => [DEFAULT_HSN, DEFAULT_HSN_DESC, "OTH-OTHERS", 0, h.total, h.rate, h.taxable, h.igst, h.cgst, h.sgst, 0]);
-
-  return { b2b, b2cl, b2cs, hsn, skipped, notesCount: rows.length - invoices.length };
-}
-
-// ────────────────────────────────────────────────────────────────
-// GSTR-3B · summary worksheet (typed on the portal, not uploaded)
-// ────────────────────────────────────────────────────────────────
-// 3B is a summary return: you enter a few figures per table. We compute the
-// exact box values from the period's books so the owner types them straight in.
-interface Gstr3b {
-  outTaxable: number; outIgst: number; outCgst: number; outSgst: number;   // Table 3.1(a) outward
-  itcIgst: number; itcCgst: number; itcSgst: number;                       // Table 4(A)(5) ITC
-  payIgst: number; payCgst: number; paySgst: number;                       // net (per head, floored)
-}
-function computeGstr3b(outputRows: OutputRow[], inputRows: InputRow[]): Gstr3b {
-  let outTaxable = 0, outIgst = 0, outCgst = 0, outSgst = 0;
-  for (const r of outputRows) {
-    const s = gstSplit(r);
-    outTaxable += r.taxableValue; outIgst += s.igst; outCgst += s.cgst; outSgst += s.sgst;
-  }
-  let itcIgst = 0, itcCgst = 0, itcSgst = 0;
-  for (const r of inputRows) { itcIgst += r.igst; itcCgst += r.cgst; itcSgst += r.sgst; }
-  const net = (o: number, i: number) => Math.max(0, o - i);
-  return {
-    outTaxable, outIgst, outCgst, outSgst, itcIgst, itcCgst, itcSgst,
-    payIgst: net(outIgst, itcIgst), payCgst: net(outCgst, itcCgst), paySgst: net(outSgst, itcSgst),
-  };
-}
+// GSTR-3B worksheet — lib/gst/gstr3b.ts (RCM, s.17(5) reversal, cash per head).
 
 // ────────────────────────────────────────────────────────────────
 // CSV export helpers
@@ -484,6 +398,35 @@ export default function GstReportPage() {
   const { data: taxPayments } = useTaxPayments();
   const gstPaidInRange = gstPaidForPeriods(taxPayments ?? [], range.from.slice(0, 7), range.to.slice(0, 7));
 
+  /* ── GSTR-2B milaan (27 Sep 2026) ────────────────────────────────────────
+     The portal's JSON is read in the browser and matched against this period's ITC rows;
+     nothing is uploaded or stored. s.16(2)(aa): only what the supplier filed is credit. */
+  const [twoB, setTwoB] = React.useState<{ period: string | null; recon: Reconciliation; count: number } | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  async function onPick2b(file: File | null) {
+    if (!file || !data) return;
+    try {
+      const parsed = parseGstr2b(JSON.parse(await file.text()));
+      if (parsed.errors.length) { toast.error(parsed.errors.join(" ")); return; }
+      const books = data.inputRows.map((r) => ({ id: r.id, source: r.source, vendor: r.vendor, vendorGstin: r.vendorGstin, billNo: r.billNo, date: r.date, taxable: r.taxableValue, igst: r.igst, cgst: r.cgst, sgst: r.sgst }));
+      const recon = reconcile2b(parsed.invoices, books);
+      setTwoB({ period: parsed.period, recon, count: parsed.invoices.length });
+      const fp = range.from.slice(5, 7) + range.from.slice(0, 4);
+      if (parsed.period && parsed.period !== fp) toast.warning(`2B ka period ${parsed.period} hai, page par ${fp} — range wahi mahina rakho.`);
+    } catch { toast.error("JSON padha nahi gaya — portal se GSTR-2B ka JSON download karke wahi file chuno."); }
+    if (fileRef.current) fileRef.current.value = "";
+  }
+  function export2b() {
+    if (!twoB) return;
+    const r = twoB.recon;
+    downloadCSV(`gstr2b-milaan-${range.from}-to-${range.to}.csv`, ["Status", "Supplier GSTIN", "Invoice no.", "Date", "Books id", "2B tax", "Books tax", "Diff"], [
+      ...r.matched.map((m): (string | number)[] => ["Matched", m.b2b.gstin, m.b2b.invoiceNo, m.b2b.date ?? "", m.book.id, m.b2b.igst + m.b2b.cgst + m.b2b.sgst, m.book.igst + m.book.cgst + m.book.sgst, 0]),
+      ...r.amountDiffers.map((m): (string | number)[] => ["Amount differs", m.b2b.gstin, m.b2b.invoiceNo, m.b2b.date ?? "", m.book.id, m.b2b.igst + m.b2b.cgst + m.b2b.sgst, m.book.igst + m.book.cgst + m.book.sgst, m.diff]),
+      ...r.onlyIn2b.map((x): (string | number)[] => ["Only in 2B (bill missing in books)", x.gstin, x.invoiceNo, x.date ?? "", "", x.igst + x.cgst + x.sgst, "", ""]),
+      ...r.onlyInBooks.map((b): (string | number)[] => ["Only in books (supplier not filed — hold)", b.vendorGstin ?? "", b.billNo ?? "", b.date, b.id, "", b.igst + b.cgst + b.sgst, ""]),
+    ]);
+  }
+
   function exportOutput() {
     if (!data) return;
     downloadCSV(
@@ -503,17 +446,19 @@ export default function GstReportPage() {
 
   function exportGstr1() {
     if (!data) return;
-    const secs = buildGstr1Sections(data.outputRows, data.sellerStateCode, data.sellerState);
+    const secs = buildGstr1(data.outputRows.map(toGstr1Doc), { stateCode: data.sellerStateCode, state: data.sellerState });
+    const csv = gstr1Csv(secs);
     const stamp = `${range.from}-to-${range.to}`;
     let files = 0;
-    if (secs.b2b.length)  { downloadCSV(`gstr1-b2b-${stamp}.csv`,  GSTR1_HEADERS.b2b,  secs.b2b);  files++; }
-    if (secs.b2cl.length) { downloadCSV(`gstr1-b2cl-${stamp}.csv`, GSTR1_HEADERS.b2cl, secs.b2cl); files++; }
-    if (secs.b2cs.length) { downloadCSV(`gstr1-b2cs-${stamp}.csv`, GSTR1_HEADERS.b2cs, secs.b2cs); files++; }
-    if (secs.hsn.length)  { downloadCSV(`gstr1-hsn-${stamp}.csv`,  GSTR1_HEADERS.hsn,  secs.hsn);  files++; }
+    for (const key of ["b2b", "b2cl", "b2cs", "cdnr", "cdnur", "hsn"] as const) {
+      if (!csv[key].length) continue;
+      downloadCSV(`gstr1-${key}-${stamp}.csv`, [...GSTR1_HEADERS[key]], csv[key]);
+      files++;
+    }
     if (files === 0) { toast.error("No invoices to export for GSTR-1 in this period."); return; }
     const notes: string[] = [];
-    if (secs.skipped)    notes.push(`${secs.skipped} B2C invoice(s) skipped — add the customer's state, then re-export.`);
-    if (secs.notesCount) notes.push(`${secs.notesCount} credit/debit note(s) not included — enter under CDNR on the portal.`);
+    if (secs.skipped.length) notes.push(`${secs.skipped.length} B2C document(s) skipped (${secs.skipped.slice(0, 3).join(", ")}) — add the customer's state, then re-export.`);
+    if (secs.notesNettedIntoB2cs) notes.push(`${secs.notesNettedIntoB2cs} small unregistered note(s) netted into B2CS.`);
     toast.success(`${files} GSTR-1 file(s) downloaded — import each into the GST Offline Tool.${notes.length ? " " + notes.join(" ") : ""}`);
   }
 
@@ -522,62 +467,43 @@ export default function GstReportPage() {
       toast.error("No invoices in this period to export JSON.");
       return;
     }
-    const secs = buildGstr1Sections(data.outputRows, data.sellerStateCode, data.sellerState);
-    const periodStr = range.from.slice(5, 7) + range.from.slice(0, 4);
-    const gstr1Payload = {
-      gstin: data.sellerStateCode ? `${data.sellerStateCode}AAAAA0000A1Z5` : "07AAAAA0000A1Z5",
-      fp: periodStr,
-      version: "GSTR1_v3.0.4",
-      b2b: secs.b2b.map((row, idx) => ({
-        ctin: row[0],
-        inv: [{
-          inum: row[2],
-          idt: row[3],
-          val: row[4],
-          pos: String(row[5]).slice(0, 2),
-          rchrg: "N",
-          inv_typ: "R",
-          itms: [{ num: idx + 1, itm_det: { rt: row[10], txval: row[11], iamt: 0, camt: 0, samt: 0 } }]
-        }]
-      })),
-      hsn: {
-        data: secs.hsn.map((row, idx) => ({
-          num: idx + 1,
-          hsn_sc: String(row[0]),
-          desc: String(row[1]),
-          uqc: String(row[2]),
-          qty: Number(row[3]) || 1,
-          val: Number(row[4]),
-          txval: Number(row[6]),
-          iamt: Number(row[7]),
-          camt: Number(row[8]),
-          samt: Number(row[9]),
-        }))
-      }
-    };
+    /* A return JSON with a placeholder GSTIN is a return for nobody — refuse, don't guess. */
+    if (!data.sellerGstin) {
+      toast.error("Company GSTIN nahi mila — Settings → Company mein GSTIN bharo, phir JSON banao.");
+      return;
+    }
+    const secs = buildGstr1(data.outputRows.map(toGstr1Doc), { stateCode: data.sellerStateCode, state: data.sellerState });
+    const payload = gstr1Json(secs, data.sellerGstin, range.from.slice(5, 7) + range.from.slice(0, 4));
 
-    const jsonBlob = new Blob([JSON.stringify(gstr1Payload, null, 2)], { type: "application/json" });
+    const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(jsonBlob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `GSTR1_Direct_Portal_Upload_${range.from}_to_${range.to}.json`;
+    a.download = `GSTR1_${data.sellerGstin}_${range.from}_to_${range.to}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Downloaded GSTR-1 Portal JSON! Ready for direct upload on gst.gov.in.");
+    const parts = [
+      secs.b2b.length && `B2B ${secs.b2b.length}`, secs.b2cl.length && `B2CL ${secs.b2cl.length}`, secs.b2cs.length && `B2CS ${secs.b2cs.length}`,
+      secs.cdnr.length && `CDNR ${secs.cdnr.length}`, secs.cdnur.length && `CDNUR ${secs.cdnur.length}`, `HSN ${secs.hsn.length}`,
+    ].filter(Boolean).join(" · ");
+    const warn = secs.skipped.length ? ` ⚠ ${secs.skipped.length} B2C document(s) skipped — add the customer's state.` : "";
+    toast.success(`GSTR-1 JSON downloaded (${parts}). Upload on gst.gov.in → Returns → GSTR-1 → Import JSON, then check every table before filing.${warn}`);
   }
 
-  const g3b = data ? computeGstr3b(data.outputRows, data.inputRows) : null;
+  const g3b = data ? computeGstr3b({
+    output: data.outputRows.map((r) => ({ taxableValue: r.taxableValue, heads: gstSplit(r) })),
+    itc: data.inputRows.map((r) => ({ igst: r.igst, cgst: r.cgst, sgst: r.sgst })),
+    blocked17: data.blocked17Heads,
+    notIn2b: data.blockedItc.blocked - data.blocked17Heads.reduce((s, h) => s + h.igst + h.cgst + h.sgst, 0),
+    rcm: data.rcmRows,
+  }) : null;
 
   function exportGstr3b() {
     if (!g3b) return;
     downloadCSV(
       `gstr3b-worksheet-${range.from}-to-${range.to}.csv`,
       ["Table", "Description", "Taxable value", "IGST", "CGST", "SGST"],
-      [
-        ["3.1(a)", "Outward taxable supplies (other than zero/nil/exempt)", g3b.outTaxable, g3b.outIgst, g3b.outCgst, g3b.outSgst],
-        ["4(A)(5)", "ITC available — all other ITC", "", g3b.itcIgst, g3b.itcCgst, g3b.itcSgst],
-        ["Net", "Tax payable in cash (per head, before IGST cross-set-off)", "", g3b.payIgst, g3b.payCgst, g3b.paySgst],
-      ],
+      gstr3bRows(g3b),
     );
   }
 
@@ -629,13 +555,13 @@ export default function GstReportPage() {
             })}
           </div>
           <div className="flex items-center gap-2 ml-auto flex-wrap">
-            <input
+            <input aria-label="From date"
               type="date" value={range.from}
               onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
               className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
             />
             <span className="text-xs text-ink-3">to</span>
-            <input
+            <input aria-label="To date"
               type="date" value={range.to}
               onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
               className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
@@ -669,7 +595,7 @@ export default function GstReportPage() {
               <div className={`font-serif text-2xl md:text-3xl ${data && data.netLiability >= 0 ? "text-rose" : "text-emerald"}`}>
                 {data ? rupee(data.netLiability) : "—"}
               </div>
-              <div className="text-2xs text-ink-3 mt-1.5 leading-relaxed">
+              <div className="text-xs text-ink-3 mt-1.5 leading-relaxed">
                 {data && data.netLiability >= 0
                   ? "Payable to government via GSTR-3B"
                   : "Refundable / carry-forward input tax credit"}
@@ -677,7 +603,7 @@ export default function GstReportPage() {
               {/* GST already paid for these return months (booked from the bank). Shown
                   only when some was paid, so an unpaid month still reads as plain "payable". */}
               {data && gstPaidInRange > 0 && (
-                <div className="mt-2 pt-2 border-t border-amber/20 text-2xs space-y-0.5 tabular-nums">
+                <div className="mt-2 pt-2 border-t border-amber/20 text-xs space-y-0.5 tabular-nums">
                   <div className="flex justify-between text-ink-2">
                     <span>Paid for these months</span><span>− {rupee(gstPaidInRange)}</span>
                   </div>
@@ -701,7 +627,7 @@ export default function GstReportPage() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-ink text-base">File GSTR-1 for {range.label}</div>
                 <p className="text-xs text-ink-2 mt-1 leading-relaxed max-w-3xl">
-                  Export sales data in official <b>GST Portal JSON</b> or <b>GST Offline Tool CSVs</b> (B2B, B2C, HSN). Direct upload on <a href="https://gst.gov.in" target="_blank" rel="noreferrer" className="text-amber-ink underline font-medium">gst.gov.in</a> → file returns with OTP.
+                  Export sales data in official <b>GST Portal JSON</b> or <b>GST Offline Tool CSVs</b> (B2B, B2CL, B2CS, CDNR/CDNUR, HSN). Direct upload on <a href="https://gst.gov.in" target="_blank" rel="noreferrer" className="text-amber-ink underline font-medium">gst.gov.in</a> → file returns with OTP.
                 </p>
               </div>
             </div>
@@ -747,34 +673,26 @@ export default function GstReportPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline font-mono">
-                <tr>
-                  <td className="px-3 py-2 text-ink-2">3.1(a)</td>
-                  <td className="px-3 py-2 font-sans text-ink">Outward taxable supplies</td>
-                  <td className="px-3 py-2 text-right text-ink">{rupee(g3b.outTaxable)}</td>
-                  <td className="px-3 py-2 text-right">{rupee(g3b.outIgst)}</td>
-                  <td className="px-3 py-2 text-right">{rupee(g3b.outCgst)}</td>
-                  <td className="px-3 py-2 text-right">{rupee(g3b.outSgst)}</td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-ink-2">4(A)(5)</td>
-                  <td className="px-3 py-2 font-sans text-ink">ITC available (all other ITC)</td>
-                  <td className="px-3 py-2 text-right text-ink-3">—</td>
-                  <td className="px-3 py-2 text-right text-emerald">{rupee(g3b.itcIgst)}</td>
-                  <td className="px-3 py-2 text-right text-emerald">{rupee(g3b.itcCgst)}</td>
-                  <td className="px-3 py-2 text-right text-emerald">{rupee(g3b.itcSgst)}</td>
-                </tr>
-                <tr className="bg-paper-2/30">
-                  <td className="px-3 py-2 text-ink-2">Net</td>
-                  <td className="px-3 py-2 font-sans font-semibold text-ink">Tax payable in cash</td>
-                  <td className="px-3 py-2 text-right text-ink-3">—</td>
-                  <td className="px-3 py-2 text-right font-semibold text-rose">{rupee(g3b.payIgst)}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-rose">{rupee(g3b.payCgst)}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-rose">{rupee(g3b.paySgst)}</td>
-                </tr>
+                {gstr3bRows(g3b).map((r) => {
+                  const box = String(r[0]);
+                  const isNet = box === "Net", isRev = box === "4(B)(1)", isInfo = box === "—", isItc = box.startsWith("4(") && !isRev;
+                  const cell = (v: string | number) => (v === "" ? "—" : typeof v === "number" ? rupee(v) : v);
+                  const tone = isNet ? "font-semibold text-rose" : isRev ? "text-amber-ink" : isItc ? "text-emerald" : isInfo ? "text-ink-3" : "text-ink";
+                  return (
+                    <tr key={box + String(r[1])} className={isNet ? "bg-paper-2/30" : isInfo ? "opacity-80" : ""}>
+                      <td className="px-3 py-2 text-ink-2">{box}</td>
+                      <td className={`px-3 py-2 font-sans ${isNet ? "font-semibold text-ink" : "text-ink"}`}>{String(r[1])}</td>
+                      <td className="px-3 py-2 text-right text-ink-3">{cell(r[2])}</td>
+                      <td className={`px-3 py-2 text-right ${tone}`}>{cell(r[3])}</td>
+                      <td className={`px-3 py-2 text-right ${tone}`}>{cell(r[4])}</td>
+                      <td className={`px-3 py-2 text-right ${tone}`}>{cell(r[5])}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          <p className="text-2xs text-ink-3 mt-2 leading-relaxed">
+          <p className="text-xs text-ink-3 mt-2 leading-relaxed">
             Net = output − ITC per head (floored at 0). The portal also lets IGST credit set off CGST/SGST,
             so your actual cash payable can be lower. Expense ITC is assumed intra-state (CGST+SGST) — adjust
             if any expense was inter-state / import (IGST). Add reverse-charge, interest or late fee separately.
@@ -832,7 +750,7 @@ export default function GstReportPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-emerald">
                       {rupee(r.gst)}
-                      <span className="block text-3xs text-ink-3">
+                      <span className="block text-xs text-ink-3">
                         {r.interState ? `IGST ${rupee(s.igst)}` : `${rupee(s.cgst)} + ${rupee(s.sgst)}`}
                       </span>
                     </td>
@@ -854,6 +772,71 @@ export default function GstReportPage() {
               </tfoot>
             </table>
           </div>
+        </Card>
+      )}
+
+      {/* GSTR-2B milaan — only what the supplier filed is credit (s.16(2)(aa)). */}
+      {data && (
+        <Card className="p-4 mb-4 border border-indigo/30 bg-indigo/5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">GSTR-2B milaan — {range.label}</p>
+              <p className="text-xs text-ink-2 mt-0.5 leading-relaxed max-w-2xl">
+                Portal → Returns → GSTR-2B → <b>Download JSON</b>, phir yahan chuno. Jo supplier ne file kiya sirf wahi credit hai; baaki hold.
+                File browser mein hi padhti hai — kahin upload/save nahi hoti.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => onPick2b(e.target.files?.[0] ?? null)} />
+              <Button variant="default" size="sm" onClick={() => fileRef.current?.click()}><Icon name="file" size={14} className="mr-1.5" />2B JSON chuno</Button>
+              {twoB && <Button variant="ghost" size="sm" icon="download" onClick={export2b}>CSV</Button>}
+            </div>
+          </div>
+          {twoB && (() => {
+            const r = twoB.recon;
+            const t = (x: { igst: number; cgst: number; sgst: number }) => x.igst + x.cgst + x.sgst;
+            return (
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Claim karo (2B ✓)</div><div className="font-mono text-emerald font-semibold">{rupee(r.claimable.total)}</div><div className="text-xs text-ink-3">{r.matched.length} matched · {r.amountDiffers.length} farq</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Hold (2B mein nahi)</div><div className="font-mono text-amber-ink font-semibold">{rupee(r.held)}</div><div className="text-xs text-ink-3">{r.onlyInBooks.length} books row</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Bill chhoota (sirf 2B mein)</div><div className="font-mono text-rose font-semibold">{rupee(r.unbooked)}</div><div className="text-xs text-ink-3">{r.onlyIn2b.length} invoice</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">2B file</div><div className="font-mono text-ink">{twoB.count} inv · {twoB.period ?? "?"}</div><div className="text-xs text-ink-3">books ITC {rupee(data.inputGST)}</div></div>
+                </div>
+                {r.onlyInBooks.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-amber-ink mb-1">Books mein hai, 2B mein nahi — is mahine claim mat karo, agle 2B mein dekho (ya supplier se filing poochho)</p>
+                    <ul className="text-xs text-ink-2 space-y-0.5">{r.onlyInBooks.slice(0, 20).map((b) => <li key={b.id} className="flex justify-between gap-3"><span className="truncate">{b.vendor} · {b.billNo ?? "bill no. nahi"} · {formatDate(b.date)}{!b.vendorGstin ? " · GSTIN nahi" : ""}</span><span className="font-mono">{rupee(t(b))}</span></li>)}</ul>
+                  </div>
+                )}
+                {r.onlyIn2b.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-rose mb-1">2B mein hai, books mein nahi — bill dhoondh kar Expenses / Bills mein daalo, credit tabhi milega</p>
+                    <ul className="text-xs text-ink-2 space-y-0.5">{r.onlyIn2b.slice(0, 20).map((x, i) => <li key={x.gstin + x.invoiceNo + i} className="flex justify-between gap-3"><span className="truncate">{x.supplierName ?? x.gstin} · {x.invoiceNo} · {x.date ? formatDate(x.date) : "—"}</span><span className="font-mono">{rupee(t(x))}</span></li>)}</ul>
+                  </div>
+                )}
+                {r.amountDiffers.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-ink mb-1">Tax alag hai — 2B ka figure claim karo, books theek karo</p>
+                    <ul className="text-xs text-ink-2 space-y-0.5">{r.amountDiffers.slice(0, 20).map((m) => <li key={m.book.id} className="flex justify-between gap-3"><span className="truncate">{m.book.vendor} · {m.b2b.invoiceNo}</span><span className="font-mono">books {rupee(t(m.book))} → 2B {rupee(t(m.b2b))}</span></li>)}</ul>
+                  </div>
+                )}
+                {r.onlyInBooks.length === 0 && r.onlyIn2b.length === 0 && r.amountDiffers.length === 0 && <p className="text-xs text-emerald">Sab match — poora {rupee(r.claimable.total)} claim karo.</p>}
+              </div>
+            );
+          })()}
+        </Card>
+      )}
+
+      {data && data.blockedItc.blocked > 0 && (
+        <Card className="p-4 mb-4 border-amber/40 bg-amber-soft/20">
+          <p className="text-sm font-semibold text-ink">GST jo credit nahi bana — {rupee(data.blockedItc.blocked)}</p>
+          <p className="text-xs text-ink-2 mt-0.5 mb-2">Ye kharche mein hi gina hai, ITC mein nahi. Wajah theek ho (GST bill lo, vendor ka GSTIN bharo) to agli baar credit milega.</p>
+          <ul className="text-xs text-ink-2 space-y-0.5">
+            {data.blockedItc.blockedByReason.map((r) => (
+              <li key={r.reason} className="flex justify-between gap-3"><span>{r.reason} · {r.count}</span><span className="font-mono tabular-nums">{rupee(r.amount)}</span></li>
+            ))}
+          </ul>
         </Card>
       )}
 
@@ -889,7 +872,7 @@ export default function GstReportPage() {
                 <p className="text-xs font-semibold text-ink">
                   {rows.length} {rows.length === 1 ? "row ka" : "rows ka"} GST batwara MAANA hua hai — {rupee(amount)}
                 </p>
-                <p className="text-2xs text-ink-2">
+                <p className="text-xs text-ink-2">
                   In par bill ka IGST/CGST batwara nahi mila, isliye intra-state maan kar aadha-aadha
                   baanta gaya hai. <strong>GSTR-3B me IGST aur CGST/SGST alag column hain</strong> —
                   agar inme koi doosre rajya ka bill hai (jaise Amazon), to uska credit galat khaane
@@ -990,7 +973,7 @@ function SectionHeader({
       <div>
         <h2 className="font-serif text-xl text-ink leading-tight">{title}</h2>
         {count > 0 && (
-          <div className="text-2xs text-ink-3 mt-0.5">{count} {count === 1 ? "row" : "rows"}</div>
+          <div className="text-xs text-ink-3 mt-0.5">{count} {count === 1 ? "row" : "rows"}</div>
         )}
       </div>
       <Button variant="default" size="sm" onClick={onExport} disabled={disabled}>
@@ -1014,7 +997,7 @@ function SummaryCard({
     <Card className="p-4 md:p-5">
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className="font-serif text-2xl md:text-3xl text-ink leading-tight mb-2">{rupee(gst)}</div>
-      <div className="text-2xs text-ink-3 leading-relaxed">
+      <div className="text-xs text-ink-3 leading-relaxed">
         on {rupee(taxable)} taxable value · {rowCount} {rowLabel}{rowCount === 1 ? "" : "s"}
       </div>
     </Card>

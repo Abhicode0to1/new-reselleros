@@ -127,9 +127,9 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
 
       {mode === "existing" ? (
         isLoading ? (
-          <p className="text-2xs text-ink-3">Projects load ho rahe hain…</p>
+          <p className="text-xs text-ink-3">Projects load ho rahe hain…</p>
         ) : (projects ?? []).length === 0 ? (
-          <p className="text-2xs text-ink-3">Koi open project nahi hai — &quot;Naya project&quot; chuno.</p>
+          <p className="text-xs text-ink-3">Koi open project nahi hai — &quot;Naya project&quot; chuno.</p>
         ) : (
           <>
             <select value={projectId} onChange={(e) => pickProject(e.target.value)} aria-label="Project" className={selectCls}>
@@ -155,7 +155,7 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
             {addingMilestone && project && (
               <>
                 <Input value={newMsLabel} onChange={(e) => setNewMsLabel(e.target.value)} placeholder="Milestone ka naam (e.g. Phase 2)" aria-label="New milestone name" />
-                <p className="text-3xs text-amber-ink">
+                <p className="text-xs text-amber-ink">
                   {project.milestones.length === 0 && project.paid > 0 ? "Is project ka poora payment ho chuka hai. " : ""}
                   Ye {rupee(settled)} ek nayi milestone ki tarah judega aur project ki value {rupee(project.total)} → {rupee(project.total + settled)} ho jayegi.
                   Agar ye alag kaam hai to &quot;Naya project&quot; chuno.
@@ -163,7 +163,7 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
               </>
             )}
             {milestone && settled !== milestone.remaining && (
-              <p className="text-3xs text-amber-ink">
+              <p className="text-xs text-amber-ink">
                 Is milestone ka {rupee(milestone.remaining)} baaki hai, ye payment {rupee(settled)} chukata hai{tds ? " (bank + TDS)" : ""} —
                 {settled < milestone.remaining
                   ? (raiseInvoice && milestone.paid === 0 && !milestone.invoiceId
@@ -194,7 +194,7 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
               it, not a new deal. Booking it as "Naya project" split a ₹50L contract into a
               ₹5L duplicate (26 Sep 2026), so it is said before anything is created. */}
           {customerProjects.length > 0 && (
-            <div className="rounded-md border border-amber/50 bg-amber-soft/30 p-2.5 text-2xs text-ink-2 space-y-1.5">
+            <div className="rounded-md border border-amber/50 bg-amber-soft/30 p-2.5 text-xs text-ink-2 space-y-1.5">
               <p>
                 <b>{customerName}</b> ka project pehle se khula hai. Agar ye paisa usi ki kist hai to naya project mat banao —
                 existing project chuno.
@@ -209,38 +209,38 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
             </div>
           )}
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Project ka naam (e.g. Accounting software)" aria-label="Project name" />
-          <label className="block text-3xs text-ink-3">
+          <label className="block text-xs text-ink-3">
             Project ki total value ₹ (GST ke saath) — sirf ye payment hai to jaisa hai waisa chhod do
             <Input value={total} onChange={(e) => { setTotal(e.target.value); setTotalEdited(true); }} type="number" min={0} className="mt-1" aria-label="Project total value" />
           </label>
           {totalNum > 0 && (
-            <p className="text-3xs text-ink-3">
+            <p className="text-xs text-ink-3">
               = <b className="text-ink">{amountInIndianWords(totalNum)}</b> (GST ke saath)
             </p>
           )}
           {/* The total defaults to this one payment — right for a one-payment job, wrong for the
               first instalment of a bigger contract, which is how a ₹50L deal became a ₹5L project. */}
           {totalNum === settled && (
-            <p className="text-3xs text-amber-ink">
+            <p className="text-xs text-amber-ink">
               Abhi poori deal ki value = sirf ye payment ({amountInIndianWords(settled)}). Agar ye badi deal ki pehli kist hai to
               upar <b>poori value</b> daalo — baaki milestone apne-aap ban jaayegi.
             </p>
           )}
           {split.length > 0 && totalNum >= settled && (
-            <p className="text-3xs text-ink-3">
+            <p className="text-xs text-ink-3">
               Milestones: {split.map((m) => `${m.label} ${rupee(m.total_amount)}`).join(" + ")} (GST 18% ke saath) — ye {rupee(settled)} pehli milestone mein jayega.
               Baad mein project page par milestones badal sakte ho.
             </p>
           )}
           {totalNum > 0 && totalNum < settled && (
-            <p className="text-3xs text-rose">Total value is payment ({rupee(settled)}) se kam nahi ho sakti.</p>
+            <p className="text-xs text-rose">Total value is payment ({rupee(settled)}) se kam nahi ho sakti.</p>
           )}
         </>
       )}
 
       {/* TDS the customer withheld: the receipt then settles more than reached the bank. */}
       <div className="rounded-md border border-hairline bg-paper p-2.5 space-y-2">
-        <label className="flex items-start gap-2 text-2xs text-ink-2">
+        <label className="flex items-start gap-2 text-xs text-ink-2">
           <input type="checkbox" checked={tdsOn} onChange={(e) => setTdsOn(e.target.checked)} className="mt-0.5" />
           <span><b>TDS kata hai?</b> Customer ne TDS kaat kar {rupee(net)} bheja</span>
         </label>
@@ -249,21 +249,21 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
             <select value={tdsKey} onChange={(e) => setTdsKey(e.target.value)} aria-label="TDS section" className={selectCls}>
               {TDS_SECTIONS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-2xs tabular-nums">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs tabular-nums">
               <span className="text-ink-3">Kaam ki value (taxable)</span><span className="text-right text-ink">{rupee(tds.taxable)}</span>
               <span className="text-ink-3">+ GST {gstRate}%</span><span className="text-right text-ink">{rupee(tds.gst)}</span>
               <span className="text-ink-3 font-semibold">= Invoice</span><span className="text-right text-ink font-semibold">{rupee(tds.gross)}</span>
               <span className="text-ink-3">− TDS {tdsSection.ratePct}% on {rupee(tds.taxable)}</span><span className="text-right text-rose">− {rupee(tds.tds)}</span>
               <span className="text-ink-3">= Bank mein aaya</span><span className="text-right text-emerald">{rupee(tds.net)}</span>
             </div>
-            <p className="text-3xs text-ink-3">
+            <p className="text-xs text-ink-3">
               {rupee(tds.tds)} TDS Receivable mein jayega (Form 16A pending) — ITR mein claim hoga.
             </p>
           </>
         )}
       </div>
 
-      <label className="flex items-start gap-2 text-2xs text-ink-2 pt-1">
+      <label className="flex items-start gap-2 text-xs text-ink-2 pt-1">
         <input type="checkbox" checked={raiseInvoice} onChange={(e) => setRaiseInvoice(e.target.checked)} className="mt-0.5" />
         <span>
           Is milestone ki tax invoice bhi bana do

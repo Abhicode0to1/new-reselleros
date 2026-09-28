@@ -14,7 +14,7 @@ const KEY = ["tenant_backups"] as const;
 
 /**
  * How many snapshots are kept per tenant. Must match the `limit` in
- * `backup._take` (migration 0244).
+ * `backup._take` (migration 20260928141000 — was 30 until S15, 28 Sep 2026).
  *
  * Exported because this page previously stated the number twice, in two places,
  * and got it wrong both times: one paragraph promised "last 15", another "last
@@ -22,10 +22,12 @@ const KEY = ["tenant_backups"] as const;
  * user learns not to trust the screen. One constant, used everywhere it is
  * claimed.
  *
- * 30 is affordable here: a snapshot of this database measures ~83 kB, so a full
- * shelf costs about 2.5 MB per tenant.
+ * S15: 7, not 30. These rows live INSIDE the database they back up — an undo
+ * button, not a backup. 30 × 50 tenants made every night's `_take` delete heavier
+ * and the DB fatter for no extra safety: the long history is off-site (daily/ 400
+ * days, monthly/ 8 years) and in Cloud SQL PITR.
  */
-export const SNAPSHOT_RETENTION = 30;
+export const SNAPSHOT_RETENTION = 7;
 
 export type BackupRow = { id: string; created_at: string; label: string | null; kind: string; table_count: number; bytes: number };
 

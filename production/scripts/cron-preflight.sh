@@ -35,7 +35,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 ENV_FILE="$ROOT/.env.local"
-REGION="${REGION:-asia-south1}"
+REGION="${REGION:-asia-southeast1}"   # Singapore since 5 Sep 2026; asia-south1 (Mumbai) is the old service
 PROJECT="${PROJECT:-resellsubsos-prod}"
 SERVICE="${SERVICE:-resellersos}"
 

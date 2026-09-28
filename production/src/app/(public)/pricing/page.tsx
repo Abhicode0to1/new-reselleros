@@ -63,7 +63,7 @@ const COMPARISON = [
       { feature: "Leads + Deal pipeline",   starter: true, growth: true, pro: true },
       { feature: "Quote builder (5 tiers)", starter: true, growth: true, pro: true },
       { feature: "GST invoices (HSN 998313)", starter: true, growth: true, pro: true },
-      { feature: "Customer portal",         starter: true, growth: true, pro: true },
+      { feature: "Customer quote links (view, accept, pay)", starter: true, growth: true, pro: true },
       { feature: "Smart Views + Kanban",    starter: true, growth: true, pro: true },
     ],
   },

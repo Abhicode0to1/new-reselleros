@@ -87,7 +87,7 @@ export function MarkJunkDialog({
                   {r.recoverable ? "Can be undone" : "Final"}
                 </Badge>
               </div>
-              <p className="mt-0.5 text-2xs leading-snug text-ink-3">{r.consequence}</p>
+              <p className="mt-0.5 text-xs leading-snug text-ink-3">{r.consequence}</p>
             </button>
           ))}
         </div>

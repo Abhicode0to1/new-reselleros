@@ -30,6 +30,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { istParts } from "@/lib/mastery/quiet-hours";
+/* addDaysISO: calendar arithmetic on a DATE column, UTC parts — ek hi copy lib/dates/ist me (S21). */
+import { addDaysISO } from "@/lib/dates/ist";
 import { loadSalesCatalog } from "@/lib/ai/sales-agent.server";
 import { dispatchTelecall } from "@/lib/ai/actions/telecall-dispatcher";
 import { loadSubscriptionSubject } from "@/lib/telecall/subject.server";
@@ -216,17 +218,4 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
   }
 
   return NextResponse.json(reportCron("ai-telecall-renewals", result));
-}
-
-/**
- * Add days to a YYYY-MM-DD string, in the calendar rather than the clock.
- *
- * Built from UTC parts on purpose: this is date arithmetic on a DATE column, and constructing
- * a local Date from "2026-08-25" then adding days lets a timezone offset move the answer by a
- * day. Month and year roll over correctly through Date.UTC.
- */
-function addDaysISO(ymd: string, days: number): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  const shifted = new Date(Date.UTC(y, m - 1, d + days));
-  return shifted.toISOString().slice(0, 10);
 }

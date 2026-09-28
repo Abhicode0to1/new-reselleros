@@ -709,6 +709,7 @@ function InvoicesPageInner() {
           body="Invoices are generated when a quote is accepted and payment is recorded. Start by creating a quote."
           action={
             <Button asChild variant="primary" icon="file">
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- pre-existing plain <a> (full navigation), kept as-is by the Next 15 upgrade; eslint-plugin-next 15 now also scans app/ */}
               <a href="/quotes/new">Create a quote</a>
             </Button>
           }

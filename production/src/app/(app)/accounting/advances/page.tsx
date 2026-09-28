@@ -36,9 +36,10 @@ import { useEmployees } from "@/lib/queries/payroll";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { EXPENSE_CATEGORIES } from "@/lib/queries/expenses";
 import { toast } from "sonner";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 export default function EmployeeAdvancesPage() {
@@ -176,13 +177,13 @@ export default function EmployeeAdvancesPage() {
                         <div key={exp.id} className="flex items-center justify-between p-2.5 bg-paper rounded border border-hairline text-xs">
                           <div className="space-y-0.5">
                             <span className="font-semibold text-ink">{exp.category}</span>
-                            {exp.description && <p className="text-ink-3 text-2xs">{exp.description}</p>}
-                            <span className="text-3xs text-ink-3">{formatDate(exp.expense_date, "short")} {exp.vendor_name ? `· Vendor: ${exp.vendor_name}` : ""}</span>
+                            {exp.description && <p className="text-ink-3 text-xs">{exp.description}</p>}
+                            <span className="text-xs text-ink-3">{formatDate(exp.expense_date, "short")} {exp.vendor_name ? `· Vendor: ${exp.vendor_name}` : ""}</span>
                           </div>
 
                           <div className="text-right">
                             <span className="font-bold text-ink">{rupee(exp.amount)}</span>
-                            <p className="text-3xs text-emerald font-medium">✓ Adjusted vs Advance</p>
+                            <p className="text-xs text-emerald font-medium">✓ Adjusted vs Advance</p>
                           </div>
                         </div>
                       ))}
@@ -207,7 +208,7 @@ export default function EmployeeAdvancesPage() {
                     <span className="font-bold text-ink">{adv.employee_name}</span>
                     <Badge kind="success" size="sm">Settled</Badge>
                   </div>
-                  <p className="text-ink-3 text-2xs mt-0.5">
+                  <p className="text-ink-3 text-xs mt-0.5">
                     Disbursed: {rupee(adv.disbursed_amount)} · Spent: {rupee(adv.total_spent)} · Disbursed on {formatDate(adv.disbursed_date, "short")}
                   </p>
                 </div>
@@ -304,9 +305,9 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <FormField label="Employee">
+          <FormField htmlFor="advances-employee" label="Employee">
             <Select value={selectedEmpId} onValueChange={(val) => { setSelectedEmpId(val); setCustomName(""); }}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="advances-employee" className="w-full">
                 <SelectValue placeholder="Select Employee..." />
               </SelectTrigger>
               <SelectContent>
@@ -320,8 +321,8 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           </FormField>
 
           {!selectedEmpId && (
-            <FormField label="Or Enter Employee Name">
-              <Input
+            <FormField htmlFor="advances-or-enter-employee-name" label="Or Enter Employee Name">
+              <Input id="advances-or-enter-employee-name"
                 placeholder="e.g. Pawan Kumar"
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
@@ -330,8 +331,8 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Advance Amount (₹)" required>
-              <Input
+            <FormField htmlFor="advances-advance-amount" label="Advance Amount (₹)" required>
+              <Input id="advances-advance-amount"
                 type="number"
                 placeholder="5000"
                 value={amount}
@@ -340,8 +341,8 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               />
             </FormField>
 
-            <FormField label="Disbursed Date">
-              <Input
+            <FormField htmlFor="advances-disbursed-date" label="Disbursed Date">
+              <Input id="advances-disbursed-date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -351,9 +352,9 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Payment Method">
+            <FormField htmlFor="advances-payment-method" label="Payment Method">
               <Select value={method} onValueChange={setMethod}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="advances-payment-method" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -366,9 +367,9 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               </Select>
             </FormField>
 
-            <FormField label="Company Bank / Cash">
+            <FormField htmlFor="advances-company-bank-cash" label="Company Bank / Cash">
               <Select value={bankId} onValueChange={setBankId}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="advances-company-bank-cash" className="w-full">
                   <SelectValue placeholder="Select Bank..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -382,8 +383,8 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             </FormField>
           </div>
 
-          <FormField label="Purpose / Purpose Notes">
-            <Input
+          <FormField htmlFor="advances-purpose-purpose-notes" label="Purpose / Purpose Notes">
+            <Input id="advances-purpose-purpose-notes"
               placeholder="e.g. Client visit travel & lodging expenses"
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
@@ -455,9 +456,9 @@ function RecordAdvanceExpenseDialog({ advance, open, onOpenChange }: { advance: 
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <FormField label="Expense Category" required>
+          <FormField htmlFor="advances-expense-category" label="Expense Category" required>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="advances-expense-category" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -471,8 +472,8 @@ function RecordAdvanceExpenseDialog({ advance, open, onOpenChange }: { advance: 
           </FormField>
 
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Spent Amount (₹)" required>
-              <Input
+            <FormField htmlFor="advances-spent-amount" label="Spent Amount (₹)" required>
+              <Input id="advances-spent-amount"
                 type="number"
                 placeholder="1200"
                 value={amount}
@@ -481,8 +482,8 @@ function RecordAdvanceExpenseDialog({ advance, open, onOpenChange }: { advance: 
               />
             </FormField>
 
-            <FormField label="Bill Date">
-              <Input
+            <FormField htmlFor="advances-bill-date" label="Bill Date">
+              <Input id="advances-bill-date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -491,16 +492,16 @@ function RecordAdvanceExpenseDialog({ advance, open, onOpenChange }: { advance: 
             </FormField>
           </div>
 
-          <FormField label="Vendor / Paid To (Optional)">
-            <Input
+          <FormField htmlFor="advances-vendor-paid-to-optional" label="Vendor / Paid To (Optional)">
+            <Input id="advances-vendor-paid-to-optional"
               placeholder="e.g. Uber / Indian Oil / Restaurant"
               value={vendor}
               onChange={(e) => setVendor(e.target.value)}
             />
           </FormField>
 
-          <FormField label="Description / Bill Details">
-            <Input
+          <FormField htmlFor="advances-description-bill-details" label="Description / Bill Details">
+            <Input id="advances-description-bill-details"
               placeholder="e.g. Travel fare for client site visit"
               value={description}
               onChange={(e) => setDescription(e.target.value)}

@@ -42,7 +42,8 @@ function parseChoices(raw: unknown): LineChoice[] {
   return out;
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createAdminClient();
 
   const { data: quote } = await supabase

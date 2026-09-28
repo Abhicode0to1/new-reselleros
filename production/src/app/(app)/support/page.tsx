@@ -589,9 +589,9 @@ export default function SupportPage() {
               ticketId={selected.id}
               onInsertText={(text) => {
                 const el = document.getElementById("resNote") as HTMLTextAreaElement | null;
-                const existing = el?.value ?? (selected as any).resolution_note ?? "";
+                const existing = el?.value ?? selected.resolution_note ?? "";
                 const next = existing ? `${existing}\n\n${text}` : text;
-                (selected as any).resolution_note = next;
+                selected.resolution_note = next;
                 if (el) {
                   el.value = next;
                   el.focus();
@@ -608,9 +608,9 @@ export default function SupportPage() {
                 id="resNote"
                 rows={3}
                 placeholder="Enter details on how this bug was resolved or reply note..."
-                defaultValue={(selected as any).resolution_note || ""}
+                defaultValue={selected.resolution_note || ""}
                 onChange={(e) => {
-                  (selected as any).resolution_note = e.target.value;
+                  selected.resolution_note = e.target.value;
                 }}
                 className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-xs text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-primary font-sans"
               />
@@ -663,7 +663,7 @@ export default function SupportPage() {
                       id: selected.id,
                       patch: {
                         status: selected.status,
-                        resolution_note: (selected as any).resolution_note,
+                        resolution_note: selected.resolution_note,
                       },
                     });
                     setSelected(null);

@@ -22,9 +22,10 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 import { EXPENSE_CATEGORIES } from "@/lib/queries/expenses";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 type Session = { employeeId: string; employeeName: string; pin: string; remaining: number };
@@ -51,7 +52,7 @@ export function ExpenseClaimClient({
           </div>
           <div>
             <div className="font-serif text-base leading-none text-ink">{brandName}</div>
-            <div className="mt-1 text-3xs text-ink-3">Expense claim</div>
+            <div className="mt-1 text-xs text-ink-3">Expense claim</div>
           </div>
         </div>
 
@@ -73,7 +74,7 @@ export function ExpenseClaimClient({
           )}
         </div>
 
-        <p className="mt-4 text-center text-2xs text-ink-3">
+        <p className="mt-4 text-center text-xs text-ink-3">
           Every submission is reviewed by the office before it is recorded.
         </p>
       </div>
@@ -301,7 +302,7 @@ function LogStep({
           <span className="font-serif text-2xl text-ink">{rupee(remaining)}</span>
         </div>
         {logged.length > 0 && (
-          <div className="mt-1 text-2xs text-ink-3">{logged.length} logged this session · {rupee(spent)}</div>
+          <div className="mt-1 text-xs text-ink-3">{logged.length} logged this session · {rupee(spent)}</div>
         )}
       </div>
 
@@ -349,8 +350,8 @@ function LogStep({
 
           {!editingId && (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink">Receipt photo (optional)</label>
-              <input
+              <label htmlFor="expense-claim-receipt" className="mb-1.5 block text-sm font-medium text-ink">Receipt photo (optional)</label>
+              <input id="expense-claim-receipt"
                 type="file" accept="image/*" capture="environment" onChange={onPhoto}
                 className="block w-full text-sm text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-paper-2 file:px-3 file:py-2 file:text-sm file:text-ink hover:file:bg-hairline"
               />
@@ -383,7 +384,7 @@ function LogStep({
                     <span className="text-ink-2">{l.category}</span>
                     <span className="font-mono text-ink">{rupee(l.amount)}</span>
                   </div>
-                  {l.purpose && <div className="truncate text-2xs text-ink-3">{l.purpose}</div>}
+                  {l.purpose && <div className="truncate text-xs text-ink-3">{l.purpose}</div>}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button type="button" onClick={() => startEdit(l)} aria-label="Edit"

@@ -40,8 +40,8 @@ export const CONTACT_IMPORT_RETIRED: boolean = true;
 
 export const CONTACT_IMPORT_RETIRED_MESSAGE =
   "Contact importing was retired on 10 Sep 2026. A customer's people are managed on "
-  + "the customer's own page (Billing & Subscriptions → Customers), and anybody who is "
-  + "not a customer yet belongs in Sales & Pipeline as a lead.";
+  + "the customer's own page (Bill → Customers), and anybody who is "
+  + "not a customer yet belongs in Sell → Sales & Pipeline as a lead.";
 
 /** The response every retired address-book entry point returns. */
 export function contactImportRetired() {

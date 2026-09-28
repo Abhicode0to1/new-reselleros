@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { attachPrimaryContact } from "@/lib/contacts/attach";
+import { requireTenantId } from "@/lib/queries/require-tenant";
 import type { Customer, Database } from "@/lib/supabase/database.types";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
@@ -66,18 +67,13 @@ export function useCreateCustomer() {
     mutationFn: async (input: Omit<CustomerInsert, "tenant_id">) => {
       const supabase = createClient();
 
-      let tenantId = "11111111-1111-1111-1111-111111111111";
-      const { data: authData } = await supabase.auth.getUser();
-      if (authData?.user) {
-        const { data: me } = await supabase
-          .from("users")
-          .select("tenant_id")
-          .eq("id", authData.user.id)
-          .single();
-        if (me?.tenant_id) {
-          tenantId = me.tenant_id;
-        }
-      }
+      /* R-001, Pardeep 2026-09-25. This used to default to the seed tenant
+         "11111111-..." and only replace it if BOTH the auth call and the users read
+         succeeded — so a signed-out session, an expired one, or a blip on that one
+         query put a real customer into the demo company and said "Customer added".
+         Banking -> Reconcile invoices whatever this returns, so that customer became a
+         bank receipt nobody could ever match. It refuses now. */
+      const tenantId = await requireTenantId(supabase);
 
       /* ── A NEW CUSTOMER MUST HAVE A PERSON ON IT ──────────────────────────
          Abhishek's rule, 18 Sep 2026: "without contact customer not created". Checked
@@ -96,6 +92,21 @@ export function useCreateCustomer() {
         .select()
         .single();
 
+      /* R-001 again, the other half. This used to swallow the error, build a
+         `CUST-<timestamp>` customer out of the form values, push it into the list cache
+         and return it as a success. The screen then showed a customer that was never
+         saved; anything done with that id — invoice, reconcile, subscription — failed
+         later with an error naming a row that does not exist.
+
+         AGENTS.md §2: never turn a failure into a plausible value. The insert's own
+         reason is what the operator needs, so it travels straight to the toast. */
+      if (error) throw new Error(error.message);
+      if (!data) {
+        throw new Error(
+          "The customer was not saved and the database gave no reason. Check your connection and try again — nothing was created.",
+        );
+      }
+
       /* ── The new customer's mandatory PRIMARY CONTACT ─────────────────────
          Since 10 Sep 2026 a customer's people live in `contacts`; since 18 Sep the
          relationship lives in `customer_contacts`, and that is the ONLY table the
@@ -110,7 +121,7 @@ export function useCreateCustomer() {
          how a customer reaches the books with nobody to invoice. If the contact cannot be
          written the customer is DELETED — it was created milliseconds ago by this same
          call, nothing references it yet, so removing it leaves the books untouched. */
-      if (!error && data?.id) {
+      {
         const outcome = await attachPrimaryContact(supabase, {
           tenantId,
           customerId: data.id,
@@ -131,36 +142,6 @@ export function useCreateCustomer() {
         }
       }
 
-      if (error) {
-        console.warn("Dev mode customer insert warning:", error.message);
-        const newCust: Customer = {
-          id: `CUST-${Date.now()}`,
-          tenant_id: tenantId,
-          name: input.name ?? "New Customer",
-          domain: input.domain ?? null,
-          gstin: input.gstin ?? null,
-          state: input.state ?? null,
-          state_code: input.state_code ?? null,
-          health: 100,
-          contact_name: input.contact_name ?? null,
-          contact_title: input.contact_title ?? null,
-          contact_email: input.contact_email ?? null,
-          contact_phone: input.contact_phone ?? null,
-          since: new Date().toISOString().split("T")[0],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          is_active: true,
-          customer_number: `CUST-${Math.floor(Math.random() * 1000)}`,
-          place_of_supply: input.state ? `27-${input.state}` : null,
-          unused_credits: 0,
-          zoho_contact_id: null,
-          customer_type: "business",
-          city: null,
-        } as unknown as Customer;
-
-        qc.setQueryData<Customer[]>(["customers"], (old) => [newCust, ...(old ?? [])]);
-        return newCust;
-      }
       return data;
     },
     onSuccess: () => {

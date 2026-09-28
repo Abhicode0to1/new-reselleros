@@ -88,7 +88,7 @@ export function GstHealthCard() {
             {data.invoicesWithIssues} invoice{data.invoicesWithIssues === 1 ? "" : "s"}.
           </p>
           <span className="flex items-center gap-2 shrink-0">
-            <span className="text-2xs text-ink-3 tabular-nums">
+            <span className="text-xs text-ink-3 tabular-nums">
               {data.invoicesChecked} checked
             </span>
             <button
@@ -96,7 +96,7 @@ export function GstHealthCard() {
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
               aria-controls={listId}
-              className="inline-flex items-center gap-1 rounded-md border border-rose/30 bg-paper px-2 py-1 text-2xs font-medium text-ink-2 hover:text-ink hover:border-rose/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+              className="inline-flex items-center gap-1 rounded-md border border-rose/30 bg-paper px-2 py-1 text-xs font-medium text-ink-2 hover:text-ink hover:border-rose/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
             >
               {open ? "Collapse" : "Expand"}
               <Icon name={open ? "chevron_up" : "chevron_down"} size={13} />
@@ -105,7 +105,7 @@ export function GstHealthCard() {
         </div>
         {/* The amount is not a shortfall, and saying so prevents the wrong panic. */}
         {open && (
-          <p className="mt-1 text-2xs leading-snug text-ink-3">
+          <p className="mt-1 text-xs leading-snug text-ink-3">
             This is the tax whose <b>head</b> may be wrong (CGST + SGST vs IGST), not money
             missing. The customer paid the right total; it may have gone into the wrong pots,
             and they may be unable to claim the credit.
@@ -119,7 +119,7 @@ export function GstHealthCard() {
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span className="text-[13px] font-medium text-ink">
                 {c.customerName}
-                <span className="ml-1.5 text-2xs font-normal text-ink-3">
+                <span className="ml-1.5 text-xs font-normal text-ink-3">
                   {c.invoiceCount} invoice{c.invoiceCount === 1 ? "" : "s"}
                 </span>
               </span>
@@ -139,7 +139,7 @@ export function GstHealthCard() {
             </div>
             <ul className="mt-1 space-y-0.5">
               {c.issues.map((i) => (
-                <li key={i.code} className="text-2xs leading-snug text-ink-3">
+                <li key={i.code} className="text-xs leading-snug text-ink-3">
                   <span className={i.severity === "critical" ? "text-rose-ink" : "text-amber-ink"}>
                     {i.severity === "critical" ? "●" : "○"}
                   </span>{" "}

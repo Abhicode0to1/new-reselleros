@@ -1,0 +1,2013 @@
+{
+  "$comment": "Snapshot of src/lib/nav.ts APP_NAV taken 28 Sep 2026, BEFORE the S30 regroup (base commit 73b52146). Read by nav-s30.test.ts: every href here must stay reachable, and allowedRoutesForRole must answer the same for every role. Never regenerate this from the new nav — the test would then compare the nav with itself.",
+  "itemCount": 81,
+  "hrefs": [
+    "/accounting",
+    "/accounting/aging",
+    "/accounting/attendance",
+    "/accounting/balance-sheet",
+    "/accounting/banking",
+    "/accounting/bill-payments",
+    "/accounting/bills",
+    "/accounting/cash-flow",
+    "/accounting/close",
+    "/accounting/employees",
+    "/accounting/esi-register",
+    "/accounting/expenses",
+    "/accounting/gst",
+    "/accounting/itr",
+    "/accounting/leave",
+    "/accounting/ledger",
+    "/accounting/loans",
+    "/accounting/payroll",
+    "/accounting/pnl",
+    "/accounting/prepaid",
+    "/accounting/salary-register",
+    "/accounting/tds-receivable",
+    "/accounting/vendors",
+    "/admin/feedback",
+    "/attendance/me",
+    "/automation",
+    "/campaigns",
+    "/compliance",
+    "/coupons",
+    "/customers",
+    "/customers/groups",
+    "/dashboard",
+    "/documents",
+    "/enquiries",
+    "/help",
+    "/hosting-domains",
+    "/invoices",
+    "/items",
+    "/lead-gen",
+    "/leads",
+    "/marketing",
+    "/marketing/ads",
+    "/marketing/campaigns",
+    "/marketing/google-business",
+    "/marketing/lead-finder",
+    "/marketing/links",
+    "/marketing/reports",
+    "/marketing/reviews",
+    "/marketing/spend",
+    "/marketing/templates",
+    "/marketing/whatsapp",
+    "/my-expenses",
+    "/online-promos",
+    "/partners",
+    "/payments",
+    "/projects",
+    "/provisioning",
+    "/purchase-orders",
+    "/quotes",
+    "/referrals",
+    "/renewals",
+    "/reports",
+    "/settings",
+    "/settings/backup",
+    "/subscriptions",
+    "/support",
+    "/tasks",
+    "/team",
+    "/vault",
+    "/vault/personal",
+    "/vendor-portal",
+    "/whatsapp"
+  ],
+  "items": [
+    {
+      "section": "Filing",
+      "id": "acc-pnl",
+      "href": "/accounting/pnl",
+      "label": "P&L Report",
+      "roles": null,
+      "sectionRoles": [
+        "accountant"
+      ]
+    },
+    {
+      "section": "Filing",
+      "id": "acc-bs",
+      "href": "/accounting/balance-sheet",
+      "label": "Balance Sheet",
+      "roles": null,
+      "sectionRoles": [
+        "accountant"
+      ]
+    },
+    {
+      "section": "Filing",
+      "id": "acc-cf",
+      "href": "/accounting/cash-flow",
+      "label": "Cash Flow",
+      "roles": null,
+      "sectionRoles": [
+        "accountant"
+      ]
+    },
+    {
+      "section": "Filing",
+      "id": "acc-gst",
+      "href": "/accounting/gst",
+      "label": "GST Reports",
+      "roles": null,
+      "sectionRoles": [
+        "accountant"
+      ]
+    },
+    {
+      "section": "Filing",
+      "id": "acc-tds",
+      "href": "/accounting/tds-receivable",
+      "label": "TDS Receivable",
+      "roles": null,
+      "sectionRoles": [
+        "accountant"
+      ]
+    },
+    {
+      "section": "Filing",
+      "id": "acc-esi",
+      "href": "/accounting/esi-register",
+      "label": "ESI & PF Register",
+      "roles": null,
+      "sectionRoles": [
+        "accountant"
+      ]
+    },
+    {
+      "section": "Filing",
+      "id": "acc-aging",
+      "href": "/accounting/aging",
+      "label": "Customer Aging",
+      "roles": null,
+      "sectionRoles": [
+        "accountant"
+      ]
+    },
+    {
+      "section": "Filing",
+      "id": "acc-ledger",
+      "href": "/accounting/ledger",
+      "label": "Ledger (Khata)",
+      "roles": null,
+      "sectionRoles": [
+        "accountant"
+      ]
+    },
+    {
+      "section": "Home",
+      "id": "dashboard",
+      "href": "/dashboard",
+      "label": "Dashboard",
+      "roles": [
+        "owner",
+        "manager",
+        "billing"
+      ],
+      "sectionRoles": null
+    },
+    {
+      "section": "Home",
+      "id": "my-attendance",
+      "href": "/attendance/me",
+      "label": "My Attendance",
+      "roles": [
+        "owner",
+        "manager",
+        "sales",
+        "sales_senior",
+        "accountant",
+        "support",
+        "billing",
+        "delivery"
+      ],
+      "sectionRoles": null
+    },
+    {
+      "section": "Home",
+      "id": "my-expenses",
+      "href": "/my-expenses",
+      "label": "Advances & Expenses",
+      "roles": [
+        "owner",
+        "manager",
+        "sales",
+        "sales_senior",
+        "accountant",
+        "support",
+        "billing",
+        "delivery"
+      ],
+      "sectionRoles": null
+    },
+    {
+      "section": "Sales & CRM",
+      "id": "leads",
+      "href": "/leads",
+      "label": "Sales & Pipeline",
+      "roles": [
+        "owner",
+        "manager",
+        "sales"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing"
+      ]
+    },
+    {
+      "section": "Sales & CRM",
+      "id": "enquiries",
+      "href": "/enquiries",
+      "label": "Enquiries",
+      "roles": [
+        "owner",
+        "manager",
+        "sales"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing"
+      ]
+    },
+    {
+      "section": "Sales & CRM",
+      "id": "tasks",
+      "href": "/tasks",
+      "label": "Tasks",
+      "roles": [
+        "owner",
+        "manager",
+        "sales"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing"
+      ]
+    },
+    {
+      "section": "Sales & CRM",
+      "id": "my-expenses-sales",
+      "href": "/my-expenses",
+      "label": "Advances & Expenses",
+      "roles": [
+        "owner",
+        "manager",
+        "sales"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing"
+      ]
+    },
+    {
+      "section": "Sales & CRM",
+      "id": "referrals",
+      "href": "/referrals",
+      "label": "Referrals",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "marketing-hub",
+      "href": "/marketing",
+      "label": "Marketing Hub",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "marketing-campaigns",
+      "href": "/marketing/campaigns",
+      "label": "Campaign budgets",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "marketing-spend",
+      "href": "/marketing/spend",
+      "label": "Spend",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "marketing-roas",
+      "href": "/marketing/reports",
+      "label": "ROAS & CAC",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "marketing-links",
+      "href": "/marketing/links",
+      "label": "Tracking links",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "campaigns",
+      "href": "/campaigns",
+      "label": "Email campaigns",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "email-templates",
+      "href": "/marketing/templates",
+      "label": "Email templates",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "wa-broadcast",
+      "href": "/marketing/whatsapp",
+      "label": "WhatsApp broadcast",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "ad-platforms",
+      "href": "/marketing/ads",
+      "label": "Ad accounts (live)",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "google-business",
+      "href": "/marketing/google-business",
+      "label": "Google Business Profile",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "google-reviews",
+      "href": "/marketing/reviews",
+      "label": "Google reviews",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "coupons",
+      "href": "/coupons",
+      "label": "Coupons",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "online-promos",
+      "href": "/online-promos",
+      "label": "Website offer banner",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "lead-gen",
+      "href": "/lead-gen",
+      "label": "Lead sources",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Marketing & Advertising",
+      "id": "lead-finder",
+      "href": "/marketing/lead-finder",
+      "label": "AI Lead Finder",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager"
+      ]
+    },
+    {
+      "section": "Billing & Subscriptions",
+      "id": "customers",
+      "href": "/customers",
+      "label": "Customers",
+      "roles": [
+        "owner",
+        "manager",
+        "billing"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing",
+        "delivery",
+        "support"
+      ]
+    },
+    {
+      "section": "Billing & Subscriptions",
+      "id": "customer-groups",
+      "href": "/customers/groups",
+      "label": "Parent Accounts",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing",
+        "delivery",
+        "support"
+      ]
+    },
+    {
+      "section": "Billing & Subscriptions",
+      "id": "quotes",
+      "href": "/quotes",
+      "label": "Quotes",
+      "roles": [
+        "owner",
+        "manager",
+        "sales"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing",
+        "delivery",
+        "support"
+      ]
+    },
+    {
+      "section": "Billing & Subscriptions",
+      "id": "subscriptions",
+      "href": "/subscriptions",
+      "label": "Subscriptions",
+      "roles": [
+        "owner",
+        "manager",
+        "billing"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing",
+        "delivery",
+        "support"
+      ]
+    },
+    {
+      "section": "Billing & Subscriptions",
+      "id": "renewals",
+      "href": "/renewals",
+      "label": "Renewals",
+      "roles": [
+        "owner",
+        "manager",
+        "billing",
+        "support"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing",
+        "delivery",
+        "support"
+      ]
+    },
+    {
+      "section": "Billing & Subscriptions",
+      "id": "invoices",
+      "href": "/invoices",
+      "label": "Invoices",
+      "roles": [
+        "owner",
+        "manager",
+        "billing"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing",
+        "delivery",
+        "support"
+      ]
+    },
+    {
+      "section": "Billing & Subscriptions",
+      "id": "payments",
+      "href": "/payments",
+      "label": "Payments Received",
+      "roles": [
+        "owner",
+        "manager",
+        "billing"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing",
+        "delivery",
+        "support"
+      ]
+    },
+    {
+      "section": "Billing & Subscriptions",
+      "id": "projects",
+      "href": "/projects",
+      "label": "Project Sales",
+      "roles": [
+        "owner",
+        "manager",
+        "sales",
+        "delivery",
+        "billing"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "sales",
+        "billing",
+        "delivery",
+        "support"
+      ]
+    },
+    {
+      "section": "Operations",
+      "id": "items",
+      "href": "/items",
+      "label": "Catalog & Products",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "support",
+        "delivery"
+      ]
+    },
+    {
+      "section": "Operations",
+      "id": "hosting-domains",
+      "href": "/hosting-domains",
+      "label": "Hosting & Domains",
+      "roles": [
+        "owner",
+        "manager",
+        "support"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "support",
+        "delivery"
+      ]
+    },
+    {
+      "section": "Operations",
+      "id": "provisioning",
+      "href": "/provisioning",
+      "label": "Activation Queue",
+      "roles": [
+        "owner",
+        "manager",
+        "support",
+        "delivery"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "support",
+        "delivery"
+      ]
+    },
+    {
+      "section": "Operations",
+      "id": "documents",
+      "href": "/documents",
+      "label": "Company Documents",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "support",
+        "delivery"
+      ]
+    },
+    {
+      "section": "Operations",
+      "id": "support",
+      "href": "/support",
+      "label": "Support Desk",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "support",
+        "delivery"
+      ]
+    },
+    {
+      "section": "Operations",
+      "id": "whatsapp",
+      "href": "/whatsapp",
+      "label": "WhatsApp Inbox",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "support",
+        "delivery"
+      ]
+    },
+    {
+      "section": "Purchases & Vendors",
+      "id": "vendor-portal",
+      "href": "/vendor-portal",
+      "label": "Vendor Portal & Bids",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "Purchases & Vendors",
+      "id": "purchase-orders",
+      "href": "/purchase-orders",
+      "label": "Purchase Orders",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "Purchases & Vendors",
+      "id": "vendors",
+      "href": "/accounting/vendors",
+      "label": "Vendors Master",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "Purchases & Vendors",
+      "id": "bills",
+      "href": "/accounting/bills",
+      "label": "COGS Bills",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "Purchases & Vendors",
+      "id": "bill-payments",
+      "href": "/accounting/bill-payments",
+      "label": "Payments Made",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "Purchases & Vendors",
+      "id": "expenses",
+      "href": "/accounting/expenses",
+      "label": "Expenses",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "Purchases & Vendors",
+      "id": "prepaid",
+      "href": "/accounting/prepaid",
+      "label": "Prepaid / Advances",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "reports",
+      "href": "/reports",
+      "label": "Reports Hub",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "acc-overview",
+      "href": "/accounting",
+      "label": "Accounting Overview",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "acc-close",
+      "href": "/accounting/close",
+      "label": "Month-end Close",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "banking",
+      "href": "/accounting/banking",
+      "label": "Banking",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "ledger",
+      "href": "/accounting/ledger",
+      "label": "Ledger (Khata)",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "acc-aging-owner",
+      "href": "/accounting/aging",
+      "label": "Customer Aging",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "pnl",
+      "href": "/accounting/pnl",
+      "label": "P&L Report",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "balance-sheet",
+      "href": "/accounting/balance-sheet",
+      "label": "Balance Sheet",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "cash-flow",
+      "href": "/accounting/cash-flow",
+      "label": "Cash Flow",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "gst-owner",
+      "href": "/accounting/gst",
+      "label": "GST Reports",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "tds-owner",
+      "href": "/accounting/tds-receivable",
+      "label": "TDS Receivable",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "itr",
+      "href": "/accounting/itr",
+      "label": "Income Tax (ITR)",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "Accounting & Finance",
+      "id": "compliance-calendar",
+      "href": "/compliance",
+      "label": "Compliance Calendar",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "accountant"
+      ]
+    },
+    {
+      "section": "HR & Payroll",
+      "id": "employees",
+      "href": "/accounting/employees",
+      "label": "Employees & Team",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "HR & Payroll",
+      "id": "attendance-reg",
+      "href": "/accounting/attendance",
+      "label": "Attendance Register",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "HR & Payroll",
+      "id": "leave-reg",
+      "href": "/accounting/leave",
+      "label": "Leave Register",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "HR & Payroll",
+      "id": "payroll",
+      "href": "/accounting/payroll",
+      "label": "Payroll Overview",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "HR & Payroll",
+      "id": "salary-register",
+      "href": "/accounting/salary-register",
+      "label": "Salary & Payroll Register",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "HR & Payroll",
+      "id": "esi-register",
+      "href": "/accounting/esi-register",
+      "label": "ESI & PF Register",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "HR & Payroll",
+      "id": "emp-loans",
+      "href": "/accounting/loans",
+      "label": "Loans & Salary Advances",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing"
+      ]
+    },
+    {
+      "section": "Admin & Control",
+      "id": "settings",
+      "href": "/settings",
+      "label": "Settings",
+      "roles": [
+        "owner",
+        "manager",
+        "billing"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "partner_agent"
+      ]
+    },
+    {
+      "section": "Admin & Control",
+      "id": "partners",
+      "href": "/partners",
+      "label": "Partners",
+      "roles": [
+        "owner",
+        "manager",
+        "partner_agent"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "partner_agent"
+      ]
+    },
+    {
+      "section": "Admin & Control",
+      "id": "automation",
+      "href": "/automation",
+      "label": "Automation",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "partner_agent"
+      ]
+    },
+    {
+      "section": "Admin & Control",
+      "id": "vault",
+      "href": "/vault",
+      "label": "Password Vault",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "partner_agent"
+      ]
+    },
+    {
+      "section": "Admin & Control",
+      "id": "vault-personal",
+      "href": "/vault/personal",
+      "label": "Private Vault",
+      "roles": [
+        "owner"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "partner_agent"
+      ]
+    },
+    {
+      "section": "Admin & Control",
+      "id": "team",
+      "href": "/team",
+      "label": "Team",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "partner_agent"
+      ]
+    },
+    {
+      "section": "Admin & Control",
+      "id": "backup",
+      "href": "/settings/backup",
+      "label": "Backup & Restore",
+      "roles": [
+        "owner"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "partner_agent"
+      ]
+    },
+    {
+      "section": "Admin & Control",
+      "id": "feedback",
+      "href": "/admin/feedback",
+      "label": "Feedback & AI Fixes",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "partner_agent"
+      ]
+    },
+    {
+      "section": "Admin & Control",
+      "id": "help",
+      "href": "/help",
+      "label": "Help & Tutorial",
+      "roles": null,
+      "sectionRoles": [
+        "owner",
+        "manager",
+        "billing",
+        "partner_agent"
+      ]
+    }
+  ],
+  "allowedRoutesByRole": {
+    "owner": [
+      "/accounting",
+      "/accounting/aging",
+      "/accounting/attendance",
+      "/accounting/balance-sheet",
+      "/accounting/banking",
+      "/accounting/bill-payments",
+      "/accounting/bills",
+      "/accounting/cash-flow",
+      "/accounting/close",
+      "/accounting/employees",
+      "/accounting/esi-register",
+      "/accounting/expenses",
+      "/accounting/gst",
+      "/accounting/itr",
+      "/accounting/leave",
+      "/accounting/ledger",
+      "/accounting/loans",
+      "/accounting/payroll",
+      "/accounting/pnl",
+      "/accounting/prepaid",
+      "/accounting/salary-register",
+      "/accounting/tds-receivable",
+      "/accounting/vendors",
+      "/admin/feedback",
+      "/attendance/me",
+      "/automation",
+      "/campaigns",
+      "/compliance",
+      "/coupons",
+      "/customers",
+      "/customers/groups",
+      "/dashboard",
+      "/documents",
+      "/enquiries",
+      "/help",
+      "/hosting-domains",
+      "/invoices",
+      "/items",
+      "/lead-gen",
+      "/leads",
+      "/marketing",
+      "/marketing/ads",
+      "/marketing/campaigns",
+      "/marketing/google-business",
+      "/marketing/lead-finder",
+      "/marketing/links",
+      "/marketing/reports",
+      "/marketing/reviews",
+      "/marketing/spend",
+      "/marketing/templates",
+      "/marketing/whatsapp",
+      "/my-expenses",
+      "/online-promos",
+      "/partners",
+      "/payments",
+      "/projects",
+      "/provisioning",
+      "/purchase-orders",
+      "/quotes",
+      "/referrals",
+      "/renewals",
+      "/reports",
+      "/settings",
+      "/settings/backup",
+      "/subscriptions",
+      "/support",
+      "/tasks",
+      "/team",
+      "/vault",
+      "/vault/personal",
+      "/vendor-portal",
+      "/whatsapp"
+    ],
+    "manager": [
+      "/accounting",
+      "/accounting/aging",
+      "/accounting/attendance",
+      "/accounting/balance-sheet",
+      "/accounting/banking",
+      "/accounting/bill-payments",
+      "/accounting/bills",
+      "/accounting/cash-flow",
+      "/accounting/close",
+      "/accounting/employees",
+      "/accounting/esi-register",
+      "/accounting/expenses",
+      "/accounting/gst",
+      "/accounting/itr",
+      "/accounting/leave",
+      "/accounting/ledger",
+      "/accounting/loans",
+      "/accounting/payroll",
+      "/accounting/pnl",
+      "/accounting/prepaid",
+      "/accounting/salary-register",
+      "/accounting/tds-receivable",
+      "/accounting/vendors",
+      "/admin/feedback",
+      "/attendance/me",
+      "/automation",
+      "/campaigns",
+      "/compliance",
+      "/coupons",
+      "/customers",
+      "/customers/groups",
+      "/dashboard",
+      "/documents",
+      "/enquiries",
+      "/help",
+      "/hosting-domains",
+      "/invoices",
+      "/items",
+      "/lead-gen",
+      "/leads",
+      "/marketing",
+      "/marketing/ads",
+      "/marketing/campaigns",
+      "/marketing/google-business",
+      "/marketing/lead-finder",
+      "/marketing/links",
+      "/marketing/reports",
+      "/marketing/reviews",
+      "/marketing/spend",
+      "/marketing/templates",
+      "/marketing/whatsapp",
+      "/my-expenses",
+      "/online-promos",
+      "/partners",
+      "/payments",
+      "/projects",
+      "/provisioning",
+      "/purchase-orders",
+      "/quotes",
+      "/referrals",
+      "/renewals",
+      "/reports",
+      "/settings",
+      "/subscriptions",
+      "/support",
+      "/tasks",
+      "/team",
+      "/vault",
+      "/vendor-portal",
+      "/whatsapp"
+    ],
+    "sales_senior": [
+      "/attendance/me",
+      "/enquiries",
+      "/leads",
+      "/my-expenses",
+      "/projects",
+      "/quotes",
+      "/tasks"
+    ],
+    "sales": [
+      "/attendance/me",
+      "/enquiries",
+      "/leads",
+      "/my-expenses",
+      "/projects",
+      "/quotes",
+      "/tasks"
+    ],
+    "billing": [
+      "/accounting",
+      "/accounting/aging",
+      "/accounting/attendance",
+      "/accounting/balance-sheet",
+      "/accounting/banking",
+      "/accounting/bill-payments",
+      "/accounting/bills",
+      "/accounting/cash-flow",
+      "/accounting/close",
+      "/accounting/employees",
+      "/accounting/esi-register",
+      "/accounting/expenses",
+      "/accounting/gst",
+      "/accounting/itr",
+      "/accounting/leave",
+      "/accounting/ledger",
+      "/accounting/loans",
+      "/accounting/payroll",
+      "/accounting/pnl",
+      "/accounting/prepaid",
+      "/accounting/salary-register",
+      "/accounting/tds-receivable",
+      "/accounting/vendors",
+      "/attendance/me",
+      "/compliance",
+      "/customers",
+      "/dashboard",
+      "/help",
+      "/invoices",
+      "/my-expenses",
+      "/payments",
+      "/projects",
+      "/purchase-orders",
+      "/renewals",
+      "/reports",
+      "/settings",
+      "/subscriptions",
+      "/support",
+      "/vendor-portal",
+      "/whatsapp"
+    ],
+    "delivery": [
+      "/attendance/me",
+      "/my-expenses",
+      "/projects",
+      "/provisioning",
+      "/support",
+      "/whatsapp"
+    ],
+    "accountant": [
+      "/accounting",
+      "/accounting/aging",
+      "/accounting/balance-sheet",
+      "/accounting/banking",
+      "/accounting/cash-flow",
+      "/accounting/close",
+      "/accounting/esi-register",
+      "/accounting/gst",
+      "/accounting/itr",
+      "/accounting/ledger",
+      "/accounting/pnl",
+      "/accounting/tds-receivable",
+      "/attendance/me",
+      "/compliance",
+      "/my-expenses",
+      "/reports"
+    ],
+    "support": [
+      "/attendance/me",
+      "/hosting-domains",
+      "/my-expenses",
+      "/provisioning",
+      "/renewals",
+      "/support",
+      "/whatsapp"
+    ],
+    "partner_agent": [
+      "/help",
+      "/partners"
+    ]
+  },
+  "menuHrefsByRole": {
+    "owner": [
+      "/accounting",
+      "/accounting/aging",
+      "/accounting/attendance",
+      "/accounting/balance-sheet",
+      "/accounting/banking",
+      "/accounting/bill-payments",
+      "/accounting/bills",
+      "/accounting/cash-flow",
+      "/accounting/close",
+      "/accounting/employees",
+      "/accounting/esi-register",
+      "/accounting/expenses",
+      "/accounting/gst",
+      "/accounting/itr",
+      "/accounting/leave",
+      "/accounting/ledger",
+      "/accounting/loans",
+      "/accounting/payroll",
+      "/accounting/pnl",
+      "/accounting/prepaid",
+      "/accounting/salary-register",
+      "/accounting/tds-receivable",
+      "/accounting/vendors",
+      "/admin/feedback",
+      "/attendance/me",
+      "/automation",
+      "/campaigns",
+      "/compliance",
+      "/coupons",
+      "/customers",
+      "/customers/groups",
+      "/dashboard",
+      "/documents",
+      "/enquiries",
+      "/help",
+      "/hosting-domains",
+      "/invoices",
+      "/items",
+      "/lead-gen",
+      "/leads",
+      "/marketing",
+      "/marketing/ads",
+      "/marketing/campaigns",
+      "/marketing/google-business",
+      "/marketing/lead-finder",
+      "/marketing/links",
+      "/marketing/reports",
+      "/marketing/reviews",
+      "/marketing/spend",
+      "/marketing/templates",
+      "/marketing/whatsapp",
+      "/my-expenses",
+      "/online-promos",
+      "/partners",
+      "/payments",
+      "/projects",
+      "/provisioning",
+      "/purchase-orders",
+      "/quotes",
+      "/referrals",
+      "/renewals",
+      "/reports",
+      "/settings",
+      "/settings/backup",
+      "/subscriptions",
+      "/support",
+      "/tasks",
+      "/team",
+      "/vault",
+      "/vault/personal",
+      "/vendor-portal",
+      "/whatsapp"
+    ],
+    "manager": [
+      "/accounting",
+      "/accounting/aging",
+      "/accounting/attendance",
+      "/accounting/balance-sheet",
+      "/accounting/banking",
+      "/accounting/bill-payments",
+      "/accounting/bills",
+      "/accounting/cash-flow",
+      "/accounting/close",
+      "/accounting/employees",
+      "/accounting/esi-register",
+      "/accounting/expenses",
+      "/accounting/gst",
+      "/accounting/itr",
+      "/accounting/leave",
+      "/accounting/ledger",
+      "/accounting/loans",
+      "/accounting/payroll",
+      "/accounting/pnl",
+      "/accounting/prepaid",
+      "/accounting/salary-register",
+      "/accounting/tds-receivable",
+      "/accounting/vendors",
+      "/admin/feedback",
+      "/attendance/me",
+      "/automation",
+      "/campaigns",
+      "/compliance",
+      "/coupons",
+      "/customers",
+      "/customers/groups",
+      "/dashboard",
+      "/documents",
+      "/enquiries",
+      "/help",
+      "/hosting-domains",
+      "/invoices",
+      "/items",
+      "/lead-gen",
+      "/leads",
+      "/marketing",
+      "/marketing/ads",
+      "/marketing/campaigns",
+      "/marketing/google-business",
+      "/marketing/lead-finder",
+      "/marketing/links",
+      "/marketing/reports",
+      "/marketing/reviews",
+      "/marketing/spend",
+      "/marketing/templates",
+      "/marketing/whatsapp",
+      "/my-expenses",
+      "/online-promos",
+      "/partners",
+      "/payments",
+      "/projects",
+      "/provisioning",
+      "/purchase-orders",
+      "/quotes",
+      "/referrals",
+      "/renewals",
+      "/reports",
+      "/settings",
+      "/subscriptions",
+      "/support",
+      "/tasks",
+      "/team",
+      "/vault",
+      "/vendor-portal",
+      "/whatsapp"
+    ],
+    "sales_senior": [
+      "/attendance/me",
+      "/enquiries",
+      "/leads",
+      "/my-expenses",
+      "/projects",
+      "/quotes",
+      "/tasks"
+    ],
+    "sales": [
+      "/attendance/me",
+      "/enquiries",
+      "/leads",
+      "/my-expenses",
+      "/projects",
+      "/quotes",
+      "/tasks"
+    ],
+    "billing": [
+      "/accounting",
+      "/accounting/aging",
+      "/accounting/attendance",
+      "/accounting/balance-sheet",
+      "/accounting/banking",
+      "/accounting/bill-payments",
+      "/accounting/bills",
+      "/accounting/cash-flow",
+      "/accounting/close",
+      "/accounting/employees",
+      "/accounting/esi-register",
+      "/accounting/expenses",
+      "/accounting/gst",
+      "/accounting/itr",
+      "/accounting/leave",
+      "/accounting/ledger",
+      "/accounting/loans",
+      "/accounting/payroll",
+      "/accounting/pnl",
+      "/accounting/prepaid",
+      "/accounting/salary-register",
+      "/accounting/tds-receivable",
+      "/accounting/vendors",
+      "/attendance/me",
+      "/compliance",
+      "/customers",
+      "/dashboard",
+      "/help",
+      "/invoices",
+      "/my-expenses",
+      "/payments",
+      "/projects",
+      "/purchase-orders",
+      "/renewals",
+      "/reports",
+      "/settings",
+      "/subscriptions",
+      "/support",
+      "/vendor-portal",
+      "/whatsapp"
+    ],
+    "delivery": [
+      "/attendance/me",
+      "/my-expenses",
+      "/projects",
+      "/provisioning",
+      "/support",
+      "/whatsapp"
+    ],
+    "accountant": [
+      "/accounting",
+      "/accounting/aging",
+      "/accounting/balance-sheet",
+      "/accounting/banking",
+      "/accounting/cash-flow",
+      "/accounting/close",
+      "/accounting/esi-register",
+      "/accounting/gst",
+      "/accounting/itr",
+      "/accounting/ledger",
+      "/accounting/pnl",
+      "/accounting/tds-receivable",
+      "/attendance/me",
+      "/compliance",
+      "/my-expenses",
+      "/reports"
+    ],
+    "support": [
+      "/attendance/me",
+      "/hosting-domains",
+      "/my-expenses",
+      "/provisioning",
+      "/renewals",
+      "/support",
+      "/whatsapp"
+    ],
+    "partner_agent": [
+      "/help",
+      "/partners"
+    ]
+  },
+  "crumbs": {
+    "/accounting/pnl": [
+      "Accounting",
+      "P&L Report"
+    ],
+    "/accounting/balance-sheet": [
+      "Accounting",
+      "Balance Sheet"
+    ],
+    "/accounting/cash-flow": [
+      "Accounting",
+      "Cash Flow"
+    ],
+    "/accounting/gst": [
+      "Accounting",
+      "GST Reports"
+    ],
+    "/accounting/tds-receivable": [
+      "Accounting",
+      "TDS Receivable"
+    ],
+    "/accounting/esi-register": [
+      "Payroll",
+      "ESI & PF Register"
+    ],
+    "/accounting/aging": [
+      "Accounting",
+      "Customer Aging"
+    ],
+    "/accounting/ledger": [
+      "Accounting",
+      "Ledger"
+    ],
+    "/dashboard": [
+      "Home",
+      "Dashboard"
+    ],
+    "/attendance/me": [
+      "My Attendance"
+    ],
+    "/my-expenses": [
+      "Me",
+      "Advances & Expenses"
+    ],
+    "/leads": [
+      "Sales",
+      "Leads"
+    ],
+    "/enquiries": [
+      "Sales",
+      "Enquiries"
+    ],
+    "/tasks": [
+      "Sales",
+      "Tasks"
+    ],
+    "/referrals": [
+      "Sales",
+      "Referrals"
+    ],
+    "/marketing": [
+      "Marketing & Advertising",
+      "Marketing Hub"
+    ],
+    "/marketing/campaigns": [
+      "Marketing & Advertising",
+      "Campaign budgets"
+    ],
+    "/marketing/spend": [
+      "Marketing & Advertising",
+      "Spend"
+    ],
+    "/marketing/reports": [
+      "Marketing & Advertising",
+      "ROAS & CAC"
+    ],
+    "/marketing/links": [
+      "Marketing & Advertising",
+      "Tracking links"
+    ],
+    "/campaigns": [
+      "Marketing & Advertising",
+      "Email campaigns"
+    ],
+    "/marketing/templates": [
+      "Marketing & Advertising",
+      "Email templates"
+    ],
+    "/marketing/whatsapp": [
+      "Marketing & Advertising",
+      "WhatsApp broadcast"
+    ],
+    "/marketing/ads": [
+      "Marketing & Advertising",
+      "Ad accounts (live)"
+    ],
+    "/marketing/google-business": [
+      "Marketing & Advertising",
+      "Google Business Profile"
+    ],
+    "/marketing/reviews": [
+      "Marketing & Advertising",
+      "Google reviews"
+    ],
+    "/coupons": [
+      "Marketing & Advertising",
+      "Coupons"
+    ],
+    "/online-promos": [
+      "Marketing & Advertising",
+      "Website offer banner"
+    ],
+    "/lead-gen": [
+      "Marketing & Advertising",
+      "Lead sources"
+    ],
+    "/marketing/lead-finder": [
+      "Marketing & Advertising",
+      "AI Lead Finder"
+    ],
+    "/customers": [
+      "Billing",
+      "Customers"
+    ],
+    "/customers/groups": [
+      "Billing",
+      "Parent Accounts"
+    ],
+    "/quotes": [
+      "Billing",
+      "Quotes"
+    ],
+    "/subscriptions": [
+      "Billing",
+      "Subscriptions"
+    ],
+    "/renewals": [
+      "Billing",
+      "Renewals"
+    ],
+    "/invoices": [
+      "Billing",
+      "Invoices"
+    ],
+    "/payments": [
+      "Billing",
+      "Payments Received"
+    ],
+    "/projects": [
+      "Billing",
+      "Project Sales"
+    ],
+    "/items": [
+      "Catalog"
+    ],
+    "/hosting-domains": [
+      "Operations",
+      "Hosting & Domains"
+    ],
+    "/provisioning": [
+      "Operations",
+      "Activation Queue"
+    ],
+    "/documents": [
+      "Company Documents",
+      "Documents"
+    ],
+    "/support": [
+      "Engage",
+      "Support"
+    ],
+    "/whatsapp": [
+      "Engage",
+      "WhatsApp Inbox"
+    ],
+    "/vendor-portal": [
+      "Purchases",
+      "Vendor Portal & Bids"
+    ],
+    "/purchase-orders": [
+      "Purchases",
+      "Purchase Orders"
+    ],
+    "/accounting/vendors": [
+      "Purchases",
+      "Vendors"
+    ],
+    "/accounting/bills": [
+      "Purchases",
+      "COGS Bills"
+    ],
+    "/accounting/bill-payments": [
+      "Purchases",
+      "Payments Made"
+    ],
+    "/accounting/expenses": [
+      "Purchases",
+      "Expenses"
+    ],
+    "/accounting/prepaid": [
+      "Purchases",
+      "Prepaid / Advances"
+    ],
+    "/reports": [
+      "Reports",
+      "All Reports"
+    ],
+    "/accounting": [
+      "Accounting",
+      "Overview"
+    ],
+    "/accounting/close": [
+      "Accounting",
+      "Month-end Close"
+    ],
+    "/accounting/banking": [
+      "Accounting",
+      "Banking"
+    ],
+    "/accounting/itr": [
+      "Accounting",
+      "Income Tax (ITR)"
+    ],
+    "/compliance": [
+      "Compliance",
+      "Compliance Calendar"
+    ],
+    "/accounting/employees": [
+      "Payroll",
+      "Employees"
+    ],
+    "/accounting/attendance": [
+      "Payroll",
+      "Attendance Register"
+    ],
+    "/accounting/leave": [
+      "Payroll",
+      "Leave Register"
+    ],
+    "/accounting/payroll": [
+      "Payroll",
+      "Payroll Overview"
+    ],
+    "/accounting/salary-register": [
+      "Payroll",
+      "Salary Register"
+    ],
+    "/accounting/loans": [
+      "Payroll",
+      "Loans & Advances"
+    ],
+    "/settings": [
+      "Settings",
+      "Settings"
+    ],
+    "/partners": [
+      "Settings",
+      "Partners"
+    ],
+    "/automation": [
+      "Admin",
+      "Automation"
+    ],
+    "/vault": [
+      "Admin",
+      "Password Vault"
+    ],
+    "/vault/personal": [
+      "Admin",
+      "Private Vault"
+    ],
+    "/team": [
+      "Settings",
+      "Team"
+    ],
+    "/settings/backup": [
+      "Settings",
+      "Backup"
+    ],
+    "/admin/feedback": [
+      "Admin",
+      "Feedback & AI Fixes"
+    ],
+    "/help": [
+      "Help",
+      "Help & Tutorial"
+    ]
+  }
+}

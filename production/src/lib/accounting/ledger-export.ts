@@ -75,10 +75,13 @@ export function ledgerFileName(partyName: string, s: LedgerStatement, ext: "csv"
 
 /* ─── TALLY XML ──────────────────────────────────────────────────────────── */
 
-/** Tally wants DDMMYYYY with no separators. */
-function tallyDate(iso: string): string {
+/**
+ * Tally's XML <DATE> is YYYYMMDD with no separators.
+ * Was `${d}${m}${y}` (DDMMYYYY) until S34 (28 Sep 2026) — Tally reads that as a wrong date.
+ */
+export function tallyDate(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split("-");
-  return `${d}${m}${y}`;
+  return `${y}${m}${d}`;
 }
 
 /**

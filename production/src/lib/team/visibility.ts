@@ -56,7 +56,9 @@ export interface TeamMember {
  * accountant, delivery, support — reads the whole workspace, which is what they already had.
  *
  * ⚠️ This list MUST match the role branch of public.can_see_record() in
- * 20260818150000_user_hierarchy_visibility.sql. If they disagree, the UI hides rows the API
+ * 20260818150000_user_hierarchy_visibility.sql AND of public.hierarchy_sees_all() in
+ * 20260928100000_rls_initplan_wrap.sql (which is what the live policies call since S13;
+ * tests/rls-initplan-migrations.test.ts checks it). If they disagree, the UI hides rows the API
  * will happily serve (or worse, shows rows it will not) — and the mismatch has no symptom
  * beyond a page that looks empty for no reason.
  */

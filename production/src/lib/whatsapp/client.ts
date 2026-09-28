@@ -19,6 +19,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { WhatsAppNotConfiguredError } from "./send-failure";
+import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import type {
   WhatsAppMessageStatus,
   WhatsAppMessageType,
@@ -37,11 +38,14 @@ export interface WhatsAppCreds {
 /** Resolve per-tenant WhatsApp credentials. Returns null when not configured. */
 export async function resolveWhatsAppCreds(tenantId: string): Promise<WhatsAppCreds | null> {
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const { data: raw, error } = await admin
     .from("tenant_secrets")
     .select("whatsapp_phone_number_id, whatsapp_access_token, whatsapp_business_account_id, whatsapp_verify_token, whatsapp_app_secret")
     .eq("tenant_id", tenantId)
     .maybeSingle();
+  /* Decrypt karo — /api/integrations/seal token ko envelope me band kar deta hai, aur bina
+     decrypt ke Meta ko "Bearer enc:…" jaata, har send 401 (S28 me pakda, 28 Sep 2026). */
+  const data = decryptTenantSecrets(raw);
   if (error || !data?.whatsapp_phone_number_id || !data.whatsapp_access_token) return null;
   return {
     phoneNumberId:     data.whatsapp_phone_number_id,

@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { guardErrorToast } from "@/lib/ui/guard-toast";
 import type { Database } from "@/lib/supabase/database.types";
+import { statutoryDues, type DuesSummary } from "@/lib/accounting/tds-deductor";
 
 export type Employee = Database["public"]["Tables"]["employees"]["Row"];
 export type LeaveEntry = Database["public"]["Tables"]["leave_entries"]["Row"];
@@ -58,6 +59,7 @@ export function useUpsertEmployee() {
       id?: string; name: string; monthly_gross: number; joining_date?: string | null;
       leave_allowance?: number; pan?: string | null; pf_no?: string | null; esi_no?: string | null;
       esi_applicable?: boolean; pf_applicable?: boolean; is_active?: boolean; notes?: string | null;
+      basic_monthly?: number | null; da_monthly?: number;
       email?: string | null; phone?: string | null; designation?: string | null;
       date_of_birth?: string | null; address?: string | null;
       emergency_contact_name?: string | null; emergency_contact_phone?: string | null;
@@ -118,6 +120,12 @@ export const EMPLOYEE_DOC_TYPES: { value: string; label: string }[] = [
   { value: "voter_id",     label: "Voter ID" },
   { value: "resume",       label: "Resume / CV" },
   { value: "offer_letter", label: "Offer letter" },
+  /* The exit set (27 Sep 2026) — the offboarding checklist looks for "relieving_letter". */
+  { value: "appointment_letter", label: "Appointment letter" },
+  { value: "nda",                label: "NDA / agreement" },
+  { value: "resignation",        label: "Resignation letter" },
+  { value: "relieving_letter",   label: "Relieving / experience letter" },
+  { value: "form16",             label: "Form 16" },
   { value: "other",        label: "Other" },
 ];
 export const EMPLOYEE_DOC_BUCKET = "employee-docs";
@@ -369,6 +377,8 @@ export function usePaySalary() {
       employeeId: string; period: string; payDate: string; gross: number;
       lopDays: number; lopAmount: number; incentive?: number; advanceRecovered: number; advanceLoanId?: string | null;
       tds: number; pf: number; esi: number; esiEmployer?: number; pfEmployer?: number; other: number; bankAccountId: string; notes?: string | null;
+      /** The PF wage the form computed (Basic + DA prorated) — kept on the payslip for the ECR. */
+      pfWage?: number | null;
     }) => {
       const supabase = createClient();
       const { error } = await supabase.rpc("pay_salary", {
@@ -386,6 +396,7 @@ export function usePaySalary() {
         p_esi:               input.esi,
         p_esi_employer:      input.esiEmployer ?? 0,
         p_pf_employer:       input.pfEmployer ?? 0,
+        p_pf_wage:           input.pfWage ?? null,
         p_other:             input.other,
         p_bank_account_id:   input.bankAccountId,
         p_notes:             input.notes ?? null,
@@ -437,18 +448,23 @@ export function useDeleteSalaryPayment() {
 export function useStatutoryDues() {
   return useQuery({
     queryKey: ["statutory-dues"],
-    queryFn: async () => {
+    queryFn: async (): Promise<DuesSummary> => {
       const supabase = createClient();
-      const { data: sal, error: sErr } = await supabase.from("salary_payments").select("tds, pf, esi, esi_employer, pf_employer");
+      /* Salary TDS/PF/ESI (both shares) + TDS withheld on vendor payments (26Q), less
+         every challan — lib/accounting/tds-deductor.ts. The Balance Sheet uses the same sum. */
+      const [{ data: sal, error: sErr }, { data: paid, error: pErr }, { data: vt, error: vErr }] = await Promise.all([
+        supabase.from("salary_payments").select("tds, pf, esi, esi_employer, pf_employer"),
+        supabase.from("statutory_dues_payments").select("kind, amount"),
+        supabase.from("expenses").select("tds_amount").gt("tds_amount", 0),
+      ]);
       if (sErr) throw sErr;
-      const withheld = (sal ?? []).reduce((s, r) => s + (r.tds ?? 0) + (r.pf ?? 0) + (r.esi ?? 0) + (r.esi_employer ?? 0) + (r.pf_employer ?? 0), 0);
-
-      const { data: paid, error: pErr } = await supabase
-        .from("statutory_dues_payments").select("amount");
       if (pErr) throw pErr;
-      const paidTotal = (paid ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
-
-      return { withheld, paid: paidTotal, payable: Math.max(0, withheld - paidTotal) };
+      if (vErr) throw vErr;
+      return statutoryDues({
+        salaries: sal ?? [],
+        vendorTds: (vt ?? []).reduce((s, r) => s + (r.tds_amount ?? 0), 0),
+        paid: paid ?? [],
+      });
     },
     staleTime: 30_000,
   });
@@ -508,6 +524,47 @@ export function useEsiRegister() {
 
       const { data: paidRows } = await supabase
         .from("statutory_dues_payments").select("amount, kind").eq("kind", "esi");
+      const paid = (paidRows ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
+      const accrued = rows.reduce((s, r) => s + r.total, 0);
+      return { rows, accrued, paid, outstanding: Math.max(0, accrued - paid) };
+    },
+    staleTime: 30_000,
+  });
+}
+
+export interface PfRegisterRow {
+  period: string; employee: string; uan: string | null;
+  gross: number; lopAmount: number; lopDays: number;
+  pfWage: number | null;         // null = payslip from before 20260927180000
+  employeeShare: number; employerShare: number; total: number;
+}
+export interface PfRegister { rows: PfRegisterRow[]; accrued: number; paid: number; outstanding: number }
+
+/** PF register — every payslip that carried a PF contribution, newest first, with
+ *  accrued-vs-paid; feeds the EPFO ECR export (lib/payroll/ecr.ts). */
+export function usePfRegister() {
+  return useQuery({
+    queryKey: ["pf-register"],
+    queryFn: async (): Promise<PfRegister> => {
+      const supabase = createClient();
+      const { data: sal, error } = await supabase
+        .from("salary_payments")
+        .select("period, pf, pf_employer, pf_wage, employee_id, gross, lop_days, lop_amount")
+        .or("pf.gt.0,pf_employer.gt.0")
+        .order("period", { ascending: false });
+      if (error) throw error;
+      const { data: emps } = await supabase.from("employees").select("id, name, pf_no");
+      const empMap = new Map((emps ?? []).map((e) => [e.id, e]));
+      const rows: PfRegisterRow[] = (sal ?? []).map((r) => {
+        const e = empMap.get(r.employee_id);
+        return {
+          period: r.period, employee: e?.name ?? "—", uan: e?.pf_no ?? null,
+          gross: r.gross ?? 0, lopAmount: r.lop_amount ?? 0, lopDays: Number(r.lop_days ?? 0),
+          pfWage: r.pf_wage ?? null,
+          employeeShare: r.pf ?? 0, employerShare: r.pf_employer ?? 0, total: (r.pf ?? 0) + (r.pf_employer ?? 0),
+        };
+      });
+      const { data: paidRows } = await supabase.from("statutory_dues_payments").select("amount, kind").eq("kind", "pf");
       const paid = (paidRows ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
       const accrued = rows.reduce((s, r) => s + r.total, 0);
       return { rows, accrued, paid, outstanding: Math.max(0, accrued - paid) };
@@ -605,7 +662,7 @@ export function useSetAttendanceNetwork() {
 export function usePayStatutoryDues() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { amount: number; kind: string; paidOn: string; bankAccountId: string; notes?: string | null }) => {
+    mutationFn: async (input: { amount: number; kind: string; paidOn: string; bankAccountId: string; notes?: string | null; challanNo?: string | null; period?: string | null }) => {
       const supabase = createClient();
       const { error } = await supabase.rpc("pay_statutory_dues", {
         p_amount:          input.amount,
@@ -613,6 +670,8 @@ export function usePayStatutoryDues() {
         p_paid_on:         input.paidOn,
         p_bank_account_id: input.bankAccountId,
         p_notes:           input.notes ?? null,
+        p_challan_no:      input.challanNo ?? null,
+        p_period:          input.period ?? null,
       });
       if (error) throw error;
     },

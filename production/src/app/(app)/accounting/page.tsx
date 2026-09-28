@@ -38,6 +38,7 @@ import { useBalanceSheetAuto } from "@/lib/queries/balance-sheet";
 import { useUnreconciledExpenses, useUnpaidBillsDue } from "@/lib/queries/expenses";
 import { useBankAccounts, useUnmatchedBankCredits } from "@/lib/queries/bank";
 import { useInvoices } from "@/lib/queries/invoices";
+import { BooksLockCard } from "@/components/features/accounting/books-lock-card";
 import { GstHealthCard } from "@/components/features/accounting/gst-health-card";
 import {
   MONEY_FOLDERS, moneyInboxState, totalOpenItems,
@@ -135,6 +136,8 @@ export default function AccountingOverviewPage() {
           hint="Net output − input, before filing" href="/accounting/gst" />
       </div>
 
+      <BooksLockCard />
+
       {/* Data-integrity + debit-side reconciliation. See the note where `alerts` is built
           for why these two are NOT folders. */}
       {alerts.length > 0 && (
@@ -173,7 +176,7 @@ export default function AccountingOverviewPage() {
           Your money inbox
         </h2>
         {!inboxLoading && (
-          <span className="text-2xs text-ink-3 font-mono tabular-nums">
+          <span className="text-xs text-ink-3 font-mono tabular-nums">
             {totalOpenItems(inbox) === 0
               ? "nothing waiting"
               : `${totalOpenItems(inbox)} thing${totalOpenItems(inbox) === 1 ? "" : "s"} waiting`}
@@ -246,14 +249,14 @@ function MoneyFolderCard({ folder, state, loading }: {
             {/* The noun, always. "3" tells a reseller nothing; "3 bills" tells them
                 what they are looking at. Singularised by dropping the trailing s. */}
             {!empty && (
-              <span className="text-2xs text-ink-3 font-mono tabular-nums">
+              <span className="text-xs text-ink-3 font-mono tabular-nums">
                 {state.count} {state.count === 1 ? folder.noun.replace(/s$/, "") : folder.noun}
               </span>
             )}
           </div>
         )}
 
-        <p className="mt-1.5 text-2xs leading-snug text-ink-3">
+        <p className="mt-1.5 text-xs leading-snug text-ink-3">
           {loading ? " "
             : state.urgentReason ?? (empty ? folder.emptyHint : folder.action)}
         </p>
@@ -288,7 +291,7 @@ function HeroKpi({ label, value, tone, hint, href, loading }: {
         {loading ? <Skeleton className="h-8 w-24" /> : (
           <div className={`font-serif text-2xl md:text-[28px] leading-none ${toneText(tone)}`}>{rupee(value)}</div>
         )}
-        <div className="text-2xs text-ink-3 mt-1.5 flex items-center gap-1">
+        <div className="text-xs text-ink-3 mt-1.5 flex items-center gap-1">
           {hint}
           <Icon name="arrow_right" size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
@@ -305,7 +308,7 @@ function JumpCard({ href, icon, title, sub }: { href: string; icon: string; titl
           <Icon name={icon} size={15} className="text-amber-ink shrink-0" />
           <span className="font-medium text-ink text-[13px] truncate">{title}</span>
         </div>
-        <div className="text-2xs text-ink-3 leading-snug">{sub}</div>
+        <div className="text-xs text-ink-3 leading-snug">{sub}</div>
       </Card>
     </Link>
   );

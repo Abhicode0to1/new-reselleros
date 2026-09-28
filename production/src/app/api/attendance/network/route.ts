@@ -9,11 +9,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { newPresenceSecret } from "@/lib/attendance/presence";
+import { clientIp as trustedClientIp } from "@/lib/security/rate-limit";
 
+/* S20: /mark jaisa hi IP — dono ek hi niyam se padhein, warna "lock" kiya IP "mark" par
+   kabhi mel na khaye. "" = IP nahi mili (purana matlab). */
 function clientIp(req: NextRequest): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip")?.trim() ?? "";
+  const ip = trustedClientIp(req.headers);
+  return ip === "unknown" ? "" : ip;
 }
 
 async function me(supabase: ReturnType<typeof createClient>) {

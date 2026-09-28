@@ -828,3 +828,97 @@ export function useCreateProjectTasksBulk() {
     onError: (e) => toastError(e),
   });
 }
+
+/**
+ * The lead this project was quoted from, if any — R-008 (Pardeep, 26 Sep 2026).
+ *
+ * The link lives on `leads.project_id`, written by Pardeep's `create_project_quote_from_lead`.
+ * It is deliberately one-directional: `project_sales` has no `lead_id`, so nothing on the
+ * project side had to change for the CRM feature to work — and nothing here writes it.
+ *
+ * Returns null, never a placeholder. Most projects have no lead (they are created straight
+ * from Banking -> Reconcile or from Project Sales), and "From lead: —" on those would be a
+ * row of furniture on every page to serve the few that do.
+ */
+export interface ProjectSourceLead {
+  id: string;
+  company: string | null;
+  contact_name: string | null;
+}
+
+export function useProjectSourceLead(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["project_source_lead", projectId],
+    enabled:  Boolean(projectId),
+    queryFn: async (): Promise<ProjectSourceLead | null> => {
+      if (!projectId) return null;
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("leads")
+        .select("id, company, contact_name")
+        .eq("project_id", projectId)
+        .maybeSingle();
+      /* A read failure must not take the page down with it — the lead line is context,
+         not the deal. It reports as "no lead", which is also what a project without one
+         shows, and that is the honest limit of a decoration. */
+      if (error) return null;
+      return data ?? null;
+    },
+  });
+}
+
+/**
+ * Edit an active project — value, title, customer, schedule. R-004 (Pardeep, 25 Sep 2026).
+ *
+ * Everything goes through ONE RPC (`update_project_details`, migration 20260926150000)
+ * rather than a handful of client-side updates, because the rules are inseparable: the
+ * new total, the locked milestones and the re-planned ones have to agree or the project
+ * is left with instalments that do not add up to it. CLAUDE.md §17b — a multi-row money
+ * write is a Postgres function, not a chain of Supabase calls.
+ *
+ * Every field is optional. Omitting one leaves it alone, so a title-only edit does not
+ * have to restate the money.
+ */
+export interface UpdateProjectDetailsInput {
+  projectId:     string;
+  title?:        string;
+  description?:  string | null;
+  customerId?:   string;
+  customerName?: string;
+  /** GST-INCLUSIVE contract value, whole rupees — what the milestones add up to. */
+  totalAmount?:  number;
+  gstRate?:      number;
+  interState?:   boolean;
+  /** The milestones that are NOT already invoiced or paid. Omit to leave the schedule. */
+  milestones?:   MilestoneInput[];
+}
+
+export function useUpdateProjectDetails() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateProjectDetailsInput) => {
+      const supabase = createClient();
+      const { error } = await supabase.rpc("update_project_details", {
+        p_project_id:    input.projectId,
+        p_title:         input.title ?? undefined,
+        p_description:   input.description ?? undefined,
+        p_customer_id:   input.customerId ?? undefined,
+        p_customer_name: input.customerName ?? undefined,
+        p_total_amount:  input.totalAmount ?? undefined,
+        p_gst_rate:      input.gstRate ?? undefined,
+        p_inter_state:   input.interState ?? undefined,
+        p_milestones:    input.milestones ? JSON.parse(JSON.stringify(input.milestones)) : undefined,
+      });
+      /* The RPC's messages are written for the operator and name the next step —
+         "credit-note the invoices first", "re-plan the remaining milestones in the same
+         save". Replacing them with a generic sentence here would throw that away. */
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project_sales"] });
+      qc.invalidateQueries({ queryKey: ["project_receivables_by_customer"] });
+      toast.success("Project updated");
+    },
+    onError: (e) => toastError(e),
+  });
+}

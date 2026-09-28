@@ -2,18 +2,22 @@
  * POST /api/attendance/mark  { employeeId, pin }
  *
  * Server-side attendance mark. The office-network gate lives HERE, not on the
- * client: we read the REAL client IP from the Cloud Run x-forwarded-for header
- * (the browser can't forge it) and, if the tenant has locked an allowlist of
- * office IPs, reject anything from outside it. Then we call mark_attendance,
- * logging the source IP.
+ * client: we read the client IP from the Cloud Run x-forwarded-for header and,
+ * if the tenant has locked an allowlist of office IPs, reject anything from
+ * outside it. Then we call mark_attendance, logging the source IP.
+ *
+ * S20 (28 Sep 2026): pehle XFF ki PEHLI entry li jaati thi — wo browser/curl khud bhej
+ * sakta hai, yaani ghar baithe `X-Forwarded-For: <office-ip>` bhej kar haazri lag jaati.
+ * Ab lib/security/rate-limit.ts ka `clientIp` (right se, sirf humari infra ki entry).
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { clientIp as trustedClientIp } from "@/lib/security/rate-limit";
 
+/* "" (IP nahi mili) purana matlab rakha — "unknown" kabhi allowlist se mel na khaye. */
 function clientIp(req: NextRequest): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip")?.trim() ?? "";
+  const ip = trustedClientIp(req.headers);
+  return ip === "unknown" ? "" : ip;
 }
 
 export async function POST(request: NextRequest) {

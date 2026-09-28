@@ -1,11 +1,23 @@
 # AGENTS.md — rules for any AI agent working in this repo
 
+> **Three people, three agents (27 Sep 2026).** At the start of EVERY session read
+> [`docs/TEAM-PROTOCOL.md`](docs/TEAM-PROTOCOL.md): it says how to read your tasks and other
+> people's changes from the shared board, how to stay in your area ([`OWNERS.json`](OWNERS.json)),
+> and what to write back before you stop. Five minutes of it saves a day of merge conflicts.
+
 Read this before writing code. It is the short list of things that, if you get them
 wrong, cost real money or break a live business.
 
 The long version is `production/CLAUDE.md` (25 sections). This file is the subset that
 must not be got wrong, plus the things that are true of this repo *today*. Where the two
 disagree, **this file wins** — CLAUDE.md has been wrong before, see §1.
+
+**Canonical (S25, 28 Sep 2026):** the two files stay separate on purpose — every
+teammate's session loads both. `AGENTS.md` is canonical for **rules** (what must not go
+wrong); `production/CLAUDE.md` is canonical for **conventions and patterns** (how code is
+written). Write a new rule here and link to it from CLAUDE.md rather than copying it.
+Decisions and their history go in [`docs/adr/`](docs/adr/), which also holds the comment
+convention.
 
 Two agents work here: **Claude Code** and **Antigravity**. Both read this file. Keeping
 one rulebook is the point of it existing.
@@ -272,6 +284,11 @@ not data. Only one person runs a migration or a data reset at a time, and says s
 This was a live bug: "arrived today" showed nothing and "overdue" silently swallowed
 leads due today. Use `localDateISO()` from `lib/leads/outcomes.ts`, which formats from
 local date parts.
+
+**Since S21 (28 Sep 2026): use `@/lib/dates/ist`** — `istToday()`, `toIstDate(d)`, `fyBounds()`,
+`monthBounds()`, `addDaysISO()`, `formatIstDate()`. `localDateISO()` is only right in a browser
+set to IST; on Cloud Run (UTC) it is the same bug. In Pardeep's areas ESLint now fails a raw
+`toISOString().slice(0, 10)`.
 
 ---
 
@@ -1400,6 +1417,13 @@ adding an LLM, a wait, a cost and a failure mode.
 
 ## L31. Registering ONE more table in the generated Database type can collapse all of it
 *23 Aug 2026, adding `document_series` for the invoice-issue dialog.*
+
+> **S21 update (28 Sep 2026):** the collapse was a property of the HAND-WRITTEN type. The
+> Database type is now generated (`database.generated.ts`, all 152 tables incl.
+> `document_series`, with real `Relationships`) plus a thin overlay, and `tsc` is clean with
+> no depth errors. New tables need no untyped client — regenerate with
+> `node scripts/check-db-types.mjs --write`. The existing untyped handles (lib/ai/*,
+> api/invoices/series, …) still work; converting them is follow-up, owner by owner.
 
 `document_series` was missing from `src/lib/supabase/database.types.ts`, so reading
 `last_number` did not typecheck. The obvious fix — declare the Row type and add one line

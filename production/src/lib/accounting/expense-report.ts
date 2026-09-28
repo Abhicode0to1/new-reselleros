@@ -11,6 +11,12 @@ export type ExpenseLike = {
   category: string | null;
   vendor_name: string | null;
   expense_date: string;       // YYYY-MM-DD
+  /**
+   * Kitni asli rows is ek row me judi hain (S17: report_pnl SQL me group karke bhejta hai).
+   * Na ho to 1 — seedhi expense row. Count isi se banta hai, taaki grouped aur ungrouped
+   * input ka report ek jaisa aaye.
+   */
+  n?: number;
 };
 
 export type ExpenseReport = {
@@ -32,7 +38,7 @@ function group<K>(rows: ExpenseLike[], key: (r: ExpenseLike) => K) {
     const k = key(r);
     const g = m.get(k) ?? { total: 0, count: 0 };
     g.total += r.amount ?? 0;
-    g.count += 1;
+    g.count += r.n ?? 1;
     m.set(k, g);
   }
   return m;
@@ -63,5 +69,5 @@ export function buildExpenseReport(rows: ExpenseLike[]): ExpenseReport {
     .map(([month, g]) => ({ month, ...g }))
     .sort((a, b) => a.month.localeCompare(b.month));
 
-  return { total, count: rows.length, byCategory, byVendor, byMonth };
+  return { total, count: rows.reduce((s, r) => s + (r.n ?? 1), 0), byCategory, byVendor, byMonth };
 }

@@ -39,16 +39,37 @@ import {
   type BalanceSheetItem,
 } from "@/lib/queries/balance-sheet";
 import type { BalanceSheetSection } from "@/lib/supabase/database.types";
+import { usePnL, BOOKS_START } from "@/lib/queries/pnl";
+import { istToday } from "@/lib/dates/ist";
 
 export default function BalanceSheetPage() {
   const { data: auto, isLoading: autoLoading } = useBalanceSheetAuto();
   const { data: items, isLoading: itemsLoading } = useBalanceSheetItems();
   const del = useDeleteBalanceSheetItem();
   const confirm = useConfirm();
+  /* D16 (27 Sep 2026): the unexplained difference is almost always the owner's money that
+     never got a line — capital put in, or drawings taken out. One click books it. */
+  const createItem = useCreateBalanceSheetItem();
+  async function bookUnexplained() {
+    if (unexplained === null || unexplained === 0) return;
+    const capital = unexplained > 0;
+    const ok = await confirm({
+      title: capital ? `Owner's capital ${rupee(unexplained)} jodein?` : `Drawings ${rupee(-unexplained)} jodein?`,
+      body: capital
+        ? "Assets books se zyada hain — matlab itna paisa business mein daala gaya jiski entry nahi thi (opening bank balance, khud ka paisa). Equity mein Owner's capital line banegi."
+        : "Liabilities books se zyada hain — matlab itna paisa business se nikala gaya jiski entry nahi thi. Equity mein Drawings (negative) line banegi. Agar ye koi kharcha ya loss hai jo books mein nahi, to pehle wo entry karo.",
+      confirmLabel: "Haan, line banao", cancelLabel: "Nahi",
+    });
+    if (!ok) return;
+    await createItem.mutateAsync({
+      section: "equity", label: capital ? "Owner's capital" : "Drawings", amount: unexplained,
+      notes: `Balance Sheet ke unexplained difference se ${today} ko banaya — cumulative P&L se bacha hua farq.`,
+    });
+  }
   const [addOpen, setAddOpen] = React.useState(false);
   const [editItem, setEditItem] = React.useState<BalanceSheetItem | null>(null);
   const [retainedInfoOpen, setRetainedInfoOpen] = React.useState(false);
-  const today = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const today = istToday();
 
   const loading = autoLoading || itemsLoading;
 
@@ -73,7 +94,14 @@ export default function BalanceSheetPage() {
   const totalAssets = autoAssets + sum(manualAssetRows);
   const totalLiab   = autoLiab + sum(manualLiabRows);
   const netWorth    = totalAssets - totalLiab;                 // = total equity
-  const retained    = netWorth - sum(manualEqRows);            // balancing plug
+  const retained    = netWorth - sum(manualEqRows);            // what equity must hold for the sheet to balance
+  /* Retained earnings PER THE BOOKS — cumulative net profit from the P&L, all periods
+     (27 Sep 2026). The plug above used to be shown AS retained earnings, which hid every
+     missing entry inside a number that always looked right. Now the P&L figure is the
+     retained earnings, and the gap between the two is printed as what it is. */
+  const cumulative = usePnL({ from: BOOKS_START, to: today });
+  const cumulativeProfit = cumulative.data ? (cumulative.data.model.netProfit ?? cumulative.data.netProfit) : null;
+  const unexplained = cumulativeProfit === null ? null : retained - cumulativeProfit;
 
   // ── Solvency ratios (liquidity + leverage) ──────────────────────────────
   // Current = liquid within a year. Long-term items (fixed assets, staff loans,
@@ -124,7 +152,8 @@ export default function BalanceSheetPage() {
         ["", ""],
         ["EQUITY", ""],
         ...manualEqRows.map((r): [string, number] => [r.label, r.amount]),
-        ["Retained earnings (derived)", retained],
+        ["Retained earnings (cumulative net profit per P&L)", cumulativeProfit ?? ""],
+        ["Unexplained difference (balancing figure)", unexplained ?? retained],
         ["Net worth (total equity)", netWorth],
       ],
     );
@@ -172,13 +201,13 @@ export default function BalanceSheetPage() {
 
       {/* Honesty note */}
       <Card className="mb-6 bg-paper-2/40 p-3">
-        <p className="text-2xs text-ink-3 leading-relaxed flex items-start gap-1.5">
+        <p className="text-xs text-ink-3 leading-relaxed flex items-start gap-1.5">
           <Icon name="info" size={13} className="mt-0.5 shrink-0" />
           <span>
             Auto figures (cash &amp; bank, receivables, TDS, payables, GST) come from your
             ResellerOS records. Add manual lines for anything the app doesn&apos;t track —
             fixed assets, loans, owner&apos;s capital, drawings — to make this a complete,
-            CA-ready sheet. <b>Equity&apos;s retained earnings is derived so the sheet balances.</b>
+            CA-ready sheet. <b>Retained earnings comes from the P&amp;L; whatever the sheet still needs to balance is shown separately as an unexplained difference.</b>
           </span>
         </p>
       </Card>
@@ -240,7 +269,7 @@ export default function BalanceSheetPage() {
                   <BSLine label="Prepaid / vendor advances" hint="paid, not yet consumed" amount={auto?.prepaidAdvances ?? 0} kind="auto" source="Prepaid" href="/accounting/prepaid" />
                 )}
                 {(auto?.fixedAssets ?? 0) > 0 && (
-                  <BSLine label="Fixed assets (EMI purchases)" hint="vehicles, equipment at cost" amount={auto?.fixedAssets ?? 0} kind="auto" source="Assets & EMIs" href="/accounting/assets" />
+                  <BSLine label="Fixed assets" hint="register at WDV (Income-tax rates) + EMI purchases not yet registered, at cost" amount={auto?.fixedAssets ?? 0} kind="auto" source="Assets & EMIs" href="/accounting/assets" />
                 )}
                 {gstCredit > 0 && <BSLine label="GST input credit (ITC)" amount={gstCredit} kind="auto" source="GST Reports" href="/accounting/gst" />}
                 {(auto?.advanceTaxPaid ?? 0) > 0 && (
@@ -267,7 +296,7 @@ export default function BalanceSheetPage() {
                   <BSLine label="Salary payable" hint="payroll run, not yet paid out" amount={auto?.salaryPayable ?? 0} kind="auto" source="Payroll" href="/accounting/payroll" />
                 )}
                 {(auto?.salaryDuesPayable ?? 0) > 0 && (
-                  <BSLine label="Salary dues payable" hint="withheld TDS/PF/ESI, not yet remitted" amount={auto?.salaryDuesPayable ?? 0} kind="auto" source="Payroll" href="/accounting/payroll" />
+                  <BSLine label="Statutory dues payable" hint="TDS (salary + vendor), PF, ESI — not yet remitted" amount={auto?.salaryDuesPayable ?? 0} kind="auto" source="Payroll" href="/accounting/payroll" />
                 )}
                 {(auto?.reimbursementsPayable ?? 0) > 0 && (
                   <BSLine label="Reimbursements payable" hint="expenses paid from someone's own card, not yet repaid" amount={auto?.reimbursementsPayable ?? 0} kind="auto" source="Reimbursements" href="/accounting/reimbursements" />
@@ -308,29 +337,47 @@ export default function BalanceSheetPage() {
                   />
                   <BSLine
                     label="Retained earnings"
-                    hint="derived so the sheet balances"
-                    amount={retained}
-                    kind="derived"
-                    onInfo={() => setRetainedInfoOpen((o) => !o)}
+                    hint={cumulativeProfit === null ? "cumulative net profit per P&L — loading…" : "cumulative net profit per P&L, all periods"}
+                    amount={cumulativeProfit ?? 0}
+                    kind="auto" source="P&L" href="/accounting/pnl"
                   />
+                  {(unexplained === null || unexplained !== 0) && (
+                    <BSLine
+                      label="Unexplained difference"
+                      hint={unexplained === null ? "assets − liabilities − equity, before the P&L loads" : unexplained > 0 ? "assets exceed what the books explain — an opening balance, capital or income not entered" : "liabilities exceed what the books explain — drawings, a loss or an expense not entered"}
+                      amount={unexplained ?? retained}
+                      kind="derived"
+                      onInfo={() => setRetainedInfoOpen((o) => !o)}
+                    />
+                  )}
                   {retainedInfoOpen && (
                     <div className="mt-1 mb-1 rounded-md border border-hairline bg-paper-2/40 p-3 text-[12px] text-ink-2 leading-relaxed">
                       <p className="font-semibold text-ink mb-1.5 flex items-center gap-1.5">
-                        <Icon name="info" size={13} className="text-amber-ink" /> How retained earnings is derived
+                        <Icon name="info" size={13} className="text-amber-ink" /> What the unexplained difference is
                       </p>
                       <p className="mb-2">
-                        This is a <b>balancing figure</b>, not a stored P&amp;L number — it&apos;s whatever makes
-                        <b> Assets = Liabilities + Equity</b> hold exactly.
+                        <b>Assets = Liabilities + Equity</b> must hold. Equity per the books is owner&apos;s capital (manual lines)
+                        plus retained earnings from the P&amp;L. Whatever is left over is an entry the books don&apos;t have —
+                        it is shown here as a <b>balancing figure</b>, not hidden inside retained earnings.
                       </p>
-                      <div className="font-mono text-2xs space-y-1 bg-paper rounded p-2 border border-hairline">
+                      <div className="font-mono text-xs space-y-1 bg-paper rounded p-2 border border-hairline">
                         <div className="flex justify-between gap-3"><span>Total assets</span><span className="tabular-nums">{fmtBS(totalAssets)}</span></div>
                         <div className="flex justify-between gap-3"><span>− Total liabilities</span><span className="tabular-nums">{fmtBS(totalLiab)}</span></div>
                         <div className="flex justify-between gap-3"><span>− Owner&apos;s capital &amp; other manual equity</span><span className="tabular-nums">{fmtBS(sum(manualEqRows))}</span></div>
-                        <div className="flex justify-between gap-3 border-t border-hairline pt-1 font-semibold text-ink"><span>= Retained earnings</span><span className="tabular-nums">{fmtBS(retained)}</span></div>
+                        <div className="flex justify-between gap-3"><span>− Retained earnings (P&amp;L, all periods)</span><span className="tabular-nums">{fmtBS(cumulativeProfit ?? 0)}</span></div>
+                        <div className="flex justify-between gap-3 border-t border-hairline pt-1 font-semibold text-ink"><span>= Unexplained difference</span><span className="tabular-nums">{fmtBS(unexplained ?? retained)}</span></div>
                       </div>
-                      <p className="mt-2 text-2xs text-ink-3">
-                        A true P&amp;L-based figure (cumulative net income − owner drawings) needs closed-period books — a future enhancement. For now this keeps the sheet balanced and CA-explainable.
+                      <p className="mt-2 text-xs text-ink-3">
+                        Usual causes: bank opening balances entered without the matching capital line, owner drawings taken without an entry, or income / expense that never reached the books. Add the missing line (Owner&apos;s capital, Drawings) and this goes to zero.
                       </p>
+                      {unexplained !== null && unexplained !== 0 && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Button size="sm" variant="primary" loading={createItem.isPending} onClick={bookUnexplained}>
+                            {unexplained > 0 ? `Owner's capital ${rupee(unexplained)} jodo` : `Drawings ${rupee(-unexplained)} jodo`}
+                          </Button>
+                          <span className="text-xs text-ink-3">Ek click — equity line ban jaayegi, farq zero. Baad mein Edit/Delete kar sakte ho.</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -447,7 +494,7 @@ function BSLine({
             </button>
           )}
         </div>
-        {hint && <div className="text-2xs text-ink-3 mt-0.5 leading-snug">{hint}</div>}
+        {hint && <div className="text-xs text-ink-3 mt-0.5 leading-snug">{hint}</div>}
       </div>
       <span className={`font-mono text-sm tabular-nums whitespace-nowrap shrink-0 ${amount < 0 ? "text-rose" : "text-ink"}`}>
         {fmtBS(amount)}
@@ -506,7 +553,7 @@ function ManualGroup({
           <Icon name={open ? "chevron_down" : "arrow_right"} size={13} className="text-ink-3 shrink-0" />
           <span className="text-sm text-ink">{label}</span>
           <OriginBadge kind="manual" />
-          <span className="text-2xs text-ink-3">· {rows.length} entries</span>
+          <span className="text-xs text-ink-3">· {rows.length} entries</span>
         </div>
         <span className={`font-mono text-sm tabular-nums whitespace-nowrap shrink-0 ${total < 0 ? "text-rose" : "text-ink"}`}>{fmtBS(total)}</span>
       </div>
@@ -586,13 +633,13 @@ function EditLineDialog({ item, onClose }: { item: BalanceSheetItem; onClose: ()
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Label</label>
-            <Input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
+            <label htmlFor="balance-sheet-label" className="block text-xs font-medium text-ink-2 mb-1">Label</label>
+            <Input id="balance-sheet-label" value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
-            <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <p className="mt-1 text-2xs text-ink-3">Negative allowed (e.g. depreciation, drawings).</p>
+            <label htmlFor="balance-sheet-amount" className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
+            <Input id="balance-sheet-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <p className="mt-1 text-xs text-ink-3">Negative allowed (e.g. depreciation, drawings).</p>
           </div>
         </div>
         <DialogFooter>
@@ -658,7 +705,7 @@ function AddLineDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 })}
               </SelectContent>
             </Select>
-            <p className="text-3xs text-ink-3 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               Goes under <b>{SECTIONS.find((s) => s.value === category.section)?.label}</b> · e.g. {category.examples}
             </p>
           </FormField>
@@ -669,7 +716,7 @@ function AddLineDialog({ open, onClose }: { open: boolean; onClose: () => void }
 
           <FormField label="Amount (₹)" required htmlFor="bs-amount">
             <Input id="bs-amount" type="number" prefix="₹" error={errors.amount?.message} {...register("amount")} />
-            <p className="text-3xs text-ink-3 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               {category.contra
                 ? "Just type the amount — we'll record it as a reduction automatically."
                 : "Enter the current value / outstanding balance."}

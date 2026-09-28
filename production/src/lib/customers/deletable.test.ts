@@ -37,3 +37,34 @@ describe("customerDeleteBlockReason", () => {
     expect(r).toMatch(/5 projects/);
   });
 });
+
+describe("customerDeleteBlockReason — the three R-007 record types", () => {
+  /* `delete_customer` counts these since migration 20260926130000. They are optional
+     here because the customer profile does not load them; when a caller does have
+     them, the dialog should name them rather than leaving the RPC to do it. */
+  it("names a credit note", () => {
+    expect(customerDeleteBlockReason({ ...EMPTY, creditNotes: 1 })).toMatch(/1 credit note/);
+  });
+
+  it("names a debit note", () => {
+    expect(customerDeleteBlockReason({ ...EMPTY, debitNotes: 2 })).toMatch(/2 debit notes/);
+  });
+
+  it("pluralises TDS correctly — entry / entries, not 'entrys'", () => {
+    expect(customerDeleteBlockReason({ ...EMPTY, tdsEntries: 1 })).toMatch(/1 TDS entry/);
+    expect(customerDeleteBlockReason({ ...EMPTY, tdsEntries: 3 })).toMatch(/3 TDS entries/);
+  });
+
+  it("stays silent when they are absent — an omitted count is not a block", () => {
+    /* They are optional, so `undefined` must read as zero. Treating it as truthy would
+       make every customer undeletable the moment a caller forgot a field. */
+    expect(customerDeleteBlockReason(EMPTY)).toBeNull();
+  });
+
+  it("lists them alongside the older five", () => {
+    const r = customerDeleteBlockReason({ ...EMPTY, invoices: 1, creditNotes: 1, tdsEntries: 2 });
+    expect(r).toMatch(/1 invoice/);
+    expect(r).toMatch(/1 credit note/);
+    expect(r).toMatch(/2 TDS entries/);
+  });
+});

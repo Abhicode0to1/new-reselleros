@@ -127,11 +127,11 @@ export default function CategoryRulesPage() {
       {/* Add a rule */}
       <Card className="mt-5 p-4">
         <form onSubmit={onAdd} className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr_0.8fr_auto] gap-2 items-end">
-          <label className="text-2xs text-ink-3 space-y-1">
+          <label className="text-xs text-ink-3 space-y-1">
             <span className="block font-medium text-ink-2">When the narration contains</span>
             <Input value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="e.g. FACEBOOK" aria-label="Text to match" />
           </label>
-          <label className="text-2xs text-ink-3 space-y-1">
+          <label className="text-xs text-ink-3 space-y-1">
             <span className="block font-medium text-ink-2">File it as</span>
             <select
               value={category}
@@ -143,7 +143,7 @@ export default function CategoryRulesPage() {
               {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
-          <label className="text-2xs text-ink-3 space-y-1">
+          <label className="text-xs text-ink-3 space-y-1">
             <span className="block font-medium text-ink-2">On</span>
             <select
               value={direction}
@@ -159,7 +159,7 @@ export default function CategoryRulesPage() {
           </Button>
         </form>
         {draftMatches !== null && (
-          <p className={`mt-2 text-2xs ${draftMatches === 0 ? "text-amber-ink" : "text-ink-3"}`}>
+          <p className={`mt-2 text-xs ${draftMatches === 0 ? "text-amber-ink" : "text-ink-3"}`}>
             {draftMatches === 0
               ? "Matches none of your imported lines yet — check the spelling against a real narration."
               : `Would match ${draftMatches} of your imported line${draftMatches === 1 ? "" : "s"} (${directionLabel(direction).toLowerCase()}).`}

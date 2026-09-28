@@ -23,6 +23,9 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { CampaignTemplateRow } from "@/lib/supabase/database.types";
+import Link from "next/link";
+import { useSaveTemplate, unknownVariables } from "@/lib/queries/campaign-templates";
+import { addDaysISO, istToday } from "@/lib/dates/ist";
 
 interface Props {
   open: boolean;
@@ -59,15 +62,28 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
   const [subject, setSubject] = React.useState("");
   const [bodyText, setBodyText] = React.useState("");
   const [bodyHtml, setBodyHtml] = React.useState("");
+  const saveTemplate = useSaveTemplate();
+  /* Keep what was written here for next time (managed on /marketing/templates). */
+  async function saveAsTemplate() {
+    if (subject.trim().length < 2 || bodyHtml.trim().length < 10) {
+      toast.error("Pehle subject aur mail likho, phir template save karo.");
+      return;
+    }
+    const unknown = unknownVariables(subject, bodyHtml, bodyText);
+    if (unknown.length) { toast.error(`Ye variable bharenge nahi: ${unknown.map((u) => `{{${u}}}`).join(", ")}`); return; }
+    const id = await saveTemplate.mutateAsync({
+      name: name.trim() || subject.trim().slice(0, 80), category: offerEnabled ? "offer" : "custom",
+      subject: subject.trim(), body_html: bodyHtml, body_text: bodyText.trim() || null, description: null,
+    });
+    setSelectedTemplateId(id);
+  }
   const [bodyMode, setBodyMode] = React.useState<BodyMode>("preview");
 
   const [offerEnabled, setOfferEnabled]   = React.useState(false);
   const [offerCode, setOfferCode]         = React.useState("");
   const [offerDiscount, setOfferDiscount] = React.useState("10");
   const [offerExpires, setOfferExpires]   = React.useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 14);
-    return d.toISOString().slice(0, 10);
+    return addDaysISO(istToday(), 14);
   });
 
   // AI generator state
@@ -233,7 +249,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
       toast.success(
         `${json.campaignId} sent · ${json.sentCount}/${json.recipientsCount} delivered${
           json.failedCount > 0 ? ` · ${json.failedCount} failed` : ""
-        }${modeNote}`
+        }${json.skippedOptOut > 0 ? ` · ${json.skippedOptOut} unsubscribed, skipped` : ""}${modeNote}`
       );
       onOpenChange(false);
     } catch (err) {
@@ -258,8 +274,14 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
         {/* Top row: Template picker + AI button */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-end">
           <div>
-            <Label>Start from a template</Label>
-            <select
+            <div className="flex items-baseline justify-between gap-2">
+              <Label htmlFor="campaign-composer-start-from-a-template">Start from a template</Label>
+              <span className="flex gap-3 text-xs">
+                <button type="button" onClick={saveAsTemplate} disabled={saveTemplate.isPending} className="text-amber-ink hover:underline disabled:opacity-50">Save as template</button>
+                <Link href="/marketing/templates" className="text-ink-3 hover:text-ink hover:underline">Manage templates</Link>
+              </span>
+            </div>
+            <select id="campaign-composer-start-from-a-template"
               value={selectedTemplateId}
               onChange={(e) => {
                 const id = e.target.value;
@@ -298,12 +320,12 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           <div className="border border-amber/40 bg-amber-soft/40 rounded-md p-3 space-y-2">
             <p className="text-xs font-semibold text-amber-ink">Tell the AI what you want</p>
             <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-2">
-              <Input
+              <Input aria-label="Describe the campaign for AI"
                 placeholder="e.g., Diwali special — 25% off Workspace Standard for SMBs, expiry 5 Nov"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
               />
-              <select
+              <select aria-label="Campaign category"
                 value={aiCategory}
                 onChange={(e) => setAiCategory(e.target.value as typeof aiCategory)}
                 className="text-sm bg-paper border border-hairline rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-amber"
@@ -321,7 +343,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                 {aiRunning ? "Drafting…" : "Generate"}
               </Button>
             </div>
-            <p className="text-3xs text-ink-3">
+            <p className="text-xs text-ink-3">
               Powered by Gemini. The AI returns HTML + text + subject. You can edit anything before sending.
             </p>
           </div>
@@ -334,7 +356,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
               <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Audience — selected contacts</p>
               <Badge kind="info" dot>Sending to {recipientCount} selected contact{recipientCount === 1 ? "" : "s"}</Badge>
             </div>
-            <p className="text-2xs text-ink-3 mt-1.5">
+            <p className="text-xs text-ink-3 mt-1.5">
               You hand-picked these on the Contacts page.
               {typeof totalSelected === "number" && totalSelected > recipientCount ? (
                 <> <b className="text-amber-ink">{totalSelected - recipientCount} of your {totalSelected} skipped</b> — no email address (reach them via WhatsApp/phone).</>
@@ -368,7 +390,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                 </button>
               ))}
             </div>
-            <Input
+            <Input aria-label="Optional: filter by company or contact name"
               placeholder="Optional: filter by company or contact name…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -380,12 +402,12 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
         {/* Compose */}
         <div className="border-t border-hairline pt-3 space-y-2">
           <div>
-            <Label>Campaign name (internal)</Label>
-            <Input placeholder="e.g. May month-end sale" value={name} onChange={(e) => setName(e.target.value)} />
+            <Label htmlFor="campaign-composer-campaign-name-internal">Campaign name (internal)</Label>
+            <Input id="campaign-composer-campaign-name-internal" placeholder="e.g. May month-end sale" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
-            <Label>Subject *</Label>
-            <Input placeholder="🎉 Special offer for {{company}}" value={subject} onChange={(e) => setSubject(e.target.value)} />
+            <Label htmlFor="campaign-composer-subject">Subject *</Label>
+            <Input id="campaign-composer-subject" placeholder="🎉 Special offer for {{company}}" value={subject} onChange={(e) => setSubject(e.target.value)} />
           </div>
 
           {/* Body mode toggle */}
@@ -417,7 +439,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                   sandbox=""
                   title="Email preview"
                 />
-                <p className="text-3xs text-ink-3 px-3 py-1.5 border-t border-hairline">
+                <p className="text-xs text-ink-3 px-3 py-1.5 border-t border-hairline">
                   Live preview · sample vars filled (name=Ramesh, company=Acme)
                 </p>
               </div>
@@ -429,7 +451,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           )}
 
           {bodyMode === "html" && (
-            <textarea
+            <textarea aria-label="Email body (HTML source)"
               rows={14}
               value={bodyHtml}
               onChange={(e) => setBodyHtml(e.target.value)}
@@ -439,7 +461,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           )}
 
           {bodyMode === "text" && (
-            <textarea
+            <textarea aria-label="Email body (plain text)"
               rows={10}
               value={bodyText}
               onChange={(e) => setBodyText(e.target.value)}
@@ -448,7 +470,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
             />
           )}
 
-          <p className="text-3xs text-ink-3">
+          <p className="text-xs text-ink-3">
             Variables: <code>{`{{name}}`}</code> · <code>{`{{company}}`}</code> · <code>{`{{sender}}`}</code>
             {offerEnabled && (
               <> · <code>{`{{offer_code}}`}</code> · <code>{`{{discount}}`}</code> · <code>{`{{expires}}`}</code></>
@@ -469,29 +491,29 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
               className="accent-amber"
             />
             <span className="text-sm font-medium text-ink">Attach a time-bound offer</span>
-            <span className="text-2xs text-ink-3">(month-end sale / discount code / etc.)</span>
+            <span className="text-xs text-ink-3">(month-end sale / discount code / etc.)</span>
           </label>
           {offerEnabled && (
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <Label>Promo code *</Label>
-                <Input
+                <Label htmlFor="campaign-composer-promo-code">Promo code *</Label>
+                <Input id="campaign-composer-promo-code"
                   value={offerCode}
                   onChange={(e) => setOfferCode(e.target.value.toUpperCase())}
                   placeholder="e.g. MAY25"
                   className={cn("font-mono", !offerCode.trim() && "border-amber/60")}
                 />
                 {!offerCode.trim() && (
-                  <p className="mt-1 text-3xs text-amber-ink">Type your code — this shows in the email as {`{{offer_code}}`}.</p>
+                  <p className="mt-1 text-xs text-amber-ink">Type your code — this shows in the email as {`{{offer_code}}`}.</p>
                 )}
               </div>
               <div>
-                <Label>Discount %</Label>
-                <Input type="number" min={0} max={100} value={offerDiscount} onChange={(e) => setOfferDiscount(e.target.value)} className="font-mono" />
+                <Label htmlFor="campaign-composer-discount">Discount %</Label>
+                <Input id="campaign-composer-discount" type="number" min={0} max={100} value={offerDiscount} onChange={(e) => setOfferDiscount(e.target.value)} className="font-mono" />
               </div>
               <div>
-                <Label>Expires on</Label>
-                <Input type="date" value={offerExpires} onChange={(e) => setOfferExpires(e.target.value)} />
+                <Label htmlFor="campaign-composer-expires-on">Expires on</Label>
+                <Input id="campaign-composer-expires-on" type="date" value={offerExpires} onChange={(e) => setOfferExpires(e.target.value)} />
               </div>
             </div>
           )}

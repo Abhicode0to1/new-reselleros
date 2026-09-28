@@ -27,13 +27,12 @@ import { Button } from "@/components/ui/button";
 import { rupee } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import { createClient } from "@/lib/supabase/client";
+import { usePnL } from "@/lib/queries/pnl";
+import { rpcValueOrThrow } from "@/lib/accounting/report-rpc";
 import { PnLDrilldownDialog, type PnLDrillKind } from "@/components/features/accounting/pnl-drilldown-dialog";
 import { PnlWaterfall, HundredRupeeBar } from "@/components/features/accounting/pnl-waterfall";
 import { MoneyFlow } from "@/components/features/accounting/money-flow";
-import {
-  buildPnl, vendorsFromSubscriptions, compareFigures, isPartialPeriod,
-  type PnlPeriod,
-} from "@/lib/accounting/pnl";
+import { compareFigures, isPartialPeriod } from "@/lib/accounting/pnl";
 import { pnlWaterfall, hundredRupeeSplit } from "@/lib/accounting/waterfall";
 import { ProfitDonut, MonthlyTrend } from "@/components/features/accounting/pnl-charts";
 import {
@@ -41,13 +40,12 @@ import {
 } from "@/lib/accounting/pnl-charts";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { buildExpenseReport, type ExpenseReport } from "@/lib/accounting/expense-report";
 import { PnlHeadline } from "@/components/features/accounting/pnl-headline";
 import { netProfitView } from "@/lib/accounting/pnl-bound";
-import { projectCostForPeriod, type ProjectCostResult } from "@/lib/accounting/project-cost";
 import { ProjectMarginCard } from "@/components/features/accounting/project-margin-card";
 import { ProjectCostDialog } from "@/components/features/accounting/project-cost-dialog";
 import { ExpenseReportCard } from "@/components/features/accounting/expense-report-card";
+import { utcDateISO } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Range helpers — all IST-safe (Indian FY runs Apr 1 → Mar 31)
@@ -59,7 +57,7 @@ function istToday(): Date {
 }
 
 function yyyymmdd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return utcDateISO(d);
 }
 
 /** Indian fiscal year start (Apr 1) of the FY containing `d`. */
@@ -108,259 +106,7 @@ const QUICK_RANGES: { label: string; build: () => DateRange }[] = [
 // P&L aggregation hook
 // ────────────────────────────────────────────────────────────────
 
-interface PnLNumbers {
-  revenue:        number;   // Invoices ≥ status='pending' within period
-  revenueCount:   number;
-  cogs:           number;   // Vendor bills category 'COGS-*' within period
-  cogsCount:      number;
-  grossMargin:    number;
-  expenses:       number;
-  expensesCount:  number;
-  expensesByCategory: { category: string; total: number; count: number }[];
-  /** The same expense rows as a report — category, vendor, month (lib/accounting/expense-report). */
-  expenseReport: ExpenseReport;
-  commissions:      number;   // referral / channel-partner commissions (gross)
-  commissionsCount: number;
-  netProfit:      number;
-
-  // GST snapshot
-  outputGST: number;        // 18% of invoice subtotal proxy (using net_payable for simplicity)
-  inputGST:  number;        // CGST + SGST + IGST on bills + gst_paid on expenses
-  netGST:    number;
-
-  // For quick scan
-  marginPct: number;        // gross margin / revenue
-  profitPct: number;        // net profit / revenue
-
-  /**
-   * The figures that know their own basis — lib/accounting/pnl.ts.
-   *
-   * Kept ALONGSIDE the flat fields above rather than replacing them: the GST snapshot,
-   * the CSV export and the drill-down all read those, and swapping them wholesale would
-   * be a large diff to change one number. Where the two disagree — and on this tenant
-   * they do, because `cogs` reads an empty table — **`model` is the one to trust.**
-   */
-  model: PnlPeriod;
-  /** Salary on customer projects + project-tagged expenses — lib/accounting/project-cost.ts. */
-  projectCost: ProjectCostResult;
-  /** employee id → name, for the project-cost drill-down. */
-  employeeNames: Map<string, string>;
-}
-
-function usePnL(range: DateRange, enabled = true) {
-  return useQuery({
-    queryKey: ["accounting", "pnl", range],
-    /* The comparison period is fetched only once the owner asks for it. A second full
-       aggregation on every page load, for a number nobody is reading, is a cost with no
-       reader. */
-    enabled,
-    queryFn: async (): Promise<PnLNumbers> => {
-      const supabase = createClient();
-
-      // ── Revenue: invoices issued in the period (accrual basis) ────
-      // We include all non-draft / non-void invoices because the legal
-      // revenue recognition point is invoice issue, not payment receipt.
-      const { data: invoices, error: invErr } = await supabase
-        .from("invoices")
-        .select("id, amount, status, invoice_date, net_payable, taxable_value, tax_amount, tax_rate")
-        .gte("invoice_date", range.from)
-        .lte("invoice_date", range.to)
-        .in("status", ["pending", "paid", "overdue"]);
-      if (invErr) throw invErr;
-
-      // Revenue = the TAXABLE value, never the GST-inclusive amount — output GST
-      // is money owed to the government, not income (migration 0116 persists it).
-      // Fall back to reverse-deriving for any legacy row missing the breakdown.
-      const invTaxable = (i: { amount: number | null; taxable_value: number | null; tax_rate: number | null }) =>
-        i.taxable_value ?? Math.round((i.amount ?? 0) * 100 / (100 + (i.tax_rate ?? 18)));
-      const invTax = (i: { amount: number | null; tax_amount: number | null; taxable_value: number | null; tax_rate: number | null }) =>
-        i.tax_amount ?? ((i.amount ?? 0) - invTaxable(i));
-
-      // Credit / debit notes net revenue + output GST for the period (a credit
-      // note reduces recognised revenue, a debit note increases it).
-      const [{ data: cnP }, { data: dnP }] = await Promise.all([
-        supabase.from("credit_notes").select("invoice_id, taxable_value, tax_amount, credit_date").gte("credit_date", range.from).lte("credit_date", range.to),
-        supabase.from("debit_notes").select("invoice_id, taxable_value, tax_amount, debit_date").gte("debit_date", range.from).lte("debit_date", range.to),
-      ]);
-      const cnTaxable = (cnP ?? []).reduce((s, n) => s + (n.taxable_value ?? 0), 0);
-      const cnTax     = (cnP ?? []).reduce((s, n) => s + (n.tax_amount ?? 0), 0);
-      const dnTaxable = (dnP ?? []).reduce((s, n) => s + (n.taxable_value ?? 0), 0);
-      const dnTax     = (dnP ?? []).reduce((s, n) => s + (n.tax_amount ?? 0), 0);
-
-      const revenue       = (invoices ?? []).reduce((s, i) => s + invTaxable(i), 0) - cnTaxable + dnTaxable;
-      const revenueCount  = (invoices ?? []).length;
-      const outputGST     = (invoices ?? []).reduce((s, i) => s + invTax(i), 0) - cnTax + dnTax;
-
-      // ── COGS: vendor bills with category like 'COGS-%' ────────────
-      const { data: bills, error: bErr } = await supabase
-        .from("vendor_bills")
-        .select("total, subtotal, cgst, sgst, igst, category")
-        .gte("bill_date", range.from)
-        .lte("bill_date", range.to)
-        .like("category", "COGS-%");
-      if (bErr) throw bErr;
-
-      const cogs      = (bills ?? []).reduce((s, b) => s + (b.subtotal ?? 0), 0);  // Pre-GST cost
-      const cogsCount = (bills ?? []).length;
-      const billsGst  = (bills ?? []).reduce((s, b) => s + (b.cgst ?? 0) + (b.sgst ?? 0) + (b.igst ?? 0), 0);
-
-      // ── Expenses: non-COGS ─────────────────────────────────────────
-      const { data: expenses, error: eErr } = await supabase
-        .from("expenses")
-        .select("amount, gst_paid, category, vendor_name, expense_date, project_id, description")
-        .gte("expense_date", range.from)
-        .lte("expense_date", range.to);
-      if (eErr) throw eErr;
-      const expenseReport = buildExpenseReport(expenses ?? []);
-
-      const expensesTotal = (expenses ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
-      const expensesCount = (expenses ?? []).length;
-      const expensesGst   = (expenses ?? []).reduce((s, e) => s + (e.gst_paid ?? 0), 0);
-
-      // Break operating expenses down by category (Salaries, Rent, Software…),
-      // biggest first — so you can see where the money went at a glance.
-      const catAgg = (expenses ?? []).reduce<Record<string, { total: number; count: number }>>((m, e) => {
-        const c = e.category || "Uncategorised";
-        (m[c] ??= { total: 0, count: 0 }).total += e.amount ?? 0;
-        m[c].count += 1;
-        return m;
-      }, {});
-      const expensesByCategory = Object.entries(catAgg)
-        .map(([category, v]) => ({ category, total: v.total, count: v.count }))
-        .sort((a, b) => b.total - a.total);
-
-      // ── Referral commissions earned in the period (operating expense) ──
-      // The GROSS commission is the expense; TDS is only a withholding, not a
-      // reduction. Cancelled accruals are excluded.
-      const { data: comms } = await supabase
-        .from("referral_commissions")
-        .select("gross_commission, earned_date, status")
-        .gte("earned_date", range.from)
-        .lte("earned_date", range.to)
-        .neq("status", "cancelled");
-      const commissions      = (comms ?? []).reduce((s, c) => s + (c.gross_commission ?? 0), 0);
-      const commissionsCount = (comms ?? []).length;
-
-      /* ── THE SUBSCRIPTION BOOK — where the licence cost actually lives ──────
-         `vendor_bills` is EMPTY on this tenant, so the COGS above is ₹0 and the report
-         used to claim a 100% gross margin. A reseller buys licences and sells them.
-
-         The cost was never missing from the app, only from that table: 9 Google
-         subscriptions carry ₹70,340/month of wholesale against ₹1,08,552 of MRR — a 35%
-         margin, and the number the owner needed. lib/accounting/pnl.ts prorates it by how
-         long each subscription actually ran inside the window and labels the basis, so an
-         estimate never renders as a fact. */
-      const { data: subs, error: sErr } = await supabase
-        .from("subscriptions")
-        .select("vendor, seats, mrr, start_date, renewal_date, item_id, status")
-        .neq("status", "cancelled");
-      if (sErr) throw sErr;
-
-      const itemIds = [...new Set((subs ?? []).map((s) => s.item_id).filter((id): id is string => !!id))];
-      const { data: items } = itemIds.length
-        ? await supabase.from("items").select("id, wholesale").in("id", itemIds)
-        : { data: [] as { id: string; wholesale: number | null }[] };
-      const wholesaleById = new Map((items ?? []).map((i) => [i.id, i.wholesale ?? 0]));
-
-      const vendors = vendorsFromSubscriptions(
-        (subs ?? []).map((s) => ({
-          vendor: String(s.vendor ?? "other"),
-          seats: s.seats ?? 0,
-          mrr: s.mrr ?? 0,
-          wholesalePerSeatMonth: s.item_id ? (wholesaleById.get(s.item_id) ?? 0) : 0,
-          startDate: s.start_date,
-          renewalDate: s.renewal_date,
-        })),
-        range.from, range.to,
-      );
-
-      /* ── PROJECT DELIVERY COST — salary spent building customers' software ──
-         The project page records who worked on which project (project_labour). That
-         salary is the cost of the project sale, so it moves from operating expenses into
-         cost of goods — moved, never added, and never more than the salary booked in the
-         period (lib/accounting/project-cost.ts). Revenue invoiced against a project's
-         milestones is marked as project revenue so the licence ratio is not applied to it. */
-      const [
-        { data: labourRows, error: lErr },
-        { data: emps, error: empErr },
-        { data: projects, error: prErr },
-        { data: milestones, error: msErr },
-      ] = await Promise.all([
-        supabase.from("project_labour").select("project_id, employee_id, percent, months, start_date, end_date"),
-        supabase.from("employees").select("id, name, monthly_gross"),
-        supabase.from("project_sales").select("id, title, customer_name, start_date"),
-        supabase.from("project_milestones").select("project_id, invoice_id").not("invoice_id", "is", null),
-      ]);
-      if (lErr) throw lErr;
-      if (empErr) throw empErr;
-      if (prErr) throw prErr;
-      if (msErr) throw msErr;
-
-      const projectByInvoice = new Map((milestones ?? []).map((m) => [String(m.invoice_id), m.project_id]));
-      const revenueByProjectMap = new Map<string, number>();
-      for (const i of invoices ?? []) {
-        const pid = projectByInvoice.get(String(i.id));
-        if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) + invTaxable(i));
-      }
-      /* A credit / debit note on a project invoice moves that project's revenue too — the
-         same notes already net the statement's Revenue above, so the two stay equal. */
-      for (const n of dnP ?? []) {
-        const pid = n.invoice_id ? projectByInvoice.get(String(n.invoice_id)) : undefined;
-        if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) + (n.taxable_value ?? 0));
-      }
-      for (const n of cnP ?? []) {
-        const pid = n.invoice_id ? projectByInvoice.get(String(n.invoice_id)) : undefined;
-        if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) - (n.taxable_value ?? 0));
-      }
-      const revenueByProject = [...revenueByProjectMap.entries()].map(([project_id, rev]) => ({ project_id, revenue: rev }));
-      const projectRevenue = revenueByProject.reduce((s, r) => s + r.revenue, 0);
-
-      const projectCost = projectCostForPeriod({
-        from: range.from, to: range.to,
-        allocations: (labourRows ?? []).map((l) => ({ ...l, percent: Number(l.percent), months: Number(l.months) })),
-        monthlyGross: new Map((emps ?? []).map((e) => [e.id, e.monthly_gross ?? 0])),
-        projects: projects ?? [],
-        expenses: expenses ?? [],
-        revenueByProject,
-      });
-
-      /* Commissions are an operating cost, not a cost of goods — they are paid on a sale
-         that already happened, so they sit below the gross margin exactly as netProfit
-         has always treated them. */
-      const model = buildPnl({
-        revenue,
-        expenses: expensesTotal + commissions,
-        billedCogs: cogs > 0 ? cogs : null,
-        vendors,
-        projectCost: projectCost.total,
-        projectRevenue,
-      });
-
-      // ── Compute derived numbers ─────────────────────────────────────
-      const grossMargin = revenue - cogs;
-      const netProfit   = grossMargin - expensesTotal - commissions;
-      const inputGST    = billsGst + expensesGst;
-      const netGST      = outputGST - inputGST;
-
-      const marginPct = revenue > 0 ? (grossMargin / revenue) * 100 : 0;
-      const profitPct = revenue > 0 ? (netProfit / revenue) * 100   : 0;
-
-      return {
-        revenue, revenueCount,
-        cogs, cogsCount,
-        grossMargin,
-        expenses: expensesTotal, expensesCount, expensesByCategory, expenseReport,
-        commissions, commissionsCount,
-        netProfit,
-        outputGST, inputGST, netGST,
-        marginPct, profitPct,
-        model,
-        projectCost,
-        employeeNames: new Map((emps ?? []).map((e) => [e.id, e.name])),
-      };
-    },
-  });
-}
+// P&L aggregation — lib/queries/pnl.ts (shared with the Balance Sheet).
 
 /**
  * Twelve months of revenue and expenses for the trend chart.
@@ -382,28 +128,14 @@ function useMonthlyTrend(fyStartYear: number, cogsRatio: number, enabled: boolea
     enabled,
     queryFn: async (): Promise<MonthPoint[]> => {
       const supabase = createClient();
-      const [inv, exp] = await Promise.all([
-        supabase.from("invoices")
-          .select("invoice_date, amount, taxable_value, tax_rate")
-          .gte("invoice_date", from).lte("invoice_date", to)
-          .in("status", ["pending", "paid", "overdue"]),
-        supabase.from("expenses")
-          .select("expense_date, amount")
-          .gte("expense_date", from).lte("expense_date", to),
-      ]);
-      if (inv.error) throw inv.error;
-      if (exp.error) throw exp.error;
-
-      /* Taxable value, never the GST-inclusive amount — output GST is money owed to the
-         government, not income. Same rule as the headline query above it. */
-      const revenue = (inv.data ?? []).map((i) => ({
-        date: i.invoice_date as string,
-        amount: i.taxable_value ?? Math.round((i.amount ?? 0) * 100 / (100 + (i.tax_rate ?? 18))),
-      }));
-      const expenses = (exp.data ?? []).map((e) => ({
-        date: e.expense_date as string,
-        amount: e.amount ?? 0,
-      }));
+      /* S17: mahine-war jod SQL me (report_pnl_monthly) — saal bhar ki har invoice aur
+         expense browser me nahi. Taxable value, never the GST-inclusive amount — same rule
+         as the headline. monthlySeries mahine se hi bucket karta hai, isliye har mahine ki
+         ek row (pehli tareekh par) wahi series deti hai. */
+      const res = await supabase.rpc("report_pnl_monthly", { p_from: from, p_to: to });
+      const months = rpcValueOrThrow<{ month: string; revenue: number; expenses: number }[]>(res, "report_pnl_monthly");
+      const revenue = months.map((m) => ({ date: `${m.month}-01`, amount: m.revenue }));
+      const expenses = months.map((m) => ({ date: `${m.month}-01`, amount: m.expenses }));
 
       return monthlySeries({
         fyStartYear, revenue, expenses, cogsRatio,
@@ -530,15 +262,15 @@ export default function PnLPage() {
             })}
           </div>
           <div className="flex items-center gap-2 ml-auto">
-            <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">From</label>
-            <input
+            <label htmlFor="pnl-from" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">From</label>
+            <input id="pnl-from"
               type="date"
               value={range.from}
               onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
               className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
             />
-            <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">To</label>
-            <input
+            <label htmlFor="pnl-to" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">To</label>
+            <input id="pnl-to"
               type="date"
               value={range.to}
               onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
@@ -654,7 +386,7 @@ export default function PnLPage() {
                       <div className="text-base font-semibold text-ink leading-tight">Net Loss</div>
                       <div className="text-right">
                         <div className="font-serif text-2xl text-rose">at least {rupee(v.value)}</div>
-                        <div className="text-2xs text-amber-ink">the licence cost, once recorded, only adds to it</div>
+                        <div className="text-xs text-amber-ink">the licence cost, once recorded, only adds to it</div>
                       </div>
                     </div>
                   ) : (
@@ -694,13 +426,19 @@ export default function PnLPage() {
                 <span className="text-ink-3">− <Term k="input_gst">Input GST</Term> paid</span>
                 <span className="font-mono text-emerald">−{rupee(data.inputGST)}</span>
               </div>
+              {data.itcBlocked > 0 && (
+                <div className="flex justify-between items-baseline text-xs">
+                  <span className="text-ink-3">GST jo credit nahi bana (kaccha bill / bina GSTIN / s.17(5)) — kharche mein hi gina</span>
+                  <span className="font-mono text-ink-3">{rupee(data.itcBlocked)}</span>
+                </div>
+              )}
               <div className="border-t-2 border-ink pt-3 flex justify-between items-baseline">
                 <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold"><Term k="net_liability">Net liability</Term></span>
                 <span className={`font-serif text-2xl ${data.netGST >= 0 ? "text-rose" : "text-emerald"}`}>
                   {rupee(data.netGST)}
                 </span>
               </div>
-              <p className="text-2xs text-ink-3 leading-relaxed mt-3">
+              <p className="text-xs text-ink-3 leading-relaxed mt-3">
                 Net positive = payable to govt. Negative = refund / carryforward credit.
                 File via GSTR-3B by the 20th of next month.
               </p>
@@ -816,7 +554,7 @@ export default function PnLPage() {
                 <button
                   type="button"
                   onClick={() => setCompare((c) => !c)}
-                  className="text-2xs font-semibold text-amber-ink hover:underline"
+                  className="text-xs font-semibold text-amber-ink hover:underline"
                 >
                   {compare ? "Hide comparison" : "Compare with previous period"}
                 </button>
@@ -907,7 +645,7 @@ export default function PnLPage() {
                     <h3 className="text-2xs font-semibold uppercase tracking-wider text-ink-3">
                       Same five numbers, as steps
                     </h3>
-                    <p className="text-2xs leading-snug text-ink-3">
+                    <p className="text-xs leading-snug text-ink-3">
                       Each bar starts where the one before it ended, so the dotted line follows
                       the money down from sales to what you kept. Click a bar for the entries.
                     </p>
@@ -931,7 +669,7 @@ export default function PnLPage() {
                 <p className="text-[12px] font-medium text-ink">
                   The step chart needs the cost of goods (licence cost), which isn&apos;t recorded for this period.
                 </p>
-                <p className="mt-0.5 text-2xs leading-snug text-ink-2">
+                <p className="mt-0.5 text-xs leading-snug text-ink-2">
                   Enter the vendor bills (Google / Microsoft / Zoho invoices) and it draws itself.
                 </p>
               </div>
@@ -1012,7 +750,7 @@ export default function PnLPage() {
                 <div key={v.vendor} className="rounded-md border border-hairline p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-[13px] font-medium text-ink">{v.label}</span>
-                    <span className="text-2xs text-ink-3 tabular-nums">
+                    <span className="text-xs text-ink-3 tabular-nums">
                       {v.subscriptions} subscription{v.subscriptions === 1 ? "" : "s"} · {v.seats} seats
                     </span>
                   </div>
@@ -1032,7 +770,7 @@ export default function PnLPage() {
                     </div>
                   </div>
                   {v.marginNote && (
-                    <p className="mt-1.5 text-2xs leading-snug text-amber-ink">{v.marginNote}</p>
+                    <p className="mt-1.5 text-xs leading-snug text-amber-ink">{v.marginNote}</p>
                   )}
                 </div>
               ))}
@@ -1049,7 +787,7 @@ export default function PnLPage() {
             <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">
               This financial year, month by month
             </h2>
-            <span className="text-2xs text-ink-3">
+            <span className="text-xs text-ink-3">
               Bars in ₹ · margin line in % on the right
             </span>
           </div>
@@ -1059,7 +797,7 @@ export default function PnLPage() {
           {/* The two months worth pointing at, in words. A chart tells you the shape; a
               sentence tells you which month to go and look at. */}
           {highlights.best && highlights.worst && highlights.best.key !== highlights.worst.key && (
-            <p className="mt-2 border-t border-hairline pt-2 text-2xs leading-snug text-ink-2">
+            <p className="mt-2 border-t border-hairline pt-2 text-xs leading-snug text-ink-2">
               {/* "Best month was Apr at ₹-90,000" makes a reader stop and re-read. When
                   every finished month is a loss, the honest sentence is about the size of
                   the losses, not about a winner there wasn't one of. */}
@@ -1131,8 +869,8 @@ function Row({
         </div>
         {hint && (
           onHint
-            ? <button type="button" onClick={onHint} className="text-2xs text-amber-ink hover:underline mt-0.5 inline-flex items-center gap-0.5">{hint} <span aria-hidden>→</span></button>
-            : <div className="text-2xs text-ink-3 mt-0.5">{hint}</div>
+            ? <button type="button" onClick={onHint} className="text-xs text-amber-ink hover:underline mt-0.5 inline-flex items-center gap-0.5">{hint} <span aria-hidden>→</span></button>
+            : <div className="text-xs text-ink-3 mt-0.5">{hint}</div>
         )}
       </div>
       <div className={`font-mono whitespace-nowrap ${xl ? "font-serif text-3xl" : emphasis ? "text-lg font-semibold" : "text-base"} ${colorClass}`}>
@@ -1151,7 +889,7 @@ function UnknownRow({ label, value, note, large }: {
       <div className={`${large ? "text-base font-semibold" : "text-sm"} text-ink leading-tight`}>{label}</div>
       <div className="text-right">
         <div className={`${large ? "font-serif text-2xl" : "text-base"} text-ink-3 italic`}>{value}</div>
-        <div className="text-2xs text-amber-ink">{note}</div>
+        <div className="text-xs text-amber-ink">{note}</div>
       </div>
     </div>
   );
@@ -1218,7 +956,7 @@ function ComparisonCell({ label, current, previous, partial, loading, periodLabe
         <span className="font-mono text-[13px] tabular-nums text-ink">{rupee(current)}</span>
         <span className={cn("text-[12px] font-semibold", tone)}>{d.label}</span>
       </div>
-      <div className="text-3xs text-ink-3 tabular-nums" title={periodLabel}>
+      <div className="text-xs text-ink-3 tabular-nums" title={periodLabel}>
         was {rupee(previous)}
         {d.pct !== null && ` · ${d.absolute >= 0 ? "+" : "−"}${rupee(Math.abs(d.absolute))}`}
       </div>

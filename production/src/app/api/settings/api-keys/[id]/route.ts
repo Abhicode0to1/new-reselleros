@@ -8,7 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: authData } = await supabase.auth.getUser();
   if (!authData?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

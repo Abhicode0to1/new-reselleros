@@ -34,7 +34,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 
-export default function EditQuotePage({ params }: { params: { id: string } }) {
+export default function EditQuotePage(props: { params: Promise<{ id: string }> }) {
+  /* Next 15: page params arrive as a Promise, in client pages too — unwrap with React.use. */
+  const params = React.use(props.params);
   const { data: quote, isLoading, error } = useQuote(params.id);
 
   if (isLoading) {

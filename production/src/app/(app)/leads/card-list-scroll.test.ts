@@ -39,6 +39,11 @@ function pageFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/** Page (relative to src/app) → component files that render its responsive card list. */
+const RENDERED_LISTS: Record<string, string[]> = {
+  "(app)/leads/page.tsx": [join(APP, "..", "..", "components", "features", "leads", "lead-list-view.tsx")],
+};
+
 /**
  * Pages whose ROOT wrapper both fixes its height and hides the overflow.
  *
@@ -59,7 +64,15 @@ function clippingPages(): { file: string; src: string }[] {
   const unprefixedHeight = /(?:^|["\s])h-\[calc\(100vh/;
   const unprefixedHidden = /(?:^|["\s])overflow-hidden/;
   return pageFiles(APP)
-    .map((file) => ({ file, src: readFileSync(file, "utf8") }))
+    .map((file) => ({
+      file,
+      /* A page's card list may live in a component it renders (S35 moved /leads' list into
+         LeadListView). Those sources are scanned WITH the page, so the list is still held
+         to the page's clipping rule instead of escaping it by changing files. */
+      src: [file, ...(RENDERED_LISTS[file.replace(/\\/g, "/").split("/app/").pop() ?? ""] ?? [])]
+        .map((f) => readFileSync(f, "utf8"))
+        .join("\n"),
+    }))
     .filter(({ src }) =>
       src
         .split(/\r?\n/)
@@ -74,6 +87,13 @@ describe("a page that clips its own height lets its lists scroll", () => {
     /* If /leads ever stops clipping, this rule may be obsolete — but silence is the wrong
        way to find that out, so the scan proves it is still looking at something. */
     expect(pages.map((p) => p.file.replace(/\\/g, "/")).join("\n")).toMatch(/leads\/page\.tsx/);
+  });
+
+  it("still sees /leads' card list, wherever the component lives", () => {
+    /* Without this, moving the list into a component would make the two checks below pass
+       by scanning nothing for the one page they were written for. */
+    const leads = pages.find((p) => p.file.replace(/\\/g, "/").endsWith("(app)/leads/page.tsx"));
+    expect(leads?.src).toMatch(/<ul className="(?:xl|lg|md|sm):hidden/);
   });
 
   it("gives every responsive card list its own vertical scroll", () => {

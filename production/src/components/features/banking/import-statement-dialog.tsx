@@ -43,6 +43,7 @@ import { directionOf } from "@/lib/banking/categorise";
 import { EXPENSE_CATEGORIES, suggestCategory } from "@/lib/queries/expenses";
 import { suggestForLine } from "@/lib/banking/categorise";
 import { rupee, formatDate } from "@/lib/utils";
+import { toIstDate } from "@/lib/dates/ist";
 
 interface Props {
   open: boolean;
@@ -119,7 +120,7 @@ function parseDate(input: string): string | null {
   }
   // Try Date.parse fallback
   const d = new Date(s);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  if (!isNaN(d.getTime())) return toIstDate(d);   // "28 Sep 2026" = local midnight; UTC slice din peeche le jata
   return null;
 }
 
@@ -463,13 +464,13 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                 <div className="w-44 h-1.5 rounded-full bg-hairline overflow-hidden">
                   <div className="h-full w-1/3 rounded-full bg-amber" style={{ animation: "ros-loadbar 1.1s ease-in-out infinite" }} />
                 </div>
-                <span className="text-2xs text-ink-3">Bade statement mein thoda zyada waqt lag sakta hai — ruko mat 😊</span>
+                <span className="text-xs text-ink-3">Bade statement mein thoda zyada waqt lag sakta hai — ruko mat 😊</span>
               </div>
             ) : (
               <label className="cursor-pointer flex flex-col items-center text-center gap-2">
                 <Icon name="upload" size={20} className="text-ink-3" />
                 <span className="text-sm font-medium">Choose file — PDF / CSV</span>
-                <span className="text-2xs text-ink-3">Bank statement PDF (AI reads it) · ya .csv / .txt (HDFC &quot;Delimited&quot;) · up to 8 MB</span>
+                <span className="text-xs text-ink-3">Bank statement PDF (AI reads it) · ya .csv / .txt (HDFC &quot;Delimited&quot;) · up to 8 MB</span>
                 <input
                   type="file"
                   accept=".csv,.txt,text/csv,text/plain,application/pdf,image/*"
@@ -482,8 +483,8 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
 
           {/* OR paste */}
           <div>
-            <label className="text-xs font-medium text-ink-2">Or paste CSV text</label>
-            <textarea
+            <label htmlFor="import-statement-or-paste-csv-text" className="text-xs font-medium text-ink-2">Or paste CSV text</label>
+            <textarea id="import-statement-or-paste-csv-text"
               rows={6}
               placeholder={"Date,Description,Debit,Credit,Balance\n28/05/2026,UPI/RAZORPAY/...,0,521088,..."}
               className="mt-1 w-full rounded-md border border-hairline bg-paper px-3 py-2 text-xs font-mono text-ink placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-amber resize-y"
@@ -506,17 +507,17 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                 )}
               </div>
               {parsed.warnings.length > 0 && (
-                <ul className="text-2xs text-rose space-y-0.5 mb-2">
+                <ul className="text-xs text-rose space-y-0.5 mb-2">
                   {parsed.warnings.map((w, i) => <li key={i}>• {w}</li>)}
                 </ul>
               )}
               {parsed.skipped > 0 && (
-                <p className="text-2xs text-ink-3 mb-2">
+                <p className="text-xs text-ink-3 mb-2">
                   Skipped {parsed.skipped} row{parsed.skipped === 1 ? "" : "s"} (missing date or both amounts zero — usually opening-balance / sub-total lines)
                 </p>
               )}
               {dupCount > 0 && (
-                <p className="text-2xs text-amber-ink mb-2 flex items-start gap-1.5">
+                <p className="text-xs text-amber-ink mb-2 flex items-start gap-1.5">
                   <Icon name="alert" size={12} className="mt-0.5 shrink-0" />
                   {dupCount} line{dupCount === 1 ? "" : "s"} pehle se books me hain — ye <b>skip</b> ho jaayengi{freshCount > 0 ? ` (sirf ${freshCount} nayi import hongi)` : " (kuch naya nahi)"}.
                 </p>
@@ -527,7 +528,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                       beside an editable category column would let somebody set 5 of 39
                       categories and believe they had reviewed the statement. */}
                   <div className="max-h-[320px] overflow-y-auto custom-scrollbar">
-                  <table className="w-full text-2xs">
+                  <table className="w-full text-xs">
                     <thead className="text-ink-3 sticky top-0 bg-paper">
                       <tr>
                         <th className="text-left py-1">Date</th>
@@ -568,7 +569,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                               {/* Why, and from which layer. Hidden once overridden, because
                                   then the reason is simply "you chose it". */}
                               {suggestion && override[i] === undefined && (
-                                <span className="block text-3xs text-ink-3 truncate max-w-[150px]">
+                                <span className="block text-xs text-ink-3 truncate max-w-[150px]">
                                   {suggestion.layer === "tenant-rule" ? suggestion.reason : "keyword"}
                                 </span>
                               )}
@@ -591,7 +592,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                                 if (!direction || candidates.length === 0) return null;
                                 return (
                                   <span className="mt-1 block">
-                                    <span className="block text-3xs text-ink-3">Always file as {override[i]} when it says:</span>
+                                    <span className="block text-xs text-ink-3">Always file as {override[i]} when it says:</span>
                                     <span className="flex flex-wrap items-center gap-1 mt-0.5">
                                       {candidates.map((c) => (
                                         <button
@@ -613,7 +614,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                                       <button
                                         type="button"
                                         onClick={() => setRuleDone((d) => ({ ...d, [i]: true }))}
-                                        className="text-3xs text-ink-3 underline hover:text-ink-2"
+                                        className="text-xs text-ink-3 underline hover:text-ink-2"
                                       >
                                         just this once
                                       </button>
@@ -630,7 +631,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                   </div>
                   {/* The honest number — it says what is NOT done, so a half-categorised
                       statement cannot read as a finished one. */}
-                  <p className="text-3xs text-ink-3 mt-1.5">
+                  <p className="text-xs text-ink-3 mt-1.5">
                     <b className="text-ink-2">{categorisedCount} of {parsed.rows.length}</b> line
                     {parsed.rows.length === 1 ? "" : "s"} have a category.
                     {categorisedCount < parsed.rows.length && (
@@ -655,14 +656,14 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                 />
                 <span>
                   <span className="block text-sm font-semibold text-ink">Set opening balance from this statement</span>
-                  <span className="block text-2xs text-ink-3">
+                  <span className="block text-xs text-ink-3">
                     Currently {account ? <>{rupee(account.opening_balance)} as of {formatDate(account.opening_balance_date)}</> : "…"}
                   </span>
                 </span>
               </label>
 
               <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
-                <label htmlFor="opening-date" className="text-2xs text-ink-2">As of</label>
+                <label htmlFor="opening-date" className="text-xs text-ink-2">As of</label>
                 <input
                   id="opening-date"
                   type="date"
@@ -675,7 +676,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                 )}
               </div>
 
-              <div className="mt-1.5 pl-6 space-y-1 text-2xs">
+              <div className="mt-1.5 pl-6 space-y-1 text-xs">
                 {!opening.ok && <p className="text-rose-ink">{opening.reason}</p>}
                 {opening.ok && (
                   <p className="text-ink-3">
@@ -709,7 +710,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
             </div>
           )}
 
-          <div className="rounded-md bg-indigo-50 border border-indigo/20 px-3 py-2 text-2xs text-indigo-ink">
+          <div className="rounded-md bg-indigo-50 border border-indigo/20 px-3 py-2 text-xs text-indigo-ink">
             <b>Tip:</b> Net banking se statement <b>PDF</b> ya <b>CSV</b> dono chalti hai —
             PDF ko AI padh leta hai, CSV auto-detect hoti hai (HDFC, ICICI, SBI, Axis,
             Kotak, IndusInd, Yes Bank). Import se pehle preview zaroor check karo.

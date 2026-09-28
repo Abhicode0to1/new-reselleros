@@ -33,9 +33,10 @@ import {
 import { useEmployees } from "@/lib/queries/payroll";
 import { rupee, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 export default function ReimbursementsPage() {
@@ -164,7 +165,7 @@ function ReimbList({
                     {r.employee_id && <Badge kind="info" size="sm">Employee</Badge>}
                     <span className="text-ink-3 font-normal truncate">· {r.purpose}</span>
                   </p>
-                  <p className="text-2xs text-ink-3 truncate">
+                  <p className="text-xs text-ink-3 truncate">
                     {r.category} · {formatDate(r.incurred_on)}{r.paid_via ? ` · ${r.paid_via}` : ""}
                     {settled && r.settled_on ? ` · settled ${formatDate(r.settled_on)}` : ""}
                   </p>
@@ -196,7 +197,7 @@ function ReimbList({
                   <p className={`font-mono text-sm font-semibold shrink-0 ${settled ? "text-ink-3" : "text-rose"}`}>{rupee(r.amount)}</p>
                 </div>
                 <p className="mt-1 text-[13px] text-ink-2">{r.purpose}</p>
-                <p className="mt-0.5 text-2xs text-ink-3">
+                <p className="mt-0.5 text-xs text-ink-3">
                   {r.category} · {formatDate(r.incurred_on)}{r.paid_via ? ` · ${r.paid_via}` : ""}
                   {settled && r.settled_on ? ` · settled ${formatDate(r.settled_on)}` : ""}
                 </p>
@@ -288,9 +289,9 @@ function AddReimbursementDialog({ onClose }: { onClose: () => void }) {
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Who paid — employee picker with free-text fallback for non-staff. */}
-            <FormField label="Kisne pay kiya" required>
+            <FormField htmlFor="reimbursements-kisne-pay-kiya" label="Kisne pay kiya" required>
               <div className="relative">
-                <Input
+                <Input id="reimbursements-kisne-pay-kiya"
                   value={person}
                   onChange={(e) => { setPerson(e.target.value); setEmployeeId(null); setNameOpen(true); }}
                   onFocus={() => setNameOpen(true)}
@@ -320,35 +321,35 @@ function AddReimbursementDialog({ onClose }: { onClose: () => void }) {
                 })()}
               </div>
               {employeeId
-                ? <p className="mt-1 text-2xs text-emerald">✓ Employee — iski reimbursement track hogi</p>
-                : person.trim() ? <p className="mt-1 text-2xs text-ink-3">Non-employee (director / dost ka card) — bhi theek hai</p> : null}
+                ? <p className="mt-1 text-xs text-emerald">✓ Employee — iski reimbursement track hogi</p>
+                : person.trim() ? <p className="mt-1 text-xs text-ink-3">Non-employee (director / dost ka card) — bhi theek hai</p> : null}
             </FormField>
-            <FormField label="Date">
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <FormField htmlFor="reimbursements-date" label="Date">
+              <Input id="reimbursements-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </FormField>
           </div>
-          <FormField label="Kis cheez ke liye" required>
-            <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Client visit cab, office stationery" />
+          <FormField htmlFor="reimbursements-kis-cheez-ke-liye" label="Kis cheez ke liye" required>
+            <Input id="reimbursements-kis-cheez-ke-liye" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Client visit cab, office stationery" />
           </FormField>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="Category">
+            <FormField htmlFor="reimbursements-category" label="Category">
               <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="reimbursements-category"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {REIMBURSEMENT_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="Paid via (optional)">
-              <Input value={paidVia} onChange={(e) => setPaidVia(e.target.value)} placeholder="e.g. cash, own UPI" />
+            <FormField htmlFor="reimbursements-paid-via-optional" label="Paid via (optional)">
+              <Input id="reimbursements-paid-via-optional" value={paidVia} onChange={(e) => setPaidVia(e.target.value)} placeholder="e.g. cash, own UPI" />
             </FormField>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="Amount (₹) incl GST" required>
-              <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <FormField htmlFor="reimbursements-amount-incl-gst" label="Amount (₹) incl GST" required>
+              <Input id="reimbursements-amount-incl-gst" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </FormField>
-            <FormField label="GST paid (₹, optional)">
-              <Input type="number" min={0} value={gst} onChange={(e) => setGst(e.target.value)} />
+            <FormField htmlFor="reimbursements-gst-paid-optional" label="GST paid (₹, optional)">
+              <Input id="reimbursements-gst-paid-optional" type="number" min={0} value={gst} onChange={(e) => setGst(e.target.value)} />
             </FormField>
           </div>
           {/* Receipt / bill photo — proof of the spend. */}
@@ -364,7 +365,7 @@ function AddReimbursementDialog({ onClose }: { onClose: () => void }) {
               />
             </label>
           </FormField>
-          <p className="text-2xs text-ink-3">On save, this expense is booked to the P&amp;L and shown as owed to {person.trim() || "that person"}.</p>
+          <p className="text-xs text-ink-3">On save, this expense is booked to the P&amp;L and shown as owed to {person.trim() || "that person"}.</p>
         </div>
         <DialogFooter>
           <Button type="button" variant="default" onClick={onClose}>Cancel</Button>
@@ -399,11 +400,11 @@ function SettleDialog({ reimb, onClose }: { reimb: Reimbursement; onClose: () =>
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <FormField label="Settled on">
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <FormField htmlFor="reimbursements-settled-on" label="Settled on">
+            <Input id="reimbursements-settled-on" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </FormField>
-          <FormField label="Note (optional)">
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Paid from HDFC current a/c" />
+          <FormField htmlFor="reimbursements-note-optional" label="Note (optional)">
+            <Input id="reimbursements-note-optional" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Paid from HDFC current a/c" />
           </FormField>
         </div>
         <DialogFooter>

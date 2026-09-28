@@ -415,6 +415,38 @@ export async function geminiJson<T>(args: {
   }
 }
 
+
+/**
+ * Gemini WITH Google Search grounding, plain-text answer. The grounded tool and JSON
+ * response mode do not combine on every model, so callers parse JSON out of the text
+ * (lib/leads/lead-finder.ts `parseDiscovery`). Throws with a human reason — the one caller
+ * (AI Lead Finder) records it on the run, where the owner reads it. Same breaker as geminiJson.
+ */
+export async function geminiGroundedText(args: { apiKey: string; model: string; system: string; user: string; temperature?: number; timeoutMs?: number; label: string }): Promise<string | null> {
+  const now = Date.now();
+  if (breakerOpen(now)) throw new Error("Gemini abhi baar-baar fail ho raha hai, ek minute ke liye calls ruki hain — thodi der baad try karo.");
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(args.model)}:generateContent?key=${args.apiKey}`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: args.system }] },
+      contents: [{ role: "user", parts: [{ text: args.user }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: args.temperature ?? 0.4 },
+    }),
+    signal: AbortSignal.timeout(args.timeoutMs ?? 60_000),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    recordFailure(now);
+    if (res.status === 429) throw new Error("Gemini ka quota khatam hai (free tier) — Settings → Integrations → AI mein billing wali Gemini key daalo; Google Search grounding paid key par hi chalta hai.");
+    if (res.status === 400 && /google_search|tool/i.test(body)) throw new Error(`Is Gemini model (${args.model}) par Google Search grounding nahi chalta — env GEMINI_MODEL mein gemini-flash-latest rakho.`);
+    throw new Error(failureReason(res.status, body));
+  }
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  breaker.failures = 0;
+  return (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("\n") || null;
+}
+
 /** Test-only: reset breaker state between cases. */
 export function __resetGeminiBreaker() {
   breaker.failures = 0;

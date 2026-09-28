@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Cloud Scheduler jobs for the six ResellerOS cron endpoints.
+# Cloud Scheduler jobs for EVERY ResellerOS cron endpoint (25 as of 27 Sep 2026).
 #
 # ─── WHY THIS FILE EXISTS ────────────────────────────────────────────────────
 # The repo carries a vercel.json with a `crons` block, and three of the six cron
@@ -22,7 +22,7 @@
 # See what already exists — birthday-greetings names a Cloud Scheduler job in its
 # own comments, so some jobs may already be set up by hand:
 #
-#   gcloud scheduler jobs list --location=asia-south1
+#   gcloud scheduler jobs list --location=asia-southeast1
 #
 # This script CREATES missing jobs and SKIPS ones that already exist, so it is
 # safe to re-run and cannot disturb a job that is working. Set UPDATE_EXISTING=1
@@ -37,8 +37,18 @@
 
 set -euo pipefail
 
-REGION="${REGION:-asia-south1}"
-SERVICE_URL="${SERVICE_URL:-https://resellersos-1005662057478.asia-south1.run.app}"
+# Singapore since 5 Sep 2026 (cloudbuild.yaml _REGION). The Mumbai URL that used to sit
+# here as the default pointed every job at the OLD service after the move — jobs that
+# looked scheduled and ran old code (or got 403). The URL is now read from the live
+# service, so it cannot go stale again.
+REGION="${REGION:-asia-southeast1}"
+SERVICE_NAME="${SERVICE_NAME:-resellersos}"
+SERVICE_URL="${SERVICE_URL:-$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')}"
+if [[ -z "$SERVICE_URL" ]]; then
+  echo "Could not resolve the Cloud Run URL for $SERVICE_NAME in $REGION — set SERVICE_URL explicitly." >&2
+  exit 1
+fi
+echo "Scheduling against $SERVICE_URL"
 # Schedules are written in IST. Cloud Scheduler does the UTC conversion, and
 # daylight saving does not apply in India — so these read exactly as intended,
 # which UTC cron expressions do not.
@@ -66,6 +76,13 @@ JOBS=(
   "resellersos-trial-expiry|0 10 * * *|/api/cron/trial-expiry|Expire trials that have run out"
   "resellersos-birthday-greetings|1 21 * * *|/api/cron/birthday-greetings|Birthday and anniversary greetings"
   "resellersos-google-contacts-sync|0 */6 * * *|/api/cron/google-contacts-sync|Two-way Google Contacts sync"
+  "resellersos-gbp-sync|30 2 * * *|/api/cron/gbp-sync|Google Business Profile reviews + performance sync"
+  "resellersos-ads-sync|0 3 * * *|/api/cron/ads-sync|Google Ads + Meta Ads daily spend sync"
+  "resellersos-lead-finder|30 3 * * *|/api/cron/lead-finder|AI Lead Finder — nightly prospect discovery"
+  # S34. Every 15 min, 08:00–21:45 IST — IndiaMART asks for >= 5 min between calls per key,
+  # and an enquiry answered within the hour is the one that converts. Harmless before any
+  # company saves a key: the route returns `disabled: true` without calling IndiaMART.
+  "resellersos-indiamart-leads|*/15 8-21 * * *|/api/cron/indiamart-leads|IndiaMART Lead Manager pull → leads"
   "resellersos-attendance-retention|0 2 * * *|/api/cron/attendance-retention|Erase attendance face images past retention"
   # Midnight IST, before the other jobs touch anything — a restore point of the
   # day that just ended, not of a day already half-modified by the 09:00 renewal
@@ -121,6 +138,26 @@ JOBS=(
   # somebody moves that dial from /automation this job prepares each call — number, script,
   # the figures it is allowed to quote — files it on the call record, and dials nothing.
   "resellersos-ai-telecall-renewals|30 10 * * 1-5|/api/cron/ai-telecall-renewals|AI voice reminder for subscriptions renewing in 5 days"
+  # ── The ten that were never in this file (deep study S9, 27 Sep 2026) ──────────────
+  # Six of them existed in Cloud Scheduler by hand (Mumbai, then copied to Singapore on
+  # 27 Sep) and four never existed anywhere. A job that lives only in the console is a job
+  # the next region move loses again.
+  "resellersos-health-digest|30 8 * * *|/api/cron/health-digest|Morning ops digest: cron failures + health signals to the owner"
+  "resellersos-billing|0 8 * * *|/api/cron/billing|Subscription billing run (idempotent, at-least-once safe)"
+  "resellersos-ai-reflection|0 8 * * *|/api/cron/ai-reflection|AI agents daily reflection over yesterday conversations"
+  # Every 5 minutes: a reply the AI could not send (Gemini 503, timeout) is retried here; a
+  # lead waiting 5 minutes is fine, a lead waiting until tomorrow is lost.
+  "resellersos-ai-reply-retry|*/5 * * * *|/api/cron/ai-reply-retry|Retry AI replies that failed to send"
+  # Every minute: the inbound sales mailbox. Bounded by MAX_PER_RUN inside the route.
+  "resellersos-gmail-inbox|* * * * *|/api/cron/gmail-inbox|Read the sales Gmail inbox into enquiries"
+  "resellersos-attendance-reminders|*/30 9-20 * * *|/api/cron/attendance-reminders|Punch-in / punch-out nudges, working hours only"
+  # Hosting & domain workers. All four are gated INSIDE the route by env flags
+  # (DOMAIN_REGISTRATION_LIVE etc.) and by a per-row, per-day command id, so scheduling
+  # them is safe: with the flag off they list what they would do and touch nothing.
+  "resellersos-provision-hosting|*/15 9-21 * * *|/api/cron/provision-hosting|Provision paid hosting orders through the DMS engine"
+  "resellersos-register-domains|*/15 9-21 * * *|/api/cron/register-domains|Register paid domains through the DMS engine"
+  "resellersos-renew-domains|0 7 * * *|/api/cron/renew-domains|Renew paid domain renewals at the registrar"
+  "resellersos-renew-hosting|0 7 * * *|/api/cron/renew-hosting|Renew paid hosting through the DMS engine"
 )
 
 echo "Region:  $REGION"
@@ -189,12 +226,12 @@ cat <<'DONE'
 
 Done. Verify what is now scheduled:
 
-  gcloud scheduler jobs list --location=asia-south1
+  gcloud scheduler jobs list --location=asia-southeast1
 
 Prove one end to end WITHOUT waiting for its schedule — the renewals and
 compliance jobs both support a dry run that sends nothing and writes nothing:
 
-  gcloud scheduler jobs run resellersos-renewals --location=asia-south1
+  gcloud scheduler jobs run resellersos-renewals --location=asia-southeast1
   gcloud logging read \
     'resource.type=cloud_run_revision AND textPayload:"cron"' \
     --limit=20 --freshness=10m

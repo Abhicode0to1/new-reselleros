@@ -120,35 +120,35 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <Label>Company name *</Label>
-            <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Acme Pvt Ltd" />
+            <Label htmlFor="start-trial-company-name">Company name *</Label>
+            <Input id="start-trial-company-name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Acme Pvt Ltd" />
           </div>
           <div>
-            <Label>Contact name *</Label>
-            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Ramesh Kumar" />
+            <Label htmlFor="start-trial-contact-name">Contact name *</Label>
+            <Input id="start-trial-contact-name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Ramesh Kumar" />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <Label>Email *</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. ramesh@acme.in" />
+            <Label htmlFor="start-trial-email">Email *</Label>
+            <Input id="start-trial-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. ramesh@acme.in" />
           </div>
           <div>
-            <Label>Phone *</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 98765 43210" />
+            <Label htmlFor="start-trial-phone">Phone *</Label>
+            <Input id="start-trial-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 98765 43210" />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
-            <Label>Domain *</Label>
-            <Input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="e.g. acme.in" className="font-mono" />
-            <p className="text-3xs text-ink-3 mt-1">For provisioning in Google CSP</p>
+            <Label htmlFor="start-trial-domain">Domain *</Label>
+            <Input id="start-trial-domain" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="e.g. acme.in" className="font-mono" />
+            <p className="text-xs text-ink-3 mt-1">For provisioning in Google CSP</p>
           </div>
           <div>
-            <Label>Seats</Label>
-            <Input type="number" min={1} max={300} value={seats} onChange={(e) => setSeats(e.target.value)} className="font-mono" />
+            <Label htmlFor="start-trial-seats">Seats</Label>
+            <Input id="start-trial-seats" type="number" min={1} max={300} value={seats} onChange={(e) => setSeats(e.target.value)} className="font-mono" />
           </div>
         </div>
 
@@ -168,13 +168,13 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
               )}
             >
               <p className="font-medium text-sm">{t.label}</p>
-              <p className="text-3xs text-ink-3 mt-0.5">{t.sublabel}</p>
+              <p className="text-xs text-ink-3 mt-0.5">{t.sublabel}</p>
             </button>
           ))}
         </div>
 
-        <Label>Notes (optional)</Label>
-        <textarea
+        <Label htmlFor="start-trial-notes-optional">Notes (optional)</Label>
+        <textarea id="start-trial-notes-optional"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={2}

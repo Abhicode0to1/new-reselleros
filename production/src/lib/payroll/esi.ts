@@ -44,9 +44,34 @@ const ZERO = (base: number): EsiContribution => ({
  * @param covered     pass false to force-exclude an exempt employee even if
  *                    they are under the wage ceiling. Defaults to true.
  */
-export function computeEsi(monthlyWage: number, covered = true): EsiContribution {
+/**
+ * ESI contribution periods: Apr–Sep and Oct–Mar. Once an employee is covered in a
+ * period they stay covered to its end even if wages cross ₹21,000 (ESI Act s.2(9)
+ * proviso) — the wage test is applied at the START of the period, not every month.
+ */
+export function esiContributionPeriodStart(period: string): string {
+  const [y, m] = period.slice(0, 7).split("-").map(Number);
+  return m >= 4 && m <= 9 ? `${y}-04` : m >= 10 ? `${y}-10` : `${y - 1}-10`;
+}
+
+/** Was this employee already contributing earlier in the same contribution period?
+ *  `earlier` = the employee's payslips (period + employee ESI). */
+export function esiStickyCovered(period: string, earlier: { period: string; esi?: number | null }[]): boolean {
+  const start = esiContributionPeriodStart(period);
+  return earlier.some((p) => p.period >= start && p.period < period.slice(0, 7) && (p.esi ?? 0) > 0);
+}
+
+/**
+ * Compute the ESI split for a month's wage.
+ * @param monthlyWage the gross wage for the month (₹, integer)
+ * @param covered     pass false to force-exclude an exempt employee even if
+ *                    they are under the wage ceiling. Defaults to true.
+ * @param sticky      true when the employee was already covered earlier in this
+ *                    contribution period — the ceiling is then ignored (esiStickyCovered).
+ */
+export function computeEsi(monthlyWage: number, covered = true, sticky = false): EsiContribution {
   const base = Math.max(0, Math.round(monthlyWage || 0));
-  if (!covered || base <= 0 || base > ESI_WAGE_CEILING) return ZERO(base);
+  if (!covered || base <= 0 || (base > ESI_WAGE_CEILING && !sticky)) return ZERO(base);
   const employee = Math.ceil(base * ESI_EMPLOYEE_RATE);
   const employer = Math.ceil(base * ESI_EMPLOYER_RATE);
   return { applicable: true, base, employee, employer, total: employee + employer };

@@ -8,12 +8,11 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isPlatformAdmin } from "@/lib/platform";
+import type { TablesUpdate } from "@/lib/supabase/database.types";
 
 // DELETE handler: Delete reseller workspace
-export async function DELETE(
-  _request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const tenantId = params.id;
   if (!tenantId) return NextResponse.json({ error: "Missing tenant ID." }, { status: 400 });
 
@@ -64,10 +63,8 @@ export async function DELETE(
 }
 
 // PATCH handler: Update reseller workspace details
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const tenantId = params.id;
   if (!tenantId) return NextResponse.json({ error: "Missing tenant ID." }, { status: 400 });
 
@@ -83,7 +80,7 @@ export async function PATCH(
 
   const admin = createAdminClient();
 
-  const updates: Record<string, any> = {};
+  const updates: TablesUpdate<"tenants"> = {};
   if (name !== undefined) updates.name = name.trim();
   if (tier !== undefined) updates.tier = tier;
   if (gstin !== undefined) updates.gstin = gstin ? gstin.trim().toUpperCase() : null;
@@ -95,7 +92,7 @@ export async function PATCH(
 
   const { data: updatedTenant, error: updateErr } = await admin
     .from("tenants")
-    .update(updates as any)
+    .update(updates)
     .eq("id", tenantId)
     .select()
     .single();

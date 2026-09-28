@@ -28,9 +28,10 @@ import { useEmployeeAdvances, useRecordAdvanceExpense, type EmployeeAdvance } fr
 import { EXPENSE_CATEGORIES } from "@/lib/queries/expenses";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 export default function MyExpensesPage() {
@@ -107,7 +108,7 @@ export default function MyExpensesPage() {
               </div>
               <div>
                 <span className="font-bold text-sm text-ink">{activeAdvance.employee_name}</span>
-                <p className="text-2xs text-ink-3">Disbursed on {formatDate(activeAdvance.disbursed_date, "short")}</p>
+                <p className="text-xs text-ink-3">Disbursed on {formatDate(activeAdvance.disbursed_date, "short")}</p>
               </div>
             </div>
             <Badge kind="warning" size="sm">Active Advance</Badge>
@@ -146,7 +147,7 @@ export default function MyExpensesPage() {
           </Button>
 
           {activeAdvance.purpose && (
-            <p className="text-2xs text-ink-3 text-center">
+            <p className="text-xs text-ink-3 text-center">
               Purpose: <strong>{activeAdvance.purpose}</strong>
             </p>
           )}
@@ -184,15 +185,15 @@ export default function MyExpensesPage() {
                       <span className="font-bold text-ink truncate">{exp.category}</span>
                       <Badge kind="success" size="sm">Deducted</Badge>
                     </div>
-                    {exp.description && <p className="text-ink-2 text-2xs truncate">{exp.description}</p>}
-                    <p className="text-3xs text-ink-3">
+                    {exp.description && <p className="text-ink-2 text-xs truncate">{exp.description}</p>}
+                    <p className="text-xs text-ink-3">
                       {formatDate(exp.expense_date, "short")} {exp.vendor_name ? `· Vendor: ${exp.vendor_name}` : ""}
                     </p>
                   </div>
 
                   <div className="text-right shrink-0">
                     <span className="font-bold text-sm text-ink">{rupee(exp.amount)}</span>
-                    <p className="text-3xs text-emerald font-medium">✓ Adjusted</p>
+                    <p className="text-xs text-emerald font-medium">✓ Adjusted</p>
                   </div>
                 </Card>
               ))}
@@ -269,9 +270,9 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <FormField label="Category (Kharcha Kahan Huwa)" required>
+          <FormField htmlFor="my-expenses-category-kharcha-kahan-huwa" label="Category (Kharcha Kahan Huwa)" required>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-full h-11 text-sm">
+              <SelectTrigger id="my-expenses-category-kharcha-kahan-huwa" className="w-full h-11 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -285,8 +286,8 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
           </FormField>
 
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Spent Amount (₹)" required>
-              <Input
+            <FormField htmlFor="my-expenses-spent-amount" label="Spent Amount (₹)" required>
+              <Input id="my-expenses-spent-amount"
                 type="number"
                 placeholder="500"
                 className="h-11 text-base font-bold"
@@ -296,8 +297,8 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
               />
             </FormField>
 
-            <FormField label="Bill Date">
-              <Input
+            <FormField htmlFor="my-expenses-bill-date" label="Bill Date">
+              <Input id="my-expenses-bill-date"
                 type="date"
                 className="h-11 text-sm"
                 value={date}
@@ -307,8 +308,8 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
             </FormField>
           </div>
 
-          <FormField label="Vendor / Paid To (e.g. Uber / Auto / Cafe)">
-            <Input
+          <FormField htmlFor="my-expenses-vendor-paid-to-e" label="Vendor / Paid To (e.g. Uber / Auto / Cafe)">
+            <Input id="my-expenses-vendor-paid-to-e"
               placeholder="e.g. Auto fare to client office"
               className="h-11 text-sm"
               value={vendor}
@@ -316,8 +317,8 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
             />
           </FormField>
 
-          <FormField label="Notes / Description">
-            <Input
+          <FormField htmlFor="my-expenses-notes-description" label="Notes / Description">
+            <Input id="my-expenses-notes-description"
               placeholder="e.g. Visited Rohini client for Google Workspace demo"
               className="h-11 text-sm"
               value={description}
@@ -326,15 +327,15 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
           </FormField>
 
           {/* Mobile Camera / Photo Bill Upload */}
-          <FormField label="Upload Bill Receipt / Photo">
-            <input
+          <FormField htmlFor="my-expenses-receipt" label="Upload Bill Receipt / Photo">
+            <input id="my-expenses-receipt"
               type="file"
               accept="image/*,.pdf"
               capture="environment"
               className="block w-full text-xs text-ink-3 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-paper-2 file:text-ink hover:file:bg-paper-3 cursor-pointer"
               onChange={(e) => setFileInput(e.target.files?.[0] ?? null)}
             />
-            {fileInput && <p className="text-3xs text-emerald mt-1">✓ Photo selected: {fileInput.name}</p>}
+            {fileInput && <p className="text-xs text-emerald mt-1">✓ Photo selected: {fileInput.name}</p>}
           </FormField>
 
           <DialogFooter className="pt-3 gap-2">

@@ -57,6 +57,33 @@ export function useReferralPartners() {
   });
 }
 
+/**
+ * Leads that came in through each partner's share link — utm_source 'referral' and
+ * utm_campaign = the partner's code (migration 20260926210000). Keyed by code.
+ */
+export function useReferralLeadCounts(codes: string[]) {
+  return useQuery({
+    queryKey: ["referral-lead-counts", [...codes].sort()],
+    enabled: codes.length > 0,
+    queryFn: async (): Promise<Record<string, { leads: number; won: number }>> => {
+      const { data, error } = await createClient()
+        .from("leads")
+        .select("utm_campaign, stage")
+        .eq("utm_source", "referral")
+        .in("utm_campaign", codes);
+      if (error) throw error;
+      const out: Record<string, { leads: number; won: number }> = {};
+      for (const l of (data ?? []) as { utm_campaign: string | null; stage: string | null }[]) {
+        if (!l.utm_campaign) continue;
+        const c = out[l.utm_campaign] ?? { leads: 0, won: 0 };
+        c.leads++; if (l.stage === "won") c.won++;
+        out[l.utm_campaign] = c;
+      }
+      return out;
+    },
+  });
+}
+
 /** All agreements, optionally scoped to one customer. */
 export function useReferralAgreements(customerId?: string | null) {
   return useQuery({

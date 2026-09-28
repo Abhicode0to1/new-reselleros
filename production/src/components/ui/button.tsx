@@ -109,7 +109,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // When asChild, we need to wrap the user's child element (e.g., <Link>)
     // and merge our icons into ITS children — Slot requires exactly one child.
     if (asChild) {
-      const child = React.Children.only(children) as React.ReactElement;
+      const child = React.Children.only(children) as React.ReactElement<{ children?: React.ReactNode }>;
       const slotChild = React.cloneElement(child, undefined, (
         <>
           {loading ? <Loader2 className="animate-spin" size={iconSize} aria-hidden="true" /> : icon && <Icon name={icon} size={iconSize} />}

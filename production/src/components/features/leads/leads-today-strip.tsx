@@ -30,6 +30,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
 import type { LeadsDueFilter } from "./leads-insight-band";
+import { istToday } from "@/lib/dates/ist";
 
 interface LeadsTodayStripProps {
   leads: Lead[];
@@ -38,7 +39,7 @@ interface LeadsTodayStripProps {
 }
 
 export function LeadsTodayStrip({ leads, dueFilter, onFilterDue }: LeadsTodayStripProps) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const open  = leads.filter((l) => l.stage !== "won" && l.stage !== "lost");
 
   // ── Counts ─────────────────────────────────────────────────
@@ -137,7 +138,7 @@ function TodayChip({ icon, label, tone, active, onClick }: TodayChipProps) {
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-1.5 shrink-0",
-        "px-2.5 py-1 rounded-full border text-2xs font-semibold",
+        "px-2.5 py-1 rounded-full border text-xs font-semibold",
         "transition-all hover:brightness-105 active:brightness-95",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2",
         toneClass[tone],

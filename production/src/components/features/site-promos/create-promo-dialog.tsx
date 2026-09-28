@@ -137,7 +137,7 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
                   {headline || "Your headline will appear here"}
                 </div>
                 {subheadline && (
-                  <div className="text-2xs sm:text-xs opacity-90 mt-0.5">{subheadline}</div>
+                  <div className="text-xs sm:text-xs opacity-90 mt-0.5">{subheadline}</div>
                 )}
               </div>
               <span className="font-mono text-xs bg-paper text-ink px-2 py-1 rounded font-semibold whitespace-nowrap">
@@ -159,7 +159,7 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
                 className="text-left text-xs border border-hairline bg-paper hover:border-amber hover:bg-amber-soft/30 rounded p-2 transition-colors"
               >
                 <div className="font-medium text-ink truncate">{p.h}</div>
-                <div className="text-3xs text-ink-3 truncate">{p.d}</div>
+                <div className="text-xs text-ink-3 truncate">{p.d}</div>
               </button>
             ))}
           </div>
@@ -167,13 +167,13 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
 
         <div className="grid grid-cols-1 gap-3 mb-3">
           <div>
-            <Label>Headline *</Label>
-            <Input value={headline} onChange={(e) => setHeadline(e.target.value)}
+            <Label htmlFor="create-promo-headline">Headline *</Label>
+            <Input id="create-promo-headline" value={headline} onChange={(e) => setHeadline(e.target.value)}
               maxLength={120} placeholder="Diwali Sale — extra 15% off" />
           </div>
           <div>
-            <Label>Subheadline (optional)</Label>
-            <Input value={subheadline} onChange={(e) => setSubheadline(e.target.value)}
+            <Label htmlFor="create-promo-subheadline-optional">Subheadline (optional)</Label>
+            <Input id="create-promo-subheadline-optional" value={subheadline} onChange={(e) => setSubheadline(e.target.value)}
               maxLength={140} placeholder="Limited time · stacks on top of Google promo" />
           </div>
         </div>
@@ -201,16 +201,16 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
             </div>
           </div>
           <div>
-            <Label>{discountType === "percent" ? "Percent" : "Rupees"} off</Label>
-            <Input type="number" min={1}
+            <Label htmlFor="create-promo-off">{discountType === "percent" ? "Percent" : "Rupees"} off</Label>
+            <Input id="create-promo-off" type="number" min={1}
               max={discountType === "percent" ? 100 : undefined}
               value={discountValue}
               onChange={(e) => setDiscountValue(e.target.value)}
               className="font-mono" />
           </div>
           <div>
-            <Label>Badge pill (optional)</Label>
-            <Input value={badgeText} onChange={(e) => setBadgeText(e.target.value)}
+            <Label htmlFor="create-promo-badge-pill-optional">Badge pill (optional)</Label>
+            <Input id="create-promo-badge-pill-optional" value={badgeText} onChange={(e) => setBadgeText(e.target.value)}
               maxLength={20} placeholder="Limited time" />
           </div>
         </div>
@@ -236,8 +236,8 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <div>
-            <Label>Tier</Label>
-            <select value={tier} onChange={(e) => setTier(e.target.value as Tier)}
+            <Label htmlFor="create-promo-tier">Tier</Label>
+            <select id="create-promo-tier" value={tier} onChange={(e) => setTier(e.target.value as Tier)}
               className="w-full text-sm bg-paper border border-hairline rounded px-2 h-10">
               <option value="">All tiers</option>
               <option value="starter">Starter</option>
@@ -247,19 +247,19 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
             </select>
           </div>
           <div>
-            <Label>Min seats</Label>
-            <Input type="number" min={1} value={minSeats}
+            <Label htmlFor="create-promo-min-seats">Min seats</Label>
+            <Input id="create-promo-min-seats" type="number" min={1} value={minSeats}
               onChange={(e) => setMinSeats(e.target.value)} className="font-mono" />
           </div>
           <div>
-            <Label>Max seats</Label>
-            <Input type="number" min={1} value={maxSeats}
+            <Label htmlFor="create-promo-max-seats">Max seats</Label>
+            <Input id="create-promo-max-seats" type="number" min={1} value={maxSeats}
               onChange={(e) => setMaxSeats(e.target.value)}
               placeholder="—" className="font-mono" />
           </div>
           <div>
-            <Label>Ends on</Label>
-            <Input type="date" value={validUntil}
+            <Label htmlFor="create-promo-ends-on">Ends on</Label>
+            <Input id="create-promo-ends-on" type="date" value={validUntil}
               onChange={(e) => setValidUntil(e.target.value)} className="font-mono" />
           </div>
         </div>

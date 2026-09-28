@@ -33,6 +33,7 @@ import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/empty-state";
 import { rupee, cn } from "@/lib/utils";
 import { recommendationFor, type ChannelStat } from "@/lib/marketing/channel-economics";
+import { sourceLabel } from "@/lib/leads/lead-sources";
 import { useMarketingReport, channelsToCsv, type RangeKey } from "@/lib/queries/marketing";
 
 const RANGES: TabBarItem[] = [
@@ -110,6 +111,7 @@ export default function MarketingReportsPage() {
             spend={data.report.totals.spend}
             wonValue={data.report.totals.wonValue}
             collected={data.collected}
+            projectCollected={data.projectCollected}
             won={data.report.totals.won}
             blendedRoas={data.report.blendedRoas}
             blendedNote={data.report.blendedNote}
@@ -158,8 +160,8 @@ function Metric({ label, value, sub, withheld }: {
   );
 }
 
-function ExecutiveCards({ spend, wonValue, collected, won, blendedRoas, blendedNote }: {
-  spend: number; wonValue: number; collected: number; won: number;
+function ExecutiveCards({ spend, wonValue, collected, projectCollected, won, blendedRoas, blendedNote }: {
+  spend: number; wonValue: number; collected: number; projectCollected: number; won: number;
   blendedRoas: number | null; blendedNote: string | null;
 }) {
   // CAC is spend ÷ won deals — and it is only meaningful when the spend behind it
@@ -181,7 +183,7 @@ function ExecutiveCards({ spend, wonValue, collected, won, blendedRoas, blendedN
       <Metric
         label="Revenue collected"
         value={rupee(collected)}
-        sub={`Payments received. Won lead value ${rupee(wonValue)} across ${won} ${won === 1 ? "lead" : "leads"}.`}
+        sub={`Payments received${projectCollected > 0 ? ` (incl. ${rupee(projectCollected)} from projects)` : ""}. Won lead value ${rupee(wonValue)} across ${won} ${won === 1 ? "lead" : "leads"}.`}
       />
       <Metric
         label="Return on ad spend"
@@ -236,27 +238,27 @@ function SpendVsRevenue({ monthly }: { monthly: { month: string; spend: number; 
       <div className="h-72 -ml-2">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={monthly}>
-            <CartesianGrid stroke="var(--hairline)" vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)" />
+            <CartesianGrid stroke="hsl(var(--hairline))" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--ink-3))" }} stroke="hsl(var(--hairline))" />
             {/* Two axes only when there IS spend: the two series differ by orders
                 of magnitude (₹4,000 against ₹69,55,963), so one shared scale
                 would flatten the bars to an invisible line. */}
             {hasSpend && (
-              <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)"
+              <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: "hsl(var(--ink-3))" }} stroke="hsl(var(--hairline))"
                      tickFormatter={(v: number) => rupee(v, { compact: true })} />
             )}
             <YAxis yAxisId="rev" orientation={hasSpend ? "right" : "left"}
-                   tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)"
+                   tick={{ fontSize: 11, fill: "hsl(var(--ink-3))" }} stroke="hsl(var(--hairline))"
                    tickFormatter={(v: number) => rupee(v, { compact: true })} />
             <Tooltip
               formatter={(v: number, name: string) => [rupee(v), name]}
-              contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--hairline)", background: "var(--paper)" }}
+              contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--hairline))", background: "hsl(var(--paper))" }}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Revenue collected"
-                  stroke="var(--emerald)" fill="var(--emerald-soft)" strokeWidth={2} />
+                  stroke="hsl(var(--emerald))" fill="hsl(var(--emerald-soft))" strokeWidth={2} />
             {hasSpend && (
-              <Bar yAxisId="spend" dataKey="spend" name="Ad spend" fill="var(--amber)" radius={[4, 4, 0, 0]} maxBarSize={48} />
+              <Bar yAxisId="spend" dataKey="spend" name="Ad spend" fill="hsl(var(--amber))" radius={[4, 4, 0, 0]} maxBarSize={48} />
             )}
           </ComposedChart>
         </ResponsiveContainer>
@@ -277,7 +279,7 @@ function ChannelRow({ c }: { c: ChannelStat }) {
   return (
     <tr className="border-b border-hairline last:border-0">
       <td className="px-3 py-2.5 align-top">
-        <div className="font-medium text-sm text-ink">{c.channel}</div>
+        <div className="font-medium text-sm text-ink">{sourceLabel(c.channel)}</div>
         {/* 12px, not 10px. These notes are the most important content in the
             table — they are the reason a figure is a dash instead of a number —
             and a first pass set them SMALLER than everything around them. The
@@ -354,7 +356,7 @@ function ChannelTable({ channels, unattributed, unattributedShare }: {
                     {/* This is the most useful number on the page: the share of
                         pipeline whose origin nobody knows. Ranking these next to
                         real channels would imply "manual" as somewhere to invest. */}
-                    <p className="text-2xs text-ink-3 mt-0.5 max-w-[54rem]">
+                    <p className="text-xs text-ink-3 mt-0.5 max-w-[54rem]">
                       These record how a lead was typed in, not where it came from, so they carry no budget decision.
                       The size of this group is itself the finding — that share of the pipeline has no known origin.
                     </p>
@@ -382,7 +384,7 @@ function Funnel({ steps }: { steps: { key: string; label: string; count: number 
       {/* Stated because the last step counts PAYMENTS while the cards above count
           leads marked won, and the two legitimately differ. An unexplained
           mismatch between two numbers on one page destroys trust in both. */}
-      <p className="text-2xs text-ink-3 mb-3 max-w-[52rem] leading-snug">
+      <p className="text-xs text-ink-3 mb-3 max-w-[52rem] leading-snug">
         The last step counts payments received, not leads marked won — a payment can settle a deal closed in an
         earlier period, and one customer can pay more than once. That is why it may differ from the deal count in
         the cards above.
@@ -410,9 +412,9 @@ function Funnel({ steps }: { steps: { key: string; label: string; count: number 
                      style={{ width: `${Math.max(2, ((s.count ?? 0) / widest) * 100)}%` }} />
               )}
             </div>
-            {s.note && <p className="text-2xs text-ink-3 mt-1 leading-snug">{s.note}</p>}
+            {s.note && <p className="text-xs text-ink-3 mt-1 leading-snug">{s.note}</p>}
             {s.bottleneck && s.benchmark !== null && (
-              <p className="text-2xs text-rose mt-1">
+              <p className="text-xs text-rose mt-1">
                 Below the {Math.round(s.benchmark * 100)}% target — this is the tightest point in the funnel.
               </p>
             )}
@@ -447,7 +449,7 @@ function AiAdvisorPanel({ canAdvise }: { canAdvise: boolean }) {
           <p className="text-sm font-semibold text-ink mb-1">AI budget recommendations</p>
           {canAdvise ? (
             <p className="text-[13px] text-ink-2">
-              Enough spend is now tracked to analyse. Connect <span className="font-mono text-2xs">GEMINI_API_KEY</span> to
+              Enough spend is now tracked to analyse. Connect <span className="font-mono text-xs">GEMINI_API_KEY</span> to
               turn this on.
             </p>
           ) : (

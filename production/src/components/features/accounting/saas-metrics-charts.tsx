@@ -47,7 +47,7 @@ function Notes({ items }: { items: readonly string[] }) {
   return (
     <ul className="mt-3 space-y-1.5">
       {items.map((n, i) => (
-        <li key={i} className="flex gap-2 text-2xs leading-relaxed text-ink-3">
+        <li key={i} className="flex gap-2 text-xs leading-relaxed text-ink-3">
           <Icon name="info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{n}</span>
         </li>

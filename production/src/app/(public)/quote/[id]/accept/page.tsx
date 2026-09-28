@@ -21,11 +21,13 @@ import { maybeAlertHotLead, recordQuoteView } from "@/lib/quotes/quote-views.ser
 export const dynamic = "force-dynamic"; // never cache — quotes change state
 
 interface Props {
-  params: { id: string };
-  searchParams: { t?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ t?: string }>;
 }
 
-export async function generateMetadata({ params, searchParams }: Props) {
+export async function generateMetadata(props: Props) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   // Resolve the supplier name — but ONLY when the link carries the right token,
   // so the tab/share preview can't be used to confirm a quote exists (SEC-1).
   const supabase = createAdminClient();
@@ -44,7 +46,9 @@ export async function generateMetadata({ params, searchParams }: Props) {
   };
 }
 
-export default async function QuoteAcceptPage({ params, searchParams }: Props) {
+export default async function QuoteAcceptPage(props: Props) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const supabase = createAdminClient();
 
   // Fetch quote (admin client bypasses RLS). We DON'T select cost columns —
@@ -88,14 +92,14 @@ export default async function QuoteAcceptPage({ params, searchParams }: Props) {
      Awaited rather than fired and forgotten, because a Server Component's floating promise can
      be cut off when the render finishes — but it never throws, so a failed analytics write
      cannot stop a customer reading their quote. See lib/quotes/quote-views.server.ts. */
-  const ua = headers().get("user-agent");
+  const ua = (await headers()).get("user-agent");
   await recordQuoteView({
     tenantId: quote.tenant_id,
     quoteId: quote.id,
     userAgent: ua,
     /* First hop of X-Forwarded-For — Cloud Run puts the client there. Hashed with a salt
        before storage; the address itself is never written. */
-    ip: (headers().get("x-forwarded-for") ?? "").split(",")[0].trim() || null,
+    ip: ((await headers()).get("x-forwarded-for") ?? "").split(",")[0].trim() || null,
   });
 
   /* And then, only if this is a person reading it repeatedly, tell the desk. Once.

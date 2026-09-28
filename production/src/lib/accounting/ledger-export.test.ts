@@ -114,8 +114,11 @@ describe("Tally XML", () => {
     expect(debitBlock).toContain("<ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>");
   });
 
-  it("uses DDMMYYYY, Tally's format", () => {
-    expect(xml).toContain("<DATE>10052026</DATE>");
+  it("uses YYYYMMDD, Tally's XML date format", () => {
+    /* Was DDMMYYYY ("10052026") until S34, 28 Sep 2026. Tally's XML import/export reads
+       <DATE> as YYYYMMDD; the old value would land as a nonsense date or be rejected.
+       From Tally's documented format — not yet imported into a real Tally company. */
+    expect(xml).toContain("<DATE>20260510</DATE>");
   });
 
   it("faces a customer at Sundry Debtors and a vendor at Sundry Creditors", () => {

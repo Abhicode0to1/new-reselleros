@@ -6,8 +6,10 @@
 --     < supabase/tests/unreconcile_undo_bank_sale.test.sql
 --
 -- What it proves:
---   1. Undo-sale on a line booked via "Invoice banao & reconcile" frees the line, VOIDS the
---      invoice (number kept), deletes the receipt and resets the quote.
+--   1. Undo-sale on a line booked via "Invoice banao & reconcile" frees the line, reverses
+--      the ISSUED invoice with a full credit note (migration 20260927140000 — it is not
+--      voided: number in the series, may be in a filed GSTR-1), leaves nothing due on it,
+--      deletes the receipt and resets the quote.
 --   2. Without undo-sale it only frees the line; invoice and receipt stay.
 --   3. A receipt recorded separately (not from the bank line) is refused, nothing changes.
 --   4. An invoice with a credit note is refused, nothing changes.
@@ -77,7 +79,12 @@ select public.unreconcile_bank_receipt('aaaaaaaa-0000-0000-0000-0000000b7001', t
 do $$ declare inv text := (select v from s where k = 'inv:aaaaaaaa-0000-0000-0000-0000000b7001'); begin
   if (select matched_to_type from public.bank_transactions where id = 'aaaaaaaa-0000-0000-0000-0000000b7001') is not null then
     raise exception 'FAIL: line not freed'; end if;
-  if (select status::text from public.invoices where id = inv) <> 'void' then raise exception 'FAIL: invoice not void'; end if;
+  if (select status::text from public.invoices where id = inv) = 'void' then raise exception 'FAIL: issued invoice was voided instead of credited'; end if;
+  if (select count(*) from public.credit_notes where invoice_id = inv and reason_code = 'cancellation'
+        and amount = (select amount from public.invoices where id = inv)) <> 1 then
+    raise exception 'FAIL: no full credit note for the reversed sale'; end if;
+  if (select net_payable from public.invoices where id = inv) <> 0 then raise exception 'FAIL: something still due on the credited invoice'; end if;
+  if (select paid_date from public.invoices where id = inv) is not null then raise exception 'FAIL: paid_date not cleared'; end if;
   if exists (select 1 from public.payments where id = (select v from s where k = 'pay:aaaaaaaa-0000-0000-0000-0000000b7001')::uuid) then
     raise exception 'FAIL: receipt not removed'; end if;
   if (select payment_status::text from public.quotes where id = (select v from s where k = 'q:aaaaaaaa-0000-0000-0000-0000000b7001')) <> 'none' then

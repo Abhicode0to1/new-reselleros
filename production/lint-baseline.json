@@ -1,0 +1,11 @@
+{
+  "_note": "Max ESLint WARNINGS per rule. CI fails above these. Lower only: node scripts/lint-ratchet.mjs --update",
+  "maxWarnings": {
+    "@next/next/no-img-element": 11,
+    "@typescript-eslint/no-explicit-any": 113,
+    "jsx-a11y/alt-text": 5,
+    "jsx-a11y/role-supports-aria-props": 3,
+    "max-lines": 25,
+    "react-hooks/exhaustive-deps": 10
+  }
+}

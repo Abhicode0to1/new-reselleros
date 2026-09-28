@@ -92,7 +92,7 @@ export default function CouponRedemptionsDialog({ open, onOpenChange, code }: Pr
                       </td>
                       <td className="p-2">
                         <div className="text-sm text-ink">{r.contact_name ?? "—"}</div>
-                        <div className="text-3xs text-ink-3">{r.contact_email ?? ""}</div>
+                        <div className="text-xs text-ink-3">{r.contact_email ?? ""}</div>
                       </td>
                       <td className="p-2 text-xs">
                         {r.tier_id ? <Badge size="sm" kind="info">{r.tier_id}</Badge> : <span className="text-ink-3">—</span>}

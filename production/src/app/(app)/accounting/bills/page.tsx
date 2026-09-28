@@ -46,16 +46,13 @@ import { InboundBillsQueue } from "@/components/features/accounting/inbound-bill
 import { BillDetailDialog } from "@/components/features/accounting/bill-detail-dialog";
 import { DocViewerDialog } from "@/components/features/documents/doc-viewer-dialog";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { istToday, fyBounds } from "@/lib/dates/ist";
 
 /** Current financial year (Apr 1 → today), IST-safe, in YYYY-MM-DD. Defaulting
  *  to the FY (not just this month) so a freshly-added bill dated in an earlier
  *  month still shows — "this month" silently hid past-dated bills. */
 function thisFYRange(): { from: string; to: string } {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-  const y   = ist.getUTCFullYear();
-  const fyStartYear = ist.getUTCMonth() < 3 ? y - 1 : y;   // Apr = month index 3
-  return { from: `${fyStartYear}-04-01`, to: ist.toISOString().slice(0, 10) };
+  return { from: fyBounds().start, to: istToday() };
 }
 
 const STATUS_COLOR: Record<string, "rose" | "emerald" | "amber" | "slate"> = {
@@ -124,21 +121,21 @@ export default function VendorBillsPage() {
       {/* ── Filter strip ────────────────────────────────────────── */}
       <Card className="mb-5 p-3 md:p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">From</label>
-          <input
+          <label htmlFor="bills-from" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">From</label>
+          <input id="bills-from"
             type="date"
             value={range.from}
             onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
           />
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">To</label>
-          <input
+          <label htmlFor="bills-to" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">To</label>
+          <input id="bills-to"
             type="date"
             value={range.to}
             onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
           />
-          <select
+          <select aria-label="Status filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
@@ -222,7 +219,7 @@ export default function VendorBillsPage() {
                             <Badge color="indigo" title="Auto-imported from your distributor — created when they invoiced you">From distributor</Badge>
                           )}
                         </div>
-                        <div className="mt-0.5 flex items-center gap-2 flex-wrap text-2xs text-ink-3">
+                        <div className="mt-0.5 flex items-center gap-2 flex-wrap text-xs text-ink-3">
                           {b.vendor_gstin && <span className="font-mono">{b.vendor_gstin}</span>}
                           {b.category && <Badge kind="muted" size="sm">{b.category}</Badge>}
                           {(b.line_items?.length ?? 0) > 0 && (
@@ -231,11 +228,11 @@ export default function VendorBillsPage() {
                         </div>
                       </td>
                       {/* Bill # */}
-                      <td className="px-3 py-3 font-mono text-2xs text-ink-2 align-top truncate" title={b.bill_no || undefined}>{b.bill_no || "—"}</td>
+                      <td className="px-3 py-3 font-mono text-xs text-ink-2 align-top truncate" title={b.bill_no || undefined}>{b.bill_no || "—"}</td>
                       {/* Date + aging */}
                       <td className="px-3 py-3 align-top whitespace-nowrap">
                         <div className="text-ink-2">{formatDate(b.bill_date)}</div>
-                        {b.due_date && <div className="text-2xs text-ink-3">due {formatDate(b.due_date)}</div>}
+                        {b.due_date && <div className="text-xs text-ink-3">due {formatDate(b.due_date)}</div>}
                         {showAging && (
                           <div className="mt-0.5">
                             <Badge kind={dueDays! < 0 ? "danger" : dueDays! <= 7 ? "warning" : "muted"} dot>
@@ -247,10 +244,10 @@ export default function VendorBillsPage() {
                       {/* Amount — total prominent, GST + foreign as sublines */}
                       <td className="px-3 py-3 text-right align-top whitespace-nowrap">
                         <div className="font-semibold text-ink font-mono tabular-nums">{rupee(b.total)}</div>
-                        {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? <div className="text-2xs font-normal text-ink-3 font-mono">{fx}</div> : null; })()}
-                        {gst > 0 && <div className="text-2xs text-emerald cursor-help" title={gstTitle}>incl {rupee(gst)} GST</div>}
+                        {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? <div className="text-xs font-normal text-ink-3 font-mono">{fx}</div> : null; })()}
+                        {gst > 0 && <div className="text-xs text-emerald cursor-help" title={gstTitle}>incl {rupee(gst)} GST</div>}
                         {b.status !== "paid" && (b.total - (b.paid_amount ?? 0)) > 0 && (b.paid_amount ?? 0) > 0 && (
-                          <div className="text-3xs text-rose tabular-nums">{rupee(b.total - (b.paid_amount ?? 0))} due</div>
+                          <div className="text-xs text-rose tabular-nums">{rupee(b.total - (b.paid_amount ?? 0))} due</div>
                         )}
                       </td>
                       {/* Status */}
@@ -282,20 +279,20 @@ export default function VendorBillsPage() {
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="font-medium text-ink leading-tight">
                         {b.vendor_name}
-                        {(b.line_items?.length ?? 0) > 0 && <span className="ml-1 text-2xs font-normal text-ink-3">· {b.line_items.length} items</span>}
+                        {(b.line_items?.length ?? 0) > 0 && <span className="ml-1 text-xs font-normal text-ink-3">· {b.line_items.length} items</span>}
                       </div>
                       <Badge color={STATUS_COLOR[b.status] ?? "slate"}>{b.status}</Badge>
                     </div>
-                    <div className="text-2xs text-ink-3 font-mono mb-2">
+                    <div className="text-xs text-ink-3 font-mono mb-2">
                       {b.bill_no || "—"} · {formatDate(b.bill_date)}
                     </div>
                     <div className="text-xs text-ink-3 mb-2">{b.category}</div>
                     <div className="flex items-end justify-between">
                       <div>
                         <div className="font-serif text-xl text-ink leading-none">{rupee(b.total)}</div>
-                        {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? <div className="text-2xs text-ink-3 mt-1">{fx} @ ₹{b.fx_rate}/{b.currency}</div> : null; })()}
+                        {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? <div className="text-xs text-ink-3 mt-1">{fx} @ ₹{b.fx_rate}/{b.currency}</div> : null; })()}
                         {gst > 0 && (
-                          <div className="text-2xs text-emerald mt-1">+{rupee(gst)} input GST</div>
+                          <div className="text-xs text-emerald mt-1">+{rupee(gst)} input GST</div>
                         )}
                       </div>
                       <span onClick={(e) => e.stopPropagation()}>
@@ -381,7 +378,7 @@ function BillActions({ bill, onPay, onDelete }: { bill: VendorBill; onPay: () =>
 }
 
 function todayISO() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 // ─── Record a payment against a vendor bill ─────────────────────────────────
@@ -421,22 +418,22 @@ function PayBillDialog({ bill, onClose }: { bill: VendorBill; onClose: () => voi
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Amount (₹)" required>
-              <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+            <FormField htmlFor="bills-amount" label="Amount (₹)" required>
+              <Input id="bills-amount" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
             </FormField>
-            <FormField label="Date">
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <FormField htmlFor="bills-date" label="Date">
+              <Input id="bills-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </FormField>
           </div>
-          {tooMuch && <p className="text-2xs text-rose">Outstanding {rupee(outstanding)} se zyada nahi.</p>}
-          <FormField label="Pay from">
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber">
+          {tooMuch && <p className="text-xs text-rose">Outstanding {rupee(outstanding)} se zyada nahi.</p>}
+          <FormField htmlFor="bills-pay-from" label="Pay from">
+            <select id="bills-pay-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber">
               {accounts.length === 0 && <option value="">No accounts — add one in Banking</option>}
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </FormField>
-          <FormField label="Method">
-            <Input value={method} onChange={(e) => setMethod(e.target.value)} placeholder="bank transfer / UPI / cash" />
+          <FormField htmlFor="bills-method" label="Method">
+            <Input id="bills-method" aria-label="bank transfer / UPI / cash" value={method} onChange={(e) => setMethod(e.target.value)} placeholder="bank transfer / UPI / cash" />
           </FormField>
         </div>
         <DialogFooter>

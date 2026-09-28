@@ -1,0 +1,71 @@
+import { describe, it, expect } from "vitest";
+import {
+  normaliseDomain, parseDiscovery, mxProvider, siteNote, baselineScore, mergeScores, discoveryPrompt, leadNotes, type ScoreInput,
+} from "./lead-finder";
+
+const site = (over: Partial<ReturnType<typeof siteNote>> = {}) => ({ https: true, status: 200, note: "Website theek hai", ...over });
+const input = (over: Partial<ScoreInput> = {}): ScoreInput => ({ company: "Acme Pvt Ltd", domain: "acme.co.in", city: "Gurgaon", description: null, mx: "zoho", site: site(), products: ["workspace", "website"], ...over });
+
+describe("lead finder", () => {
+  it("normalises domains and refuses free-mail / marketplace ones", () => {
+    expect(normaliseDomain("https://www.Example.co.in/about?x=1")).toBe("example.co.in");
+    expect(normaliseDomain("gmail.com")).toBeNull();
+    expect(normaliseDomain("not a domain")).toBeNull();
+  });
+
+  it("parses a grounded answer with prose and fences, dedupes by domain", () => {
+    const text = 'Here you go:\n```json\n[{"company":"Acme","domain":"www.acme.co.in","city":"Gurgaon"},{"company":"Acme again","domain":"acme.co.in"},{"company":"","domain":"x.com"},{"company":"Free","domain":"gmail.com"}]\n```';
+    const out = parseDiscovery(text);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ company: "Acme", domain: "acme.co.in", website: "https://acme.co.in", city: "Gurgaon" });
+    expect(parseDiscovery("no json here")).toEqual([]);
+  });
+
+  it("reads the mail provider off MX hosts", () => {
+    expect(mxProvider(["10 aspmx.l.google.com."])).toBe("google");
+    expect(mxProvider(["10 mx.zoho.in."])).toBe("zoho");
+    expect(mxProvider(["0 acme-co-in.mail.protection.outlook.com."])).toBe("microsoft");
+    expect(mxProvider(["10 mail.acme.co.in."])).toBe("cpanel");
+    expect(mxProvider([])).toBe("none");
+    expect(mxProvider(null)).toBe("unknown");
+  });
+
+  it("website audit reads SSL and stack", () => {
+    expect(siteNote({ httpsOk: false, httpOk: false, status: null }).note).toMatch(/nahi khulti/);
+    expect(siteNote({ httpsOk: false, httpOk: true, status: 200 }).note).toMatch(/SSL nahi/);
+    expect(siteNote({ httpsOk: true, httpOk: true, status: 200, generator: "WordPress 4.9", title: "Acme" }).note).toBe("Purana WordPress");
+    expect(siteNote({ httpsOk: true, httpOk: true, status: 200, generator: "Wix.com Website Builder", title: "Acme" }).note).toMatch(/builder/);
+  });
+
+  it("baseline score: no Workspace + no SSL is a strong lead; already on Workspace is weak", () => {
+    const strong = baselineScore(input({ mx: "none", site: site({ https: false, status: 200, note: "Sirf HTTP" }) }));
+    expect(strong.score).toBe(80);
+    expect(strong.product).toBe("workspace");
+    expect(strong.fit_reason).toMatch(/email hi nahi/);
+    const weak = baselineScore(input({ mx: "google" }));
+    expect(weak.score).toBe(25);
+    const web = baselineScore(input({ mx: "google", site: site({ https: false, status: null, note: "x" }) }));
+    expect(web.product).toBe("website");
+  });
+
+  it("merge keeps the AI within ±20 of the baseline and drops pitches with prices", () => {
+    const items = [input()];
+    const base = [baselineScore(items[0])];   // zoho → 60
+    const merged = mergeScores(items, base, [{ domain: "acme.co.in", score: 99, product: "website", fit_reason: "Zoho par hai", pitch: "Sirf ₹99 mein Workspace" }]);
+    expect(merged[0].score).toBe(80);
+    expect(merged[0].product).toBe("website");
+    expect(merged[0].fit_reason).toBe("Zoho par hai");
+    expect(merged[0].pitch).toBe(base[0].pitch);            // price → baseline pitch
+    expect(mergeScores(items, base, "garbage")).toEqual(base);
+  });
+
+  it("discovery prompt carries the profile and the exclusions", () => {
+    const p = discoveryPrompt({ name: "x", cities: "Gurgaon", industries: "CA firms", company_size: "10-50", products: ["workspace"], must_have: "", exclude: "MNC", daily_limit: 10 }, ["known.com"], 10);
+    expect(p.user).toContain("Gurgaon"); expect(p.user).toContain("CA firms"); expect(p.user).toContain("known.com"); expect(p.user).toContain("Exclude: MNC");
+    expect(p.system).toMatch(/Do not use Google Maps/);
+  });
+
+  it("lead notes list the signals", () => {
+    expect(leadNotes({ fit_reason: "r", pitch: "p", mx_provider: "zoho", site_note: "ok", source_url: "https://s", description: null })).toBe("AI Lead Finder\nWhy: r\nEmail: Zoho Mail\nWebsite: ok\nPitch: p\nSource: https://s");
+  });
+});

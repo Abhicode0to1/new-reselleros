@@ -1,4 +1,4 @@
--- Regression test: referral commission on project payments (migration 20260926140000).
+-- Regression test: referral commission on project payments (migration 20260926170000).
 --
 -- Self-asserting: RAISEs on failure. Runs inside a transaction that ROLLS BACK.
 --

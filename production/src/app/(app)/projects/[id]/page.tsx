@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
   useProjectSale,
+  useProjectSourceLead,
   useRaiseMilestoneInvoice,
   useAcceptProjectQuote,
   type ProjectMilestoneRow,
@@ -31,6 +32,7 @@ import { useCustomer } from "@/lib/queries/customers";
 import { RecordProjectPaymentDialog } from "@/components/features/projects/record-project-payment-dialog";
 import { AddExpenseDialog } from "@/components/features/accounting/add-expense-dialog";
 import { AddLabourDialog } from "@/components/features/projects/add-labour-dialog";
+import { EditProjectDialog } from "@/components/features/projects/edit-project-dialog";
 import { ProjectTasks } from "@/components/features/projects/project-tasks";
 import { useRemoveProjectLabour, useSaveProjectLabour, useUpdateProjectDates, type ProjectLabourLine } from "@/lib/queries/projects";
 import { Input } from "@/components/ui/input";
@@ -40,6 +42,10 @@ export default function ProjectDetailPage() {
   const id = params?.id;
   const { data, isLoading } = useProjectSale(id);
   const { data: customer } = useCustomer(data?.project.customer_id ?? undefined);
+  // R-008: the CRM lead this deal was quoted from, when it came in that way.
+  const { data: sourceLead } = useProjectSourceLead(id);
+  // R-004: change the deal itself — value, title, customer, remaining schedule.
+  const [editOpen, setEditOpen] = React.useState(false);
   const raise = useRaiseMilestoneInvoice();
   const accept = useAcceptProjectQuote();
   const [payFor, setPayFor] = React.useState<ProjectMilestoneRow | null>(null);
@@ -128,10 +134,34 @@ export default function ProjectDetailPage() {
             <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold">{project.customer_name}</p>
             <h1 className="font-serif text-3xl md:text-4xl leading-tight">{project.title}</h1>
             {project.description && <p className="text-sm text-ink-3 mt-1 max-w-prose">{project.description}</p>}
+            {/* Where the deal came from. Shown only when there IS a lead — a
+                "From lead: —" on every other project would be furniture. The link
+                opens the lead's drawer via the ?lead= deep-link the leads page
+                already handles. */}
+            {sourceLead && (
+              <Link
+                href={`/leads?lead=${sourceLead.id}` as Route}
+                className="inline-flex items-center gap-1.5 mt-2 text-xs text-ink-3 hover:text-ink transition-colors"
+              >
+                <Icon name="target" size={12} />
+                <span>
+                  From lead: <span className="font-medium text-ink-2">{sourceLead.company ?? "Unnamed company"}</span>
+                  {sourceLead.contact_name ? <span className="text-ink-3"> · {sourceLead.contact_name}</span> : null}
+                </span>
+              </Link>
+            )}
           </div>
-          <Badge kind={project.status === "completed" ? "success" : project.status === "cancelled" ? "muted" : isQuote ? "info" : "warning"}>
-            {project.status === "completed" ? "Completed" : project.status === "cancelled" ? "Cancelled" : isQuote ? "Quotation" : "Active"}
-          </Badge>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* R-004. Before this, an active project's value, title and customer could
+                only be changed in the database — and that value drives the margin card
+                and the P&L's project revenue, so a wrong one stayed wrong in the books. */}
+            <Button size="sm" variant="outline" icon="edit" onClick={() => setEditOpen(true)}>
+              Edit project
+            </Button>
+            <Badge kind={project.status === "completed" ? "success" : project.status === "cancelled" ? "muted" : isQuote ? "info" : "warning"}>
+              {project.status === "completed" ? "Completed" : project.status === "cancelled" ? "Cancelled" : isQuote ? "Quotation" : "Active"}
+            </Badge>
+          </div>
         </div>
       </div>
 
@@ -476,6 +506,14 @@ export default function ProjectDetailPage() {
         onOpenChange={(o) => { if (!o) setPayFor(null); }}
         milestone={payFor}
         projectId={project.id}
+      />
+
+      <EditProjectDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        project={project}
+        milestones={data.milestones}
+        payments={data.payments}
       />
     </div>
   );

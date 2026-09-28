@@ -54,8 +54,28 @@ const TRANSIENT = /TransportError|LegacyDbConfigLoginRole|ECONNRESET|fetch faile
  * production par nahi, local par hota hai. Ab `--local` local container se baat karta
  * hai; bina flag ke purana raasta (production, --linked) waisa hi hai. */
 const LOCAL = process.argv.includes("--local");
+/* ── --db-url=postgres://…@127.0.0.1:54322/postgres : psql seedha, bina docker exec ──
+ *
+ * S18 (28 Sep 2026): CI runner me SQL test chalane ke liye (ek service container ya
+ * `supabase start`, jisme baseline + migrations lage hon) container ka naam dhoondhna
+ * kaam nahi aata — wahan sirf ek URL hota hai. Isliye ye raasta. SIRF localhost /
+ * 127.0.0.1 / ::1 maana jata hai: production ka URL diya to script ruk jaati hai, taaki
+ * ye flag kabhi `--linked` ka chor-darwaza na bane. */
+const DB_URL = (process.argv.find((a) => a.startsWith("--db-url=")) ?? "").slice("--db-url=".length) || null;
+if (DB_URL) {
+  let host = "";
+  try { host = new URL(DB_URL).hostname.replace(/^\[|\]$/g, ""); } catch { /* host stays "" */ }
+  if (!["127.0.0.1", "localhost", "::1"].includes(host)) {
+    console.error(`RUKA — --db-url sirf local database ke liye hai (mila host: "${host || "?"}").`);
+    process.exit(2);
+  }
+  if (spawnSync("psql", ["--version"], { encoding: "utf8" }).status !== 0) {
+    console.error("--db-url ke liye `psql` PATH par chahiye.");
+    process.exit(2);
+  }
+}
 let CONTAINER = null;
-if (LOCAL) {
+if (LOCAL && !DB_URL) {
   const ps = spawnSync("docker", ["ps", "--format", "{{.Names}}"], { encoding: "utf8" });
   CONTAINER = (ps.stdout ?? "")
     .split(/[\r\n]+/)
@@ -85,7 +105,10 @@ const classify = (r) => (r.ok ? "ok" : /NOT APPLICABLE HERE/.test(r.out) ? "skip
 
 function runOne(path) {
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const r = LOCAL
+    const r = DB_URL
+      ? spawnSync("psql", ["-v", "ON_ERROR_STOP=1", DB_URL],
+          { input: readFileSync(path, "utf8"), encoding: "utf8", timeout: 120_000 })
+      : LOCAL
       ? spawnSync(
           "docker",
           ["exec", "-i", CONTAINER, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres"],
