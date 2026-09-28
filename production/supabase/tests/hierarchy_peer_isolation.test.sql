@@ -40,6 +40,13 @@
 -- Copy the CREATE POLICY statements from the migration whenever they change there. If they
 -- drift, this test proves something the database does not do.
 --
+-- ⚠️ SINCE S13 (20260928100000_rls_initplan_wrap.sql) the LIVE policies no longer call
+--    can_see_record(owner_id); they use the InitPlan form
+--    `owner_id is null or (select hierarchy_sees_all()) or owner_id = any ((select visible_owner_ids())::uuid[])`.
+--    This file still proves the original can_see_record() predicate (hierarchy-policy.test.ts
+--    pins that text). The same six cases against the LIVE form are asserted in
+--    rls_initplan_and_hot_indexes.test.sql, which applies the S13 migration itself.
+--
 -- ─── `set local role authenticated` IS THE TEST ──────────────────────────────
 -- An owner/superuser connection BYPASSES RLS entirely. Without the role switch this file
 -- would report PASS against a database with no policies at all — precisely the failure it
