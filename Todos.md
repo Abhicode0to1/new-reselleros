@@ -20,9 +20,57 @@ conflict; each superseded entry is marked in place.
 Everything below needs an owner decision or an owner action. Nothing here is being worked on.
 
 **Decisions**
-- [ ] **Not now (owner, 26 Sep 2026).** Multi-year domain registration and a cart with two hosting plans can no longer be bought
-      inside DMS. `/api/dms/panel-order` takes one year per domain and one hosting `domain`, and
-      the DMS cart refuses both by name. Allowing them means widening that contract. Want them?
+- [x] **DECIDED 28 Sep 2026 (owner):** *"Do these in ResellerOS if user buys for first time. But if existing
+      user renew either hosting or domain, then that part should happen inside the DMS customer portal
+      itself."* Multi-year domains and several hosting plans are for a FIRST purchase in the ResellerOS cart;
+      renewals are paid inside the DMS panel; an existing DMS customer buying something new with those is sent
+      to the ResellerOS cart. Owner also chose: build Pawan's parts, hand the rest to Abhishek / Pardeep; stop
+      charging for a second hosting plan now. Status below (§ "Multi-year and several hosting plans").
+
+### Multi-year and several hosting plans — first purchase in ResellerOS (28 Sep 2026)
+
+**Built (Pawan):**
+- [x] **Stop-gap (ResellerOS `d977e138`):** checkout refuses a second hosting plan or a hosting quantity > 1,
+      before anything is saved or charged (`lib/checkout/hosting-limit.ts`); the cart shows no quantity stepper
+      on a hosting line. Until then such an order was charged in full and only the first account was set up.
+- [x] **Renewal paid inside the DMS panel** (ResellerOS `1fc34a3e`, DMS `bf7a3a7d`): `POST /api/dms/renewal-order`
+      (panel key, exact email, renewal quotes only) → the Renew dialog pays in the panel's Razorpay frame. The
+      pay route's guards moved to `lib/checkout/quote-order.ts`, pinned by tests first. **Browser-verified
+      locally 28 Sep:** a real cron-made hosting renewal bill `Q-2222-2026-27-0021` paid in the panel → "Payment
+      received" → webhook settled it as a renewal (`hosting-renewal` queued, held for test mode; no new sale, no
+      new subscription; subscription renewed to 2027-10-13).
+- [x] **A service's Renew offers only its own bill** (ResellerOS `9951f454`, DMS `a62e0ce1`): `/api/v1` quotes carry
+      `renews` (vendor + domain); found in the browser, where the domain's Renew offered the hosting renewal.
+- [x] **DMS `domain.register` takes 1-10 years** (DMS `5f4e3943`), costed at ResellerClub's price for that tenure ×
+      years; a tenure RC does not quote is held. Nothing sends years > 1 yet.
+
+**Still Pawan's, after the colleagues' parts land:** the site cart's years picker and a `years` field on a
+domain line (`lib/checkout/cart-checkout.ts` `priceDomainLines`, `src/site/**`); one hosting domain PER hosting
+line at checkout; lifting the stop-gap; DMS's cart refusals linking to the ResellerOS cart (held until that cart
+can actually take them, or the customer goes from one refusal to another).
+
+**For Abhishek (his area per OWNERS.json) — pass on:**
+- [ ] **Multi-year price:** `lib/domains/live-lookup.ts` reads only the 1-year price (`years: 1` at :68). It needs a
+      price for N years (ResellerClub quotes a per-year price for each tenure; total = that × N). **Done when:** a
+      lookup for 3 years of a `.in` returns the 3-year tenure's per-year price × 3, and a tenure RC does not quote is
+      "unknown", never the 1-year figure.
+- [ ] **Years on the queued registration:** `provisioning_requests` has no years/term column
+      (`lib/provisioning/provisioning.server.ts:189-213`); a migration (shared) plus `queueProvisioning` writing the
+      paid line's years. **Done when:** a paid 3-year domain line queues a row that says 3.
+- [ ] **Several hosting plans:** the webhook's `provisioningProducts` (`lib/provisioning/products.ts:41-65`) makes one
+      hosting request per order, and `hostingLineFor` (`lib/provisioning/domain-registration.ts:98-104`) returns the
+      first `hostingPlan` line. Needed: one hosting request per hosting line, each with its own domain and plan.
+      **Done when:** an order with Starter on a.in and Plus on b.in queues two hosting requests (a.in/Starter,
+      b.in/Plus) and the index `provisioning_requests_one_per_product` allows both.
+- [ ] **Cover per product:** `amount_paid` on every row is the whole payment (webhook ~:421), so a domain's spend
+      check is against the whole cart. With several products that overstates each one's cover. **Done when:** each
+      queued row's cover is its own line's taxable value (a bundled ₹0 domain keeps drawing on its hosting line).
+
+**For Pardeep (his area: `app/api/cron/`) — pass on:**
+- [ ] **`/api/cron/register-domains`** sends `years: 1` (`route.ts:175-187`). **Done when:** it sends the queued row's
+      years, and DMS's `domain.register` (already 1-10) registers that term.
+- [ ] **`/api/cron/provision-hosting`** reads one hosting line per order (`hostingLineFor`). **Done when:** it provisions
+      each queued hosting request with its own plan and domain.
 - [x] **Admin package edits create no Razorpay plans** (owner, 26 Sep 2026; DMS `c1e52acd`).
       `RazorpayService.createPlan` deleted; the DMS guard now refuses `plans.create` outside the one-off
       operator script `scripts/razorpay-regenerate-plans-live.js`.
