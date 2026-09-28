@@ -529,7 +529,11 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       domain: cleanDomain || null,
       created_date: today.toISOString().slice(0, 10),
       expires_date: expires.toISOString().slice(0, 10),
-      notes: panel ? `Bought in the DMS panel (DMS account ${panel.dmsUserId}). Razorpay order pending.` : `Direct buy from cart. Razorpay order pending.`,
+      // `notes` is printed on the customer's PDF (lib/pdf/build-props.ts), and it is written
+      // once, here, before payment. Until 28 Sep 2026 it said "Razorpay order pending" — false
+      // on every paid order's bill — and printed the internal DMS account id. Only a sentence
+      // that stays true after payment goes here; the internal detail is on the lead's notes.
+      notes: panel ? `Ordered from your hosting control panel.` : `Ordered online.`,
     });
     if (qErr) {
       console.error("[checkout/cart] quote insert failed:", qErr);
