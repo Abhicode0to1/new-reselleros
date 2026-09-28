@@ -25,6 +25,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { errorResponse, RouteError } from "@/lib/api/with-route";
 import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import { verifyDraftMoney } from "@/lib/ai/money-guard";
 import { logAiDecision, formatGuardBlock } from "@/lib/ai/audit";
@@ -50,7 +51,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     .select("id, company, contact_name, seats, plan")
     .eq("id", leadId)
     .maybeSingle();
-  if (leadErr) return NextResponse.json({ error: leadErr.message }, { status: 500 });
+  // Raw DB text client ko nahi (S21) — server log me [route] prefix ke saath.
+  if (leadErr) return errorResponse("[api/leads/draft-reply]", "POST", new RouteError(500, "Lead load nahi hua — dobara try kariye.", leadErr.message));
   if (!lead) return NextResponse.json({ error: "Lead not found." }, { status: 404 });
 
   const { data: rows } = await supabase

@@ -11,7 +11,8 @@
  * Authentication templates (OTP) are skipped — they are not for broadcasts.
  */
 import { NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { withRoute, RouteError } from "@/lib/api/with-route";
 import { resolveWhatsAppCreds } from "@/lib/whatsapp/client";
 import { paramCount, type ParamField } from "@/lib/marketing/whatsapp-broadcast";
 
@@ -29,16 +30,10 @@ interface MetaTemplate {
   components?: { type: string; text?: string }[];
 }
 
-export async function POST() {
-  const userClient = createClient();
-  const { data: auth } = await userClient.auth.getUser();
-  if (!auth?.user) return NextResponse.json({ error: "Sign in again." }, { status: 401 });
-  const { data: me } = await userClient.from("users").select("tenant_id").eq("id", auth.user.id).single();
-  if (!me?.tenant_id) return NextResponse.json({ error: "Aapka account kisi company se juda nahi hai." }, { status: 403 });
-
-  const creds = await resolveWhatsAppCreds(me.tenant_id);
+export const POST = withRoute({ route: "api/marketing/whatsapp/templates/sync" }, async ({ tenantId, user }) => {
+  const creds = await resolveWhatsAppCreds(tenantId);
   if (!creds?.businessAccountId) {
-    return NextResponse.json({ error: "WhatsApp connect nahi hai, ya Business Account ID nahi bhara — Settings mein jodo.", code: "not_configured" }, { status: 409 });
+    return NextResponse.json({ ok: false, error: "WhatsApp connect nahi hai, ya Business Account ID nahi bhara — Settings mein jodo.", code: "not_configured" }, { status: 409 });
   }
 
   const found: MetaTemplate[] = [];
@@ -48,14 +43,16 @@ export async function POST() {
     const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${creds.accessToken}` } });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {
-      return NextResponse.json({ error: `Meta ne mana kiya: ${j?.error?.message ?? res.status}` }, { status: 502 });
+      // Meta ka apna jawab (upstream) — DB text nahi; 502 kyunki upstream ne mana kiya.
+      throw new RouteError(502, `Meta ne mana kiya: ${j?.error?.message ?? res.status}`);
     }
     found.push(...((j.data ?? []) as MetaTemplate[]));
     url = j.paging?.next ?? null;
   }
 
-  const db = createAdminClient() as unknown as { from: (t: string) => any };  // eslint-disable-line @typescript-eslint/no-explicit-any
-  const { data: existing } = await db.from("whatsapp_templates").select("id, name, language").eq("tenant_id", me.tenant_id);
+  // S21: whatsapp_templates generated types me hai — typed admin client, tenant filter explicit.
+  const db = createAdminClient();
+  const { data: existing } = await db.from("whatsapp_templates").select("id, name, language").eq("tenant_id", tenantId);
   const have = new Map(((existing ?? []) as { id: string; name: string; language: string }[]).map((t) => [`${t.name}|${t.language}`, t.id]));
 
   let updated = 0, added = 0;
@@ -72,13 +69,13 @@ export async function POST() {
       if (!body) continue;
       const n = paramCount(body);
       await db.from("whatsapp_templates").insert({
-        tenant_id: me.tenant_id, name: t.name, language: t.language, category, body, status, meta_id: t.id,
+        tenant_id: tenantId, name: t.name, language: t.language, category, body, status, meta_id: t.id,
         param_map: Array.from({ length: n }, (_, i) => GUESS[i] ?? "first_name"),
         notes: n > 0 ? "Meta se aaya — har {{n}} ka field check karo" : null,
-        created_by: auth.user.id,
+        created_by: user.id,
       });
       added++;
     }
   }
-  return NextResponse.json({ found: found.length, updated, added });
-}
+  return { found: found.length, updated, added };
+});

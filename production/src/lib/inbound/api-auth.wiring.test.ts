@@ -34,7 +34,29 @@ const OTHER_DOORS = /^(cron|public|webhooks|v1|portal|auth)$/;
 const USES_ADMIN = /createAdminClient\s*\(/;
 
 /** Kya route ne poochha "tum kaun ho"? */
-const CHECKS_USER = /auth\.getUser\s*\(/;
+const CHECKS_USER_DIRECT = /auth\.getUser\s*\(/;
+
+/* S21: `withRoute()` (lib/api/with-route.ts) getUser khud karta hai. Chhoot sirf tab jab
+   file ka HAR exported handler `= withRoute(` se bana ho — ek bhi plain
+   `export async function POST` bacha to wahi purana getUser() niyam lagta hai. */
+const HANDLER_EXPORT = /export\s+(?:async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b|const\s+(GET|POST|PUT|PATCH|DELETE)\s*=\s*(\S+?)\()/g;
+function allHandlersWrapped(src: string): boolean {
+  const found = [...src.matchAll(HANDLER_EXPORT)];
+  return found.length > 0 && found.every((m) => m[3] === "withRoute");
+}
+const CHECKS_USER = { test: (src: string) => CHECKS_USER_DIRECT.test(src) || allHandlersWrapped(src) };
+
+describe("withRoute() sach me login maangta hai (upar ki chhoot isi par tiki hai)", () => {
+  const wrapper = readFileSync(join(process.cwd(), "src", "lib", "api", "with-route.ts"), "utf8");
+  it("getUser() karta hai aur user na ho to 401", () => {
+    expect(CHECKS_USER_DIRECT.test(wrapper)).toBe(true);
+    expect(/if \(!auth\?\.user\) return fail\(401/.test(wrapper)).toBe(true);
+  });
+  it("ek plain handler bacha ho to chhoot nahi milti", () => {
+    expect(allHandlersWrapped("export const GET = withRoute({}, h);\nexport async function POST() {}")).toBe(false);
+    expect(allHandlersWrapped("export const GET = withRoute({}, h);\nexport const POST = withRoute({}, h);")).toBe(true);
+  });
+});
 
 /* ── EK CHHOOT, NAAM SE, WAJAH KE SAATH ──────────────────────────────────────
    `attendance/punch` ek MACHINE ka darwaza hai — office ka biometric bridge ise call

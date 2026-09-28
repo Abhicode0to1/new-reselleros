@@ -13,6 +13,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { errorResponse, RouteError } from "@/lib/api/with-route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -113,10 +114,8 @@ export async function POST(req: NextRequest) {
   });
 
   if (leadErr) {
-    return NextResponse.json(
-      { error: `Could not start trial: ${leadErr.message}` },
-      { status: 500 },
-    );
+    // Raw DB text client ko nahi (S21) — server log me [route] prefix ke saath.
+    return errorResponse("[api/leads/start-trial]", "POST", new RouteError(500, "Trial shuru nahi hua — lead save nahi hui. Dobara try kariye.", leadErr.message));
   }
 
   // Auto-create follow-up tasks (Day 7 / 12 / 14)
