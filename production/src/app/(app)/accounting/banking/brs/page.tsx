@@ -91,7 +91,7 @@ export default function BrsPage() {
             <Input id="brs-as-of" type="date" value={asOf} max={todayIso()} onChange={(e) => setAsOf(e.target.value)} />
           </div>
           <div>
-            <label htmlFor="brs-bank-statement-ka-closing" className="block text-xs font-medium text-ink-2 mb-1">Bank statement ka closing balance (optional)</label>
+            <label htmlFor="brs-bank-statement-ka-closing" className="block text-xs font-medium text-ink-2 mb-1">Closing balance per bank statement (optional)</label>
             <Input id="brs-bank-statement-ka-closing" type="number" value={closing} onChange={(e) => setClosing(e.target.value)} placeholder="Statement PDF se" />
           </div>
         </div>

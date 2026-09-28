@@ -329,7 +329,7 @@ function OptOutsTab() {
       <p className="text-sm text-ink-2">Jo STOP likhta hai wo khud yahan aa jaata hai. Kisi ne phone par mana kiya ho to number yahan haath se daalo.</p>
       <div className="flex gap-2 flex-wrap">
         <Input aria-label="Phone number to opt out" className="max-w-xs" placeholder="98990 65121" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        <Button disabled={!norm || add.isPending} onClick={() => { if (norm) add.mutate(norm, { onSuccess: () => setPhone("") }); }}>Opt-out mein daalo</Button>
+        <Button disabled={!norm || add.isPending} onClick={() => { if (norm) add.mutate(norm, { onSuccess: () => setPhone("") }); }}>Add to opt-out list</Button>
         {phone && !norm && <span className="text-xs text-red-600 self-center">Number sahi nahi lagta</span>}
       </div>
       {q.isLoading ? <Skeleton className="h-16" /> : (q.data ?? []).length === 0 ? (
