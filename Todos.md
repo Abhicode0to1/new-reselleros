@@ -1943,6 +1943,17 @@ Consequences accepted with the decision:
       redundancy actually cost has now been paid: see the dead-logout entry above.
 
 - [ ] **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
+      · [x] **Customer panel (`app/dashboard`) converted 28 Sep 2026 (DMS `8590e845`).** 156 lines in 12
+        files, by one mapping: green → emerald, red → rose, amber/yellow/orange → amber, blue/indigo/
+        violet/purple → indigo; light backgrounds → `-soft`, text 600+ → `-ink`, light borders → `/30`,
+        a hover on a light tint → `/15` so it still shows. **Left alone on purpose:** the DNS record-type
+        map (7 types) and the support ticket-category maps (5), which need more hues than the tokens
+        have — 30 classes, the only ones left in the folder by a direct scan. `palette-audit.mjs` reports
+        91 for its `app/dashboard` area and 2,328 served overall (was 383 and 2,620); the 91-vs-30 gap
+        is the audit's wider definition and was not investigated. **Browser-checked** before/after on 8
+        pages with a local test domain (dashboard, domains, hosting, settings changed; nothing broken);
+        pages whose coloured states need data this local account does not have (DNS records, orders,
+        tickets) were not seen changed. Remaining: `app/admin` and shared `components/`.
       The panel-scoped figures stand (`app/admin` 563, `app/dashboard` 200), but two things
       found while starting the work change how to approach it:
       · [x] **DELETED 28 Sep 2026 (owner: "Delete 4 dead DMS components"; DMS `c75dba79`).** The 114
