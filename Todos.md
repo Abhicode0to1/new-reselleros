@@ -1945,12 +1945,12 @@ Consequences accepted with the decision:
 - [ ] **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
       The panel-scoped figures stand (`app/admin` 563, `app/dashboard` 200), but two things
       found while starting the work change how to approach it:
-      · **114 legacy classes are in components nothing renders.** `DomainBookingProgress` (36),
-        `AdminStatsCard` (33), `AdminQuickActions` (29) and `NameServerManagement` (16) are
-        imported only by `components/index.ts` — **a barrel that nothing imports**. Git says
-        they were never wired rather than deliberately unmounted, so they are dead by neglect.
-        Left in place: deleting unused components is the owner's call, not a side effect of a
-        palette pass. But do not count them as work.
+      · [x] **DELETED 28 Sep 2026 (owner: "Delete 4 dead DMS components"; DMS `c75dba79`).** The 114
+        legacy classes were in `DomainBookingProgress` (36), `AdminStatsCard` (33), `AdminQuickActions`
+        (29) and `NameServerManagement` (16). `git log -S"<Name"` found no render of any of them, ever.
+        This entry's "a barrel that nothing imports" was not quite right: `components/index.ts` has one
+        importer, `components/examples/DomainRequirementsExample.tsx`, which is itself unused; and two
+        of the four were not in the barrel at all, only in their own tests. Deleted with 26 tests.
       · **The obvious proxy for "is this rendered" is wrong in BOTH directions.** "Does any file
         under `app/` mention it" marked `FooterClassic`, `CustomToast` and `LoadingComponents`
         dead when they are reached through `Footer.tsx`, `lib/toast.tsx` and `UserLayout.tsx`.

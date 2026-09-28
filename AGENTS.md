@@ -346,8 +346,11 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,422 passing across 442 files, zero failures**
-on 26 Sep 2026, after round 5 (DMS `c1e52acd`: the trial pre-check asks ResellerOS, admin package
+`C:/xampp/htdocs/Domain-Management-Project`, **6,444 passing across 442 files, zero failures**
+on 28 Sep 2026, after four never-rendered components were deleted (DMS `c75dba79`); 6,470 / 446 just
+before, after hosting prices moved to a live read from ResellerOS (DMS `46092c10`), and 6,450 / 444 the
+same day after in-panel renewal payment. The count FELL on purpose: 26 tests went with the deleted
+components. Earlier: 6,422 / 442 on 26 Sep 2026, after round 5 (DMS `c1e52acd`: the trial pre-check asks ResellerOS, admin package
 edits create no Razorpay plans). Same day, 6,422 / 441 after round 4 (DMS `9bc63716`: dead payment code deleted, old renewal dunning
 switched off, reminders point to the ResellerOS quote, the panel trial starts in ResellerOS). The
 count FELL, on purpose: tests were deleted along with the code they covered. Earlier:
