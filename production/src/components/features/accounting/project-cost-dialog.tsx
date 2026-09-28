@@ -50,7 +50,7 @@ export function ProjectCostDialog({ open, onClose, result, employeeNames, period
                         <span className="text-ink-3"> · {l.percent}% on </span>
                         <Link href={`/projects/${l.projectId}`} className="text-ink hover:underline">{l.projectTitle}</Link>
                       </div>
-                      <div className="text-2xs text-ink-3 tabular-nums">
+                      <div className="text-xs text-ink-3 tabular-nums">
                         {formatDate(l.from)} – {formatDate(l.to)} · {l.months} mo × {rupee(l.monthlyGross)}/mo × {l.percent}%
                         {l.cost !== l.allocated && <> · {rupee(l.allocated)} scaled to salary booked</>}
                       </div>
@@ -76,7 +76,7 @@ export function ProjectCostDialog({ open, onClose, result, employeeNames, period
                         <span className="text-ink-3"> · </span>
                         <Link href={`/projects/${d.projectId}`} className="text-ink-2 hover:underline">{d.projectTitle}</Link>
                       </div>
-                      <div className="text-2xs text-ink-3">
+                      <div className="text-xs text-ink-3">
                         {d.date ? formatDate(d.date) : "—"}{d.category ? ` · ${d.category}` : ""}{d.description && d.vendor ? ` · ${d.description}` : ""}
                       </div>
                     </div>
@@ -88,13 +88,13 @@ export function ProjectCostDialog({ open, onClose, result, employeeNames, period
           )}
 
           {result.capped && (
-            <p className="text-2xs text-amber-ink leading-snug">
+            <p className="text-xs text-amber-ink leading-snug">
               Allocations add up to {rupee(result.labourAllocated)}, more than the {rupee(result.salaryPool)} of salary booked in
               this period — so each line is scaled down to what was actually booked.
             </p>
           )}
           {result.undated > 0 && (
-            <p className="text-2xs text-amber-ink leading-snug">
+            <p className="text-xs text-amber-ink leading-snug">
               {result.undated} allocation{result.undated === 1 ? " has" : "s have"} no start date, so {result.undated === 1 ? "it is" : "they are"} not
               counted. Add a start date on the project page (Team / Labour).
             </p>

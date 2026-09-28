@@ -137,7 +137,7 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
                   {headline || "Your headline will appear here"}
                 </div>
                 {subheadline && (
-                  <div className="text-2xs sm:text-xs opacity-90 mt-0.5">{subheadline}</div>
+                  <div className="text-xs sm:text-xs opacity-90 mt-0.5">{subheadline}</div>
                 )}
               </div>
               <span className="font-mono text-xs bg-paper text-ink px-2 py-1 rounded font-semibold whitespace-nowrap">
@@ -159,7 +159,7 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
                 className="text-left text-xs border border-hairline bg-paper hover:border-amber hover:bg-amber-soft/30 rounded p-2 transition-colors"
               >
                 <div className="font-medium text-ink truncate">{p.h}</div>
-                <div className="text-3xs text-ink-3 truncate">{p.d}</div>
+                <div className="text-xs text-ink-3 truncate">{p.d}</div>
               </button>
             ))}
           </div>

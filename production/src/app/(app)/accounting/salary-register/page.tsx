@@ -282,7 +282,7 @@ function MonthRegister() {
                     <tr key={e.id} className="hover:bg-paper-2/40 transition-colors">
                       <td className="px-3 py-2.5">
                         <div className="font-bold text-ink">{toTitleCase(e.name)}</div>
-                        <div className="text-3xs text-ink-3">{e.designation || "Staff"}</div>
+                        <div className="text-xs text-ink-3">{e.designation || "Staff"}</div>
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono font-bold text-ink">{rupee(ctc.annualCtc)}</td>
                       <td className="px-3 py-2.5 text-right font-mono font-semibold text-ink-2">{rupee(ctc.monthlyCtc)}</td>
@@ -346,7 +346,7 @@ function MonthRegister() {
                   >
                     <td className="px-3 py-2.5">
                       <div className="font-medium text-ink">{toTitleCase(e?.name ?? "Employee")}</div>
-                      {e?.designation && <div className="text-2xs text-ink-3 mt-0.5">{e.designation}</div>}
+                      {e?.designation && <div className="text-xs text-ink-3 mt-0.5">{e.designation}</div>}
                     </td>
                     {COLS.map((c) => <td key={c.key} className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-2">{num(p[c.key] as number)}</td>)}
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums font-semibold text-ink">{rupee(p.net)}</td>
@@ -359,7 +359,7 @@ function MonthRegister() {
           </table>
         </Card>
       )}
-      <p className="mt-3 text-2xs text-ink-3">
+      <p className="mt-3 text-xs text-ink-3">
         Net pay = Gross − LOP − TDS − PF − ESI − other. These are the real amounts paid — the same figures your CA files.
       </p>
         </>
@@ -442,33 +442,33 @@ function EmployeeRegister({ employeeId }: { employeeId: string }) {
             )}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
-            <div><div className="text-2xs text-ink-3">Salary paid ({f16.monthsPaid} mo)</div><div className="font-mono text-ink">{rupee(f16.tax.grossSalary)}</div></div>
+            <div><div className="text-xs text-ink-3">Salary paid ({f16.monthsPaid} mo)</div><div className="font-mono text-ink">{rupee(f16.tax.grossSalary)}</div></div>
             {/* New regime: ₹12L rebate (s.87A) + ₹75k standard deduction = nothing to pay up to
                 ₹12.75L of salary. Showing "taxable ₹37,445" for a ₹1.1L salary reads like a tax
                 bill — so the tile shows the tax-free limit and what, if anything, is above it. */}
             <div>
-              <div className="text-2xs text-ink-3">Tax-free tak (₹{taxYearFor(f16.fyStart).rebateLimit.toLocaleString("en-IN")} s.87A + ₹{taxYearFor(f16.fyStart).standardDeduction.toLocaleString("en-IN")} std. ded.)</div>
+              <div className="text-xs text-ink-3">Tax-free tak (₹{taxYearFor(f16.fyStart).rebateLimit.toLocaleString("en-IN")} s.87A + ₹{taxYearFor(f16.fyStart).standardDeduction.toLocaleString("en-IN")} std. ded.)</div>
               <div className="font-mono text-ink">{rupee(taxYearFor(f16.fyStart).rebateLimit + taxYearFor(f16.fyStart).standardDeduction)}</div>
             </div>
             <div>
-              <div className="text-2xs text-ink-3">Limit se upar</div>
+              <div className="text-xs text-ink-3">Limit se upar</div>
               <div className={`font-mono ${f16.tax.taxableIncome > taxYearFor(f16.fyStart).rebateLimit ? "text-rose" : "text-emerald"}`}>{rupee(Math.max(0, f16.tax.taxableIncome - taxYearFor(f16.fyStart).rebateLimit))}</div>
             </div>
-            <div><div className="text-2xs text-ink-3">Tax for the year (incl. cess)</div><div className="font-mono text-ink">{rupee(f16.tax.totalTax)}</div></div>
-            <div><div className="text-2xs text-ink-3">TDS deducted</div><div className="font-mono text-ink">{rupee(f16.tdsDeducted)}</div></div>
+            <div><div className="text-xs text-ink-3">Tax for the year (incl. cess)</div><div className="font-mono text-ink">{rupee(f16.tax.totalTax)}</div></div>
+            <div><div className="text-xs text-ink-3">TDS deducted</div><div className="font-mono text-ink">{rupee(f16.tdsDeducted)}</div></div>
             <div>
-              <div className="text-2xs text-ink-3">{f16.balance > 0 ? "Short — deduct by March" : f16.balance < 0 ? "Excess (refund via ITR)" : "Balance"}</div>
+              <div className="text-xs text-ink-3">{f16.balance > 0 ? "Short — deduct by March" : f16.balance < 0 ? "Excess (refund via ITR)" : "Balance"}</div>
               <div className={`font-mono ${f16.balance > 0 ? "text-rose" : f16.balance < 0 ? "text-amber-ink" : "text-emerald"}`}>{rupee(Math.abs(f16.balance))}</div>
             </div>
           </div>
-          {f16.tax.rebate87A > 0 && f16.tax.totalTax === 0 && <p className="text-2xs text-ink-3 mt-2">Taxable income ₹12 lakh tak — s.87A rebate se tax shunya; agar saal mein incentive se upar gaya to TDS lagega.</p>}
+          {f16.tax.rebate87A > 0 && f16.tax.totalTax === 0 && <p className="text-xs text-ink-3 mt-2">Taxable income ₹12 lakh tak — s.87A rebate se tax shunya; agar saal mein incentive se upar gaya to TDS lagega.</p>}
         </Card>
       )}
 
       <Card className="mb-4 p-4">
         <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Salary register</div>
         <div className="font-serif text-2xl text-ink leading-tight mt-1">{toTitleCase(emp?.name ?? "Employee")}</div>
-        <div className="text-2xs text-ink-3 mt-0.5">
+        <div className="text-xs text-ink-3 mt-0.5">
           {[emp?.designation?.trim() || null, emp?.joining_date ? `Joined ${formatDate(emp.joining_date)}` : null].filter(Boolean).join(" · ")}
         </div>
       </Card>

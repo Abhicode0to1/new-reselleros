@@ -143,21 +143,21 @@ function AdvanceCard({ r, onConsume, onDelete }: { r: PrepaidAdvance; onConsume:
               </span>
             )}
           </div>
-          <div className="text-2xs text-ink-3 mt-0.5">
+          <div className="text-xs text-ink-3 mt-0.5">
             Paid {formatDate(r.paid_date)}{r.payment_method ? ` · ${r.payment_method.replace(/_/g, " ")}` : ""}
             {r.notes ? ` · ${r.notes}` : ""}
           </div>
         </div>
         <div className="text-right">
           <div className="font-serif text-2xl text-ink leading-none">{rupee(r.balance)}</div>
-          <div className="text-3xs text-ink-3 mt-0.5">balance of {rupee(r.total_amount)}</div>
+          <div className="text-xs text-ink-3 mt-0.5">balance of {rupee(r.total_amount)}</div>
         </div>
       </div>
       {/* consumed bar */}
       <div className="mt-3 h-1.5 rounded-full bg-paper-2 overflow-hidden">
         <div className="h-full bg-emerald" style={{ width: `${pct}%` }} />
       </div>
-      <div className="mt-1 flex items-center justify-between gap-2 text-2xs text-ink-3">
+      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-ink-3">
         {/* Click to expand the expenses booked against this advance. */}
         <button type="button" onClick={() => setOpen((o) => !o)}
           className="inline-flex items-center gap-1 hover:text-ink transition-colors"
@@ -167,9 +167,9 @@ function AdvanceCard({ r, onConsume, onDelete }: { r: PrepaidAdvance; onConsume:
         </button>
         <div className="flex items-center gap-1">
           {!done && (
-            <Button variant="primary" className="h-7 px-2.5 text-2xs" icon="check" onClick={onConsume}>Consume</Button>
+            <Button variant="primary" className="h-7 px-2.5 text-xs" icon="check" onClick={onConsume}>Consume</Button>
           )}
-          <Button variant="ghost" className="h-7 px-2 text-2xs" onClick={onDelete}>Delete</Button>
+          <Button variant="ghost" className="h-7 px-2 text-xs" onClick={onDelete}>Delete</Button>
         </div>
       </div>
 
@@ -189,17 +189,17 @@ function AdvanceCard({ r, onConsume, onDelete }: { r: PrepaidAdvance; onConsume:
                     {e.gst_paid > 0 && <span className="text-ink-3"> · GST {rupee(e.gst_paid)}</span>}
                   </div>
                   {(e.notes || e.description) && (
-                    <div className="text-2xs text-ink-3 truncate">{e.notes || e.description}</div>
+                    <div className="text-xs text-ink-3 truncate">{e.notes || e.description}</div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {e.attachment_url ? (
                     <button type="button" onClick={() => openBill(e.attachment_url!)}
-                      className="inline-flex items-center gap-1 text-2xs text-amber-ink hover:underline">
+                      className="inline-flex items-center gap-1 text-xs text-amber-ink hover:underline">
                       <Icon name="file" size={12} /> Bill
                     </button>
                   ) : (
-                    <span className="text-3xs text-ink-3">no bill</span>
+                    <span className="text-xs text-ink-3">no bill</span>
                   )}
                   <span className="font-medium text-ink text-[12px] tabular-nums">{rupee(e.amount)}</span>
                 </div>
@@ -218,7 +218,7 @@ function AdvanceChannel({ id, channel }: { id: string; channel: string | null })
   const set = useSetPrepaidAdvanceChannel();
   return (
     <Select value={channel ?? "none"} onValueChange={(v) => set.mutate({ id, channel: v === "none" ? null : v })}>
-      <SelectTrigger className={`h-6 w-auto gap-1 px-2 text-3xs ${channel ? "" : "border-amber/60 text-amber-ink"}`} aria-label="Channel">
+      <SelectTrigger className={`h-6 w-auto gap-1 px-2 text-xs ${channel ? "" : "border-amber/60 text-amber-ink"}`} aria-label="Channel">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -301,7 +301,7 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
                         onMouseDown={(e) => { e.preventDefault(); setVendor(v.name); setVendorId(v.id); setVendorOpen(false); }}
                         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2">
                         <span className="text-ink truncate">{v.name}</span>
-                        {v.gstin && <span className="text-3xs text-ink-3 font-mono shrink-0">{v.gstin}</span>}
+                        {v.gstin && <span className="text-xs text-ink-3 font-mono shrink-0">{v.gstin}</span>}
                       </button>
                     ))}
                   </div>
@@ -309,9 +309,9 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
               })()}
             </div>
             {vendorId || vMatch ? (
-              <p className="mt-1 flex items-center gap-1.5 text-2xs text-emerald"><Icon name="check_circle" size={12} /> Existing vendor — isi se link hoga.</p>
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald"><Icon name="check_circle" size={12} /> Existing vendor — isi se link hoga.</p>
             ) : isNewVendor ? (
-              <p className="mt-1 flex items-center gap-1.5 text-2xs text-amber-ink"><Icon name="plus" size={12} /> Naya vendor &ldquo;{vName}&rdquo; — Save par Vendors master me add ho jayega.</p>
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-amber-ink"><Icon name="plus" size={12} /> Naya vendor &ldquo;{vName}&rdquo; — Save par Vendors master me add ho jayega.</p>
             ) : null}
           </FormField>
           <div className="grid grid-cols-2 gap-3">
@@ -334,7 +334,7 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
                   {AD_CHANNELS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <p className="mt-1 text-3xs text-ink-3 leading-snug">Mahine ke invoice se jo kharcha banega, wo isi channel mein ginega (Marketing → Spend, ROAS &amp; CAC).</p>
+              <p className="mt-1 text-xs text-ink-3 leading-snug">Mahine ke invoice se jo kharcha banega, wo isi channel mein ginega (Marketing → Spend, ROAS &amp; CAC).</p>
             </FormField>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -361,7 +361,7 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-3xs text-ink-3 mt-1">
+              <p className="text-xs text-ink-3 mt-1">
                 {method === "cash"
                   ? "Cash-in-hand se diya — yahan wo petty-cash account chuno."
                   : "Bank se gaya — Banking me isi account ki debit line se reconcile karo."}
@@ -456,11 +456,11 @@ function ConsumeDialog({ advance, onClose }: { advance: PrepaidAdvance; onClose:
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Amount used (₹)" required htmlFor="cons_amt">
               <Input id="cons_amt" type="number" min={1} prefix="₹" value={amount} onChange={(e) => setAmount(e.target.value)} error={tooMuch ? "More than balance" : undefined} />
-              <button type="button" className="text-2xs text-amber-ink hover:underline mt-1" onClick={() => setAmount(String(advance.balance))}>Full ({rupee(advance.balance)})</button>
+              <button type="button" className="text-xs text-amber-ink hover:underline mt-1" onClick={() => setAmount(String(advance.balance))}>Full ({rupee(advance.balance)})</button>
             </FormField>
             <FormField label="of which GST (ITC)" htmlFor="cons_gst">
               <Input id="cons_gst" type="number" min={0} prefix="₹" value={gst} onChange={(e) => setGst(e.target.value)} error={gstTooMuch ? "GST > amount" : undefined} />
-              <p className="text-3xs text-ink-3 mt-1">Bill ka input GST — claimable.</p>
+              <p className="text-xs text-ink-3 mt-1">Bill ka input GST — claimable.</p>
             </FormField>
           </div>
           <FormField label="Date" htmlFor="cons_date">
@@ -471,11 +471,11 @@ function ConsumeDialog({ advance, onClose }: { advance: PrepaidAdvance; onClose:
               onChange={(e) => onFile(e.target.files?.[0] ?? null)}
               className="block w-full text-[12px] text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-paper-2 file:px-3 file:py-1.5 file:text-ink file:cursor-pointer disabled:opacity-50" />
             {reading ? (
-              <p className="text-2xs text-amber-ink mt-1 inline-flex items-center gap-1"><Icon name="sparkles" size={12} /> AI bill padh raha hai — amount/GST/date bhar dega…</p>
+              <p className="text-xs text-amber-ink mt-1 inline-flex items-center gap-1"><Icon name="sparkles" size={12} /> AI bill padh raha hai — amount/GST/date bhar dega…</p>
             ) : aiNote ? (
-              <p className="text-2xs text-emerald mt-1">{aiNote}</p>
+              <p className="text-xs text-emerald mt-1">{aiNote}</p>
             ) : (
-              <p className="text-3xs text-ink-3 mt-1">Facebook/Google ka tax invoice lagao — AI amount/GST/date khud bhar dega, aur bill expense se juda rahega.</p>
+              <p className="text-xs text-ink-3 mt-1">Facebook/Google ka tax invoice lagao — AI amount/GST/date khud bhar dega, aur bill expense se juda rahega.</p>
             )}
           </FormField>
           <FormField label="Note (optional)" htmlFor="cons_note">
@@ -499,7 +499,7 @@ function KPI({ label, value, tone, sub }: { label: string; value: string; tone?:
     <Card className="p-2.5">
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5 truncate">{label}</div>
       <div className={`font-serif text-lg md:text-xl ${c} leading-tight truncate`}>{value}</div>
-      {sub && <div className="text-3xs text-ink-3 truncate">{sub}</div>}
+      {sub && <div className="text-xs text-ink-3 truncate">{sub}</div>}
     </Card>
   );
 }
@@ -588,7 +588,7 @@ function BookInvoiceDialog({ advances, onClose }: { advances: PrepaidAdvance[]; 
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Invoice total (₹, incl. GST)" required htmlFor="inv_amt">
               <Input id="inv_amt" type="number" min={1} prefix="₹" value={amount} onChange={(e) => setAmount(e.target.value)} />
-              <button type="button" className="text-2xs text-amber-ink hover:underline mt-1" onClick={() => setAmount(String(balance))}>
+              <button type="button" className="text-xs text-amber-ink hover:underline mt-1" onClick={() => setAmount(String(balance))}>
                 All that&apos;s left ({rupee(balance)})
               </button>
             </FormField>
@@ -610,7 +610,7 @@ function BookInvoiceDialog({ advances, onClose }: { advances: PrepaidAdvance[]; 
 
           {/* GST: which head, and whether it is credit at all. */}
           {gstAmt > 0 && (
-            <div className={`rounded-md border p-2.5 text-2xs ${itc.eligible ? "border-hairline bg-paper-2/30 text-ink-2" : "border-amber/40 bg-amber-soft/20 text-amber-ink"}`}>
+            <div className={`rounded-md border p-2.5 text-xs ${itc.eligible ? "border-hairline bg-paper-2/30 text-ink-2" : "border-amber/40 bg-amber-soft/20 text-amber-ink"}`}>
               {vendorRow?.gstin
                 ? <>Vendor <b>{vendorRow.name}</b> · GSTIN {vendorRow.gstin} → {interState ? <>inter-state: <b>IGST {rupee(gstAmt)}</b></> : <>same state: <b>CGST {rupee(heads!.cgst)} + SGST {rupee(heads!.sgst)}</b></>}.</>
                 : <>Vendor master mein <b>{vendor}</b> ka GSTIN nahi — GST head maan kar CGST/SGST likha jayega aur <b>ITC nahi milega</b> (lib/gst/itc.ts). Vendors page par GSTIN bharo, phir book karo.</>}
@@ -634,7 +634,7 @@ function BookInvoiceDialog({ advances, onClose }: { advances: PrepaidAdvance[]; 
             )}
           </div>
           {tdsSection && tdsView && (
-            <p className={`text-2xs ${tdsView.applies ? (tdsView.noPan ? "text-rose" : "text-ink-2") : "text-emerald"}`}>
+            <p className={`text-xs ${tdsView.applies ? (tdsView.noPan ? "text-rose" : "text-ink-2") : "text-emerald"}`}>
               {tdsView.reason}{tdsView.applies && !tdsEdited ? ` ${rupee(tdsView.tds)} apne-aap bhara.` : ""}
               {tdsView.applies ? " Paisa advance mein poora ja chuka hai — TDS challan se jama karo; vendor ko Form 16A do, wo credit/refund deta hai (Meta/Google TDS certificate lete hain)." : ""}
             </p>
@@ -643,7 +643,7 @@ function BookInvoiceDialog({ advances, onClose }: { advances: PrepaidAdvance[]; 
           {/* The split, before booking. */}
           {plan && (
             plan.ok ? (
-              <div className="rounded-md border border-hairline bg-paper-2/30 p-3 text-2xs">
+              <div className="rounded-md border border-hairline bg-paper-2/30 p-3 text-xs">
                 <p className="font-semibold text-ink-2 mb-1.5">
                   Drawn from {plan.slices.length} top-up{plan.slices.length === 1 ? "" : "s"}, oldest first
                 </p>
@@ -658,7 +658,7 @@ function BookInvoiceDialog({ advances, onClose }: { advances: PrepaidAdvance[]; 
                 <p className="mt-1.5 text-ink-3">{vendor} advance left after this: <b className="text-ink">{rupee(plan.leftAfter)}</b></p>
               </div>
             ) : (
-              <p className="text-2xs text-rose-ink">{plan.reason}</p>
+              <p className="text-xs text-rose-ink">{plan.reason}</p>
             )
           )}
         </div>

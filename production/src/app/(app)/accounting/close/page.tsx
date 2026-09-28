@@ -94,7 +94,7 @@ export default function MonthClosePage() {
               {!close.locked && (
                 isOwner
                   ? <Button variant="primary" disabled={!close.readyToLock || update.isPending} loading={update.isPending} onClick={lock} icon="lock">Books {formatDate(data.facts.monthEnd)} tak lock karo</Button>
-                  : <span className="text-2xs text-ink-3">Lock sirf owner kar sakta hai</span>
+                  : <span className="text-xs text-ink-3">Lock sirf owner kar sakta hai</span>
               )}
             </div>
             <div className="mt-3 h-1.5 rounded-full bg-paper-2 overflow-hidden">
@@ -113,9 +113,9 @@ export default function MonthClosePage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-2xs text-ink-3 font-mono">{i + 1}.</span>
+                        <span className="text-xs text-ink-3 font-mono">{i + 1}.</span>
                         <span className="font-semibold text-ink">{s.title}</span>
-                        <span className={cn("text-2xs font-semibold", t.cls)}>{t.label}</span>
+                        <span className={cn("text-xs font-semibold", t.cls)}>{t.label}</span>
                         {s.kind === "manual" && <span className="text-3xs uppercase tracking-wider text-ink-3 border border-hairline rounded px-1">portal</span>}
                       </div>
                       <p className="text-xs text-ink-2 mt-0.5 leading-relaxed">{s.detail}{s.doneAt ? ` (tick: ${formatDate(s.doneAt.slice(0, 10))})` : ""}</p>

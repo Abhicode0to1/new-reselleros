@@ -145,7 +145,7 @@ function CampaignCard({ r, today, onEdit }: { r: CampaignRow; today: string; onE
           </span>
         </div>
         {r.budget > 0 && <Bar pct={m.budgetUsedPct ?? 0} tone={m.overBudget ? "bad" : m.pace === "overspending" ? "warn" : "ok"} />}
-        {paceText && <p className={cn("text-2xs", m.pace === "overspending" ? "text-amber-ink" : "text-ink-3")}>{paceText}</p>}
+        {paceText && <p className={cn("text-xs", m.pace === "overspending" ? "text-amber-ink" : "text-ink-3")}>{paceText}</p>}
       </div>
 
       <div className="space-y-1">
@@ -214,7 +214,7 @@ function CampaignCard({ r, today, onEdit }: { r: CampaignRow; today: string; onE
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md bg-paper-2/60 px-1 py-1.5">
-      <div className="text-2xs text-ink-3">{label}</div>
+      <div className="text-xs text-ink-3">{label}</div>
       <div className="text-sm font-medium text-ink tabular-nums">{value}</div>
     </div>
   );

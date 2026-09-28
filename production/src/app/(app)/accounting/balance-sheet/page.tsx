@@ -200,7 +200,7 @@ export default function BalanceSheetPage() {
 
       {/* Honesty note */}
       <Card className="mb-6 bg-paper-2/40 p-3">
-        <p className="text-2xs text-ink-3 leading-relaxed flex items-start gap-1.5">
+        <p className="text-xs text-ink-3 leading-relaxed flex items-start gap-1.5">
           <Icon name="info" size={13} className="mt-0.5 shrink-0" />
           <span>
             Auto figures (cash &amp; bank, receivables, TDS, payables, GST) come from your
@@ -359,14 +359,14 @@ export default function BalanceSheetPage() {
                         plus retained earnings from the P&amp;L. Whatever is left over is an entry the books don&apos;t have —
                         it is shown here as a <b>balancing figure</b>, not hidden inside retained earnings.
                       </p>
-                      <div className="font-mono text-2xs space-y-1 bg-paper rounded p-2 border border-hairline">
+                      <div className="font-mono text-xs space-y-1 bg-paper rounded p-2 border border-hairline">
                         <div className="flex justify-between gap-3"><span>Total assets</span><span className="tabular-nums">{fmtBS(totalAssets)}</span></div>
                         <div className="flex justify-between gap-3"><span>− Total liabilities</span><span className="tabular-nums">{fmtBS(totalLiab)}</span></div>
                         <div className="flex justify-between gap-3"><span>− Owner&apos;s capital &amp; other manual equity</span><span className="tabular-nums">{fmtBS(sum(manualEqRows))}</span></div>
                         <div className="flex justify-between gap-3"><span>− Retained earnings (P&amp;L, all periods)</span><span className="tabular-nums">{fmtBS(cumulativeProfit ?? 0)}</span></div>
                         <div className="flex justify-between gap-3 border-t border-hairline pt-1 font-semibold text-ink"><span>= Unexplained difference</span><span className="tabular-nums">{fmtBS(unexplained ?? retained)}</span></div>
                       </div>
-                      <p className="mt-2 text-2xs text-ink-3">
+                      <p className="mt-2 text-xs text-ink-3">
                         Usual causes: bank opening balances entered without the matching capital line, owner drawings taken without an entry, or income / expense that never reached the books. Add the missing line (Owner&apos;s capital, Drawings) and this goes to zero.
                       </p>
                       {unexplained !== null && unexplained !== 0 && (
@@ -374,7 +374,7 @@ export default function BalanceSheetPage() {
                           <Button size="sm" variant="primary" loading={createItem.isPending} onClick={bookUnexplained}>
                             {unexplained > 0 ? `Owner's capital ${rupee(unexplained)} jodo` : `Drawings ${rupee(-unexplained)} jodo`}
                           </Button>
-                          <span className="text-2xs text-ink-3">Ek click — equity line ban jaayegi, farq zero. Baad mein Edit/Delete kar sakte ho.</span>
+                          <span className="text-xs text-ink-3">Ek click — equity line ban jaayegi, farq zero. Baad mein Edit/Delete kar sakte ho.</span>
                         </div>
                       )}
                     </div>
@@ -493,7 +493,7 @@ function BSLine({
             </button>
           )}
         </div>
-        {hint && <div className="text-2xs text-ink-3 mt-0.5 leading-snug">{hint}</div>}
+        {hint && <div className="text-xs text-ink-3 mt-0.5 leading-snug">{hint}</div>}
       </div>
       <span className={`font-mono text-sm tabular-nums whitespace-nowrap shrink-0 ${amount < 0 ? "text-rose" : "text-ink"}`}>
         {fmtBS(amount)}
@@ -552,7 +552,7 @@ function ManualGroup({
           <Icon name={open ? "chevron_down" : "arrow_right"} size={13} className="text-ink-3 shrink-0" />
           <span className="text-sm text-ink">{label}</span>
           <OriginBadge kind="manual" />
-          <span className="text-2xs text-ink-3">· {rows.length} entries</span>
+          <span className="text-xs text-ink-3">· {rows.length} entries</span>
         </div>
         <span className={`font-mono text-sm tabular-nums whitespace-nowrap shrink-0 ${total < 0 ? "text-rose" : "text-ink"}`}>{fmtBS(total)}</span>
       </div>
@@ -638,7 +638,7 @@ function EditLineDialog({ item, onClose }: { item: BalanceSheetItem; onClose: ()
           <div>
             <label htmlFor="balance-sheet-amount" className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
             <Input id="balance-sheet-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <p className="mt-1 text-2xs text-ink-3">Negative allowed (e.g. depreciation, drawings).</p>
+            <p className="mt-1 text-xs text-ink-3">Negative allowed (e.g. depreciation, drawings).</p>
           </div>
         </div>
         <DialogFooter>
@@ -704,7 +704,7 @@ function AddLineDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 })}
               </SelectContent>
             </Select>
-            <p className="text-3xs text-ink-3 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               Goes under <b>{SECTIONS.find((s) => s.value === category.section)?.label}</b> · e.g. {category.examples}
             </p>
           </FormField>
@@ -715,7 +715,7 @@ function AddLineDialog({ open, onClose }: { open: boolean; onClose: () => void }
 
           <FormField label="Amount (₹)" required htmlFor="bs-amount">
             <Input id="bs-amount" type="number" prefix="₹" error={errors.amount?.message} {...register("amount")} />
-            <p className="text-3xs text-ink-3 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               {category.contra
                 ? "Just type the amount — we'll record it as a reduction automatically."
                 : "Enter the current value / outstanding balance."}

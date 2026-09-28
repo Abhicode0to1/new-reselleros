@@ -55,7 +55,7 @@ export function ExpenseReportCard({ report, periodLabel, fileStem, onCategory, m
         <div>
           <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Expense report</h2>
           <p className="font-serif text-2xl text-ink mt-1 tabular-nums">{rupee(report.total)}</p>
-          <p className="text-2xs text-ink-3">
+          <p className="text-xs text-ink-3">
             {report.count} {report.count === 1 ? "entry" : "entries"} · {periodLabel} · {movedToCogs > 0
               ? <>every booked expense — {rupee(movedToCogs)} of it (salary on projects) is shown under cost of goods, the rest is “Operating expenses”</>
               : <>same total as “Operating expenses” below</>}
@@ -82,10 +82,10 @@ export function ExpenseReportCard({ report, periodLabel, fileStem, onCategory, m
                   >
                     <div className="flex items-baseline justify-between gap-2 text-[13px]">
                       <span className="text-ink-2 truncate">
-                        {c.category} <span className="text-2xs text-ink-3">· {c.count}</span>
+                        {c.category} <span className="text-xs text-ink-3">· {c.count}</span>
                       </span>
                       <span className="tabular-nums text-ink shrink-0">
-                        {rupee(c.total)} <span className="text-2xs text-ink-3 w-10 inline-block text-right">{c.pct}%</span>
+                        {rupee(c.total)} <span className="text-xs text-ink-3 w-10 inline-block text-right">{c.pct}%</span>
                       </span>
                     </div>
                     <div className="mt-1 h-1.5 rounded-full bg-paper-2 overflow-hidden">
@@ -105,14 +105,14 @@ export function ExpenseReportCard({ report, periodLabel, fileStem, onCategory, m
                 {vendors.map((v) => (
                   <li key={v.vendor} className="flex items-baseline justify-between gap-2 py-1.5 text-[13px]">
                     <span className="text-ink-2 truncate">
-                      {v.vendor} <span className="text-2xs text-ink-3">· {v.count}</span>
+                      {v.vendor} <span className="text-xs text-ink-3">· {v.count}</span>
                     </span>
                     <span className="tabular-nums text-ink shrink-0">{rupee(v.total)}</span>
                   </li>
                 ))}
               </ul>
               {report.byVendor.length > 8 && (
-                <button type="button" onClick={() => setShowAllVendors((s) => !s)} className="mt-1 text-2xs text-amber-ink hover:underline">
+                <button type="button" onClick={() => setShowAllVendors((s) => !s)} className="mt-1 text-xs text-amber-ink hover:underline">
                   {showAllVendors ? "Show top 8" : `Show all ${report.byVendor.length}`}
                 </button>
               )}
@@ -125,7 +125,7 @@ export function ExpenseReportCard({ report, periodLabel, fileStem, onCategory, m
                 <ul className="space-y-1">
                   {report.byMonth.map((m) => (
                     <li key={m.month} className="grid grid-cols-[3.5rem_1fr_auto] items-center gap-2 text-[13px]">
-                      <span className="text-ink-3 text-2xs">{monthLabel(m.month)}</span>
+                      <span className="text-ink-3 text-xs">{monthLabel(m.month)}</span>
                       <div className="h-1.5 rounded-full bg-paper-2 overflow-hidden">
                         <div className="h-full rounded-full bg-rose/60" style={{ width: `${Math.max(2, Math.round((m.total / maxMonth) * 100))}%` }} />
                       </div>

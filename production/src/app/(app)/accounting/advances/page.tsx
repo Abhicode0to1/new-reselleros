@@ -176,13 +176,13 @@ export default function EmployeeAdvancesPage() {
                         <div key={exp.id} className="flex items-center justify-between p-2.5 bg-paper rounded border border-hairline text-xs">
                           <div className="space-y-0.5">
                             <span className="font-semibold text-ink">{exp.category}</span>
-                            {exp.description && <p className="text-ink-3 text-2xs">{exp.description}</p>}
-                            <span className="text-3xs text-ink-3">{formatDate(exp.expense_date, "short")} {exp.vendor_name ? `· Vendor: ${exp.vendor_name}` : ""}</span>
+                            {exp.description && <p className="text-ink-3 text-xs">{exp.description}</p>}
+                            <span className="text-xs text-ink-3">{formatDate(exp.expense_date, "short")} {exp.vendor_name ? `· Vendor: ${exp.vendor_name}` : ""}</span>
                           </div>
 
                           <div className="text-right">
                             <span className="font-bold text-ink">{rupee(exp.amount)}</span>
-                            <p className="text-3xs text-emerald font-medium">✓ Adjusted vs Advance</p>
+                            <p className="text-xs text-emerald font-medium">✓ Adjusted vs Advance</p>
                           </div>
                         </div>
                       ))}
@@ -207,7 +207,7 @@ export default function EmployeeAdvancesPage() {
                     <span className="font-bold text-ink">{adv.employee_name}</span>
                     <Badge kind="success" size="sm">Settled</Badge>
                   </div>
-                  <p className="text-ink-3 text-2xs mt-0.5">
+                  <p className="text-ink-3 text-xs mt-0.5">
                     Disbursed: {rupee(adv.disbursed_amount)} · Spent: {rupee(adv.total_spent)} · Disbursed on {formatDate(adv.disbursed_date, "short")}
                   </p>
                 </div>

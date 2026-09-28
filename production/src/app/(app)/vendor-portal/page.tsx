@@ -516,17 +516,17 @@ function ViewAgreementModal({
             <div className="p-3 bg-paper-2/40 border border-hairline rounded-xl space-y-1">
               <div className="text-3xs uppercase font-bold text-ink-3">Signed on behalf of Reseller</div>
               <div className="font-bold text-ink">Anutech Digital</div>
-              <div className="text-2xs text-emerald-600 font-semibold">✓ Signed Digitally by Pardeep Sharma (Owner)</div>
-              <div className="text-3xs text-ink-3 font-mono">Date: {agreement.effectiveDate}</div>
+              <div className="text-xs text-emerald-600 font-semibold">✓ Signed Digitally by Pardeep Sharma (Owner)</div>
+              <div className="text-xs text-ink-3 font-mono">Date: {agreement.effectiveDate}</div>
             </div>
 
             <div className="p-3 bg-paper-2/40 border border-hairline rounded-xl space-y-1">
               <div className="text-3xs uppercase font-bold text-ink-3">Signed on behalf of Vendor</div>
               <div className="font-bold text-ink">{agreement.vendorName}</div>
-              <div className="text-2xs text-emerald-600 font-semibold">
+              <div className="text-xs text-emerald-600 font-semibold">
                 {agreement.status === "Active (Signed)" ? "✓ Signed Digitally by Authorized Officer" : "⏳ Pending Digital Signature"}
               </div>
-              <div className="text-3xs text-ink-3 font-mono">Date: {agreement.effectiveDate}</div>
+              <div className="text-xs text-ink-3 font-mono">Date: {agreement.effectiveDate}</div>
             </div>
           </div>
         </div>
@@ -781,7 +781,7 @@ function CompareVendorsModal({
                 <td className="p-3 font-bold text-ink-2">Wholesale Unit Rate</td>
                 {bids.map((b) => (
                   <td key={b.id} className="p-3 text-center font-bold font-mono text-base text-ink">
-                    {rupee(b.unitCostMonthly)} <span className="text-2xs text-ink-3 font-sans">/usr/mo</span>
+                    {rupee(b.unitCostMonthly)} <span className="text-xs text-ink-3 font-sans">/usr/mo</span>
                   </td>
                 ))}
               </tr>
@@ -1037,7 +1037,7 @@ function EditVendorCardModal({
                   <Icon name="sparkles" size={14} />
                   <span>Product Group Wholesale Rates (₹ / User / Month)</span>
                 </label>
-                <span className="text-2xs text-ink-3 font-bold">🗓️ Billed Monthly · 📅 Annual = Rate × 12</span>
+                <span className="text-xs text-ink-3 font-bold">🗓️ Billed Monthly · 📅 Annual = Rate × 12</span>
               </div>
 
               <div className="space-y-3 pt-1">
@@ -1047,7 +1047,7 @@ function EditVendorCardModal({
                       <span className="text-xs font-bold text-ink flex items-center gap-1">
                         <span>🔵</span> Google Workspace Group Rates
                       </span>
-                      <span className="text-3xs text-ink-3">All 3 editions supplied</span>
+                      <span className="text-xs text-ink-3">All 3 editions supplied</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <div>
@@ -1062,7 +1062,7 @@ function EditVendorCardModal({
                           }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
-                        <span className="text-3xs text-primary font-semibold block mt-0.5">
+                        <span className="text-xs text-primary font-semibold block mt-0.5">
                           📅 {rupee(Number(skuRates["Google Workspace Business Starter"] || 121) * 12)} / yr
                         </span>
                       </div>
@@ -1078,7 +1078,7 @@ function EditVendorCardModal({
                           }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
-                        <span className="text-3xs text-primary font-semibold block mt-0.5">
+                        <span className="text-xs text-primary font-semibold block mt-0.5">
                           📅 {rupee(Number(skuRates["Google Workspace Business Standard"] || 650) * 12)} / yr
                         </span>
                       </div>
@@ -1094,7 +1094,7 @@ function EditVendorCardModal({
                           }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
-                        <span className="text-3xs text-primary font-semibold block mt-0.5">
+                        <span className="text-xs text-primary font-semibold block mt-0.5">
                           📅 {rupee(Number(skuRates["Google Workspace Business Plus"] || 1260) * 12)} / yr
                         </span>
                       </div>
@@ -1108,7 +1108,7 @@ function EditVendorCardModal({
                       <span className="text-xs font-bold text-ink flex items-center gap-1">
                         <span>🔷</span> Microsoft 365 Group Rates
                       </span>
-                      <span className="text-3xs text-ink-3">Basic &amp; Standard supplied</span>
+                      <span className="text-xs text-ink-3">Basic &amp; Standard supplied</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
@@ -1123,7 +1123,7 @@ function EditVendorCardModal({
                           }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
-                        <span className="text-3xs text-primary font-semibold block mt-0.5">
+                        <span className="text-xs text-primary font-semibold block mt-0.5">
                           📅 {rupee(Number(skuRates["Microsoft 365 Business Basic"] || 114) * 12)} / yr
                         </span>
                       </div>
@@ -1139,7 +1139,7 @@ function EditVendorCardModal({
                           }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
-                        <span className="text-3xs text-primary font-semibold block mt-0.5">
+                        <span className="text-xs text-primary font-semibold block mt-0.5">
                           📅 {rupee(Number(skuRates["Microsoft 365 Business Standard"] || 660) * 12)} / yr
                         </span>
                       </div>
@@ -1164,7 +1164,7 @@ function EditVendorCardModal({
                         }}
                         className="bg-paper text-xs font-mono font-bold"
                       />
-                      <span className="text-3xs text-primary font-semibold block mt-0.5">
+                      <span className="text-xs text-primary font-semibold block mt-0.5">
                         📅 {rupee(Number(skuRates["Zoho One License"] || 290) * 12)} / yr
                       </span>
                     </div>
@@ -1178,7 +1178,7 @@ function EditVendorCardModal({
             <div>
               <label htmlFor="vendor-portal-featured-primary-sku-auto" className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1 flex items-center justify-between">
                 <span>Featured / Primary SKU *</span>
-                <span className="text-3xs text-primary font-bold">Auto-syncs rate</span>
+                <span className="text-xs text-primary font-bold">Auto-syncs rate</span>
               </label>
               <select id="vendor-portal-featured-primary-sku-auto"
                 value={productSku}
@@ -1198,7 +1198,7 @@ function EditVendorCardModal({
                   </option>
                 ))}
               </select>
-              <p className="text-3xs text-ink-3 mt-1">
+              <p className="text-xs text-ink-3 mt-1">
                 *(Vendor supplies all selected product group editions above)*
               </p>
             </div>
@@ -1219,7 +1219,7 @@ function EditVendorCardModal({
                 }}
                 className="bg-paper font-mono font-bold text-sm"
               />
-              <div className="flex items-center justify-between text-3xs mt-1 font-mono">
+              <div className="flex items-center justify-between text-xs mt-1 font-mono">
                 <span className="text-primary font-bold">🗓️ {rupee(Number(monthlyCost || 0))} / mo</span>
                 <span className="text-ink-3 font-semibold">📅 {rupee(Number(monthlyCost || 0) * 12)} / yr</span>
               </div>
@@ -1824,7 +1824,7 @@ export default function VendorPortalPage() {
                 {autoProcureEnabled ? "ACTIVE (AUTO-ROUTING POs)" : "MANUAL MODE"}
               </Badge>
             </div>
-            <p className="text-2xs text-ink-3 mt-0.5">
+            <p className="text-xs text-ink-3 mt-0.5">
               Automatically routes new customer subscription orders to the Distributor offering lowest rate & Net 30+ credit.
             </p>
           </div>
@@ -1852,7 +1852,7 @@ export default function VendorPortalPage() {
             <Icon name="award" size={16} className="text-amber-ink" />
           </div>
           <div className="text-xl font-bold font-mono text-ink">₹120 / usr / mo</div>
-          <div className="text-2xs text-emerald-600 font-semibold flex items-center gap-1">
+          <div className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
             <span>By Redington India (30 Days Credit)</span>
           </div>
         </Card>
@@ -1865,7 +1865,7 @@ export default function VendorPortalPage() {
           <div className="text-xl font-bold font-mono text-ink">
             {rfqs.filter((r) => r.status === "Open Bidding").length} Open Requests
           </div>
-          <div className="text-2xs text-ink-3 font-medium">
+          <div className="text-xs text-ink-3 font-medium">
             275 total seats in active procurement
           </div>
         </Card>
@@ -1876,7 +1876,7 @@ export default function VendorPortalPage() {
             <Icon name="rupee" size={16} className="text-ink-2" />
           </div>
           <div className="text-xl font-bold font-mono text-ink">{rupee(485000)}</div>
-          <div className="text-2xs text-ink-3 font-medium">
+          <div className="text-xs text-ink-3 font-medium">
             Across 4 active Distributors & Sub-Resellers
           </div>
         </Card>
@@ -1887,7 +1887,7 @@ export default function VendorPortalPage() {
             <Icon name="trending_up" size={16} className="text-emerald-600" />
           </div>
           <div className="text-xl font-bold font-mono text-emerald-600">14.2% Extra Profit</div>
-          <div className="text-2xs text-emerald-600 font-semibold">
+          <div className="text-xs text-emerald-600 font-semibold">
             Saved ₹38,400 vs standard Google SRP list rate!
           </div>
         </Card>
@@ -2196,10 +2196,10 @@ export default function VendorPortalPage() {
                         <span className="text-lg font-bold font-mono text-ink">
                           {rupee(bid.unitCostMonthly)}
                         </span>
-                        <span className="text-2xs text-ink-3"> / user / mo</span>
+                        <span className="text-xs text-ink-3"> / user / mo</span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between text-2xs text-ink-3 pt-1 border-t border-hairline/60">
+                    <div className="flex items-center justify-between text-xs text-ink-3 pt-1 border-t border-hairline/60">
                       <span>Annual Cost: <b>{rupee(bid.unitCostYearly)}/yr</b></span>
                       <span>Credit: <b>{bid.creditDays ? `${bid.creditDays} Days Net` : "Prepaid"}</b></span>
                     </div>
@@ -2212,7 +2212,7 @@ export default function VendorPortalPage() {
                     const marginPct = Math.round((profit / mrp) * 100);
                     return (
                       <div className="flex items-center justify-between text-xs px-3 py-1.5 bg-emerald-50/50 border border-emerald-200/60 rounded-xl">
-                        <span className="text-ink-3 text-2xs font-medium">Standard MRP: ₹{mrp}/mo</span>
+                        <span className="text-ink-3 text-xs font-medium">Standard MRP: ₹{mrp}/mo</span>
                         <span className="font-bold text-emerald-700 text-xs">
                           Profit: +{marginPct}% ({rupee(profit)}/mo)
                         </span>
@@ -2228,12 +2228,12 @@ export default function VendorPortalPage() {
                 </div>
 
                 <div className="pt-3 border-t border-hairline space-y-2">
-                  <div className="flex items-center justify-between text-2xs text-ink-3">
+                  <div className="flex items-center justify-between text-xs text-ink-3">
                     <span className="flex items-center gap-1">
                       <Icon name="clock" size={13} />
                       <span>Speed: <b>{bid.provisioningTime}</b></span>
                     </span>
-                    <span className="text-3xs text-ink-3">Updated {bid.updatedAt}</span>
+                    <span className="text-xs text-ink-3">Updated {bid.updatedAt}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -2755,7 +2755,7 @@ export default function VendorPortalPage() {
                 </div>
 
                 {b.supportContact && (
-                  <div className="text-2xs text-ink-3 flex items-center gap-1 pt-1">
+                  <div className="text-xs text-ink-3 flex items-center gap-1 pt-1">
                     <Icon name="mail" size={12} />
                     <span>Support Desk: <b>{b.supportContact}</b></span>
                   </div>
@@ -2799,25 +2799,25 @@ export default function VendorPortalPage() {
               <div className="text-xl font-bold font-mono text-ink">
                 {agreements.filter((a) => a.status === "Active (Signed)").length} Enforceable
               </div>
-              <div className="text-2xs text-emerald-600 font-semibold">100% Digitally Verified</div>
+              <div className="text-xs text-emerald-600 font-semibold">100% Digitally Verified</div>
             </Card>
 
             <Card className="p-4 bg-paper border-hairline shadow-2xs space-y-1">
               <div className="text-xs text-ink-3 font-semibold uppercase tracking-wider">Protected Wholesale Margin</div>
               <div className="text-xl font-bold font-mono text-emerald-600">{rupee(485000)}/mo</div>
-              <div className="text-2xs text-ink-3">Under 12-Month Rate Freeze</div>
+              <div className="text-xs text-ink-3">Under 12-Month Rate Freeze</div>
             </Card>
 
             <Card className="p-4 bg-paper border-hairline shadow-2xs space-y-1">
               <div className="text-xs text-ink-3 font-semibold uppercase tracking-wider">Binding Credit Lines</div>
               <div className="text-xl font-bold font-mono text-primary">Net 30/45 Days</div>
-              <div className="text-2xs text-ink-3">Enforceable Payment Guarantee</div>
+              <div className="text-xs text-ink-3">Enforceable Payment Guarantee</div>
             </Card>
 
             <Card className="p-4 bg-paper border-hairline shadow-2xs space-y-1">
               <div className="text-xs text-ink-3 font-semibold uppercase tracking-wider">Expiry & Renewal Alerts</div>
               <div className="text-xl font-bold font-mono text-amber-ink">1 Renewing Soon</div>
-              <div className="text-2xs text-amber-ink font-semibold">Auto-Notification Active</div>
+              <div className="text-xs text-amber-ink font-semibold">Auto-Notification Active</div>
             </Card>
           </div>
 
@@ -2849,7 +2849,7 @@ export default function VendorPortalPage() {
                       </td>
                       <td className="p-3 text-ink-2">
                         <div><b>Net {ag.creditDaysLock} Days</b> Credit</div>
-                        <div className="text-3xs text-emerald-600 font-semibold">{ag.priceFreezeMonths}-Mo Price Freeze</div>
+                        <div className="text-xs text-emerald-600 font-semibold">{ag.priceFreezeMonths}-Mo Price Freeze</div>
                       </td>
                       <td className="p-3 font-medium text-ink-3">{ag.expiryDate}</td>
                       <td className="p-3">

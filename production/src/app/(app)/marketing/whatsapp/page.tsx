@@ -198,9 +198,9 @@ function TemplatesTab() {
                 </div>
                 <p className="whitespace-pre-wrap text-xs text-ink-2 line-clamp-4">{t.body}</p>
                 {t.param_map.length > 0 && (
-                  <p className="text-2xs text-ink-3">{t.param_map.map((f, i) => `{{${i + 1}}} = ${PARAM_FIELDS[f as ParamField]?.label ?? f}`).join(" · ")}</p>
+                  <p className="text-xs text-ink-3">{t.param_map.map((f, i) => `{{${i + 1}}} = ${PARAM_FIELDS[f as ParamField]?.label ?? f}`).join(" · ")}</p>
                 )}
-                {t.notes && <p className="text-2xs text-amber-ink">{t.notes}</p>}
+                {t.notes && <p className="text-xs text-amber-ink">{t.notes}</p>}
                 <div className="flex gap-1.5">
                   <Button variant="outline" size="sm" onClick={() => setEditing({ ...t })}>Edit</Button>
                   <Button variant="ghost" size="sm" onClick={async () => {
@@ -225,7 +225,7 @@ function TemplatesTab() {
             <Card key={s.name} className="p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="font-mono text-sm text-ink">{s.name}</div>
-                <span className="text-2xs text-ink-3">{s.when}</span>
+                <span className="text-xs text-ink-3">{s.when}</span>
               </div>
               <p className="whitespace-pre-wrap text-xs text-ink-2">{s.body}</p>
               <Button variant="outline" size="sm" disabled={names.has(s.name)}
@@ -299,7 +299,7 @@ function TemplateDialog({ draft, onClose }: { draft: Draft; onClose: () => void 
             </div>
           )}
           {!/stop/i.test(d.body) && d.category === "MARKETING" && d.body.trim() && (
-            <p className="text-2xs text-amber-ink">Marketing message mein &ldquo;Reply STOP to opt out&rdquo; jaisi line rakho — Meta isse pasand karta hai aur STOP khud opt-out ban jaata hai.</p>
+            <p className="text-xs text-amber-ink">Marketing message mein &ldquo;Reply STOP to opt out&rdquo; jaisi line rakho — Meta isse pasand karta hai aur STOP khud opt-out ban jaata hai.</p>
           )}
           {problem && <p className="text-xs text-red-600">{problem}</p>}
         </div>

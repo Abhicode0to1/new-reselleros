@@ -112,7 +112,7 @@ export function EmployeeDetailDrawer({
                   <div className="flex items-center justify-between pb-2 border-b border-hairline">
                     <div>
                       <span className="font-bold text-ink text-sm">Monthly CTC: {rupee(ctc.monthlyCtc)}/mo</span>
-                      <span className="text-2xs text-ink-3 block">Annual Package: {rupee(ctc.annualCtc)}/yr</span>
+                      <span className="text-xs text-ink-3 block">Annual Package: {rupee(ctc.annualCtc)}/yr</span>
                     </div>
                     <Badge kind="info" size="sm">CTC Breakdown</Badge>
                   </div>
@@ -121,7 +121,7 @@ export function EmployeeDetailDrawer({
                     {/* Earnings */}
                     <div className="bg-paper-2/50 p-2 rounded-lg border border-hairline/60">
                       <span className="font-bold text-ink block uppercase text-3xs tracking-wider mb-1">1. Earnings (Gross {rupee(ctc.grossMonthly)}/mo)</span>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-2xs text-ink-2">
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-ink-2">
                         <div>Basic (50%): <b className="font-mono">{rupee(ctc.basicMonthly)}</b></div>
                         <div>HRA (40%): <b className="font-mono">{rupee(ctc.hraMonthly)}</b></div>
                         {ctc.conveyanceMonthly > 0 && <div>Conveyance: <b className="font-mono">{rupee(ctc.conveyanceMonthly)}</b></div>}
@@ -133,7 +133,7 @@ export function EmployeeDetailDrawer({
                     {/* Retirals */}
                     <div className="bg-paper-2/50 p-2 rounded-lg border border-hairline/60">
                       <span className="font-bold text-amber-800 block uppercase text-3xs tracking-wider mb-1">2. Employer Contributions ({rupee(ctc.totalEmployerContributionMonthly)}/mo)</span>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-2xs text-ink-2">
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-ink-2">
                         <div>EPF Share: <b className="font-mono">{rupee(ctc.employerEpfShareMonthly)}</b></div>
                         <div>EPS Pension: <b className="font-mono">{rupee(ctc.employerEpsMonthly)}</b></div>
                         <div>ESI Share: <b className="font-mono">{rupee(ctc.employerEsiMonthly)}</b></div>
@@ -148,7 +148,7 @@ export function EmployeeDetailDrawer({
                         <span>Net Payout / Month:</span>
                         <span className="font-mono">{rupee(ctc.netTakeHomeMonthly)}</span>
                       </div>
-                      <div className="text-3xs text-emerald-700 mt-1">
+                      <div className="text-xs text-emerald-700 mt-1">
                         Deductions: Employee PF -{rupee(ctc.employeePfMonthly)} · PT -{rupee(ctc.professionalTaxMonthly)}
                       </div>
                     </div>
@@ -194,7 +194,7 @@ export function EmployeeDetailDrawer({
                     Upload
                   </Button>
                 </div>
-                <p className="text-2xs text-ink-3 mt-2 leading-relaxed">
+                <p className="text-xs text-ink-3 mt-2 leading-relaxed">
                   Aadhaar, PAN, Voter ID, resume… Stored privately (only your team can open them). Images or PDF.
                 </p>
               </div>
@@ -206,7 +206,7 @@ export function EmployeeDetailDrawer({
                 <div className="rounded-md border border-dashed border-hairline bg-paper-2/20 px-4 py-6 text-center">
                   <Icon name="file" size={18} className="text-ink-3 mx-auto mb-1" />
                   <p className="text-sm text-ink-2">No documents yet</p>
-                  <p className="text-2xs text-ink-3 mt-1">Upload the employee&apos;s ID proofs & resume above.</p>
+                  <p className="text-xs text-ink-3 mt-1">Upload the employee&apos;s ID proofs & resume above.</p>
                 </div>
               ) : (
                 <ul className="space-y-2">
@@ -218,7 +218,7 @@ export function EmployeeDetailDrawer({
                           <span className="font-medium">{DOC_LABEL.get(d.doc_type) ?? d.doc_type}</span>
                           <span className="text-ink-3"> · {d.file_name}</span>
                         </p>
-                        <p className="text-2xs text-ink-3">{formatDate(d.uploaded_at)}</p>
+                        <p className="text-xs text-ink-3">{formatDate(d.uploaded_at)}</p>
                       </div>
                       <Button size="sm" variant="ghost" icon="eye" onClick={() => openDoc(d)} title="View / download">View</Button>
                       <Button

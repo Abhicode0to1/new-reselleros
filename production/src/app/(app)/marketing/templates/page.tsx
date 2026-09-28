@@ -163,7 +163,7 @@ function PreviewDialog({ t, onClose }: { t: CampaignTemplateRow; onClose: () => 
         </DialogHeader>
         <p className="text-sm"><span className="text-ink-3">Subject:</span> <b>{previewTemplate(t.subject)}</b></p>
         <HtmlPreview html={previewTemplate(t.body_html)} title={`Preview: ${t.name}`} className="h-[55vh]" />
-        <p className="text-2xs text-ink-3">Unsubscribe link bhejte waqt khud neeche judta hai.</p>
+        <p className="text-xs text-ink-3">Unsubscribe link bhejte waqt khud neeche judta hai.</p>
       </DialogContent>
     </Dialog>
   );

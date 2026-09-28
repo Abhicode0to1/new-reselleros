@@ -324,7 +324,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 {lead.value ? rupee(lead.value, { compact: true }) : "—"}
               </p>
               {lead.seats && (
-                <p className="text-3xs text-ink-3 tabular-nums mt-0.5">{lead.seats} seats</p>
+                <p className="text-xs text-ink-3 tabular-nums mt-0.5">{lead.seats} seats</p>
               )}
               {/* Quote ka sach mobile par bhi — wahi pill jo desktop ke PLAN cell me
                   hai (Pardeep, 31 Aug 2026). Tap quote kholta hai; stopPropagation
@@ -362,7 +362,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               {stageMeta && (
                 <span
                   title="Stage khud badalta hai — baat hone, demo, trial ya quote jane par. Badalna ho to lead kholiye."
-                  className="inline-flex items-center gap-1 text-3xs font-medium text-ink-2 px-1.5 py-0.5 shrink-0"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-ink-2 px-1.5 py-0.5 shrink-0"
                 >
                   <span className={cn("w-1.5 h-1.5 rounded-full", stageMeta.dot)} />
                   {stageMeta.label}
@@ -386,7 +386,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 <span className="text-3xs px-1.5 py-0.5 rounded bg-emerald/10 text-emerald shrink-0">Existing customer</span>
               )}
               {/* Plan text — truncates when space tight. Shown for context. */}
-              <span className="text-2xs text-ink-3 truncate min-w-0">
+              <span className="text-xs text-ink-3 truncate min-w-0">
                 {lead.plan || "No plan"}
               </span>
             </div>
@@ -519,7 +519,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               nahi ki phone par swipe ka pata sirf isi se chalta hai — gesture apne aap me
               invisible hota hai jab tak koi bataye na. */}
           {hasPhone && (
-            <p className="mt-1.5 hidden text-3xs leading-none text-ink-3 [@media(pointer:coarse)]:block">
+            <p className="mt-1.5 hidden text-xs leading-none text-ink-3 [@media(pointer:coarse)]:block">
               Swipe → contacted · ← tomorrow · ↑ WhatsApp
             </p>
           )}

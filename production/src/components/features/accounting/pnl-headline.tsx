@@ -43,7 +43,7 @@ function Tile({
     <>
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
       <div className={`font-serif text-2xl md:text-[28px] leading-tight mt-1 tabular-nums ${color}`}>{value}</div>
-      <div className="text-2xs text-ink-3 mt-0.5 leading-snug">{sub}</div>
+      <div className="text-xs text-ink-3 mt-0.5 leading-snug">{sub}</div>
     </>
   );
   return onClick ? (
@@ -124,7 +124,7 @@ export function PnlHeadline({ model, revenueCount, expensesCount, outputGst, onO
 
       {/* The cost-of-goods caveat, said once for the whole page. */}
       {model.cogsBasis !== "billed" && (
-        <p className="mx-3 mb-1 mt-1 border-t border-hairline pt-2 text-2xs leading-snug text-amber-ink">
+        <p className="mx-3 mb-1 mt-1 border-t border-hairline pt-2 text-xs leading-snug text-amber-ink">
           {cogsBasisNote(model)}
         </p>
       )}

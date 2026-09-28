@@ -153,11 +153,11 @@ export function PayrollScreen() {
             <div className="text-sm text-ink-2">
               <b className="text-ink">{rupee(dues.data!.payable)}</b> statutory dues withheld (TDS/PF/ESI) — pending payment to govt.
               {dues.data!.payableByKind ? (
-                <span className="block text-2xs text-ink-3 mt-0.5">
+                <span className="block text-xs text-ink-3 mt-0.5">
                   TDS {rupee(dues.data!.payableByKind.tds)}{dues.data!.tdsVendor > 0 ? ` (salary ${rupee(dues.data!.tdsSalary)} + vendor 26Q ${rupee(dues.data!.tdsVendor)}, challans ke baad)` : ""} · PF {rupee(dues.data!.payableByKind.pf)} · ESI {rupee(dues.data!.payableByKind.esi)}
                 </span>
               ) : (
-                <span className="block text-2xs text-ink-3 mt-0.5">Kuch challans &ldquo;Mixed&rdquo; book hue hain, isliye TDS/PF/ESI alag-alag nahi dikh sakte.</span>
+                <span className="block text-xs text-ink-3 mt-0.5">Kuch challans &ldquo;Mixed&rdquo; book hue hain, isliye TDS/PF/ESI alag-alag nahi dikh sakte.</span>
               )}
             </div>
             <Button variant="outline" size="sm" onClick={() => setPayDuesOpen(true)}>Record statutory payment</Button>
@@ -246,7 +246,7 @@ export function EmployeesTab() {
                     >
                       <td className="px-4 py-3">
                         <div className="font-medium text-ink group-hover:text-amber-ink transition-colors">{toTitleCase(e.name)}</div>
-                        <div className="text-2xs text-ink-3 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <div className="text-xs text-ink-3 mt-0.5 flex items-center gap-1.5 flex-wrap">
                           {employeeSubline(e) && <span>{employeeSubline(e)}</span>}
                           {employeeSubline(e) && e.email && <span className="text-ink-3">·</span>}
                           {e.email && <span className="font-mono text-ink-2">{e.email}</span>}
@@ -297,9 +297,9 @@ export function EmployeesTab() {
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="min-w-0">
                         <div className="font-medium text-ink leading-tight">{toTitleCase(e.name)}</div>
-                        {employeeSubline(e) && <div className="text-2xs text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
+                        {employeeSubline(e) && <div className="text-xs text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
                         {e.email && (
-                          <div className="text-2xs font-mono text-amber-ink mt-0.5 flex items-center gap-1">
+                          <div className="text-xs font-mono text-amber-ink mt-0.5 flex items-center gap-1">
                             <Icon name="mail" size={11} className="text-amber-ink shrink-0" />
                             <span className="truncate">{e.email}</span>
                           </div>
@@ -311,7 +311,7 @@ export function EmployeesTab() {
                         <Badge kind="warning" size="sm">Salary pending</Badge>
                       )}
                     </div>
-                    <div className="text-2xs text-ink-3 mb-2">
+                    <div className="text-xs text-ink-3 mb-2">
                       {e.joining_date ? `Joined ${formatDate(e.joining_date)}` : "Not joined yet"} · Paid leave {left}/{allowance}{prorated ? " (pro-rata)" : ""}
                     </div>
                     <div className="flex items-center justify-between gap-2" onClick={(ev) => ev.stopPropagation()}>
@@ -697,7 +697,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         <span className="font-extrabold text-ink text-sm">Monthly CTC: {rupee(ctcBreakdown.monthlyCtc)}/mo</span>
                         <Badge kind="info" size="sm">Annual {rupee(ctcBreakdown.annualCtc)}</Badge>
                       </div>
-                      <span className="text-2xs text-ink-3 block mt-0.5">Itemized Indian Wage Code &amp; Statutory Breakdown</span>
+                      <span className="text-xs text-ink-3 block mt-0.5">Itemized Indian Wage Code &amp; Statutory Breakdown</span>
                     </div>
                     <Button
                       type="button"
@@ -723,7 +723,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         <span className="font-extrabold text-blue-900 uppercase tracking-wider text-3xs">1. Gross Earnings</span>
                         <Badge kind="info" size="sm" className="font-mono font-bold">{rupee(ctcBreakdown.grossMonthly)}/mo</Badge>
                       </div>
-                      <div className="space-y-1.5 text-ink-2 text-2xs">
+                      <div className="space-y-1.5 text-ink-2 text-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-ink-3">Basic Salary ({Math.round(ctcBreakdown.basicPct * 100)}%):</span>
                           <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.basicMonthly)}</span>
@@ -757,7 +757,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         <span className="font-extrabold text-amber-900 uppercase tracking-wider text-3xs">2. Employer Retirals</span>
                         <Badge kind="warning" size="sm" className="font-mono font-bold">{rupee(ctcBreakdown.totalEmployerContributionMonthly)}/mo</Badge>
                       </div>
-                      <div className="space-y-1.5 text-ink-2 text-2xs">
+                      <div className="space-y-1.5 text-ink-2 text-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-ink-3">EPF Share (3.67%):</span>
                           <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.employerEpfShareMonthly)}</span>
@@ -783,7 +783,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         <span className="font-extrabold text-emerald-900 uppercase tracking-wider text-3xs">3. Employee Net In-Hand</span>
                         <Badge kind="success" size="sm" className="font-mono font-bold">{rupee(ctcBreakdown.netTakeHomeMonthly)}/mo</Badge>
                       </div>
-                      <div className="space-y-1.5 text-ink-2 text-2xs">
+                      <div className="space-y-1.5 text-ink-2 text-xs">
                         <div className="flex items-center justify-between text-rose-700">
                           <span>Employee PF (12%):</span>
                           <span className="font-mono font-bold">-{rupee(ctcBreakdown.employeePfMonthly)}</span>
@@ -862,7 +862,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                       </div>
                     </div>
                     {basicMonthly.trim() !== "" && (Number(basicMonthly) || 0) + (Number(daMonthly) || 0) > (Number(gross) || 0) && (
-                      <p className="text-2xs text-rose">Basic + DA gross se zyada hai — check karo.</p>
+                      <p className="text-xs text-rose">Basic + DA gross se zyada hai — check karo.</p>
                     )}
                   </div>
                 )}
@@ -881,8 +881,8 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                 <Input id="payroll-field" inputMode="numeric" value={pin} onChange={(e) => setPinValue(e.target.value.replace(/\D/g, ""))}
                   placeholder={employee?.pin_hash ? "Enter new 4–6 digits to reset" : "Set a 4–6 digit PIN"} maxLength={6} />
                 {!pinValid
-                  ? <p className="mt-1 text-2xs text-rose">PIN must be 4–6 digits.</p>
-                  : <p className="mt-1 text-2xs text-ink-3">Used at the attendance kiosk to check in / out.</p>}
+                  ? <p className="mt-1 text-xs text-rose">PIN must be 4–6 digits.</p>
+                  : <p className="mt-1 text-xs text-ink-3">Used at the attendance kiosk to check in / out.</p>}
               </Field>
 
               <label className="flex items-center gap-2 text-sm text-ink-2 pt-2 border-t border-hairline">
@@ -890,7 +890,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                 Active employee
               </label>
               {!active && (employee?.is_active ?? true) && (
-                <p className="text-2xs text-amber-ink -mt-1">Inactive karne se pehle profile mein <b>Exit checklist</b> dekho — devices/logins wapas, advance settle, full &amp; final.</p>
+                <p className="text-xs text-amber-ink -mt-1">Inactive karne se pehle profile mein <b>Exit checklist</b> dekho — devices/logins wapas, advance settle, full &amp; final.</p>
               )}
             </section>
           )}
@@ -1002,19 +1002,19 @@ export function PayrollTab() {
           <div>
             <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Estimated monthly cost</div>
             <div className="font-serif text-2xl text-ink leading-tight mt-1">{rupee(estimatedMonthly)}</div>
-            <div className="text-2xs text-ink-3 mt-0.5">All {employees.length} active employees&apos; gross</div>
+            <div className="text-xs text-ink-3 mt-0.5">All {employees.length} active employees&apos; gross</div>
           </div>
           <div>
             <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Run this month (net)</div>
             <div className="font-serif text-2xl text-ink leading-tight mt-1">{rupee(totalNet)}</div>
-            <div className="text-2xs text-ink-3 mt-0.5">{runCount} of {employees.length} paid</div>
+            <div className="text-xs text-ink-3 mt-0.5">{runCount} of {employees.length} paid</div>
           </div>
           <div className="col-span-2 sm:col-span-1">
             <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Still to run</div>
             <div className={cn("font-serif text-2xl leading-tight mt-1", employees.length - runCount > 0 ? "text-amber-ink" : "text-emerald")}>
               {employees.length - runCount}
             </div>
-            <div className="text-2xs text-ink-3 mt-0.5">{employees.length - runCount > 0 ? "employees pending" : "everyone paid 🎉"}</div>
+            <div className="text-xs text-ink-3 mt-0.5">{employees.length - runCount > 0 ? "employees pending" : "everyone paid 🎉"}</div>
           </div>
         </div>
       </Card>
@@ -1059,7 +1059,7 @@ export function PayrollTab() {
                     <tr key={e.id} className="hover:bg-paper-2/40">
                       <td className="px-4 py-3">
                         <div className="font-medium text-ink">{toTitleCase(e.name)}</div>
-                        {employeeSubline(e) && <div className="text-2xs text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
+                        {employeeSubline(e) && <div className="text-xs text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-ink-2">
                         {p ? rupee(p.gross) : e.monthly_gross > 0 ? rupee(e.monthly_gross) : <span className="text-ink-3">—</span>}
@@ -1079,14 +1079,14 @@ export function PayrollTab() {
                                 {rupee(p.net)}
                               </button>
                               {(p.incentive ?? 0) > 0 && (
-                                <div className="text-3xs font-sans text-ink-3 mt-0.5">incl. {rupee(p.incentive ?? 0)} incentive</div>
+                                <div className="text-xs font-sans text-ink-3 mt-0.5">incl. {rupee(p.incentive ?? 0)} incentive</div>
                               )}
                               {p.lop_days > 0 ? (
-                                <div className="text-3xs font-sans text-ink-3 mt-0.5" title={`${p.lop_days} day(s) of loss-of-pay deducted from gross for absences.`}>
+                                <div className="text-xs font-sans text-ink-3 mt-0.5" title={`${p.lop_days} day(s) of loss-of-pay deducted from gross for absences.`}>
                                   {p.lop_days}d LOP deducted
                                 </div>
                               ) : noLopButLowPresent ? (
-                                <div className="text-3xs font-sans text-amber-ink mt-0.5"
+                                <div className="text-xs font-sans text-amber-ink mt-0.5"
                                   title={`Paid for all working days — no loss-of-pay deducted, though attendance shows only ${a.present}/${a.expected} present. Likely attendance wasn't marked at the kiosk, they were on paid leave, or treated as present. To dock absent days: ⋯ → Edit salary → apply LOP.`}>
                                   Full pay · no LOP
                                 </div>
@@ -1168,7 +1168,7 @@ export function PayrollTab() {
                         title={`See ${e.name}'s full-year payroll`}
                       >
                         <div className="font-medium text-ink leading-tight hover:text-amber-ink">{toTitleCase(e.name)}</div>
-                        {employeeSubline(e) && <div className="text-2xs text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
+                        {employeeSubline(e) && <div className="text-xs text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
                       </button>
                       <div className="font-serif text-xl leading-none shrink-0 text-ink">
                         {p ? (
@@ -1178,7 +1178,7 @@ export function PayrollTab() {
                         ) : e.monthly_gross > 0 ? rupee(e.monthly_gross) : <span className="text-ink-3">—</span>}
                       </div>
                     </div>
-                    <div className="text-2xs text-ink-3 mb-2">
+                    <div className="text-xs text-ink-3 mb-2">
                       {p ? `Net pay · gross ${rupee(p.gross)}` : `Monthly salary · not run yet`}
                       {(() => {
                         const a = attendanceFor(e);
@@ -1316,12 +1316,12 @@ function EmployeePayrollYearDialog({
                         <td className="px-3 py-2 text-right font-mono">
                           {p ? rupee(p.net) : <span className="text-ink-3">—</span>}
                           {p && p.paid_status === "partial" && (
-                            <span className="block text-3xs text-ink-3">paid {rupee(p.paid_amount)}</span>
+                            <span className="block text-xs text-ink-3">paid {rupee(p.paid_amount)}</span>
                           )}
                         </td>
                         <td className="px-3 py-2 text-right">
                           {!p ? (
-                            <span className="text-2xs text-ink-3">Not run</span>
+                            <span className="text-xs text-ink-3">Not run</span>
                           ) : p.paid_status === "paid" ? (
                             <Badge kind="success" size="sm" dot>Paid</Badge>
                           ) : p.paid_status === "partial" ? (
@@ -1617,7 +1617,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
               <label htmlFor="payroll-salary-to-pay" className="block text-xs font-medium text-ink-2 mb-1">Salary to pay (₹)</label>
               <Input id="payroll-salary-to-pay" type="number" min={0} value={gross} onChange={(e) => setGross(e.target.value)} />
               {!payPeriod.complete && (
-                <p className="text-2xs text-ink-3 mt-1">
+                <p className="text-xs text-ink-3 mt-1">
                   {proratedDefault > 0
                     ? <>Prorated to <b>{payPeriod.elapsed} of {payPeriod.daysInMonth} days</b> (till today) — days not yet worked aren&apos;t paid.</>
                     : <>This month hasn&apos;t started yet — enter an amount to pay in advance.</>}
@@ -1627,7 +1627,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
                 </p>
               )}
               {payPeriod.complete && (
-                <p className="text-2xs text-ink-3 mt-1">
+                <p className="text-xs text-ink-3 mt-1">
                   Full month · {payPeriod.daysInMonth} days ({periodLabel(period)}). Absences are deducted below as LOP.
                 </p>
               )}
@@ -1649,7 +1649,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
                 <Input id="payroll-bonus-incentive" type="number" min={0} value={bonus} onChange={(e) => setBonus(e.target.value)} />
               </div>
             </div>
-            <p className="text-2xs text-ink-3">One-time bonus/incentive for this month — added to net pay + the Salaries expense, shown separately on the payslip.</p>
+            <p className="text-xs text-ink-3">One-time bonus/incentive for this month — added to net pay + the Salaries expense, shown separately on the payslip.</p>
           </div>
 
           {(suggestedLopUnapplied || monthIncomplete) && (
@@ -1677,7 +1677,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
 
           <div className="rounded-md border border-hairline p-3 space-y-3">
             <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Deductions</div>
-            <div className="rounded bg-paper-2/50 px-2.5 py-2 text-2xs text-ink-3">
+            <div className="rounded bg-paper-2/50 px-2.5 py-2 text-xs text-ink-3">
               <div className="flex items-center justify-between gap-2">
                 <span><b className="text-ink-2">{lopSuggestion.workingDays}</b> working days · <b className="text-ink-2">{lopSuggestion.present}</b> present · <b className="text-ink-2">{lopSuggestion.absent}</b> absent · <b className="text-ink-2">{lopSuggestion.unpaidLeave}</b> unpaid leave → LOP <b className="text-ink">{lopSuggestion.lopDays}d</b></span>
                 <button type="button" onClick={applyLopSuggestion} className="shrink-0 rounded border border-hairline px-2 py-0.5 font-medium text-ink hover:bg-paper">Apply</button>
@@ -1701,7 +1701,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
                 <div>
                   <label htmlFor="payroll-advance-recovery" className="block text-xs font-medium text-ink-2 mb-1">Advance recovery (₹)</label>
                   <Input id="payroll-advance-recovery" type="number" min={0} value={advAmt} onChange={(e) => setAdvAmt(e.target.value)} />
-                  {advTooMuch && <p className="mt-1 text-2xs text-rose">Max {rupee(selectedAdv?.outstanding ?? 0)}.</p>}
+                  {advTooMuch && <p className="mt-1 text-xs text-rose">Max {rupee(selectedAdv?.outstanding ?? 0)}.</p>}
                 </div>
                 <div>
                   <label htmlFor="payroll-from-advance" className="block text-xs font-medium text-ink-2 mb-1">From advance</label>
@@ -1711,7 +1711,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
                 </div>
               </div>
             )}
-            <p className="text-2xs text-ink-3 -mt-1">{tdsEstimate.note}{tdsEdited ? " (tumne badla)" : ""}</p>
+            <p className="text-xs text-ink-3 -mt-1">{tdsEstimate.note}{tdsEdited ? " (tumne badla)" : ""}</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="payroll-tds" className="block text-xs font-medium text-ink-2 mb-1">TDS (₹){!tdsEdited && <span className="text-emerald ml-1 font-normal">auto s.192</span>}</label>
@@ -1732,7 +1732,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
               <div><label htmlFor="payroll-other" className="block text-xs font-medium text-ink-2 mb-1">Other (₹)</label><Input id="payroll-other" type="number" min={0} value={other} onChange={(e) => setOther(e.target.value)} /></div>
             </div>
             {employee.esi_applicable ? (
-              <div className="rounded bg-paper-2/50 px-2.5 py-2 text-2xs text-ink-2 space-y-0.5">
+              <div className="rounded bg-paper-2/50 px-2.5 py-2 text-xs text-ink-2 space-y-0.5">
                 <div className="flex items-center justify-between">
                   <span>Employer ESI (3.25%) — company's own cost, <b>not</b> cut from net</span>
                   <span className="font-mono text-ink">{rupee(esiEmployerN)}</span>
@@ -1746,10 +1746,10 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
                 )}
               </div>
             ) : (
-              <p className="text-2xs text-ink-3">ESI not applicable — gross above the ₹{ESI_WAGE_CEILING.toLocaleString("en-IN")} ceiling (or turned off for this employee).{employee.esi_applicable && esiWage > ESI_WAGE_CEILING ? " Agar is contribution period (Apr–Sep / Oct–Mar) ke pehle mahine mein cover the to ESI chalta rehta — is employee ki us period ki koi payslip ESI ke saath nahi mili." : ""}</p>
+              <p className="text-xs text-ink-3">ESI not applicable — gross above the ₹{ESI_WAGE_CEILING.toLocaleString("en-IN")} ceiling (or turned off for this employee).{employee.esi_applicable && esiWage > ESI_WAGE_CEILING ? " Agar is contribution period (Apr–Sep / Oct–Mar) ke pehle mahine mein cover the to ESI chalta rehta — is employee ki us period ki koi payslip ESI ke saath nahi mili." : ""}</p>
             )}
             {employee.pf_applicable && (
-              <div className="rounded bg-paper-2/50 px-2.5 py-2 text-2xs text-ink-2 space-y-0.5">
+              <div className="rounded bg-paper-2/50 px-2.5 py-2 text-xs text-ink-2 space-y-0.5">
                 <div className="flex items-center justify-between">
                   <span>Employer PF (12%) — company's own cost, <b>not</b> cut from net</span>
                   <span className="font-mono text-ink">{rupee(pfEmployerN)}</span>
@@ -1767,7 +1767,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
             <label htmlFor="payroll-pay-date" className="block text-xs font-medium text-ink-2 mb-1">Pay date</label>
             <Input id="payroll-pay-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             {/* Accrual (migration 20260927170000): the cost sits in the salary month, the cash on the pay date. */}
-            <p className="mt-1 text-2xs text-ink-3">
+            <p className="mt-1 text-xs text-ink-3">
               Kharcha <b>{period}</b> ke mahine mein book hoga{date.slice(0, 7) !== period ? ` (${period} ki aakhri tareekh par)` : ""}; bank se paisa {date ? formatDate(date) : "pay date"} ko niklega.
               {date.slice(0, 7) !== period && " Agar wo mahina books-lock hai to pehle lock hatao."}
             </p>
@@ -1782,7 +1782,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
               <span>Net pay (cash out)</span><span className="font-mono">{rupee(net)}</span>
             </div>
             {(esiEmployerN > 0 || pfEmployerN > 0) && (
-              <p className="text-2xs text-ink-3 pt-1">
+              <p className="text-xs text-ink-3 pt-1">
                 {esiEmployerN > 0 && <>+ {rupee(esiEmployerN)} employer ESI</>}
                 {esiEmployerN > 0 && pfEmployerN > 0 && " · "}
                 {pfEmployerN > 0 && <>+ {rupee(pfEmployerN)} employer PF</>}
@@ -1866,7 +1866,7 @@ export function LeaveTab() {
                     <div className="font-medium text-ink leading-tight">{empName.get(l.employee_id) ?? "—"}</div>
                     <div className="font-serif text-xl text-ink leading-none">{l.days}<span className="ml-1 text-sm text-ink-3">day{l.days === 1 ? "" : "s"}</span></div>
                   </div>
-                  <div className="text-2xs text-ink-3 mb-2">
+                  <div className="text-xs text-ink-3 mb-2">
                     {formatDate(l.from_date)}{l.to_date !== l.from_date ? ` – ${formatDate(l.to_date)}` : ""}
                   </div>
                   <div className="flex items-center justify-between gap-2">
@@ -1919,7 +1919,7 @@ function HolidaysCard() {
       <div className="mb-3 flex items-start justify-between gap-2">
         <div>
           <div className="text-sm font-semibold text-ink">Holidays</div>
-          <div className="text-2xs text-ink-3">
+          <div className="text-xs text-ink-3">
             Treated as non-working days in payroll — an absence on these dates is <b>not</b> docked as loss-of-pay (Sundays are already off).
           </div>
         </div>
@@ -1930,17 +1930,17 @@ function HolidaysCard() {
       </div>
       <div className="flex flex-wrap items-end gap-2 mb-3">
         <div>
-          <label htmlFor="payroll-date" className="block text-2xs text-ink-3 mb-1">Date</label>
+          <label htmlFor="payroll-date" className="block text-xs text-ink-3 mb-1">Date</label>
           <Input id="payroll-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
         </div>
         <div className="flex-1 min-w-[160px]">
-          <label htmlFor="payroll-name" className="block text-2xs text-ink-3 mb-1">Name</label>
+          <label htmlFor="payroll-name" className="block text-xs text-ink-3 mb-1">Name</label>
           <Input id="payroll-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Diwali, Independence Day" />
         </div>
         <Button size="sm" variant="primary" icon="plus" onClick={add} disabled={!date || !name.trim() || create.isPending} loading={create.isPending}>Add</Button>
       </div>
       {rows.length === 0 ? (
-        <p className="text-2xs text-ink-3">No holidays added yet — add your festival + national holidays so payroll doesn't dock pay for them.</p>
+        <p className="text-xs text-ink-3">No holidays added yet — add your festival + national holidays so payroll doesn't dock pay for them.</p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {rows.map((h) => (
@@ -2039,7 +2039,7 @@ function LeaveDialog({ employees, onClose }: { employees: Employee[]; onClose: (
               <label htmlFor="payroll-days" className="block text-xs font-medium text-ink-2 mb-1">Days</label>
               <Input id="payroll-days" type="number" min={0.5} step={0.5} value={days} onChange={(e) => setDays(e.target.value)} />
               {autoWorkingDays > 0 && autoWorkingDays !== daysN && (
-                <button type="button" onClick={() => setDays(String(autoWorkingDays))} className="mt-1 text-2xs text-amber-ink underline hover:no-underline">
+                <button type="button" onClick={() => setDays(String(autoWorkingDays))} className="mt-1 text-xs text-amber-ink underline hover:no-underline">
                   Use {autoWorkingDays} working day{autoWorkingDays === 1 ? "" : "s"} (excl. Sun + holidays)
                 </button>
               )}
@@ -2057,7 +2057,7 @@ function LeaveDialog({ employees, onClose }: { employees: Employee[]; onClose: (
 
           {/* Paid-leave balance for the selected employee (this leave-year) */}
           {emp && (
-            <div className="rounded-md bg-paper-2/50 px-3 py-2 text-2xs text-ink-2">
+            <div className="rounded-md bg-paper-2/50 px-3 py-2 text-xs text-ink-2">
               <div className="flex items-center justify-between">
                 <span>Paid leave used this year (FY {fy.start.slice(0, 4)}–{fy.end.slice(2, 4)})</span>
                 <span className="font-mono"><b className="text-ink">{usage.paidTaken}</b> / {allowance} · {paidLeft} left</span>
@@ -2068,7 +2068,7 @@ function LeaveDialog({ employees, onClose }: { employees: Employee[]; onClose: (
             </div>
           )}
           {wouldExceed && (
-            <div className="rounded-md bg-rose-soft border border-rose/30 px-3 py-2 text-2xs text-rose-ink flex items-start gap-2">
+            <div className="rounded-md bg-rose-soft border border-rose/30 px-3 py-2 text-xs text-rose-ink flex items-start gap-2">
               <Icon name="alert" size={13} className="flex-shrink-0 mt-0.5" />
               <span>
                 This is <b>{usage.paidTaken + daysN - allowance} day(s) over</b> the {allowance}-day paid allowance.
@@ -2105,7 +2105,7 @@ function NetworkCard() {
             <Icon name="lock" size={14} className={locked ? "text-emerald" : "text-ink-3"} />
             Office network {locked ? "locked" : "not locked"}
           </div>
-          <p className="text-2xs text-ink-3 mt-0.5 max-w-xl">
+          <p className="text-xs text-ink-3 mt-0.5 max-w-xl">
             {locked
               ? "Attendance can only be marked from the office network(s) below — off-site marking is blocked."
               : "Anyone with the kiosk link can mark from any network. Open this on the office WiFi and lock it to prevent off-site marking."}
@@ -2119,7 +2119,7 @@ function NetworkCard() {
         </div>
       </div>
       {d && (
-        <div className="mt-2 text-2xs text-ink-3">
+        <div className="mt-2 text-xs text-ink-3">
           This network&apos;s IP: <span className="font-mono text-ink-2">{d.currentIp || "—"}</span>
           {locked && (
             <span className="ml-2">· Allowed:{d.allowedIps.map((ip) => (
@@ -2139,7 +2139,7 @@ function NetworkCard() {
             <Icon name="eye" size={14} className={d?.requireSelfie ? "text-emerald" : "text-ink-3"} />
             Selfie required to mark {d?.requireSelfie ? "· ON" : "· OFF"}
           </div>
-          <p className="text-2xs text-ink-3 mt-0.5 max-w-xl">
+          <p className="text-xs text-ink-3 mt-0.5 max-w-xl">
             {d?.requireSelfie
               ? "Every check-in captures a photo — knowing someone's PIN alone can't mark them present (no buddy-punching)."
               : "PIN-only marking is allowed. Anyone who knows a PIN could mark that person present. Turn on to require a photo."}
@@ -2162,7 +2162,7 @@ function NetworkCard() {
             <Icon name="mobile" size={14} className={d?.requirePresence ? "text-emerald" : "text-ink-3"} />
             Office code for self check-in {d?.requirePresence ? "· ON" : "· OFF"}
           </div>
-          <p className="text-2xs text-ink-3 mt-0.5 max-w-xl">
+          <p className="text-xs text-ink-3 mt-0.5 max-w-xl">
             {d?.requirePresence
               ? "Employees marking from their OWN phone must type the rotating code shown on the kiosk — so \"My Attendance\" can only be done inside the office."
               : "Self check-in (\"My Attendance\") works from anywhere. Turn on to require the office code — the fix for marking present from home."}
@@ -2185,7 +2185,7 @@ function NetworkCard() {
             <Icon name="clock" size={14} className="text-ink-3" />
             Selfies kept for
           </div>
-          <p className="text-2xs text-ink-3 mt-0.5 max-w-xl">
+          <p className="text-xs text-ink-3 mt-0.5 max-w-xl">
             Puraani selfies is period ke baad apne-aap delete ho jaati hain (privacy / DPDP). Employee exit pe bhi delete.
           </p>
         </div>
@@ -2208,7 +2208,7 @@ function NetworkCard() {
             <Icon name="user" size={14} className={d?.requireFaceMatch ? "text-emerald" : "text-ink-3"} />
             Face verification {d?.requireFaceMatch ? "· ON" : "· OFF"}
           </div>
-          <p className="text-2xs text-ink-3 mt-0.5 max-w-xl">
+          <p className="text-xs text-ink-3 mt-0.5 max-w-xl">
             {d?.requireFaceMatch
               ? "Self check-in selfie ko employee ke enrolled face se match kiya jaata hai. Bina certified face-provider ke, mismatch/undecided owner review me aata hai (koi auto-reject nahi)."
               : "OFF. Turn on to match each self check-in selfie against an enrolled face. Employees ko pehle 'My Attendance' pe apna face enroll karna hoga. (Certified provider env se connect hota hai — warna review-only.)"}
@@ -2264,7 +2264,7 @@ export function AttendanceTab() {
         <Card className="mb-4 p-4">
           <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Attendance register</div>
           <div className="font-serif text-2xl text-ink leading-tight mt-1">{toTitleCase(focusEmp.name)}</div>
-          {focusEmp.designation && <div className="text-2xs text-ink-3 mt-0.5">{focusEmp.designation}</div>}
+          {focusEmp.designation && <div className="text-xs text-ink-3 mt-0.5">{focusEmp.designation}</div>}
         </Card>
         {attQ.isLoading
           ? <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
@@ -2297,7 +2297,7 @@ export function AttendanceTab() {
             Open kiosk
           </Button>
         </div>
-        <p className="mt-2 text-2xs text-ink-3">
+        <p className="mt-2 text-xs text-ink-3">
           Open the kiosk on your office tablet/phone (kept logged in) — employees tap their name + PIN to check in/out.
           Set each employee&apos;s PIN in the Employees tab.
         </p>
@@ -2337,7 +2337,7 @@ export function AttendanceTab() {
                           onClick={() => setConsent.mutate({ employeeId: e.id, value: false })}
                         >
                           <Badge kind="success">Given</Badge>
-                          <span className="text-3xs text-ink-3 group-hover:text-rose">withdraw</span>
+                          <span className="text-xs text-ink-3 group-hover:text-rose">withdraw</span>
                         </button>
                       ) : (
                         <button
@@ -2346,7 +2346,7 @@ export function AttendanceTab() {
                           onClick={() => setConsent.mutate({ employeeId: e.id, value: true })}
                         >
                           <Badge kind="warning">Pending</Badge>
-                          <span className="text-3xs text-ink-3 hover:text-amber-ink">mark given</span>
+                          <span className="text-xs text-ink-3 hover:text-amber-ink">mark given</span>
                         </button>
                       )}
                     </td>
@@ -2403,11 +2403,11 @@ function AttendanceRegister({ period, employees, attendance }: { period: string;
         <div className="text-3xs font-semibold uppercase tracking-wider text-ink-3">
           Attendance register · {monthLabel} · <span className="text-ink-2">{workingCount} working</span> · {sundayCount} Sundays{holidayDays.length > 0 ? ` · ${holidayDays.length} holiday${holidayDays.length === 1 ? "" : "s"}` : ""}
         </div>
-        <div className="text-2xs text-ink-3"><span className="font-semibold text-emerald">P</span> present · – absent · <span className="text-indigo">S</span> Sunday · <span className="text-amber-ink">H</span> holiday</div>
+        <div className="text-xs text-ink-3"><span className="font-semibold text-emerald">P</span> present · – absent · <span className="text-indigo">S</span> Sunday · <span className="text-amber-ink">H</span> holiday</div>
       </div>
       <div className="overflow-x-auto">
         <table className="text-sm">
-          <thead className="bg-paper-2/50 text-3xs text-ink-3">
+          <thead className="bg-paper-2/50 text-xs text-ink-3">
             <tr>
               <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2 text-left min-w-[130px]">Employee</th>
               {dayList.map((d) => {
@@ -2424,7 +2424,7 @@ function AttendanceRegister({ period, employees, attendance }: { period: string;
                     )}
                   >
                     {d}
-                    {kind !== "work" && <div className="text-3xs leading-none font-semibold">{kind === "sunday" ? "S" : "H"}</div>}
+                    {kind !== "work" && <div className="text-xs leading-none font-semibold">{kind === "sunday" ? "S" : "H"}</div>}
                   </th>
                 );
               })}
@@ -2450,8 +2450,8 @@ function AttendanceRegister({ period, employees, attendance }: { period: string;
                       >
                         {isPresent
                           ? <span className="font-semibold text-emerald">P</span>
-                          : kind === "sunday" ? <span className="text-indigo/50 text-3xs">S</span>
-                          : kind === "holiday" ? <span className="text-amber-ink/60 text-3xs">H</span>
+                          : kind === "sunday" ? <span className="text-indigo/50 text-xs">S</span>
+                          : kind === "holiday" ? <span className="text-amber-ink/60 text-xs">H</span>
                           : future ? <span className="text-ink-3/25">·</span>
                           : <span className="text-ink-3/40">–</span>}
                       </td>
@@ -2465,7 +2465,7 @@ function AttendanceRegister({ period, employees, attendance }: { period: string;
         </table>
       </div>
       {holidayDays.length > 0 && (
-        <div className="border-t border-hairline px-4 py-2 text-2xs text-ink-3">
+        <div className="border-t border-hairline px-4 py-2 text-xs text-ink-3">
           <span className="font-semibold text-ink-2">Holidays:</span>{" "}
           {holidayDays.map((d) => `${d} ${monthLabel.split(" ")[0]} — ${holidayMap.get(dateFor(d))}`).join(" · ")}
         </div>
@@ -2529,7 +2529,7 @@ function ReviewQueue({
       <div className="px-4 py-3 border-b border-hairline bg-amber-soft/30 flex items-center gap-2">
         <Icon name="alert" size={14} className="text-amber-ink" />
         <span className="text-sm font-semibold text-ink">Needs review · {rows.length}</span>
-        <span className="text-2xs text-ink-3">Self check-ins jinme kuch anokha laga — dekh ke clear karo.</span>
+        <span className="text-xs text-ink-3">Self check-ins jinme kuch anokha laga — dekh ke clear karo.</span>
       </div>
       <ul className="divide-y divide-hairline">
         {rows.map((a) => (
@@ -2586,7 +2586,7 @@ function SelfieButton({ path, label }: { path: string; label: string }) {
     if (url) window.open(url, "_blank", "noopener");
   }
   return (
-    <button onClick={view} disabled={loading} className="inline-flex items-center gap-1 text-2xs text-indigo hover:underline disabled:opacity-50">
+    <button onClick={view} disabled={loading} className="inline-flex items-center gap-1 text-xs text-indigo hover:underline disabled:opacity-50">
       <Icon name="eye" size={12} /> {label}
     </button>
   );
@@ -2626,7 +2626,7 @@ function PayDuesDialog({ payable, onClose }: { payable: number; onClose: () => v
           <div>
             <label htmlFor="payroll-amount" className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
             <Input id="payroll-amount" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
-            {tooMuch && <p className="mt-1 text-2xs text-rose">Can&apos;t exceed payable {rupee(payable)}.</p>}
+            {tooMuch && <p className="mt-1 text-xs text-rose">Can&apos;t exceed payable {rupee(payable)}.</p>}
           </div>
           <div>
             <label htmlFor="payroll-type-2" className="block text-xs font-medium text-ink-2 mb-1">Type</label>

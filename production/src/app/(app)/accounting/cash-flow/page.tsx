@@ -188,13 +188,13 @@ export default function CashFlowPage() {
         <Card className="mb-5 p-3.5">
           <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
             <p className="text-sm font-semibold text-ink">Cash flow statement — by activity (direct method)</p>
-            <span className="text-2xs text-ink-3">reconciliation se classify; transfers alag; unreconciled alag</span>
+            <span className="text-xs text-ink-3">reconciliation se classify; transfers alag; unreconciled alag</span>
           </div>
           <table className="w-full text-sm">
             <tbody className="divide-y divide-hairline">
               {byActivity.map((g) => (
                 <tr key={g.activity} className={g.activity === "transfer" || g.activity === "unreconciled" ? "text-ink-3" : ""}>
-                  <td className="py-1.5 pr-3">{g.label}<span className="ml-1 text-2xs text-ink-3">({g.count})</span></td>
+                  <td className="py-1.5 pr-3">{g.label}<span className="ml-1 text-xs text-ink-3">({g.count})</span></td>
                   <td className="py-1.5 px-2 text-right font-mono tabular-nums text-emerald">{g.cashIn ? rupee(g.cashIn) : "—"}</td>
                   <td className="py-1.5 px-2 text-right font-mono tabular-nums text-rose">{g.cashOut ? rupee(g.cashOut) : "—"}</td>
                   <td className={`py-1.5 pl-2 text-right font-mono tabular-nums font-semibold ${g.net >= 0 ? "text-emerald" : "text-rose"}`}>{g.net < 0 ? "−" : ""}{rupee(Math.abs(g.net))}</td>
@@ -208,7 +208,7 @@ export default function CashFlowPage() {
               </tr>
             </tbody>
           </table>
-          <p className="mt-2 text-2xs text-ink-3">Opening cash {rupee(flow?.balanceBefore ?? 0)} → closing {rupee(months.length ? months[months.length - 1].balanceEnd : 0)}. Indirect method (net profit ± working capital) ke liye P&amp;L aur Balance Sheet — ye direct method hai, jo chhoti company ke liye CA aksar yahi maangta hai.</p>
+          <p className="mt-2 text-xs text-ink-3">Opening cash {rupee(flow?.balanceBefore ?? 0)} → closing {rupee(months.length ? months[months.length - 1].balanceEnd : 0)}. Indirect method (net profit ± working capital) ke liye P&amp;L aur Balance Sheet — ye direct method hai, jo chhoti company ke liye CA aksar yahi maangta hai.</p>
         </Card>
       )}
 
@@ -227,21 +227,21 @@ export default function CashFlowPage() {
                 <div className="font-serif text-2xl text-ink tabular-nums">
                   {runway.ifNoIncome === null ? "—" : <>≈ {fmtMonths(runway.ifNoIncome)} mahine</>}
                 </div>
-                <div className="text-2xs text-ink-3">average kharcha {rupee(runway.spendPerMonth)}/mahina</div>
+                <div className="text-xs text-ink-3">average kharcha {rupee(runway.spendPerMonth)}/mahina</div>
               </div>
               <div>
                 <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Pichhle {runway.months} mahine jaisa chale</div>
                 <div className={`font-serif text-2xl tabular-nums ${tight ? "text-rose" : "text-ink"}`}>
                   {runway.atTrend === null ? "Paisa badh raha hai" : <>≈ {fmtMonths(runway.atTrend)} mahine</>}
                 </div>
-                <div className="text-2xs text-ink-3">
+                <div className="text-xs text-ink-3">
                   {runway.netPerMonth < 0
                     ? <>income ke baad bhi average {rupee(-runway.netPerMonth)}/mahina ghat raha hai</>
                     : <>average {rupee(runway.netPerMonth)}/mahina badh raha hai</>}
                 </div>
               </div>
             </div>
-            {tight && <p className="text-2xs text-rose mt-2">Tight — receivables jaldi collect karo ya non-essential kharcha roko.</p>}
+            {tight && <p className="text-xs text-rose mt-2">Tight — receivables jaldi collect karo ya non-essential kharcha roko.</p>}
           </Card>
         );
       })()}
@@ -329,7 +329,7 @@ export default function CashFlowPage() {
         accountName={accountName}
       />
 
-      <p className="text-2xs text-ink-3 mt-3 leading-relaxed">
+      <p className="text-xs text-ink-3 mt-3 leading-relaxed">
         Click a month to see the bank lines behind it.{" "}
         Cash flow = actual bank credits (in) minus debits (out) per month, from your imported/connected statements.
         Balance (month end) = opening balance + every line up to that month — it should match your statement.

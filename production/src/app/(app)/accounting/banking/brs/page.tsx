@@ -107,17 +107,17 @@ export default function BrsPage() {
             <Card className="p-4">
               <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Balance per bank (imported lines)</div>
               <div className="font-serif text-2xl text-ink mt-1">{rupee(brs.statementBalance)}</div>
-              <div className="text-2xs text-ink-3 mt-0.5">opening {rupee(account.opening_balance)} on {formatDate(account.opening_balance_date)}</div>
+              <div className="text-xs text-ink-3 mt-0.5">opening {rupee(account.opening_balance)} on {formatDate(account.opening_balance_date)}</div>
             </Card>
             <Card className="p-4">
               <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Balance per books (all lines)</div>
               <div className="font-serif text-2xl text-ink mt-1">{rupee(brs.bookBalance)}</div>
-              <div className="text-2xs text-ink-3 mt-0.5">+ {rupee(brs.totals.depositsInTransit)} in transit − {rupee(brs.totals.paymentsNotPresented)} not presented</div>
+              <div className="text-xs text-ink-3 mt-0.5">+ {rupee(brs.totals.depositsInTransit)} in transit − {rupee(brs.totals.paymentsNotPresented)} not presented</div>
             </Card>
             <Card className={`p-4 ${brs.clean ? "border-emerald/40 bg-emerald/5" : "border-amber/40 bg-amber-soft/20"}`}>
               <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Status</div>
               <div className={`font-serif text-2xl mt-1 ${brs.clean ? "text-emerald" : "text-amber-ink"}`}>{brs.clean ? "Reconciled" : "Farq hai"}</div>
-              <div className="text-2xs text-ink-3 mt-0.5">
+              <div className="text-xs text-ink-3 mt-0.5">
                 {brs.unbookedImports.length ? `${brs.unbookedImports.length} bank line(s) books mein nahi` : "har bank line booked"}
                 {brs.importGap !== null && brs.importGap !== 0 ? ` · import gap ${rupee(Math.abs(brs.importGap))}` : brs.importGap === 0 ? " · statement closing matches" : ""}
               </div>
@@ -142,7 +142,7 @@ export default function BrsPage() {
             {brs.unbookedImports.length === 0
               ? <p className="px-4 py-3 text-sm text-ink-3">Koi nahi — har imported line kisi entry se judi hai.</p>
               : <>
-                  <p className="px-4 pt-2 text-2xs text-ink-3">Bank charges, interest, anjaan receipt — <Link href={`/accounting/banking/${account.id}`} className="text-amber-ink underline">Banking → is account</Link> par har line ko book / reconcile karo.</p>
+                  <p className="px-4 pt-2 text-xs text-ink-3">Bank charges, interest, anjaan receipt — <Link href={`/accounting/banking/${account.id}`} className="text-amber-ink underline">Banking → is account</Link> par har line ko book / reconcile karo.</p>
                   <LineTable rows={brs.unbookedImports} sign="net" />
                 </>}
           </Card>
@@ -156,7 +156,7 @@ export default function BrsPage() {
               {brs.paymentsNotPresented.length === 0
                 ? <p className="px-4 py-3 text-sm text-ink-3">Koi nahi.</p>
                 : <>
-                    <p className="px-4 pt-2 text-2xs text-ink-3">Books mein book ho chuke (Bills / Payroll / Referrals se), bank se abhi nikle nahi. Statement aane par wahi line reconcile karo — ye manual line replace ho jaayegi.</p>
+                    <p className="px-4 pt-2 text-xs text-ink-3">Books mein book ho chuke (Bills / Payroll / Referrals se), bank se abhi nikle nahi. Statement aane par wahi line reconcile karo — ye manual line replace ho jaayegi.</p>
                     <LineTable rows={brs.paymentsNotPresented} sign="debit" />
                   </>}
             </Card>

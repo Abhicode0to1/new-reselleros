@@ -219,17 +219,17 @@ export default function CreateBillFromPODialog({ po, open, onOpenChange }: Props
           <div>
             <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">PO expected</p>
             <p className="font-medium text-ink tabular-nums">{rupee(po.total_cost)}</p>
-            <p className="text-3xs text-ink-3">{po.term_months} months × {po.seats} seats</p>
+            <p className="text-xs text-ink-3">{po.term_months} months × {po.seats} seats</p>
           </div>
           <div>
             <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Monthly suggest</p>
             <p className="font-medium text-ink tabular-nums">{rupee(suggestedMonthly)}</p>
-            <p className="text-3xs text-ink-3">total ÷ {po.term_months}</p>
+            <p className="text-xs text-ink-3">total ÷ {po.term_months}</p>
           </div>
           <div>
             <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Customer</p>
             <p className="font-medium text-ink truncate">{po.customer_name}</p>
-            {po.domain && <p className="text-3xs text-ink-3 font-mono truncate">{po.domain}</p>}
+            {po.domain && <p className="text-xs text-ink-3 font-mono truncate">{po.domain}</p>}
           </div>
         </div>
 
@@ -265,7 +265,7 @@ export default function CreateBillFromPODialog({ po, open, onOpenChange }: Props
               <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 Items billed
               </p>
-              <p className="text-3xs text-ink-3">
+              <p className="text-xs text-ink-3">
                 Auto-derived from PO + subtotal · adjust subtotal to change billing period
               </p>
             </div>
@@ -282,7 +282,7 @@ export default function CreateBillFromPODialog({ po, open, onOpenChange }: Props
                 <tr className="border-t border-hairline">
                   <td className="px-3 py-2 text-ink">
                     <div className="font-medium">{po.plan}</div>
-                    <div className="text-3xs text-ink-3 mt-0.5">
+                    <div className="text-xs text-ink-3 mt-0.5">
                       {monthsLabel}
                       {po.domain && <> · {po.domain}</>}
                     </div>
@@ -336,7 +336,7 @@ export default function CreateBillFromPODialog({ po, open, onOpenChange }: Props
               <Input id="total" type="number" min={0} step={1} error={errors.total?.message} {...register("total")} className="font-mono" />
             </FormField>
             {totalMismatch && (
-              <p className="text-2xs text-amber-ink flex items-center gap-1.5">
+              <p className="text-xs text-amber-ink flex items-center gap-1.5">
                 ⚠️ Total ({rupee(total)}) doesn't match computed ({rupee(computedTotal)}). Check your numbers.
               </p>
             )}
@@ -350,7 +350,7 @@ export default function CreateBillFromPODialog({ po, open, onOpenChange }: Props
           <div className="bg-emerald/5 border border-emerald/20 rounded-md p-3 text-xs flex items-center justify-between gap-3">
             <div>
               <p className="font-medium text-ink">Will auto-allocate {rupee(total)} to {po.id}</p>
-              <p className="text-3xs text-ink-3 mt-0.5">
+              <p className="text-xs text-ink-3 mt-0.5">
                 After save, no manual "Match bill" step needed. Variance updates immediately.
               </p>
             </div>

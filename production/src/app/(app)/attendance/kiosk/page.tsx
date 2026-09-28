@@ -56,7 +56,7 @@ export default function AttendanceKioskPage() {
       <div className="mb-6 text-center relative">
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Attendance</h1>
         <p className="text-sm text-ink-3 mt-1">Tap your name and enter your PIN to check in or out.</p>
-        <div className="mt-2 flex items-center justify-center gap-3 text-2xs">
+        <div className="mt-2 flex items-center justify-center gap-3 text-xs">
           {locked ? (
             <span className={cn("inline-flex items-center gap-1", offNetwork ? "text-rose" : "text-emerald")}>
               <Icon name={offNetwork ? "alert" : "lock"} size={12} />
@@ -98,7 +98,7 @@ export default function AttendanceKioskPage() {
                 )}
               >
                 <div className="font-medium text-ink leading-tight">{e.name}</div>
-                <div className="text-2xs mt-2">
+                <div className="text-xs mt-2">
                   {done ? (
                     <span className="text-ink-3">In {fmtTime(a!.check_in)} · Out {fmtTime(a!.check_out)}</span>
                   ) : inOnly ? (
@@ -160,7 +160,7 @@ function PresenceCodeBanner() {
           <div className="font-mono text-4xl md:text-5xl font-bold tracking-[0.25em] tabular-nums text-ink">
             {code ?? "······"}
           </div>
-          <div className="text-2xs text-ink-3 mt-1">refreshes in {secs}s</div>
+          <div className="text-xs text-ink-3 mt-1">refreshes in {secs}s</div>
         </div>
       </div>
     </Card>
@@ -281,7 +281,7 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
               className="mx-auto mb-3 flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3 hover:border-amber/50 hover:text-amber-ink"
             >
               <Icon name="eye" size={22} />
-              <span className="text-3xs leading-tight">Tap for camera</span>
+              <span className="text-xs leading-tight">Tap for camera</span>
             </button>
           )}
           <DialogTitle className="font-serif text-2xl text-ink">{employee.name}</DialogTitle>

@@ -217,7 +217,7 @@ function Kpi({ label, value, change, hint }: { label: string; value: string; cha
     <div className="rounded-md border border-hairline p-3">
       <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
       <p className="font-serif text-2xl text-ink mt-1 tabular-nums">{value}</p>
-      <p className="text-2xs mt-0.5">
+      <p className="text-xs mt-0.5">
         {change === null ? <span className="text-ink-3">{hint ?? "pichhla period 0"}</span> : (
           <>
             <span className={cn("font-semibold inline-flex items-center gap-0.5", change > 0 ? "text-emerald" : change < 0 ? "text-rose" : "text-ink-3")}>
@@ -301,7 +301,7 @@ function ReviewsSection({ reviews, loading, stats, ownerPhone, today }: { review
               <span className="w-6 text-ink-2 tabular-nums">{stats.distribution[s]}</span>
             </div>
           ))}
-          {stats.overdue > 0 && <p className="text-2xs text-rose-ink mt-2">{stats.overdue} review {REPLY_SLA_DAYS}+ din se bina jawab</p>}
+          {stats.overdue > 0 && <p className="text-xs text-rose-ink mt-2">{stats.overdue} review {REPLY_SLA_DAYS}+ din se bina jawab</p>}
         </div>
 
         <div>
@@ -341,13 +341,13 @@ function ReviewRow({ r, ownerPhone, today }: { r: GbpReview; ownerPhone: string 
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-ink">{r.is_anonymous ? "Google user" : r.reviewer_name ?? "Google user"}</span>
             <Stars n={r.star_rating} />
-            <span className="text-2xs text-ink-3">{formatDate(r.reviewed_at)}</span>
+            <span className="text-xs text-ink-3">{formatDate(r.reviewed_at)}</span>
             {overdue && <Badge kind="danger" size="sm">{ageDays} din bina jawab</Badge>}
           </div>
           {r.comment ? <p className="text-sm text-ink-2 mt-1 whitespace-pre-line">{r.comment}</p> : <p className="text-xs text-ink-3 mt-1 italic">(sirf rating, text nahi)</p>}
           {r.reply_comment ? (
             <div className="mt-2 rounded-md bg-paper-2 px-3 py-2 text-sm text-ink-2 border-l-2 border-emerald">
-              <p className="text-2xs text-ink-3 mb-0.5">Owner reply · {r.replied_at ? formatDate(r.replied_at) : ""}</p>
+              <p className="text-xs text-ink-3 mb-0.5">Owner reply · {r.replied_at ? formatDate(r.replied_at) : ""}</p>
               <p className="whitespace-pre-line">{r.reply_comment}</p>
             </div>
           ) : open ? (

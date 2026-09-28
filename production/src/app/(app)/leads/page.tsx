@@ -837,7 +837,7 @@ function LeadsPageInner() {
               {/* Licences and custom software are different businesses — a ₹5L project and
                   ₹5L of annual seats are not the same pipeline, so the split is shown. */}
               {pipelineByType.project > 0 && (
-                <p className="text-3xs text-ink-3 tabular-nums mt-0.5">
+                <p className="text-xs text-ink-3 tabular-nums mt-0.5">
                   Subscription {rupee(pipelineByType.subscription, { compact: true })} · Project {rupee(pipelineByType.project, { compact: true })}
                 </p>
               )}
@@ -857,7 +857,7 @@ function LeadsPageInner() {
               </p>
               {/* The sample, under the number. "100%" off two closed deals and "100%" off
                   two hundred are the same three characters and not the same claim. */}
-              <p className="text-3xs text-ink-3 tabular-nums">
+              <p className="text-xs text-ink-3 tabular-nums">
                 {decidedCount > 0 ? `${wonCount} of ${decidedCount} decided` : "nothing closed yet"}
               </p>
             </div>
@@ -961,7 +961,7 @@ function LeadsPageInner() {
                 <Button icon="filter" size="sm">
                   Filter
                   {activeFilterCount > 0 && (
-                    <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-amber text-paper text-3xs font-semibold px-1">
+                    <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-amber text-paper text-xs font-semibold px-1">
                       {activeFilterCount}
                     </span>
                   )}
@@ -1363,7 +1363,7 @@ function LeadsPageInner() {
                     ))}
 
                     {stageLeads.length === 0 && (
-                      <div className="h-20 flex items-center justify-center border border-dashed border-hairline/60 rounded-md text-2xs text-ink-3">
+                      <div className="h-20 flex items-center justify-center border border-dashed border-hairline/60 rounded-md text-xs text-ink-3">
                         No deals in {stage.label.toLowerCase()}
                       </div>
                     )}
@@ -1373,7 +1373,7 @@ function LeadsPageInner() {
                   <button
                     type="button"
                     onClick={() => setAddOpen(true)}
-                    className="mt-2 shrink-0 border border-dashed border-hairline hover:border-hairline-strong rounded-md py-1.5 text-2xs font-medium text-ink-3 hover:text-ink flex items-center justify-center gap-1 transition-colors cursor-pointer bg-paper/50 hover:bg-paper"
+                    className="mt-2 shrink-0 border border-dashed border-hairline hover:border-hairline-strong rounded-md py-1.5 text-xs font-medium text-ink-3 hover:text-ink flex items-center justify-center gap-1 transition-colors cursor-pointer bg-paper/50 hover:bg-paper"
                   >
                     <Icon name="plus" size={12} /> Add deal
                   </button>
@@ -1383,7 +1383,7 @@ function LeadsPageInner() {
           </div>
 
           {/* Footer status bar */}
-          <div className="shrink-0 flex items-center justify-between text-2xs text-ink-3 pt-1.5 px-1">
+          <div className="shrink-0 flex items-center justify-between text-xs text-ink-3 pt-1.5 px-1">
             <span className="flex items-center gap-1">
               <Icon name="info" size={12} /> Drag cards across columns to update pipeline stage instantly
             </span>
@@ -2132,7 +2132,7 @@ function LeadDetailSheet({
                     <span className="font-medium text-ink">{lead.contact_name}</span>
                   )}
                   {lead.contact_name && (lead.contact_phone || lead.contact_email) && " · "}
-                  <span className="font-mono text-2xs text-ink-3">
+                  <span className="font-mono text-xs text-ink-3">
                     {lead.contact_phone}
                     {lead.contact_phone && lead.contact_email && " · "}
                     {lead.contact_email}
@@ -2273,7 +2273,7 @@ function LeadDetailSheet({
                 const ageText =
                   quoteAgeDays === null ? "" : quoteAgeDays === 0 ? "Sent today" : `Sent ${quoteAgeDays}d ago`;
                 return (
-                  <p className="flex items-start gap-1 text-2xs leading-snug text-ink-3">
+                  <p className="flex items-start gap-1 text-xs leading-snug text-ink-3">
                     <Icon name="info" size={11} className="mt-0.5 shrink-0" />
                     <span>
                       {ageText}
@@ -2302,13 +2302,13 @@ function LeadDetailSheet({
               <Icon name={nextAction.icon} size={14} />
               {nextAction.label}
               {nextAction.hint && (
-                <span className="text-2xs opacity-90 ml-1">
+                <span className="text-xs opacity-90 ml-1">
                   · {nextAction.hint}
                 </span>
               )}
             </button>
             {nextAction.help && (
-              <p className="mt-1.5 flex items-start gap-1 text-2xs leading-snug text-ink-3">
+              <p className="mt-1.5 flex items-start gap-1 text-xs leading-snug text-ink-3">
                 <Icon name="info" size={11} className="mt-0.5 shrink-0" />
                 {nextAction.help}
               </p>
@@ -2347,7 +2347,7 @@ function LeadDetailSheet({
               alone cannot do that — a flex item shrinks before it wraps. */}
           {lead.stage === "new" && (threadSummary.total > 0 || activities.length > 0) && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-              <p className="min-w-0 basis-full sm:basis-0 sm:flex-1 text-2xs leading-snug text-ink-3">
+              <p className="min-w-0 basis-full sm:basis-0 sm:flex-1 text-xs leading-snug text-ink-3">
                 Stage still reads <b className="font-semibold text-ink-2">New</b>, but there
                 {threadSummary.total > 0
                   ? ` ${threadSummary.total === 1 ? "is 1 message" : `are ${threadSummary.total} messages`} in the thread`
@@ -2388,7 +2388,7 @@ function LeadDetailSheet({
             <Icon name="shield" size={15} className="shrink-0 text-ink-3" />
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-ink">Objection battlecards</span>
-              <span className="block text-2xs text-ink-3">
+              <span className="block text-xs text-ink-3">
                 &ldquo;Microsoft is cheaper&rdquo;, &ldquo;nobody has heard of Zoho&rdquo; — what to say.
               </span>
             </span>
@@ -2436,12 +2436,12 @@ function LeadDetailSheet({
                     )}
                   </p>
                   {m.band === "loss" && (
-                    <p className="mt-0.5 text-2xs font-semibold leading-snug text-rose">
+                    <p className="mt-0.5 text-xs font-semibold leading-snug text-rose">
                       Below the vendor&apos;s own cost — reprice before quoting.
                     </p>
                   )}
                   {m.band === "unknown" && (
-                    <p className="mt-0.5 text-2xs leading-snug text-ink-3">{b.title}</p>
+                    <p className="mt-0.5 text-xs leading-snug text-ink-3">{b.title}</p>
                   )}
                 </div>
               );
@@ -2483,7 +2483,7 @@ function LeadDetailSheet({
                 <button
                   type="button"
                   onClick={() => setDrawerTab("activity")}
-                  className="text-2xs font-medium text-amber-ink hover:text-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+                  className="text-xs font-medium text-amber-ink hover:text-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
                 >
                   Open conversation ({activities.length})
                 </button>
@@ -2512,7 +2512,7 @@ function LeadDetailSheet({
                           <div className="line-clamp-3 break-words text-sm text-ink" title={a.detail || meta.label}>
                             {a.detail || meta.label}
                           </div>
-                          <div className="text-2xs text-ink-3">
+                          <div className="text-xs text-ink-3">
                             {meta.label} · {formatDate(a.created_at)} {fmtActTime(a.created_at)}
                           </div>
                         </div>
@@ -2730,7 +2730,7 @@ function LeadDetailSheet({
                             {e.detail}
                           </div>
                         )}
-                        <div className="text-2xs text-ink-3">
+                        <div className="text-xs text-ink-3">
                           {formatDate(e.at)} {fmtActTime(e.at)}
                         </div>
                       </div>
@@ -2743,7 +2743,7 @@ function LeadDetailSheet({
                 placed at a guessed position — a wrongly-ordered event invents a history
                 that never happened. */}
             {timeline.undated > 0 && (
-              <p className="mt-2 text-2xs leading-relaxed text-ink-3">
+              <p className="mt-2 text-xs leading-relaxed text-ink-3">
                 {timeline.undated} record{timeline.undated === 1 ? " has" : "s have"} no
                 usable date and {timeline.undated === 1 ? "is" : "are"} not shown — placing
                 {timeline.undated === 1 ? " it" : " them"} anywhere in this list would
@@ -2837,7 +2837,7 @@ function LeadDetailSheet({
                saying that plainly beats a composer that cannot send. The Email button is
                still there; what it does NOT do is worth stating, because a logged
                "Emailed …" line looks like the mail was kept. */
-            <div className="text-2xs leading-snug text-ink-3 p-2.5 bg-paper-2 rounded-md">
+            <div className="text-xs leading-snug text-ink-3 p-2.5 bg-paper-2 rounded-md">
               No email from this lead yet, so there is no thread to reply into. Use the{" "}
               <b className="text-ink-2">Email</b> button to write to them — it sends from
               your connected account and keeps the text, so it shows up in the Email tab.
@@ -2882,7 +2882,7 @@ function LeadDetailSheet({
                           </span>
                           <Badge kind={statusKind} dot>{q.status}</Badge>
                         </div>
-                        <div className="text-2xs text-ink-3 mt-0.5">
+                        <div className="text-xs text-ink-3 mt-0.5">
                           {formatDate(q.created_at)} · {q.line_items && Array.isArray(q.line_items) ? q.line_items.length : 0} item
                           {Array.isArray(q.line_items) && q.line_items.length === 1 ? "" : "s"}
                         </div>
@@ -2897,7 +2897,7 @@ function LeadDetailSheet({
                   );
                 })}
               </div>
-              <p className="text-2xs text-ink-3 mt-1.5 flex items-center gap-1">
+              <p className="text-xs text-ink-3 mt-1.5 flex items-center gap-1">
                 <Icon name="info" size={11} />
                 {lead.stage === "won"
                   ? "Click any quote to view · upsell with a new quote below"
@@ -2963,7 +2963,7 @@ function LeadDetailSheet({
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-ink leading-tight">{t.title}</p>
                         <p className={cn(
-                          "text-2xs mt-0.5 tabular-nums",
+                          "text-xs mt-0.5 tabular-nums",
                           isOverdue ? "text-rose font-medium" : "text-ink-3",
                         )}>
                           {isOverdue ? "Overdue · " : ""}
@@ -2971,7 +2971,7 @@ function LeadDetailSheet({
                           {t.snooze_count > 0 && ` · snoozed ${t.snooze_count}×`}
                         </p>
                         {t.notes && (
-                          <p className="text-2xs text-ink-3 mt-1 line-clamp-2">{t.notes}</p>
+                          <p className="text-xs text-ink-3 mt-1 line-clamp-2">{t.notes}</p>
                         )}
                       </div>
                       <div className="flex gap-0.5 shrink-0">
@@ -2996,7 +2996,7 @@ function LeadDetailSheet({
                   );
                 })}
                 {doneTasks.length > 0 && (
-                  <details className="text-2xs text-ink-3 mt-2">
+                  <details className="text-xs text-ink-3 mt-2">
                     <summary className="cursor-pointer select-none hover:text-ink">
                       {doneTasks.length} completed
                     </summary>
@@ -3084,7 +3084,7 @@ function LeadDetailSheet({
                       </p>
                       <ul className="mt-1 space-y-0.5">
                         {q.checks.map((c) => (
-                          <li key={c.id} className="flex items-start gap-1.5 text-2xs leading-snug">
+                          <li key={c.id} className="flex items-start gap-1.5 text-xs leading-snug">
                             <span aria-hidden className={c.passed ? "text-emerald" : "text-ink-3"}>
                               {c.passed ? "✓" : "○"}
                             </span>
@@ -3373,7 +3373,7 @@ function RowActions({
                   onClick={() => logActivity.mutate({ leadId: lead.id, kind: "call", detail: `Called ${lead.contact_phone}` })}
                 >
                   <Icon name="call" size={20} className="text-emerald" /> Call
-                  <span className="ml-auto max-w-[9rem] truncate text-2xs text-ink-3">{lead.contact_phone}</span>
+                  <span className="ml-auto max-w-[9rem] truncate text-xs text-ink-3">{lead.contact_phone}</span>
                 </a>
               </DropdownMenuItem>
             )}
@@ -3458,7 +3458,7 @@ function RowActions({
                 onClick={() => logActivity.mutate({ leadId: lead.id, kind: "email", detail: `Emailed ${lead.contact_email}` })}
               >
                 <Icon name="email" size={20} /> Email
-                <span className="ml-auto max-w-[9rem] truncate text-2xs text-ink-3">{lead.contact_email}</span>
+                <span className="ml-auto max-w-[9rem] truncate text-xs text-ink-3">{lead.contact_email}</span>
               </a>
             </DropdownMenuItem>
           )}
@@ -4691,11 +4691,11 @@ function LeadListView({
                 <td className={cn(GRID_TD_ATOM, "text-right")}>
                   {(() => {
                     const w = waitState(lead.created_at, firstReplies.get(lead.id) ?? null, nowForWait);
-                    if (w.kind === "unknown") return <span className="text-2xs text-ink-3">—</span>;
+                    if (w.kind === "unknown") return <span className="text-xs text-ink-3">—</span>;
                     if (w.kind === "answered") {
                       return (
                         <span
-                          className="text-2xs tabular-nums text-ink-3"
+                          className="text-xs tabular-nums text-ink-3"
                           title={`Pehla jawab ${waitLabel(w.minutes)} me chala gaya tha`}
                         >
                           ✓ {waitLabel(w.minutes)}
@@ -4935,12 +4935,12 @@ function LeadListView({
                   {(() => {
                     const o = lead.owner_id ? ownerById.get(lead.owner_id) : undefined;
                     if (!lead.owner_id) {
-                      return <span className="text-2xs text-ink-3">Unassigned</span>;
+                      return <span className="text-xs text-ink-3">Unassigned</span>;
                     }
                     if (!o) {
                       /* owner_id hai par us naam ka user nahi mila — nikala hua ya
                          deactivate kiya gaya member. Chup rehne se behtar hai kehna. */
-                      return <span className="text-2xs text-ink-3" title={lead.owner_id}>Unknown user</span>;
+                      return <span className="text-xs text-ink-3" title={lead.owner_id}>Unknown user</span>;
                     }
                     return (
                       <span
@@ -4987,7 +4987,7 @@ function LeadListView({
       {sorted.length === 0 && (
         <div className="p-8 text-center text-sm text-ink-3 italic">No leads match.</div>
       )}
-      <div className="px-3 py-2 border-t border-hairline bg-paper-2/40 text-2xs text-ink-3 flex items-center gap-2">
+      <div className="px-3 py-2 border-t border-hairline bg-paper-2/40 text-xs text-ink-3 flex items-center gap-2">
         <Icon name="info" size={11} />
         <span className="min-w-0 flex-1">
           Click any row to open the drawer · Tick a checkbox to enable bulk actions · Every row action lives under the ⋯ at its right · a red left edge means it needs you today, green means high value

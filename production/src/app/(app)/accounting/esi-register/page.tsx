@@ -90,17 +90,17 @@ function PfSection() {
         <Card className="p-4">
           <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">PF accrued</div>
           <div className="font-serif text-2xl text-ink mt-1">{rupee(data.accrued)}</div>
-          <div className="text-2xs text-ink-3 mt-0.5">employee + employer, all payslips</div>
+          <div className="text-xs text-ink-3 mt-0.5">employee + employer, all payslips</div>
         </Card>
         <Card className="p-4">
           <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid to EPFO</div>
           <div className="font-serif text-2xl text-ink mt-1">{rupee(data.paid)}</div>
-          <div className="text-2xs text-ink-3 mt-0.5">challans booked as PF</div>
+          <div className="text-xs text-ink-3 mt-0.5">challans booked as PF</div>
         </Card>
         <Card className="p-4">
           <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Still payable</div>
           <div className={`font-serif text-2xl mt-1 ${data.outstanding > 0 ? "text-rose" : "text-emerald"}`}>{rupee(data.outstanding)}</div>
-          <div className="text-2xs text-ink-3 mt-0.5">accrued − paid (ECR due by the 15th)</div>
+          <div className="text-xs text-ink-3 mt-0.5">accrued − paid (ECR due by the 15th)</div>
         </Card>
       </div>
       {byPeriod.map(([period, rows]) => {
@@ -110,7 +110,7 @@ function PfSection() {
         return (
           <Card key={period} className="overflow-hidden">
             <div className="flex items-center justify-between gap-3 bg-paper-2/50 px-4 py-2.5">
-              <span className="font-semibold text-ink">{periodLabel(period)} <span className="text-2xs text-ink-3 font-normal">ceiling ₹{pfWageCeiling(period).toLocaleString("en-IN")}</span></span>
+              <span className="font-semibold text-ink">{periodLabel(period)} <span className="text-xs text-ink-3 font-normal">ceiling ₹{pfWageCeiling(period).toLocaleString("en-IN")}</span></span>
               <div className="flex items-center gap-3">
                 <span className="hidden sm:inline text-xs text-ink-2 font-mono">
                   employee {rupee(ee)} · employer {rupee(er)} · <b className="text-ink">{rupee(ee + er)}</b>
@@ -204,17 +204,17 @@ export default function EsiRegisterPage() {
             <Card className="p-4">
               <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">ESI accrued</div>
               <div className="font-serif text-2xl text-ink mt-1">{rupee(data!.accrued)}</div>
-              <div className="text-2xs text-ink-3 mt-0.5">employee + employer, all payslips</div>
+              <div className="text-xs text-ink-3 mt-0.5">employee + employer, all payslips</div>
             </Card>
             <Card className="p-4">
               <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid to ESIC</div>
               <div className="font-serif text-2xl text-ink mt-1">{rupee(data!.paid)}</div>
-              <div className="text-2xs text-ink-3 mt-0.5">challans reconciled</div>
+              <div className="text-xs text-ink-3 mt-0.5">challans reconciled</div>
             </Card>
             <Card className="p-4">
               <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Still payable</div>
               <div className={`font-serif text-2xl mt-1 ${data!.outstanding > 0 ? "text-rose" : "text-emerald"}`}>{rupee(data!.outstanding)}</div>
-              <div className="text-2xs text-ink-3 mt-0.5">accrued − paid</div>
+              <div className="text-xs text-ink-3 mt-0.5">accrued − paid</div>
             </Card>
           </div>
 

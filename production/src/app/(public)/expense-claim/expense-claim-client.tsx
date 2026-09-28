@@ -51,7 +51,7 @@ export function ExpenseClaimClient({
           </div>
           <div>
             <div className="font-serif text-base leading-none text-ink">{brandName}</div>
-            <div className="mt-1 text-3xs text-ink-3">Expense claim</div>
+            <div className="mt-1 text-xs text-ink-3">Expense claim</div>
           </div>
         </div>
 
@@ -73,7 +73,7 @@ export function ExpenseClaimClient({
           )}
         </div>
 
-        <p className="mt-4 text-center text-2xs text-ink-3">
+        <p className="mt-4 text-center text-xs text-ink-3">
           Every submission is reviewed by the office before it is recorded.
         </p>
       </div>
@@ -301,7 +301,7 @@ function LogStep({
           <span className="font-serif text-2xl text-ink">{rupee(remaining)}</span>
         </div>
         {logged.length > 0 && (
-          <div className="mt-1 text-2xs text-ink-3">{logged.length} logged this session · {rupee(spent)}</div>
+          <div className="mt-1 text-xs text-ink-3">{logged.length} logged this session · {rupee(spent)}</div>
         )}
       </div>
 
@@ -383,7 +383,7 @@ function LogStep({
                     <span className="text-ink-2">{l.category}</span>
                     <span className="font-mono text-ink">{rupee(l.amount)}</span>
                   </div>
-                  {l.purpose && <div className="truncate text-2xs text-ink-3">{l.purpose}</div>}
+                  {l.purpose && <div className="truncate text-xs text-ink-3">{l.purpose}</div>}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button type="button" onClick={() => startEdit(l)} aria-label="Edit"

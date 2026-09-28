@@ -78,9 +78,9 @@ export default function PaymentsMadePage() {
             <div className="rounded-md border border-hairline p-3"><p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid MTD</p><p className="font-serif text-2xl text-rose mt-1">{rupee(summary.mtd)}</p></div>
             <div className="rounded-md border border-hairline p-3"><p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid this FY</p><p className="font-serif text-2xl text-ink mt-1">{rupee(summary.fy)}</p></div>
             <div className="rounded-md border border-hairline p-3"><p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Awaiting reconcile</p><p className={`font-serif text-2xl mt-1 ${summary.unreconciled.count ? "text-amber-ink" : "text-emerald"}`}>{rupee(summary.unreconciled.amount)} <span className="text-xs font-sans text-ink-3">({summary.unreconciled.count})</span></p></div>
-            <div className="rounded-md border border-hairline p-3"><p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Top payee</p><p className="font-serif text-lg text-ink mt-1 truncate">{summary.topPayee ? `${summary.topPayee.name}` : "—"}</p>{summary.topPayee && <p className="text-2xs text-ink-3">{rupee(summary.topPayee.amount)} all-time</p>}</div>
+            <div className="rounded-md border border-hairline p-3"><p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Top payee</p><p className="font-serif text-lg text-ink mt-1 truncate">{summary.topPayee ? `${summary.topPayee.name}` : "—"}</p>{summary.topPayee && <p className="text-xs text-ink-3">{rupee(summary.topPayee.amount)} all-time</p>}</div>
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-2xs text-ink-3">
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">
             {summary.byGroup.map((g) => <span key={g.group}>{g.label} <b className="text-ink-2">{rupee(g.amount)}</b> ({g.count})</span>)}
           </div>
           </>)}
@@ -116,8 +116,8 @@ export default function PaymentsMadePage() {
                   <span className="font-medium text-ink truncate">{l.payee}</span>
                   <span className="font-serif tabular-nums text-rose">− {rupee(l.amount)}</span>
                 </div>
-                <div className="mt-1 text-2xs text-ink-3">{formatDate(l.txn_date)} · {l.what}{l.reference ? ` · ${l.reference}` : ""} · {l.account}</div>
-                {l.group === "unreconciled" && <Link href={"/accounting/banking" as Route} className="text-2xs text-amber-ink underline">Reconcile →</Link>}
+                <div className="mt-1 text-xs text-ink-3">{formatDate(l.txn_date)} · {l.what}{l.reference ? ` · ${l.reference}` : ""} · {l.account}</div>
+                {l.group === "unreconciled" && <Link href={"/accounting/banking" as Route} className="text-xs text-amber-ink underline">Reconcile →</Link>}
               </li>
             ))}
           </ul>
@@ -135,7 +135,7 @@ export default function PaymentsMadePage() {
                       <td className="p-3 whitespace-nowrap text-ink-2">{formatDate(l.txn_date)}</td>
                       <td className="p-3 font-medium text-ink">{l.payee}</td>
                       <td className="p-3 text-ink-2">{l.group === "unreconciled" ? <Link href={"/accounting/banking" as Route} className="text-amber-ink underline">Not reconciled — book it →</Link> : l.what}</td>
-                      <td className="p-3 font-mono text-2xs text-ink-3">{l.reference ?? "—"}</td>
+                      <td className="p-3 font-mono text-xs text-ink-3">{l.reference ?? "—"}</td>
                       <td className="p-3 text-ink-2">{l.account}</td>
                       <td className="p-3 text-right font-serif tabular-nums text-rose">− {rupee(l.amount)}</td>
                     </tr>

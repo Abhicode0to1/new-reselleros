@@ -86,7 +86,7 @@ export function LossReasonsCard({ leads }: { leads: readonly LossLead[] }) {
         <>
           {mostlyUnrecorded && (
             // Don't let the owner read a conclusion out of mostly-missing data.
-            <p className="mt-2 text-2xs text-ink-3 leading-snug">
+            <p className="mt-2 text-xs text-ink-3 leading-snug">
               Most of these were lost before the reason prompt existed, so this is
               not yet a reliable picture — it fills in from here.
             </p>

@@ -234,7 +234,7 @@ export function LeadsInsightBand({
                   type="button"
                   onClick={() => onToggleStage(stage)}
                   className={cn(
-                    "inline-flex items-center gap-1.5 text-3xs text-ink-3 hover:text-ink transition-colors",
+                    "inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink transition-colors",
                     isDimmed && "opacity-50",
                   )}
                 >
@@ -248,7 +248,7 @@ export function LeadsInsightBand({
             {/* Total ₹ pipeline at the end of the legend. Shows aggregate value
                 across all visible stages — useful at a glance for owners. */}
             {pulseTotal > totalCount && (
-              <span className="inline-flex items-center gap-1.5 text-3xs text-ink-3 ml-auto">
+              <span className="inline-flex items-center gap-1.5 text-xs text-ink-3 ml-auto">
                 <span>Total</span>
                 <span className="font-serif text-ink tabular-nums text-sm">{rupee(pulseTotal, { compact: true })}</span>
               </span>

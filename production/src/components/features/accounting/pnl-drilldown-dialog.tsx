@@ -202,7 +202,7 @@ export function PnLDrilldownDialog({ open, onOpenChange, kind, range, expenseCat
           <DialogDescription className="text-[12px] leading-relaxed">
             {meta?.desc}
           </DialogDescription>
-          <p className="text-2xs text-ink-3 mt-1">
+          <p className="text-xs text-ink-3 mt-1">
             {range.from} to {range.to}
           </p>
         </DialogHeader>
@@ -242,7 +242,7 @@ export function PnLDrilldownDialog({ open, onOpenChange, kind, range, expenseCat
             <div className="rounded-md border border-dashed border-hairline bg-paper-2/20 px-4 py-8 text-center">
               <Icon name="inbox" size={20} className="text-ink-3 mx-auto mb-1" />
               <p className="text-sm text-ink-2">No transactions in this period</p>
-              <p className="text-2xs text-ink-3 mt-1">
+              <p className="text-xs text-ink-3 mt-1">
                 Nothing recorded between {range.from} and {range.to}.
               </p>
             </div>
@@ -289,11 +289,11 @@ export function PnLDrilldownDialog({ open, onOpenChange, kind, range, expenseCat
                             {g.rows.map((r) => (
                               <li key={r.id} className="flex items-center gap-3 py-2">
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-2xs text-ink-3 truncate">{r.sub}</p>
+                                  <p className="text-xs text-ink-3 truncate">{r.sub}</p>
                                 </div>
                                 <div className="text-right whitespace-nowrap">
                                   <p className={`font-mono text-sm ${amountColor}`}>{rupee(r.amount)}</p>
-                                  <p className="text-2xs text-ink-3">{formatDate(r.date)}</p>
+                                  <p className="text-xs text-ink-3">{formatDate(r.date)}</p>
                                 </div>
                               </li>
                             ))}
@@ -311,11 +311,11 @@ export function PnLDrilldownDialog({ open, onOpenChange, kind, range, expenseCat
                 <li key={r.id} className="flex items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-ink truncate">{r.primary}</p>
-                    <p className="text-2xs text-ink-3 truncate">{r.sub}</p>
+                    <p className="text-xs text-ink-3 truncate">{r.sub}</p>
                   </div>
                   <div className="text-right whitespace-nowrap">
                     <p className={`font-mono text-sm ${amountColor}`}>{rupee(r.amount)}</p>
-                    <p className="text-2xs text-ink-3">{formatDate(r.date)}</p>
+                    <p className="text-xs text-ink-3">{formatDate(r.date)}</p>
                   </div>
                 </li>
               ))}

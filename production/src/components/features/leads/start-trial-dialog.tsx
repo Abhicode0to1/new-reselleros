@@ -144,7 +144,7 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
           <div>
             <Label htmlFor="start-trial-domain">Domain *</Label>
             <Input id="start-trial-domain" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="e.g. acme.in" className="font-mono" />
-            <p className="text-3xs text-ink-3 mt-1">For provisioning in Google CSP</p>
+            <p className="text-xs text-ink-3 mt-1">For provisioning in Google CSP</p>
           </div>
           <div>
             <Label htmlFor="start-trial-seats">Seats</Label>
@@ -168,7 +168,7 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
               )}
             >
               <p className="font-medium text-sm">{t.label}</p>
-              <p className="text-3xs text-ink-3 mt-0.5">{t.sublabel}</p>
+              <p className="text-xs text-ink-3 mt-0.5">{t.sublabel}</p>
             </button>
           ))}
         </div>

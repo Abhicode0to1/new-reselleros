@@ -82,7 +82,7 @@ export function BooksLockCard() {
             {current && <Button size="sm" variant="ghost" disabled={update.isPending} onClick={() => save(null)}>Lock hatao</Button>}
           </div>
         ) : (
-          <span className="text-2xs text-ink-3">Sirf owner badal sakta hai</span>
+          <span className="text-xs text-ink-3">Sirf owner badal sakta hai</span>
         )}
       </div>
     </Card>

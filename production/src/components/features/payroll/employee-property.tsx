@@ -38,7 +38,7 @@ export function EmployeeProperty({ employee }: { employee: { id: string; name: s
       </div>
 
       {h.open.length === 0 && h.returned.length === 0 ? (
-        <p className="text-2xs text-ink-3 rounded-md border border-dashed border-hairline p-3">Laptop, phone, SIM, logins (Workspace / GitHub / bank portal), keys, ID card — jo bhi company ne diya hai, yahan likho. Chhodte waqt yahi list wapas maangne ki hai.</p>
+        <p className="text-xs text-ink-3 rounded-md border border-dashed border-hairline p-3">Laptop, phone, SIM, logins (Workspace / GitHub / bank portal), keys, ID card — jo bhi company ne diya hai, yahan likho. Chhodte waqt yahi list wapas maangne ki hai.</p>
       ) : (
         <ul className="space-y-1">
           {h.open.map((a) => (
@@ -54,7 +54,7 @@ export function EmployeeProperty({ employee }: { employee: { id: string; name: s
             </li>
           ))}
           {h.returned.map((a) => (
-            <li key={a.id} className="flex items-center justify-between gap-2 rounded-md px-2.5 py-1 text-2xs text-ink-3">
+            <li key={a.id} className="flex items-center justify-between gap-2 rounded-md px-2.5 py-1 text-xs text-ink-3">
               <span className="truncate">{a.name} · {a.return_condition ? RETURN_LABEL[a.return_condition] : "wapas"} {a.returned_on ? formatDate(a.returned_on) : ""}</span>
               <button type="button" className="underline" onClick={() => ret.mutate({ id: a.id, returnedOn: null, condition: null })}>undo</button>
             </li>
@@ -64,7 +64,7 @@ export function EmployeeProperty({ employee }: { employee: { id: string; name: s
 
       {/* Exit checklist — open by default for an inactive employee, on demand otherwise. */}
       <div className="mt-3">
-        <button type="button" className="text-2xs text-amber-ink underline" onClick={() => setShowChecklist((v) => !v)}>
+        <button type="button" className="text-xs text-amber-ink underline" onClick={() => setShowChecklist((v) => !v)}>
           {showChecklist ? "Exit checklist chhupao" : "Exit / offboarding checklist dekho"}
         </button>
         {showChecklist && checklist && (
@@ -78,7 +78,7 @@ export function EmployeeProperty({ employee }: { employee: { id: string; name: s
                 </li>
               ))}
             </ul>
-            {facts.data && facts.data.loanOutstanding > 0 && <p className="mt-1.5 text-2xs text-ink-3">Advance {rupee(facts.data.loanOutstanding)} — full & final payslip mein "Advance recovered" bharo.</p>}
+            {facts.data && facts.data.loanOutstanding > 0 && <p className="mt-1.5 text-xs text-ink-3">Advance {rupee(facts.data.loanOutstanding)} — full & final payslip mein "Advance recovered" bharo.</p>}
           </div>
         )}
       </div>
@@ -137,7 +137,7 @@ function IssueDialog({ employeeId, employeeName, onClose }: { employeeId: string
               <select id="ea_kind" value={kind} onChange={(e) => setKind(e.target.value as AssetKind)} className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink">
                 {(Object.keys(ASSET_KINDS) as AssetKind[]).map((k) => <option key={k} value={k}>{ASSET_KINDS[k].label}</option>)}
               </select>
-              <p className="text-2xs text-ink-3 mt-1">{ASSET_KINDS[kind].examples}</p>
+              <p className="text-xs text-ink-3 mt-1">{ASSET_KINDS[kind].examples}</p>
             </FormField>
             <FormField label="Date" required htmlFor="ea_date"><Input id="ea_date" type="date" value={issuedOn} max={todayIso()} onChange={(e) => setIssuedOn(e.target.value)} /></FormField>
           </div>

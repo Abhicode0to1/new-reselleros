@@ -95,7 +95,7 @@ export function FixedAssetRegister() {
                     const sold = !!a.disposed_on;
                     return (
                       <tr key={a.id} className={sold ? "opacity-60" : ""}>
-                        <td className="px-3 py-2 text-ink">{a.name}{holder.get(a.id) && <span className="ml-2 text-2xs text-indigo">with {holder.get(a.id)}</span>}{sold && <span className="ml-2 text-2xs text-ink-3">sold {formatDate(a.disposed_on!)} for {rupee(a.disposal_value)}</span>}</td>
+                        <td className="px-3 py-2 text-ink">{a.name}{holder.get(a.id) && <span className="ml-2 text-xs text-indigo">with {holder.get(a.id)}</span>}{sold && <span className="ml-2 text-xs text-ink-3">sold {formatDate(a.disposed_on!)} for {rupee(a.disposal_value)}</span>}</td>
                         <td className="px-3 py-2 text-ink-2 text-xs">{BLOCKS[a.block].label} · {BLOCKS[a.block].ratePct}%</td>
                         <td className="px-3 py-2 text-right font-mono">{rupee(a.cost)}</td>
                         <td className="px-3 py-2 text-ink-2 text-xs">{formatDate(a.put_to_use)}{fyStartOf(a.put_to_use) === fy && depreciationSchedule(a, fy)[0]?.halfRate ? <span className="ml-1 text-amber-ink">(½ rate — &lt;180 din)</span> : null}</td>
@@ -187,7 +187,7 @@ function AddAssetDialog({ onClose }: { onClose: () => void }) {
               <select id="fa_block" value={block} onChange={(e) => setBlock(e.target.value as AssetBlock)} className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink">
                 {(Object.keys(BLOCKS) as AssetBlock[]).map((b) => <option key={b} value={b}>{BLOCKS[b].label} · {BLOCKS[b].ratePct}%</option>)}
               </select>
-              <p className="text-2xs text-ink-3 mt-1">{BLOCKS[block].examples}</p>
+              <p className="text-xs text-ink-3 mt-1">{BLOCKS[block].examples}</p>
             </FormField>
             <FormField label="Cost (₹, ex-GST)" required htmlFor="fa_cost"><Input id="fa_cost" type="number" min={1} prefix="₹" value={cost} onChange={(e) => setCost(e.target.value)} /></FormField>
           </div>

@@ -99,7 +99,7 @@ export default function AssetsPage() {
                         {p.name}
                         <Badge kind="muted">{EMI_CATEGORY_LABEL[p.category]}</Badge>
                       </div>
-                      {p.lender && <div className="text-2xs text-ink-3 font-normal">{p.lender}</div>}
+                      {p.lender && <div className="text-xs text-ink-3 font-normal">{p.lender}</div>}
                     </td>
                     <td className="px-4 py-3 text-ink-2">{formatDate(p.purchased_on)}</td>
                     <td className="px-4 py-3 text-right font-mono text-ink-2">{rupee(p.total_cost)}</td>
@@ -130,11 +130,11 @@ export default function AssetsPage() {
                 <Card className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="font-medium text-ink leading-tight">
-                      {p.name} <span className="text-3xs font-normal text-ink-3">· {EMI_CATEGORY_LABEL[p.category]}</span>
+                      {p.name} <span className="text-xs font-normal text-ink-3">· {EMI_CATEGORY_LABEL[p.category]}</span>
                     </div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(p.outstanding)}</div>
                   </div>
-                  <div className="text-2xs text-ink-3 mb-2">
+                  <div className="text-xs text-ink-3 mb-2">
                     {formatDate(p.purchased_on)} · {rupee(p.total_cost)} cost · {p.emisPaid}{p.emi_count ? `/${p.emi_count}` : ""} EMIs paid
                   </div>
                   <div className="flex items-center justify-between">
@@ -276,7 +276,7 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
             <div className="flex items-center justify-between pt-1 border-t border-hairline font-semibold text-ink">
               <span>Loan (financed)</span><span className="font-mono">{rupee(financed)}</span>
             </div>
-            {emiN > 0 && countN > 0 && <p className="text-2xs text-ink-3">≈ {rupee(emiN)} × {countN} EMIs</p>}
+            {emiN > 0 && countN > 0 && <p className="text-xs text-ink-3">≈ {rupee(emiN)} × {countN} EMIs</p>}
           </div>
         </div>
         <DialogFooter>
@@ -331,8 +331,8 @@ function PayEmiDialog({ purchase, onClose }: { purchase: EmiPurchase; onClose: (
           <div>
             <label htmlFor="assets-of-which-interest-optional" className="block text-xs font-medium text-ink-2 mb-1">Of which interest (₹, optional)</label>
             <Input id="assets-of-which-interest-optional" type="number" min={0} value={interest} onChange={(e) => setInterest(e.target.value)} />
-            {tooMuchInt && <p className="mt-1 text-2xs text-rose">Interest can&apos;t exceed the EMI.</p>}
-            {!tooMuchInt && tooMuchPrin && <p className="mt-1 text-2xs text-rose">Principal ({rupee(principal)}) exceeds outstanding {rupee(purchase.outstanding)}.</p>}
+            {tooMuchInt && <p className="mt-1 text-xs text-rose">Interest can&apos;t exceed the EMI.</p>}
+            {!tooMuchInt && tooMuchPrin && <p className="mt-1 text-xs text-rose">Principal ({rupee(principal)}) exceeds outstanding {rupee(purchase.outstanding)}.</p>}
           </div>
           <div>
             <label htmlFor="assets-paid-from" className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
@@ -383,7 +383,7 @@ function EmiHistoryDialog({ purchase, onClose }: { purchase: EmiPurchase; onClos
               <div key={h.id} className="flex items-start justify-between gap-3 rounded-md border border-hairline px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-ink">{rupee(h.amount)}</div>
-                  <div className="text-2xs text-ink-3">
+                  <div className="text-xs text-ink-3">
                     {formatDate(h.paid_on)}
                     {h.bank_account_id ? ` · ${acctName.get(h.bank_account_id) ?? "account"}` : ""}
                     {" · "}{rupee(h.principal_part)} principal{h.interest_part > 0 ? ` + ${rupee(h.interest_part)} interest` : ""}

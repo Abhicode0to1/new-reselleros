@@ -107,7 +107,7 @@ export default function MyExpensesPage() {
               </div>
               <div>
                 <span className="font-bold text-sm text-ink">{activeAdvance.employee_name}</span>
-                <p className="text-2xs text-ink-3">Disbursed on {formatDate(activeAdvance.disbursed_date, "short")}</p>
+                <p className="text-xs text-ink-3">Disbursed on {formatDate(activeAdvance.disbursed_date, "short")}</p>
               </div>
             </div>
             <Badge kind="warning" size="sm">Active Advance</Badge>
@@ -146,7 +146,7 @@ export default function MyExpensesPage() {
           </Button>
 
           {activeAdvance.purpose && (
-            <p className="text-2xs text-ink-3 text-center">
+            <p className="text-xs text-ink-3 text-center">
               Purpose: <strong>{activeAdvance.purpose}</strong>
             </p>
           )}
@@ -184,15 +184,15 @@ export default function MyExpensesPage() {
                       <span className="font-bold text-ink truncate">{exp.category}</span>
                       <Badge kind="success" size="sm">Deducted</Badge>
                     </div>
-                    {exp.description && <p className="text-ink-2 text-2xs truncate">{exp.description}</p>}
-                    <p className="text-3xs text-ink-3">
+                    {exp.description && <p className="text-ink-2 text-xs truncate">{exp.description}</p>}
+                    <p className="text-xs text-ink-3">
                       {formatDate(exp.expense_date, "short")} {exp.vendor_name ? `· Vendor: ${exp.vendor_name}` : ""}
                     </p>
                   </div>
 
                   <div className="text-right shrink-0">
                     <span className="font-bold text-sm text-ink">{rupee(exp.amount)}</span>
-                    <p className="text-3xs text-emerald font-medium">✓ Adjusted</p>
+                    <p className="text-xs text-emerald font-medium">✓ Adjusted</p>
                   </div>
                 </Card>
               ))}
@@ -334,7 +334,7 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
               className="block w-full text-xs text-ink-3 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-paper-2 file:text-ink hover:file:bg-paper-3 cursor-pointer"
               onChange={(e) => setFileInput(e.target.files?.[0] ?? null)}
             />
-            {fileInput && <p className="text-3xs text-emerald mt-1">✓ Photo selected: {fileInput.name}</p>}
+            {fileInput && <p className="text-xs text-emerald mt-1">✓ Photo selected: {fileInput.name}</p>}
           </FormField>
 
           <DialogFooter className="pt-3 gap-2">

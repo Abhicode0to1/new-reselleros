@@ -129,7 +129,7 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
               className="font-mono uppercase"
               maxLength={50}
             />
-            <p className="text-3xs text-ink-3 mt-1">A-Z, 0-9. Auto-uppercased.</p>
+            <p className="text-xs text-ink-3 mt-1">A-Z, 0-9. Auto-uppercased.</p>
           </div>
           <div>
             <Label htmlFor="create-coupon-description-internal">Description (internal)</Label>
@@ -182,7 +182,7 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
               onChange={(e) => setDiscountValue(e.target.value)}
               className="font-mono"
             />
-            <p className="text-3xs text-ink-3 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               {discountType === "percent" ? "0-100" : "Flat ₹ off pre-GST gross"}
             </p>
           </div>
@@ -244,7 +244,7 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
               onChange={(e) => setValidUntil(e.target.value)}
               className="font-mono"
             />
-            <p className="text-3xs text-ink-3 mt-1">Leave blank for no expiry</p>
+            <p className="text-xs text-ink-3 mt-1">Leave blank for no expiry</p>
           </div>
         </div>
 

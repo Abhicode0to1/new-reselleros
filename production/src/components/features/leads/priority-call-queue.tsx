@@ -226,7 +226,7 @@ export function PriorityCallQueue({
             🔥 Today&apos;s priority call queue
           </span>
           {/* Stays visible when folded. This is the count a rep must keep seeing. */}
-          <span className="text-2xs text-ink-3">
+          <span className="text-xs text-ink-3">
             {queue.entries.length > 0
               ? `${queue.entries.length} of ${queue.dueCount} due`
               : "Everything due today is missing a phone number"}
@@ -246,7 +246,7 @@ export function PriorityCallQueue({
             shadcn-compat alias for the same colour under another name, which is why a grep
             for `text-amber` never found this, and there is no `primary-ink` to reach for. */}
         {!open && (
-          <span className="shrink-0 text-2xs font-semibold text-amber-ink">Show</span>
+          <span className="shrink-0 text-xs font-semibold text-amber-ink">Show</span>
         )}
       </button>
 
@@ -269,7 +269,7 @@ export function PriorityCallQueue({
 
       {/* The truncation, stated. Not "and more" — the actual number. */}
       {hidden > 0 && (
-        <p className="border-t border-hairline bg-paper-2 px-4 py-2 text-2xs text-ink-3">
+        <p className="border-t border-hairline bg-paper-2 px-4 py-2 text-xs text-ink-3">
           {hidden} more due today, below the top {queue.entries.length}. Work through these
           first — the list re-sorts as you clear them.
         </p>
@@ -277,7 +277,7 @@ export function PriorityCallQueue({
 
       {/* The unreachable ones, named. */}
       {queue.dueWithoutPhone.length > 0 && (
-        <p className="border-t border-hairline px-4 py-2.5 text-2xs leading-relaxed text-ink-2">
+        <p className="border-t border-hairline px-4 py-2.5 text-xs leading-relaxed text-ink-2">
           <b>{queue.dueWithoutPhone.length} due today with no phone number</b> —{" "}
           {queue.dueWithoutPhone.slice(0, 3).map((l) => cleanDisplayName(l.company)).join(", ")}
           {queue.dueWithoutPhone.length > 3 ? ` +${queue.dueWithoutPhone.length - 3} more` : ""}.

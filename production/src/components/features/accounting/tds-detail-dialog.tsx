@@ -186,7 +186,7 @@ export function TdsDetailDialog({ open, onOpenChange, tds }: Props) {
           <div className="flex items-center justify-between mb-2">
             <div>
               <div className="text-sm font-medium text-ink">Form 16A Certificate</div>
-              <div className="text-2xs text-ink-3 mt-0.5">
+              <div className="text-xs text-ink-3 mt-0.5">
                 {tds.form_16a_url
                   ? "Uploaded · verify on Form 26AS next"
                   : "PDF or image, max 10 MB"}

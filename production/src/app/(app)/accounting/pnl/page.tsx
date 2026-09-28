@@ -385,7 +385,7 @@ export default function PnLPage() {
                       <div className="text-base font-semibold text-ink leading-tight">Net Loss</div>
                       <div className="text-right">
                         <div className="font-serif text-2xl text-rose">at least {rupee(v.value)}</div>
-                        <div className="text-2xs text-amber-ink">the licence cost, once recorded, only adds to it</div>
+                        <div className="text-xs text-amber-ink">the licence cost, once recorded, only adds to it</div>
                       </div>
                     </div>
                   ) : (
@@ -437,7 +437,7 @@ export default function PnLPage() {
                   {rupee(data.netGST)}
                 </span>
               </div>
-              <p className="text-2xs text-ink-3 leading-relaxed mt-3">
+              <p className="text-xs text-ink-3 leading-relaxed mt-3">
                 Net positive = payable to govt. Negative = refund / carryforward credit.
                 File via GSTR-3B by the 20th of next month.
               </p>
@@ -553,7 +553,7 @@ export default function PnLPage() {
                 <button
                   type="button"
                   onClick={() => setCompare((c) => !c)}
-                  className="text-2xs font-semibold text-amber-ink hover:underline"
+                  className="text-xs font-semibold text-amber-ink hover:underline"
                 >
                   {compare ? "Hide comparison" : "Compare with previous period"}
                 </button>
@@ -644,7 +644,7 @@ export default function PnLPage() {
                     <h3 className="text-2xs font-semibold uppercase tracking-wider text-ink-3">
                       Same five numbers, as steps
                     </h3>
-                    <p className="text-2xs leading-snug text-ink-3">
+                    <p className="text-xs leading-snug text-ink-3">
                       Each bar starts where the one before it ended, so the dotted line follows
                       the money down from sales to what you kept. Click a bar for the entries.
                     </p>
@@ -668,7 +668,7 @@ export default function PnLPage() {
                 <p className="text-[12px] font-medium text-ink">
                   The step chart needs the cost of goods (licence cost), which isn&apos;t recorded for this period.
                 </p>
-                <p className="mt-0.5 text-2xs leading-snug text-ink-2">
+                <p className="mt-0.5 text-xs leading-snug text-ink-2">
                   Enter the vendor bills (Google / Microsoft / Zoho invoices) and it draws itself.
                 </p>
               </div>
@@ -749,7 +749,7 @@ export default function PnLPage() {
                 <div key={v.vendor} className="rounded-md border border-hairline p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-[13px] font-medium text-ink">{v.label}</span>
-                    <span className="text-2xs text-ink-3 tabular-nums">
+                    <span className="text-xs text-ink-3 tabular-nums">
                       {v.subscriptions} subscription{v.subscriptions === 1 ? "" : "s"} · {v.seats} seats
                     </span>
                   </div>
@@ -769,7 +769,7 @@ export default function PnLPage() {
                     </div>
                   </div>
                   {v.marginNote && (
-                    <p className="mt-1.5 text-2xs leading-snug text-amber-ink">{v.marginNote}</p>
+                    <p className="mt-1.5 text-xs leading-snug text-amber-ink">{v.marginNote}</p>
                   )}
                 </div>
               ))}
@@ -786,7 +786,7 @@ export default function PnLPage() {
             <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">
               This financial year, month by month
             </h2>
-            <span className="text-2xs text-ink-3">
+            <span className="text-xs text-ink-3">
               Bars in ₹ · margin line in % on the right
             </span>
           </div>
@@ -796,7 +796,7 @@ export default function PnLPage() {
           {/* The two months worth pointing at, in words. A chart tells you the shape; a
               sentence tells you which month to go and look at. */}
           {highlights.best && highlights.worst && highlights.best.key !== highlights.worst.key && (
-            <p className="mt-2 border-t border-hairline pt-2 text-2xs leading-snug text-ink-2">
+            <p className="mt-2 border-t border-hairline pt-2 text-xs leading-snug text-ink-2">
               {/* "Best month was Apr at ₹-90,000" makes a reader stop and re-read. When
                   every finished month is a loss, the honest sentence is about the size of
                   the losses, not about a winner there wasn't one of. */}
@@ -868,8 +868,8 @@ function Row({
         </div>
         {hint && (
           onHint
-            ? <button type="button" onClick={onHint} className="text-2xs text-amber-ink hover:underline mt-0.5 inline-flex items-center gap-0.5">{hint} <span aria-hidden>→</span></button>
-            : <div className="text-2xs text-ink-3 mt-0.5">{hint}</div>
+            ? <button type="button" onClick={onHint} className="text-xs text-amber-ink hover:underline mt-0.5 inline-flex items-center gap-0.5">{hint} <span aria-hidden>→</span></button>
+            : <div className="text-xs text-ink-3 mt-0.5">{hint}</div>
         )}
       </div>
       <div className={`font-mono whitespace-nowrap ${xl ? "font-serif text-3xl" : emphasis ? "text-lg font-semibold" : "text-base"} ${colorClass}`}>
@@ -888,7 +888,7 @@ function UnknownRow({ label, value, note, large }: {
       <div className={`${large ? "text-base font-semibold" : "text-sm"} text-ink leading-tight`}>{label}</div>
       <div className="text-right">
         <div className={`${large ? "font-serif text-2xl" : "text-base"} text-ink-3 italic`}>{value}</div>
-        <div className="text-2xs text-amber-ink">{note}</div>
+        <div className="text-xs text-amber-ink">{note}</div>
       </div>
     </div>
   );
@@ -955,7 +955,7 @@ function ComparisonCell({ label, current, previous, partial, loading, periodLabe
         <span className="font-mono text-[13px] tabular-nums text-ink">{rupee(current)}</span>
         <span className={cn("text-[12px] font-semibold", tone)}>{d.label}</span>
       </div>
-      <div className="text-3xs text-ink-3 tabular-nums" title={periodLabel}>
+      <div className="text-xs text-ink-3 tabular-nums" title={periodLabel}>
         was {rupee(previous)}
         {d.pct !== null && ` · ${d.absolute >= 0 ? "+" : "−"}${rupee(Math.abs(d.absolute))}`}
       </div>

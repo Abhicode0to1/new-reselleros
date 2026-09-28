@@ -104,22 +104,31 @@ export function scan(raw, path = "") {
 
   for (const m of src.matchAll(/(^|[^:\w-])text-ink-4\b/g)) hits["ink4-body"].push(lineOf(src, m.index + m[1].length));
 
-  for (const m of src.matchAll(/text-(2xs|3xs|\[10px\]|\[11px\])\b/g)) {
+  for (const s of smallTextSites(raw)) hits[`small-${s.kind}`].push(lineOf(src, s.index));
+  return hits;
+}
+
+/** Every sub-12px size class, with its offset and a verdict: "content" (real text S36 lifts
+ *  to 12px), "deco" (eyebrow / pill / counter — left alone), "other" (not on a JSX tag). */
+export function smallTextSites(raw) {
+  const src = stripComments(raw);
+  const out = [];
+  for (const m of src.matchAll(/text-(2xs|3xs|\[10px\]|\[11px\])(?![\w-])/g)) {
     // The className string the size sits in, and the tag it belongs to.
     const lt = src.lastIndexOf("<", m.index);
     const tag = tagAt(src, lt);
     // A class string in a lookup table / variable, not on the element it styles: which
     // element it lands on is not knowable from here, so it is not judged either way.
-    if (lt < 0 || lt + tag.length < m.index) { hits["small-other"].push(lineOf(src, m.index)); continue; }
+    if (lt < 0 || lt + tag.length < m.index) { out.push({ index: m.index, length: m[0].length, kind: "other" }); continue; }
     const deco =
       /\buppercase\b/.test(tag) ||                                        // eyebrow / column header
       (/\brounded(-full|-sm|-md)?\b/.test(tag) && /\bpx-(0\.5|1|1\.5|2)\b/.test(tag) && /\bpy-(0|px|0\.5)\b/.test(tag)) || // pill
       /\b(h|w|size|min-w)-(3|3\.5|4|4\.5|5)\b/.test(tag) ||               // count bubble in a fixed tiny box
       /^<(kbd|sup|sub|Badge|StatusPill)\b/.test(tag) ||
       (/\btabular-nums\b/.test(tag) && /\b(ml-auto|min-w-)/.test(tag));  // trailing counter
-    hits[deco ? "small-deco" : "small-content"].push(lineOf(src, m.index));
+    out.push({ index: m.index, length: m[0].length, kind: deco ? "deco" : "content" });
   }
-  return hits;
+  return out;
 }
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url).replace(/\\/g, "/") === process.argv[1].replace(/\\/g, "/");

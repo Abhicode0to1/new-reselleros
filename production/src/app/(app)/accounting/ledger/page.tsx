@@ -324,7 +324,7 @@ function SummaryStrip({ statement: s, partyName }: { statement: LedgerStatement;
           {s.closingSide && <span className="ml-1.5 text-sm font-sans font-semibold text-ink-2">{s.closingSide}</span>}
         </div>
         {/* Spelled out, because "Dr" is not plain English to the person being sent this. */}
-        <div className="text-2xs text-ink-3 mt-1.5">
+        <div className="text-xs text-ink-3 mt-1.5">
           {s.closingBalance === 0
             ? "Fully settled — nothing outstanding either way."
             : s.closingSide === (s.kind === "customer" ? "Dr" : "Cr")
@@ -391,7 +391,7 @@ function StatementTable({ statement: s }: { statement: LedgerStatement }) {
                 <td className="p-2.5 font-mono text-ink-2 whitespace-nowrap">{r.date}</td>
                 <td className="p-2.5">
                   <span className="font-mono text-ink">{r.reference}</span>
-                  {r.narration && <span className="block text-2xs text-ink-3">{r.narration}</span>}
+                  {r.narration && <span className="block text-xs text-ink-3">{r.narration}</span>}
                 </td>
                 <td className="p-2.5 whitespace-nowrap">
                   <Badge kind="muted" size="sm">{r.voucher}</Badge>
@@ -426,7 +426,7 @@ function StatementTable({ statement: s }: { statement: LedgerStatement }) {
         </table>
       </div>
 
-      <p className="px-3 py-2 text-2xs text-ink-3 border-t border-hairline flex items-center gap-1.5">
+      <p className="px-3 py-2 text-xs text-ink-3 border-t border-hairline flex items-center gap-1.5">
         <Icon name="info" size={12} />
         {s.kind === "customer"
           ? "Dr = owed to you · Cr = held on their behalf. Void invoices are excluded — a void document was never issued."

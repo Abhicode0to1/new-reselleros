@@ -146,7 +146,7 @@ export default function AdPlatformsPage() {
                   {pc.verdict === "over" && <Badge kind="danger" size="sm">Budget se upar ja raha</Badge>}
                   {pc.verdict === "on_track" && <Badge kind="success" size="sm">On track</Badge>}
                   {pc.verdict === "under" && <Badge kind="info" size="sm">Budget se kaafi neeche</Badge>}
-                  {pc.verdict === "no_budget" && <Link href={"/marketing" as Route} className="text-2xs underline text-ink-3">Budget set karo →</Link>}
+                  {pc.verdict === "no_budget" && <Link href={"/marketing" as Route} className="text-xs underline text-ink-3">Budget set karo →</Link>}
                 </div>
                 <div className="mt-2 flex items-baseline gap-3 flex-wrap">
                   <span className="font-serif text-3xl text-ink tabular-nums">{rupee(pc.spent)}</span>
@@ -220,7 +220,7 @@ export default function AdPlatformsPage() {
                         <td className="p-3"><span className="font-medium text-ink">{c.campaign_name}</span> <Badge kind={c.platform === "google-ads" ? "warning" : "info"} size="sm">{c.platform === "google-ads" ? "Google" : "Meta"}</Badge></td>
                         <td className="p-3 text-right tabular-nums font-serif">{rupee(c.spend)}</td>
                         <td className="p-3 text-right tabular-nums text-ink-2">{num(c.impressions)}</td>
-                        <td className="p-3 text-right tabular-nums text-ink-2">{num(c.clicks)}{c.ctr !== null && <span className="text-2xs text-ink-3"> ({c.ctr}%)</span>}</td>
+                        <td className="p-3 text-right tabular-nums text-ink-2">{num(c.clicks)}{c.ctr !== null && <span className="text-xs text-ink-3"> ({c.ctr}%)</span>}</td>
                         <td className="p-3 text-right tabular-nums text-ink-2">{c.cpc !== null ? rupee(c.cpc) : "—"}</td>
                         <td className="p-3 text-right tabular-nums text-ink-2">{num(c.conversions)}</td>
                         <td className="p-3 text-right tabular-nums text-ink-2">{c.leads || "—"}</td>
@@ -264,7 +264,7 @@ export default function AdPlatformsPage() {
                 );
               })}
             </div>
-            <p className="text-2xs text-ink-3 mt-3"><Link href={"/marketing/spend" as Route} className="underline">Spend page</Link> par expense book / tag karo · <Link href={"/accounting/prepaid" as Route} className="underline">Prepaid</Link> par Facebook advance se consume karo.</p>
+            <p className="text-xs text-ink-3 mt-3"><Link href={"/marketing/spend" as Route} className="underline">Spend page</Link> par expense book / tag karo · <Link href={"/accounting/prepaid" as Route} className="underline">Prepaid</Link> par Facebook advance se consume karo.</p>
           </Card>
 
           {(runs.data?.length ?? 0) > 0 && (
@@ -296,7 +296,7 @@ function Kpi({ label, value, change, hint, invert }: { label: string; value: str
     <div className="rounded-md border border-hairline p-3">
       <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
       <p className="font-serif text-2xl text-ink mt-1 tabular-nums">{value}</p>
-      <p className="text-2xs mt-0.5">
+      <p className="text-xs mt-0.5">
         {change === null ? <span className="text-ink-3">{hint ?? "pichhla period 0"}</span> : (
           <><span className={cn("font-semibold", good ? "text-emerald" : bad ? "text-rose" : "text-ink-3")}>{change > 0 ? "+" : ""}{change}%</span>{hint && <span className="text-ink-3"> · {hint}</span>}</>
         )}
@@ -336,10 +336,10 @@ function PlatformCard({ platform, status, accounts, onToggle }: { platform: AdPl
           {accounts.map((a) => (
             <li key={a.id} className="py-2 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm text-ink truncate">{a.name} <span className="text-2xs text-ink-3 font-mono">{a.account_id}</span> <span className="text-2xs text-ink-3">{a.currency}</span></p>
-                <p className="text-2xs text-ink-3">{a.last_synced_at ? `synced ${formatDate(a.last_synced_at)}` : "not synced yet"}{a.last_error ? <span className="text-rose-ink"> · {a.last_error}</span> : ""}</p>
+                <p className="text-sm text-ink truncate">{a.name} <span className="text-xs text-ink-3 font-mono">{a.account_id}</span> <span className="text-xs text-ink-3">{a.currency}</span></p>
+                <p className="text-xs text-ink-3">{a.last_synced_at ? `synced ${formatDate(a.last_synced_at)}` : "not synced yet"}{a.last_error ? <span className="text-rose-ink"> · {a.last_error}</span> : ""}</p>
               </div>
-              <label className="flex items-center gap-2 text-2xs text-ink-3 shrink-0">
+              <label className="flex items-center gap-2 text-xs text-ink-3 shrink-0">
                 <Switch checked={a.enabled} onCheckedChange={(v) => onToggle(a.id, v)} aria-label={`Sync ${a.name}`} /> sync
               </label>
             </li>

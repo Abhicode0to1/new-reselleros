@@ -166,7 +166,7 @@ function Review({ label, value, mono, note }: {
       <dt className="text-3xs uppercase tracking-wider text-ink-3">{label}</dt>
       {v ? (
         <dd className={cn("break-words text-[13px] font-medium text-ink", mono && "font-mono")}>
-          {v}{note && <span className="ml-1 font-sans text-2xs font-normal text-ink-3">· {note}</span>}
+          {v}{note && <span className="ml-1 font-sans text-xs font-normal text-ink-3">· {note}</span>}
         </dd>
       ) : (
         <dd className="text-[12px] italic text-ink-3">not set</dd>
@@ -780,7 +780,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   if (phone) setValue("contact_phone", commitPhone(phone), { shouldDirty: true });
                   if (c.gstin) setValue("gstin", c.gstin, { shouldDirty: true });
                 }} />
-              <p className="mt-1 text-2xs text-ink-3">Upsell, zyada seats ya naya project — customer ki details khud bhar jaati hain, badal bhi sakte ho.</p>
+              <p className="mt-1 text-xs text-ink-3">Upsell, zyada seats ya naya project — customer ki details khud bhar jaati hain, badal bhi sakte ho.</p>
             </FormField>
           )}
 
@@ -894,7 +894,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 Haryana has caught a wrong paste before it became a tax head. */}
             <FieldPill check={checkGstin(watch("gstin") ?? "")} />
             {!(watch("gstin") ?? "").trim() && (
-              <p className="text-3xs text-ink-3">
+              <p className="text-xs text-ink-3">
                 Optional. Helps auto-fill legal name + address on conversion.
               </p>
             )}
@@ -923,7 +923,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   )}
                 >
                   <div className="text-sm font-medium text-ink">{t.label}</div>
-                  <div className="text-2xs text-ink-3">{t.hint}</div>
+                  <div className="text-xs text-ink-3">{t.hint}</div>
                 </button>
               ))}
             </div>
@@ -940,7 +940,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-amber resize-y"
                   {...register("requirement")}
                 />
-                <p className="text-2xs text-ink-3 mt-1">
+                <p className="text-xs text-ink-3 mt-1">
                   {(watch("requirement") ?? "").trim()
                     ? "Requirement hai — Deal Pipeline mein qualified project opportunity ki tarah jaayegi."
                     : "Khaali chhodo to Lead Inbox mein jaayegi — baad mein requirement likh sakte ho."}
@@ -964,7 +964,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   />
                   <FieldPill check={checkMoney(valueText)} />
                   {(parseMoney(valueText) ?? 0) > 0 && (
-                    <p className="mt-1 text-2xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
+                    <p className="mt-1 text-xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
                   )}
                 </FormField>
                 <FormField label="Kab tak chahiye?" htmlFor="project_timeline">
@@ -996,7 +996,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </SelectContent>
             </Select>
             <input type="hidden" {...register("plan")} value={plan} />
-            <p className="text-2xs text-ink-3 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               {plan
                 ? "Will go straight into Deal Pipeline as a qualified opportunity."
                 : "Leave empty to drop into Lead Inbox — you can qualify later."}
@@ -1040,7 +1040,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               />
               <FieldPill check={checkMoney(valueText)} />
               {(parseMoney(valueText) ?? 0) > 0 && (
-                <p className="mt-1 text-2xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
+                <p className="mt-1 text-xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
               )}
               {/* Auto-calc hint */}
               {PLAN_PRICE_PER_SEAT_PM[plan] && (watchedSeats ?? 0) >= 1 && (
@@ -1084,7 +1084,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </Select>
               <input type="hidden" {...register("stage")} value={stage} />
               {!isProject && !plan && (
-                <p className="mt-1 text-3xs text-ink-3 leading-snug">
+                <p className="mt-1 text-xs text-ink-3 leading-snug">
                   Pick a plan to unlock Demo / Trial / Quote / Won.
                 </p>
               )}
@@ -1149,7 +1149,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               <option value="fresh">Fresh subscription (new)</option>
               <option value="switch">Switching vendor (already subscribed elsewhere)</option>
             </select>
-            <p className="mt-1 text-3xs text-ink-3 leading-snug">
+            <p className="mt-1 text-xs text-ink-3 leading-snug">
               &ldquo;Switching&rdquo; = they already use this product, just moving billing/reseller to you (migration).
             </p>
           </FormField>
@@ -1164,7 +1164,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 min={new Date().toISOString().slice(0, 10)}
                 {...register("follow_up_date")}
               />
-              <p className="mt-1 text-3xs text-ink-3">
+              <p className="mt-1 text-xs text-ink-3">
                 Drives your daily worklist · reminder ping the morning of.
               </p>
             </FormField>
@@ -1245,7 +1245,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               {/* Blanks are stated, not shown as gaps — a blank row reads as a
                   rendering fault and an operator cannot tell it apart from a value
                   that failed to load. See the same rule on the enquiry panel. */}
-              <p className="mt-2.5 border-t border-hairline pt-2 text-3xs leading-snug text-ink-3">
+              <p className="mt-2.5 border-t border-hairline pt-2 text-xs leading-snug text-ink-3">
                 Anything marked “not set” will be saved empty. Go back to any step above to
                 fill it — nothing is lost.
               </p>

@@ -117,7 +117,7 @@ export default function ReferralsPage() {
                     <span className="font-medium text-ink truncate">{c.partner_name ?? "—"}</span>
                     <span className="font-serif tabular-nums text-ink">{rupee(c.net_payable)}</span>
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-2xs text-ink-3 flex-wrap">
+                  <div className="mt-1 flex items-center gap-2 text-xs text-ink-3 flex-wrap">
                     <span className={`px-1.5 py-0.5 rounded ${STATUS_PILL[c.status]}`}>{c.status}</span>
                     <span>· {formatDate(c.earned_date)}</span>
                     <span>· base {rupee(c.base_amount)}</span>
@@ -155,7 +155,7 @@ export default function ReferralsPage() {
                         <td className="p-3 whitespace-nowrap text-ink-2">{formatDate(c.earned_date)}</td>
                         <td className="p-3 font-medium text-ink">
                           {c.partner_name ?? "—"}
-                          <span className="ml-2 text-3xs text-ink-3">
+                          <span className="ml-2 text-xs text-ink-3">
                             {c.basis === "percent" ? `${c.rate ?? 0}%` : "fixed"}
                           </span>
                         </td>
@@ -171,8 +171,8 @@ export default function ReferralsPage() {
                               <Button size="sm" variant="ghost" onClick={() => cancel.mutate(c.id)}>Cancel</Button>
                             </div>
                           ) : c.status === "paid" ? (
-                            <span className="text-2xs text-emerald inline-flex items-center gap-1"><Icon name="check" className="w-3 h-3" /> {c.paid_date ? formatDate(c.paid_date) : "Paid"}</span>
-                          ) : <span className="text-2xs text-ink-3">—</span>}
+                            <span className="text-xs text-emerald inline-flex items-center gap-1"><Icon name="check" className="w-3 h-3" /> {c.paid_date ? formatDate(c.paid_date) : "Paid"}</span>
+                          ) : <span className="text-xs text-ink-3">—</span>}
                         </td>
                       </tr>
                     ))}
@@ -210,7 +210,7 @@ export default function ReferralsPage() {
                 <div className="mt-2 text-[12px] text-ink-2">
                   Default: {p.default_basis === "percent" ? `${p.default_percent ?? 0}% of deal` : rupee(p.default_fixed_amount ?? 0)}
                 </div>
-                {p.pan && <p className="mt-1 text-2xs font-mono text-ink-3">PAN {p.pan}</p>}
+                {p.pan && <p className="mt-1 text-xs font-mono text-ink-3">PAN {p.pan}</p>}
                 {p.code && <PartnerLink name={p.name} phone={p.phone} code={p.code} counts={leadCounts.data?.[p.code]} />}
               </Card>
             ))}

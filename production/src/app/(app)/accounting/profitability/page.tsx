@@ -441,7 +441,7 @@ export default function ProfitabilityPage() {
                           </Link>
                         ) : r.customerName}
                       </div>
-                      <div className="text-2xs text-ink-3 mt-0.5">
+                      <div className="text-xs text-ink-3 mt-0.5">
                         {r.quoteCount} {r.quoteCount === 1 ? "quote" : "quotes"} · {r.seatCount} seats
                       </div>
                     </div>
@@ -449,7 +449,7 @@ export default function ProfitabilityPage() {
                       {r.marginPct.toFixed(1)}%
                     </Badge>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-2xs mb-2">
+                  <div className="grid grid-cols-3 gap-2 text-xs mb-2">
                     <div>
                       <div className="text-ink-3 uppercase tracking-wider">Revenue</div>
                       <div className="font-mono text-ink">{rupee(r.revenue)}</div>
@@ -499,7 +499,7 @@ function KPI({
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>
-      {hint && <div className="text-3xs text-ink-3 mt-1">{hint}</div>}
+      {hint && <div className="text-xs text-ink-3 mt-1">{hint}</div>}
     </Card>
   );
 }

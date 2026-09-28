@@ -51,7 +51,7 @@ export function SalaryBreakdownDialog({ name, record, onClose }: {
               <tr key={i} className={l.sign === "=" ? "border-t border-hairline font-semibold" : ""}>
                 <td className="py-1.5 pr-2 text-ink-3 w-5">{l.sign}</td>
                 <td className="py-1.5 text-ink-2">
-                  {l.label}{l.note && <span className="text-2xs text-ink-3"> · {l.note}</span>}
+                  {l.label}{l.note && <span className="text-xs text-ink-3"> · {l.note}</span>}
                 </td>
                 <td className={`py-1.5 text-right ${l.sign === "−" ? "text-rose" : "text-ink"}`}>{rupee(l.amount)}</td>
               </tr>
@@ -60,15 +60,15 @@ export function SalaryBreakdownDialog({ name, record, onClose }: {
         </table>
 
         {!b.addsUp && (
-          <p className="text-2xs text-rose">
+          <p className="text-xs text-rose">
             In lines ka jod net se nahi milta — record haath se badla gaya ho sakta hai. Payroll mein ⋯ → Edit salary se dekh lo.
           </p>
         )}
         {b.employerCost > 0 && (
-          <p className="text-2xs text-ink-3">+ Employer PF / ESI {rupee(b.employerCost)} — company ka kharcha, salary se nahi kata.</p>
+          <p className="text-xs text-ink-3">+ Employer PF / ESI {rupee(b.employerCost)} — company ka kharcha, salary se nahi kata.</p>
         )}
 
-        <div className="rounded-md border border-hairline bg-paper-2/40 px-3 py-2 text-2xs text-ink-2 space-y-0.5">
+        <div className="rounded-md border border-hairline bg-paper-2/40 px-3 py-2 text-xs text-ink-2 space-y-0.5">
           <div className="flex justify-between"><span>Diya ja chuka</span><span className="tabular-nums">{rupee(paid)}</span></div>
           <div className="flex justify-between"><span>Baaki</span><span className={`tabular-nums ${due > 0 ? "text-rose" : ""}`}>{rupee(due)}</span></div>
           <div className="text-ink-3">
@@ -79,7 +79,7 @@ export function SalaryBreakdownDialog({ name, record, onClose }: {
         </div>
 
         {record.notes && (
-          <p className="text-2xs text-ink-3 leading-snug whitespace-pre-line"><b className="text-ink-2">Note:</b> {record.notes}</p>
+          <p className="text-xs text-ink-3 leading-snug whitespace-pre-line"><b className="text-ink-2">Note:</b> {record.notes}</p>
         )}
 
         <DialogFooter>

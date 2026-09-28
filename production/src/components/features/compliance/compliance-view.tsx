@@ -139,12 +139,12 @@ export function ComplianceView({
                         )}
                         {r.status === "filed" && <span className="text-emerald"> · {dueText(r)}</span>}
                       </div>
-                      {r.ob.applies && <div className="text-2xs text-ink-3 mt-1">{r.ob.applies}</div>}
+                      {r.ob.applies && <div className="text-xs text-ink-3 mt-1">{r.ob.applies}</div>}
                       <div className="flex items-center gap-3 mt-1.5">
-                        {r.ob.penalty && <span className="text-2xs text-rose/80">Late: {r.ob.penalty}</span>}
+                        {r.ob.penalty && <span className="text-xs text-rose/80">Late: {r.ob.penalty}</span>}
                         {r.ob.link && (
                           <a href={r.ob.link} target="_blank" rel="noopener noreferrer"
-                            className="text-2xs text-amber-ink hover:underline inline-flex items-center gap-1">
+                            className="text-xs text-amber-ink hover:underline inline-flex items-center gap-1">
                             <Icon name="external" size={11} /> {r.ob.authority}
                           </a>
                         )}
@@ -152,7 +152,7 @@ export function ComplianceView({
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1">
                       {r.status === "filed" ? (
-                        <Button variant="ghost" className="h-7 px-2 text-2xs"
+                        <Button variant="ghost" className="h-7 px-2 text-xs"
                           loading={unmark.isPending}
                           onClick={() => unmark.mutate({ obligation_key: r.ob.key, period_key: r.inst.periodKey })}>
                           Undo
@@ -160,12 +160,12 @@ export function ComplianceView({
                       ) : (
                         <>
                           {r.ob.filingSteps && (
-                            <Button variant={r.status === "overdue" ? "primary" : "default"} icon="rocket" className="h-7 px-2.5 text-2xs"
+                            <Button variant={r.status === "overdue" ? "primary" : "default"} icon="rocket" className="h-7 px-2.5 text-xs"
                               onClick={() => setGuide(r)}>
                               How to file
                             </Button>
                           )}
-                          <Button variant="ghost" icon="check" className="h-7 px-2.5 text-2xs"
+                          <Button variant="ghost" icon="check" className="h-7 px-2.5 text-xs"
                             onClick={() => setFiling(r)}>
                             Mark filed
                           </Button>
@@ -339,7 +339,7 @@ function KPI({ label, value, tone, sub }: {
     <Card className="p-2.5">
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5 truncate">{label}</div>
       <div className={`font-serif text-xl md:text-2xl ${colorClass} leading-tight`}>{value}</div>
-      {sub && <div className="text-3xs text-ink-3 truncate">{sub}</div>}
+      {sub && <div className="text-xs text-ink-3 truncate">{sub}</div>}
     </Card>
   );
 }

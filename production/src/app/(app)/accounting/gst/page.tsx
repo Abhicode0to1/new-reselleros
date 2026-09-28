@@ -594,7 +594,7 @@ export default function GstReportPage() {
               <div className={`font-serif text-2xl md:text-3xl ${data && data.netLiability >= 0 ? "text-rose" : "text-emerald"}`}>
                 {data ? rupee(data.netLiability) : "—"}
               </div>
-              <div className="text-2xs text-ink-3 mt-1.5 leading-relaxed">
+              <div className="text-xs text-ink-3 mt-1.5 leading-relaxed">
                 {data && data.netLiability >= 0
                   ? "Payable to government via GSTR-3B"
                   : "Refundable / carry-forward input tax credit"}
@@ -602,7 +602,7 @@ export default function GstReportPage() {
               {/* GST already paid for these return months (booked from the bank). Shown
                   only when some was paid, so an unpaid month still reads as plain "payable". */}
               {data && gstPaidInRange > 0 && (
-                <div className="mt-2 pt-2 border-t border-amber/20 text-2xs space-y-0.5 tabular-nums">
+                <div className="mt-2 pt-2 border-t border-amber/20 text-xs space-y-0.5 tabular-nums">
                   <div className="flex justify-between text-ink-2">
                     <span>Paid for these months</span><span>− {rupee(gstPaidInRange)}</span>
                   </div>
@@ -691,7 +691,7 @@ export default function GstReportPage() {
               </tbody>
             </table>
           </div>
-          <p className="text-2xs text-ink-3 mt-2 leading-relaxed">
+          <p className="text-xs text-ink-3 mt-2 leading-relaxed">
             Net = output − ITC per head (floored at 0). The portal also lets IGST credit set off CGST/SGST,
             so your actual cash payable can be lower. Expense ITC is assumed intra-state (CGST+SGST) — adjust
             if any expense was inter-state / import (IGST). Add reverse-charge, interest or late fee separately.
@@ -749,7 +749,7 @@ export default function GstReportPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-emerald">
                       {rupee(r.gst)}
-                      <span className="block text-3xs text-ink-3">
+                      <span className="block text-xs text-ink-3">
                         {r.interState ? `IGST ${rupee(s.igst)}` : `${rupee(s.cgst)} + ${rupee(s.sgst)}`}
                       </span>
                     </td>
@@ -797,10 +797,10 @@ export default function GstReportPage() {
             return (
               <div className="mt-3 space-y-3">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Claim karo (2B ✓)</div><div className="font-mono text-emerald font-semibold">{rupee(r.claimable.total)}</div><div className="text-2xs text-ink-3">{r.matched.length} matched · {r.amountDiffers.length} farq</div></div>
-                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Hold (2B mein nahi)</div><div className="font-mono text-amber-ink font-semibold">{rupee(r.held)}</div><div className="text-2xs text-ink-3">{r.onlyInBooks.length} books row</div></div>
-                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Bill chhoota (sirf 2B mein)</div><div className="font-mono text-rose font-semibold">{rupee(r.unbooked)}</div><div className="text-2xs text-ink-3">{r.onlyIn2b.length} invoice</div></div>
-                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">2B file</div><div className="font-mono text-ink">{twoB.count} inv · {twoB.period ?? "?"}</div><div className="text-2xs text-ink-3">books ITC {rupee(data.inputGST)}</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Claim karo (2B ✓)</div><div className="font-mono text-emerald font-semibold">{rupee(r.claimable.total)}</div><div className="text-xs text-ink-3">{r.matched.length} matched · {r.amountDiffers.length} farq</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Hold (2B mein nahi)</div><div className="font-mono text-amber-ink font-semibold">{rupee(r.held)}</div><div className="text-xs text-ink-3">{r.onlyInBooks.length} books row</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Bill chhoota (sirf 2B mein)</div><div className="font-mono text-rose font-semibold">{rupee(r.unbooked)}</div><div className="text-xs text-ink-3">{r.onlyIn2b.length} invoice</div></div>
+                  <div className="rounded-md bg-paper p-2.5"><div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">2B file</div><div className="font-mono text-ink">{twoB.count} inv · {twoB.period ?? "?"}</div><div className="text-xs text-ink-3">books ITC {rupee(data.inputGST)}</div></div>
                 </div>
                 {r.onlyInBooks.length > 0 && (
                   <div>
@@ -871,7 +871,7 @@ export default function GstReportPage() {
                 <p className="text-xs font-semibold text-ink">
                   {rows.length} {rows.length === 1 ? "row ka" : "rows ka"} GST batwara MAANA hua hai — {rupee(amount)}
                 </p>
-                <p className="text-2xs text-ink-2">
+                <p className="text-xs text-ink-2">
                   In par bill ka IGST/CGST batwara nahi mila, isliye intra-state maan kar aadha-aadha
                   baanta gaya hai. <strong>GSTR-3B me IGST aur CGST/SGST alag column hain</strong> —
                   agar inme koi doosre rajya ka bill hai (jaise Amazon), to uska credit galat khaane
@@ -972,7 +972,7 @@ function SectionHeader({
       <div>
         <h2 className="font-serif text-xl text-ink leading-tight">{title}</h2>
         {count > 0 && (
-          <div className="text-2xs text-ink-3 mt-0.5">{count} {count === 1 ? "row" : "rows"}</div>
+          <div className="text-xs text-ink-3 mt-0.5">{count} {count === 1 ? "row" : "rows"}</div>
         )}
       </div>
       <Button variant="default" size="sm" onClick={onExport} disabled={disabled}>
@@ -996,7 +996,7 @@ function SummaryCard({
     <Card className="p-4 md:p-5">
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className="font-serif text-2xl md:text-3xl text-ink leading-tight mb-2">{rupee(gst)}</div>
-      <div className="text-2xs text-ink-3 leading-relaxed">
+      <div className="text-xs text-ink-3 leading-relaxed">
         on {rupee(taxable)} taxable value · {rowCount} {rowLabel}{rowCount === 1 ? "" : "s"}
       </div>
     </Card>

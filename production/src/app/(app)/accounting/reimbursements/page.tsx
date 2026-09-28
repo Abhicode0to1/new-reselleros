@@ -164,7 +164,7 @@ function ReimbList({
                     {r.employee_id && <Badge kind="info" size="sm">Employee</Badge>}
                     <span className="text-ink-3 font-normal truncate">· {r.purpose}</span>
                   </p>
-                  <p className="text-2xs text-ink-3 truncate">
+                  <p className="text-xs text-ink-3 truncate">
                     {r.category} · {formatDate(r.incurred_on)}{r.paid_via ? ` · ${r.paid_via}` : ""}
                     {settled && r.settled_on ? ` · settled ${formatDate(r.settled_on)}` : ""}
                   </p>
@@ -196,7 +196,7 @@ function ReimbList({
                   <p className={`font-mono text-sm font-semibold shrink-0 ${settled ? "text-ink-3" : "text-rose"}`}>{rupee(r.amount)}</p>
                 </div>
                 <p className="mt-1 text-[13px] text-ink-2">{r.purpose}</p>
-                <p className="mt-0.5 text-2xs text-ink-3">
+                <p className="mt-0.5 text-xs text-ink-3">
                   {r.category} · {formatDate(r.incurred_on)}{r.paid_via ? ` · ${r.paid_via}` : ""}
                   {settled && r.settled_on ? ` · settled ${formatDate(r.settled_on)}` : ""}
                 </p>
@@ -320,8 +320,8 @@ function AddReimbursementDialog({ onClose }: { onClose: () => void }) {
                 })()}
               </div>
               {employeeId
-                ? <p className="mt-1 text-2xs text-emerald">✓ Employee — iski reimbursement track hogi</p>
-                : person.trim() ? <p className="mt-1 text-2xs text-ink-3">Non-employee (director / dost ka card) — bhi theek hai</p> : null}
+                ? <p className="mt-1 text-xs text-emerald">✓ Employee — iski reimbursement track hogi</p>
+                : person.trim() ? <p className="mt-1 text-xs text-ink-3">Non-employee (director / dost ka card) — bhi theek hai</p> : null}
             </FormField>
             <FormField htmlFor="reimbursements-date" label="Date">
               <Input id="reimbursements-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -364,7 +364,7 @@ function AddReimbursementDialog({ onClose }: { onClose: () => void }) {
               />
             </label>
           </FormField>
-          <p className="text-2xs text-ink-3">On save, this expense is booked to the P&amp;L and shown as owed to {person.trim() || "that person"}.</p>
+          <p className="text-xs text-ink-3">On save, this expense is booked to the P&amp;L and shown as owed to {person.trim() || "that person"}.</p>
         </div>
         <DialogFooter>
           <Button type="button" variant="default" onClick={onClose}>Cancel</Button>

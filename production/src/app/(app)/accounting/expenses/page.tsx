@@ -403,7 +403,7 @@ export default function ExpensesPage() {
                 {e.bill_type === "kaccha" && <BillChip tone="amber" label="Kaccha" title="Non-GST (kaccha) bill" />}
                 {e.bill_type === "none" && !isPayrollExpense(e) && <BillChip tone="rose" label="No bill" title="No bill/receipt attached yet" />}
               </div>
-              <div className="text-2xs text-ink-3 truncate mt-0.5" title={e.description ?? undefined}>
+              <div className="text-xs text-ink-3 truncate mt-0.5" title={e.description ?? undefined}>
                 {formatDate(e.expense_date)}
                 {e.payment_method ? ` · ${e.payment_method}` : ""}
                 {e.description ? ` · ${e.description}` : ""}
@@ -414,8 +414,8 @@ export default function ExpensesPage() {
             {/* Amount (+ GST + FX as sub-lines) */}
             <td className="px-3 py-2.5 text-right">
               <div className="font-semibold text-ink font-mono">{rupee(e.amount)}</div>
-              {e.gst_paid > 0 && <div className="text-3xs text-emerald">+{rupee(e.gst_paid)} GST</div>}
-              {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-3xs text-ink-3">{fx}</div> : null; })()}
+              {e.gst_paid > 0 && <div className="text-xs text-emerald">+{rupee(e.gst_paid)} GST</div>}
+              {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-xs text-ink-3">{fx}</div> : null; })()}
             </td>
             {/* Actions — icon-first, wrap instead of overflowing */}
             <td className="px-3 py-2.5" onClick={(ev) => ev.stopPropagation()}>
@@ -425,11 +425,11 @@ export default function ExpensesPage() {
                     title="Upload receipt / bill" onClick={() => setEditing(e)} />
                 )}
                 {!e.paid && !isPayrollExpense(e) && (
-                  <Button variant="default" className="h-7 px-2 py-0 text-2xs"
+                  <Button variant="default" className="h-7 px-2 py-0 text-xs"
                     onClick={() => setPayingExpense(e)}>Mark paid</Button>
                 )}
                 {canReconcile(e) && (
-                  <Button variant="default" className="h-7 px-2 py-0 text-2xs"
+                  <Button variant="default" className="h-7 px-2 py-0 text-xs"
                     onClick={() => startReconcile(e)}>Reconcile</Button>
                 )}
                 <IconButton icon="edit" size="sm" variant="ghost" aria-label="Edit expense" onClick={() => setEditing(e)} />
@@ -465,26 +465,26 @@ export default function ExpensesPage() {
                 : <PayBadge e={e} today={today} />}
             </div>
             <div className="font-serif text-xl text-ink leading-none">{rupee(e.amount)}</div>
-            {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-2xs text-ink-3">{fx} @ ₹{e.fx_rate}/{e.currency}</div> : null; })()}
+            {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-xs text-ink-3">{fx} @ ₹{e.fx_rate}/{e.currency}</div> : null; })()}
           </div>
-          <div className="text-2xs text-ink-3 mb-1.5">
+          <div className="text-xs text-ink-3 mb-1.5">
             {formatDate(e.expense_date)} · {e.payment_method ?? "—"}
           </div>
           {e.vendor_name && <div className="text-xs text-ink-2 mb-1">{e.vendor_name}</div>}
           {e.description && <div className="text-xs text-ink-3 mb-2">{e.description}</div>}
           <div className="flex items-center justify-between">
             {e.gst_paid > 0 && (
-              <span className="text-2xs text-emerald">+{foreignAmount(e.currency, e.gst_paid, e.fx_rate) ?? rupee(e.gst_paid)} input GST</span>
+              <span className="text-xs text-emerald">+{foreignAmount(e.currency, e.gst_paid, e.fx_rate) ?? rupee(e.gst_paid)} input GST</span>
             )}
             <div className="ml-auto flex items-center gap-1">
               {!e.paid && !isPayrollExpense(e) && (
-                <Button variant="default" className="h-7 px-2 py-0 text-2xs mr-1"
+                <Button variant="default" className="h-7 px-2 py-0 text-xs mr-1"
                   onClick={(ev) => { ev.stopPropagation(); setPayingExpense(e); }}>
                   Mark paid
                 </Button>
               )}
               {canReconcile(e) && (
-                <Button variant="default" className="h-7 px-2 py-0 text-2xs mr-1"
+                <Button variant="default" className="h-7 px-2 py-0 text-xs mr-1"
                   onClick={(ev) => { ev.stopPropagation(); startReconcile(e); }}>
                   Reconcile
                 </Button>
@@ -594,7 +594,7 @@ export default function ExpensesPage() {
           >
             To pay{payableQ.data && payableQ.data.count > 0 ? ` · ${payableQ.data.count}` : ""}
           </button>
-          <span className="ml-auto text-2xs text-ink-3">
+          <span className="ml-auto text-xs text-ink-3">
             {rows.length} {rows.length === 1 ? "entry" : "entries"}
           </span>
         </div>
@@ -643,18 +643,18 @@ export default function ExpensesPage() {
           </select>
           {isFiltered && (
             <button type="button" onClick={() => { setCatFilter(""); setPayeeFilter(""); setUnpaidOnly(false); setSearch(""); }}
-              className="text-2xs text-amber-ink hover:underline">Clear</button>
+              className="text-xs text-amber-ink hover:underline">Clear</button>
           )}
           {/* Group the list — subtotal per vendor / category. */}
           <div className="ml-auto flex items-center gap-1" role="group" aria-label="Group expenses by">
-            <span className="text-2xs text-ink-3 mr-0.5">Group by</span>
+            <span className="text-xs text-ink-3 mr-0.5">Group by</span>
             {([["none", "None"], ["vendor", "Vendor"], ["category", "Category"]] as const).map(([k, label]) => (
               <button
                 key={k}
                 type="button"
                 aria-pressed={groupBy === k}
                 onClick={() => { setGroupBy(k); setCollapsed(new Set()); }}
-                className={`text-2xs px-2 py-1 rounded-md border transition-colors ${
+                className={`text-xs px-2 py-1 rounded-md border transition-colors ${
                   groupBy === k ? "border-amber bg-amber-soft text-amber-ink font-semibold" : "border-hairline text-ink-3 hover:text-ink hover:bg-paper-2"
                 }`}
               >
@@ -760,12 +760,12 @@ export default function ExpensesPage() {
                         >
                           <Icon name={collapsed.has(g.key) ? "chevron_right" : "chevron_down"} size={14} className="text-ink-3" />
                           {g.label}
-                          <span className="text-2xs font-normal text-ink-3">· {g.count} {g.count === 1 ? "entry" : "entries"}</span>
+                          <span className="text-xs font-normal text-ink-3">· {g.count} {g.count === 1 ? "entry" : "entries"}</span>
                         </button>
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="font-semibold text-ink font-mono">{rupee(g.total)}</div>
-                        {g.gst > 0 && <div className="text-3xs text-emerald">+{rupee(g.gst)} GST</div>}
+                        {g.gst > 0 && <div className="text-xs text-emerald">+{rupee(g.gst)} GST</div>}
                       </td>
                       <td />
                     </tr>
@@ -790,7 +790,7 @@ export default function ExpensesPage() {
                   >
                     <span className="flex items-center gap-1.5 font-semibold text-ink">
                       <Icon name={collapsed.has(g.key) ? "chevron_right" : "chevron_down"} size={14} className="text-ink-3" />
-                      {g.label} <span className="text-2xs font-normal text-ink-3">· {g.count}</span>
+                      {g.label} <span className="text-xs font-normal text-ink-3">· {g.count}</span>
                     </span>
                     <span className="font-mono font-semibold text-ink">{rupee(g.total)}</span>
                   </button>
@@ -845,7 +845,7 @@ function KPI({
     <Card className="p-2.5">
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5 truncate">{label}</div>
       <div className={`font-serif text-lg md:text-xl ${colorClass} leading-tight truncate`}>{value}</div>
-      {sub && <div className="text-3xs text-ink-3 truncate">{sub}</div>}
+      {sub && <div className="text-xs text-ink-3 truncate">{sub}</div>}
     </Card>
   );
 }

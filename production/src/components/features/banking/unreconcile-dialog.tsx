@@ -54,7 +54,7 @@ export function UnreconcileDialog({ txn, onClose }: { txn: BankTransactionRow | 
               <input type="checkbox" checked={undoSale} onChange={(e) => setUndoSale(e.target.checked)} className="mt-1" />
               <span className="text-[13px] leading-snug">
                 <b>Wo sale bhi palat do</b> — issued invoice par poora credit note banega (invoice rahegi, kuch due nahi; draft ho to void), aur receipt hat jayegi.
-                <span className="block text-2xs text-ink-3 mt-0.5">
+                <span className="block text-xs text-ink-3 mt-0.5">
                   Agar ye line ab kisi aur cheez (jaise project payment) mein book karni hai to ise ticked rehne do — warna wahi paisa do baar revenue mein ginega.
                 </span>
               </span>

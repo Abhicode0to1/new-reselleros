@@ -137,9 +137,9 @@ function ProfileCard({ p, onEdit, onRun, running }: { p: FinderProfileRow; onEdi
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ink truncate">{p.name}</p>
           <p className="text-xs text-ink-3 mt-0.5">{p.cities || "India"} · {p.industries || "koi bhi industry"} · {p.company_size}</p>
-          <p className="text-2xs text-ink-3 mt-1">{p.products.map((k) => PRODUCT_LABEL[k]?.split(" (")[0] ?? k).join(", ")} · {p.daily_limit}/din · {p.last_run_at ? `last run ${formatDate(p.last_run_at)}` : "kabhi nahi chala"}</p>
+          <p className="text-xs text-ink-3 mt-1">{p.products.map((k) => PRODUCT_LABEL[k]?.split(" (")[0] ?? k).join(", ")} · {p.daily_limit}/din · {p.last_run_at ? `last run ${formatDate(p.last_run_at)}` : "kabhi nahi chala"}</p>
         </div>
-        <label className="flex items-center gap-1.5 text-2xs text-ink-3 shrink-0"><Switch checked={p.enabled} onCheckedChange={(v) => save.mutate({ ...p, enabled: v })} aria-label="Nightly run" /> nightly</label>
+        <label className="flex items-center gap-1.5 text-xs text-ink-3 shrink-0"><Switch checked={p.enabled} onCheckedChange={(v) => save.mutate({ ...p, enabled: v })} aria-label="Nightly run" /> nightly</label>
       </div>
       <div className="mt-3 flex gap-2">
         <Button size="sm" variant="primary" icon="search" onClick={onRun} loading={running}>{running ? "Dhoondh raha…" : "Run now"}</Button>
@@ -179,7 +179,7 @@ function ProfileForm({ value, onClose }: { value: FinderProfileInput; onClose: (
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
         {v.id && <Button variant="ghost" className="text-rose ml-auto" onClick={async () => { if (await confirm({ title: "Profile delete?", body: "Mili hui companies rahengi, sirf profile hatega." })) del.mutate(v.id!, { onSuccess: onClose }); }}>Delete</Button>}
       </div>
-      <p className="text-2xs text-ink-3">Roz raat 03:30 par har enabled profile chalta hai. Gemini API key Settings → Integrations → AI se lagti hai; har run ~2 AI calls + {v.daily_limit} DNS/website checks.</p>
+      <p className="text-xs text-ink-3">Roz raat 03:30 par har enabled profile chalta hai. Gemini API key Settings → Integrations → AI se lagti hai; har run ~2 AI calls + {v.daily_limit} DNS/website checks.</p>
     </Card>
   );
 }
@@ -199,7 +199,7 @@ function CandidateRow({ c, onApprove, onReject, onUndo, busy }: { c: FinderCandi
             {c.product && <Badge kind="info" size="sm">{PRODUCT_LABEL[c.product]?.split(" (")[0] ?? c.product}</Badge>}
             {c.status === "converted" && c.lead_id && <Link href={`/leads?lead=${c.lead_id}` as Route} className="text-xs underline text-emerald">Lead {c.lead_id} →</Link>}
           </div>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs">
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
             <span className={cn(c.on_workspace === false ? "text-emerald" : c.on_workspace ? "text-rose" : "text-ink-3")}>✉ {c.mx_provider ? MX_LABEL[c.mx_provider] : "—"}</span>
             <span className={cn(c.site_https === false ? "text-emerald" : "text-ink-3")}>🌐 {c.site_note ?? "—"}</span>
           </div>
@@ -221,7 +221,7 @@ function CandidateRow({ c, onApprove, onReject, onUndo, busy }: { c: FinderCandi
             ) : c.status === "rejected" ? (
               <Button size="sm" variant="ghost" onClick={onUndo} disabled={busy}>Wapas review mein</Button>
             ) : null}
-            <button type="button" className="text-2xs text-ink-3 underline" onClick={() => setOpen((v) => !v)}>{open ? "Kam dikhao" : "Pitch & details"}</button>
+            <button type="button" className="text-xs text-ink-3 underline" onClick={() => setOpen((v) => !v)}>{open ? "Kam dikhao" : "Pitch & details"}</button>
           </div>
         </div>
       </div>

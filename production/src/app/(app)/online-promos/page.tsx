@@ -141,7 +141,7 @@ export default function OnlinePromosPage() {
               <div className="flex-1 min-w-0">
                 <div className="font-serif text-base sm:text-lg leading-tight">{winning.headline}</div>
                 {winning.subheadline && (
-                  <div className="text-2xs sm:text-xs opacity-90 mt-0.5">{winning.subheadline}</div>
+                  <div className="text-xs sm:text-xs opacity-90 mt-0.5">{winning.subheadline}</div>
                 )}
               </div>
               <span className="font-mono text-xs bg-paper text-ink px-2 py-1 rounded font-semibold whitespace-nowrap">
@@ -150,7 +150,7 @@ export default function OnlinePromosPage() {
             </div>
           </div>
           {activePromos.length > 1 && (
-            <p className="text-2xs text-amber-ink mt-2 inline-flex items-center gap-1.5">
+            <p className="text-xs text-amber-ink mt-2 inline-flex items-center gap-1.5">
               <Icon name="alert" size={11} />
               {activePromos.length} promos are active — only the most-recently-updated one shows on the buy page.
             </p>
@@ -280,7 +280,7 @@ export default function OnlinePromosPage() {
                         {p.valid_until ? `ends ${formatDate(p.valid_until)}` : "no end date"}
                       </span>
                     </div>
-                    <div className="text-2xs text-ink-3 tabular-nums mb-2">
+                    <div className="text-xs text-ink-3 tabular-nums mb-2">
                       {p.min_seats}+ seats
                       {p.max_seats != null ? ` · max ${p.max_seats}` : ""}
                       {p.applies_to_tier ? ` · ${p.applies_to_tier}` : ""}
@@ -307,7 +307,7 @@ export default function OnlinePromosPage() {
       )}
 
       {!isLoading && promos && promos.length > 0 && (
-        <p className="text-2xs text-ink-3 mt-3 flex items-center gap-1.5">
+        <p className="text-xs text-ink-3 mt-3 flex items-center gap-1.5">
           <Icon name="info" size={11} />
           Stacks below Google promo (catalog), above any visitor coupon code. Discount is applied pre-GST; 18% GST recomputed on the discounted subtotal.
         </p>

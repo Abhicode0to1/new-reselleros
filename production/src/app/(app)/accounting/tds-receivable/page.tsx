@@ -273,13 +273,13 @@ export default function TdsReceivablePage() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0">
                         <div className="font-medium text-ink leading-tight">{r.customer_name}</div>
-                        <div className="text-2xs text-ink-3 mt-0.5">
+                        <div className="text-xs text-ink-3 mt-0.5">
                           {formatDate(r.payment_received_date)} · {r.section} @ {Number(r.rate_pct).toFixed(2)}%
                         </div>
                       </div>
                       <Badge color={STATUS_COLOR[r.status]}>{TDS_STATUS_LABEL[r.status]}</Badge>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-2xs">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <div className="text-ink-3 uppercase tracking-wider">Gross</div>
                         <div className="font-mono text-ink">{rupee(r.gross_amount)}</div>
@@ -290,7 +290,7 @@ export default function TdsReceivablePage() {
                       </div>
                     </div>
                     {r.customer_tan && (
-                      <div className="text-3xs text-ink-3 mt-2 font-mono">TAN: {r.customer_tan}</div>
+                      <div className="text-xs text-ink-3 mt-2 font-mono">TAN: {r.customer_tan}</div>
                     )}
                   </Card>
                 </button>
@@ -368,7 +368,7 @@ function KPI({
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>
-      {hint && <div className="text-3xs text-ink-3 mt-1">{hint}</div>}
+      {hint && <div className="text-xs text-ink-3 mt-1">{hint}</div>}
     </Card>
   );
 }

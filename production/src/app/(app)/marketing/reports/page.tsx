@@ -356,7 +356,7 @@ function ChannelTable({ channels, unattributed, unattributedShare }: {
                     {/* This is the most useful number on the page: the share of
                         pipeline whose origin nobody knows. Ranking these next to
                         real channels would imply "manual" as somewhere to invest. */}
-                    <p className="text-2xs text-ink-3 mt-0.5 max-w-[54rem]">
+                    <p className="text-xs text-ink-3 mt-0.5 max-w-[54rem]">
                       These record how a lead was typed in, not where it came from, so they carry no budget decision.
                       The size of this group is itself the finding — that share of the pipeline has no known origin.
                     </p>
@@ -384,7 +384,7 @@ function Funnel({ steps }: { steps: { key: string; label: string; count: number 
       {/* Stated because the last step counts PAYMENTS while the cards above count
           leads marked won, and the two legitimately differ. An unexplained
           mismatch between two numbers on one page destroys trust in both. */}
-      <p className="text-2xs text-ink-3 mb-3 max-w-[52rem] leading-snug">
+      <p className="text-xs text-ink-3 mb-3 max-w-[52rem] leading-snug">
         The last step counts payments received, not leads marked won — a payment can settle a deal closed in an
         earlier period, and one customer can pay more than once. That is why it may differ from the deal count in
         the cards above.
@@ -412,9 +412,9 @@ function Funnel({ steps }: { steps: { key: string; label: string; count: number 
                      style={{ width: `${Math.max(2, ((s.count ?? 0) / widest) * 100)}%` }} />
               )}
             </div>
-            {s.note && <p className="text-2xs text-ink-3 mt-1 leading-snug">{s.note}</p>}
+            {s.note && <p className="text-xs text-ink-3 mt-1 leading-snug">{s.note}</p>}
             {s.bottleneck && s.benchmark !== null && (
-              <p className="text-2xs text-rose mt-1">
+              <p className="text-xs text-rose mt-1">
                 Below the {Math.round(s.benchmark * 100)}% target — this is the tightest point in the funnel.
               </p>
             )}
@@ -449,7 +449,7 @@ function AiAdvisorPanel({ canAdvise }: { canAdvise: boolean }) {
           <p className="text-sm font-semibold text-ink mb-1">AI budget recommendations</p>
           {canAdvise ? (
             <p className="text-[13px] text-ink-2">
-              Enough spend is now tracked to analyse. Connect <span className="font-mono text-2xs">GEMINI_API_KEY</span> to
+              Enough spend is now tracked to analyse. Connect <span className="font-mono text-xs">GEMINI_API_KEY</span> to
               turn this on.
             </p>
           ) : (

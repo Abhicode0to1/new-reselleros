@@ -218,7 +218,7 @@ function EditTool({ r, onClose }: { r: ToolRow; onClose: () => void }) {
           </FormField>
           <FormField label="Account ka link" htmlFor="mt_url">
             <Input id="mt_url" placeholder={r.homeUrl.startsWith("http") ? r.homeUrl : "https://…"} value={url} onChange={(e) => setUrl(e.target.value)} />
-            {urlBad && <p className="mt-1 text-2xs text-red-600">Poora link daalo, https:// ke saath.</p>}
+            {urlBad && <p className="mt-1 text-xs text-red-600">Poora link daalo, https:// ke saath.</p>}
           </FormField>
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Kaun sambhalta hai" htmlFor="mt_owner">
@@ -229,11 +229,11 @@ function EditTool({ r, onClose }: { r: ToolRow; onClose: () => void }) {
                      disabled={!r.channel} />
             </FormField>
           </div>
-          {!r.channel && <p className="text-2xs text-ink-3 -mt-1">Is tool ka kharcha kisi channel se nahi judta, isliye budget nahi.</p>}
+          {!r.channel && <p className="text-xs text-ink-3 -mt-1">Is tool ka kharcha kisi channel se nahi judta, isliye budget nahi.</p>}
           <FormField label="Note" htmlFor="mt_notes">
             <Input id="mt_notes" placeholder="e.g. login Pardeep ke Gmail se" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
-          <p className="text-2xs text-ink-3">Password yahan mat likho — uske liye Admin → Password Vault hai.</p>
+          <p className="text-xs text-ink-3">Password yahan mat likho — uske liye Admin → Password Vault hai.</p>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>

@@ -58,8 +58,8 @@ export default function ReviewsPage() {
           <Input aria-label="Google review link" className="flex-1 min-w-[260px]" placeholder="https://g.page/r/…/review" value={link} onChange={(e) => setLink(e.target.value)} />
           <Button onClick={() => saveLink.mutate(link)} disabled={saveLink.isPending || (link.trim() !== "" && !isValidReviewLink(link))}>Save</Button>
         </div>
-        {link.trim() !== "" && !isValidReviewLink(link) && <p className="text-2xs text-red-600">Poora https:// link daalo.</p>}
-        <p className="text-2xs text-ink-3">
+        {link.trim() !== "" && !isValidReviewLink(link) && <p className="text-xs text-red-600">Poora https:// link daalo.</p>}
+        <p className="text-xs text-ink-3">
           Kahan milega: business.google.com → apna profile → &ldquo;Ask for reviews&rdquo; / &ldquo;Get more reviews&rdquo; → link copy karo.
         </p>
       </Card>

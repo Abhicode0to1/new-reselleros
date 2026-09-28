@@ -174,10 +174,10 @@ export default function VendorsPage() {
                     >
                       <td className="px-4 py-2.5 align-top">
                         <div className="font-medium text-ink leading-snug">{v.name}</div>
-                        {v.gstin && <div className="text-2xs text-ink-3 font-mono">{v.gstin}</div>}
+                        {v.gstin && <div className="text-xs text-ink-3 font-mono">{v.gstin}</div>}
                         {v.udyam && <Badge kind="info" size="sm" className="mt-0.5" title={v.udyam}>MSME{v.msme_category ? ` · ${v.msme_category}` : ""}</Badge>}
-                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-2xs text-ink-3">{r}</div> : null; })()}
-                        {v.contact_email && <div className="text-2xs text-ink-3 truncate">{v.contact_email}</div>}
+                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-xs text-ink-3">{r}</div> : null; })()}
+                        {v.contact_email && <div className="text-xs text-ink-3 truncate">{v.contact_email}</div>}
                       </td>
 
                       <td className="px-4 py-2.5 align-top">
@@ -199,7 +199,7 @@ export default function VendorsPage() {
                       <td className="px-4 py-2.5 text-right tabular-nums align-top">
                         {v.totalSpend > 0 ? rupee(v.totalSpend) : "—"}
                         {v.billCurrency && v.totalBilled > 0 && (
-                          <div className="text-3xs text-ink-3">{formatForeignAmount(v.billCurrency, v.foreignBilled)} COGS</div>
+                          <div className="text-xs text-ink-3">{formatForeignAmount(v.billCurrency, v.foreignBilled)} COGS</div>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums align-top">
@@ -207,7 +207,7 @@ export default function VendorsPage() {
                           ? <span className="font-serif text-[15px] font-semibold text-rose">{rupee(v.outstanding)}</span>
                           : <span className="text-emerald">✓</span>}
                         {v.billCurrency && v.outstanding > 0 && (
-                          <div className="text-3xs font-normal text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
+                          <div className="text-xs font-normal text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
                         )}
                       </td>
                       <td className="px-2 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
@@ -236,16 +236,16 @@ export default function VendorsPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="font-medium text-ink truncate">{v.name}</div>
-                        {v.gstin && <div className="text-2xs text-ink-3 font-mono truncate">{v.gstin}</div>}
-                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-2xs text-ink-3 truncate">{r}</div> : null; })()}
-                        <div className="text-2xs text-ink-3 mt-0.5">{v.docCount} {v.docCount === 1 ? "entry" : "entries"} · {rupee(v.totalSpend, { compact: true })} spent</div>
+                        {v.gstin && <div className="text-xs text-ink-3 font-mono truncate">{v.gstin}</div>}
+                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-xs text-ink-3 truncate">{r}</div> : null; })()}
+                        <div className="text-xs text-ink-3 mt-0.5">{v.docCount} {v.docCount === 1 ? "entry" : "entries"} · {rupee(v.totalSpend, { compact: true })} spent</div>
                       </div>
                       <div className="text-right shrink-0">
                         {v.outstanding > 0
                           ? <span className="font-serif text-lg text-rose">{rupee(v.outstanding, { compact: true })}</span>
                           : <span className="text-emerald text-sm">✓ clear</span>}
                         {v.billCurrency && v.outstanding > 0 && (
-                          <div className="text-3xs text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
+                          <div className="text-xs text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
                         )}
                       </div>
                     </div>
@@ -458,7 +458,7 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
                 );
               })}
             </div>
-            <p className="text-2xs text-ink-3">Select products this vendor offers so you can buy & source licenses from them.</p>
+            <p className="text-xs text-ink-3">Select products this vendor offers so you can buy & source licenses from them.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -520,7 +520,7 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {vendor.name}
-            {vendor.gstin && <span className="font-mono text-2xs text-ink-3">{vendor.gstin}</span>}
+            {vendor.gstin && <span className="font-mono text-xs text-ink-3">{vendor.gstin}</span>}
             {(() => { const r = vendorRegion(vendor.gstin); return r ? <span className="text-2xs font-normal text-ink-3 rounded-full bg-paper-2 px-2 py-0.5">{r}</span> : null; })()}
           </DialogTitle>
           <DialogDescription>
@@ -575,15 +575,15 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
                   >
                     <div className="min-w-0">
                       <p className="text-sm text-ink truncate">{b.bill_no || b.id} <span className="text-ink-3">· {b.category}</span>{(b.line_items?.length ?? 0) > 0 && <span className="text-ink-3"> · {b.line_items.length} items</span>}</p>
-                      <p className="text-2xs text-ink-3">{formatDate(b.bill_date)}</p>
+                      <p className="text-xs text-ink-3">{formatDate(b.bill_date)}</p>
                     </div>
                     <div className="text-right shrink-0">
                       {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? (
-                        <p className="font-mono text-sm font-semibold text-ink">{fx} <span className="text-3xs font-normal text-ink-3">({rupee(b.total)})</span></p>
+                        <p className="font-mono text-sm font-semibold text-ink">{fx} <span className="text-xs font-normal text-ink-3">({rupee(b.total)})</span></p>
                       ) : (
                         <p className="font-mono text-sm font-semibold text-ink">{rupee(b.total)}</p>
                       ); })()}
-                      <p className={`text-3xs ${out > 0 ? "text-rose" : "text-emerald"}`}>{out > 0 ? `${rupee(out)} due` : "paid"}</p>
+                      <p className={`text-xs ${out > 0 ? "text-rose" : "text-emerald"}`}>{out > 0 ? `${rupee(out)} due` : "paid"}</p>
                     </div>
                   </li>
                 );
@@ -605,11 +605,11 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
                   >
                     <div className="min-w-0">
                       <p className="text-sm text-ink truncate">{e.category}{e.description ? <span className="text-ink-3"> · {e.description}</span> : ""}</p>
-                      <p className="text-2xs text-ink-3">{formatDate(e.expense_date)}</p>
+                      <p className="text-xs text-ink-3">{formatDate(e.expense_date)}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-mono text-sm font-semibold text-ink">{fx ? <>{fx} <span className="text-3xs font-normal text-ink-3">({rupee(e.amount)})</span></> : rupee(e.amount)}</p>
-                      {e.gst_paid > 0 && (() => { const gfx = foreignAmount(e.currency, e.gst_paid, e.fx_rate); return <p className="text-3xs text-emerald">+{gfx ?? rupee(e.gst_paid)} GST{gfx ? ` (${rupee(e.gst_paid)})` : ""}</p>; })()}
+                      <p className="font-mono text-sm font-semibold text-ink">{fx ? <>{fx} <span className="text-xs font-normal text-ink-3">({rupee(e.amount)})</span></> : rupee(e.amount)}</p>
+                      {e.gst_paid > 0 && (() => { const gfx = foreignAmount(e.currency, e.gst_paid, e.fx_rate); return <p className="text-xs text-emerald">+{gfx ?? rupee(e.gst_paid)} GST{gfx ? ` (${rupee(e.gst_paid)})` : ""}</p>; })()}
                     </div>
                   </li>
                   );

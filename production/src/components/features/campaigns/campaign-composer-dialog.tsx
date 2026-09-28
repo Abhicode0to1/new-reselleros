@@ -277,7 +277,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           <div>
             <div className="flex items-baseline justify-between gap-2">
               <Label htmlFor="campaign-composer-start-from-a-template">Start from a template</Label>
-              <span className="flex gap-3 text-2xs">
+              <span className="flex gap-3 text-xs">
                 <button type="button" onClick={saveAsTemplate} disabled={saveTemplate.isPending} className="text-amber-ink hover:underline disabled:opacity-50">Save as template</button>
                 <Link href="/marketing/templates" className="text-ink-3 hover:text-ink hover:underline">Manage templates</Link>
               </span>
@@ -344,7 +344,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                 {aiRunning ? "Drafting…" : "Generate"}
               </Button>
             </div>
-            <p className="text-3xs text-ink-3">
+            <p className="text-xs text-ink-3">
               Powered by Gemini. The AI returns HTML + text + subject. You can edit anything before sending.
             </p>
           </div>
@@ -357,7 +357,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
               <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Audience — selected contacts</p>
               <Badge kind="info" dot>Sending to {recipientCount} selected contact{recipientCount === 1 ? "" : "s"}</Badge>
             </div>
-            <p className="text-2xs text-ink-3 mt-1.5">
+            <p className="text-xs text-ink-3 mt-1.5">
               You hand-picked these on the Contacts page.
               {typeof totalSelected === "number" && totalSelected > recipientCount ? (
                 <> <b className="text-amber-ink">{totalSelected - recipientCount} of your {totalSelected} skipped</b> — no email address (reach them via WhatsApp/phone).</>
@@ -440,7 +440,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                   sandbox=""
                   title="Email preview"
                 />
-                <p className="text-3xs text-ink-3 px-3 py-1.5 border-t border-hairline">
+                <p className="text-xs text-ink-3 px-3 py-1.5 border-t border-hairline">
                   Live preview · sample vars filled (name=Ramesh, company=Acme)
                 </p>
               </div>
@@ -471,7 +471,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
             />
           )}
 
-          <p className="text-3xs text-ink-3">
+          <p className="text-xs text-ink-3">
             Variables: <code>{`{{name}}`}</code> · <code>{`{{company}}`}</code> · <code>{`{{sender}}`}</code>
             {offerEnabled && (
               <> · <code>{`{{offer_code}}`}</code> · <code>{`{{discount}}`}</code> · <code>{`{{expires}}`}</code></>
@@ -492,7 +492,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
               className="accent-amber"
             />
             <span className="text-sm font-medium text-ink">Attach a time-bound offer</span>
-            <span className="text-2xs text-ink-3">(month-end sale / discount code / etc.)</span>
+            <span className="text-xs text-ink-3">(month-end sale / discount code / etc.)</span>
           </label>
           {offerEnabled && (
             <div className="grid grid-cols-3 gap-2">
@@ -505,7 +505,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                   className={cn("font-mono", !offerCode.trim() && "border-amber/60")}
                 />
                 {!offerCode.trim() && (
-                  <p className="mt-1 text-3xs text-amber-ink">Type your code — this shows in the email as {`{{offer_code}}`}.</p>
+                  <p className="mt-1 text-xs text-amber-ink">Type your code — this shows in the email as {`{{offer_code}}`}.</p>
                 )}
               </div>
               <div>

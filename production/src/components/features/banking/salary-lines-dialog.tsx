@@ -227,7 +227,7 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
             <div className="space-y-2">
               <p className="text-sm font-semibold text-ink">Result</p>
               {results.map((r, i) => (
-                <div key={i} className={`rounded-md border px-3 py-2 text-2xs ${r.ok ? "border-emerald/30 bg-emerald-soft/40" : "border-rose/30 bg-rose-soft/40"}`}>
+                <div key={i} className={`rounded-md border px-3 py-2 text-xs ${r.ok ? "border-emerald/30 bg-emerald-soft/40" : "border-rose/30 bg-rose-soft/40"}`}>
                   <p className="font-medium text-ink flex items-center gap-1.5">
                     <Icon name={r.ok ? "check_circle" : "alert"} size={13} className={r.ok ? "text-emerald" : "text-rose"} />
                     {r.label} · {monthLabel(r.period)}
@@ -241,7 +241,7 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
           ) : (
             <>
               {activeEmployees.length === 0 && !empLoading && (
-                <p className="rounded-md border border-amber/30 bg-amber-soft/40 px-3 py-2 text-2xs text-amber-ink">
+                <p className="rounded-md border border-amber/30 bg-amber-soft/40 px-3 py-2 text-xs text-amber-ink">
                   No employees in Payroll yet. Lines with a readable name will create the employee
                   (monthly salary set to the amount paid — edit it later in{" "}
                   <Link href={"/accounting/payroll" as never} className="underline">Payroll</Link>).
@@ -270,7 +270,7 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
                             <p className="text-[12px] text-ink truncate" title={l.txn.description ?? ""}>{l.txn.description}</p>
                             <span className="text-[12px] font-semibold tabular-nums text-rose shrink-0">{rupee(l.txn.debit)}</span>
                           </div>
-                          <p className="text-3xs text-ink-3">{formatDate(l.txn.txn_date)}</p>
+                          <p className="text-xs text-ink-3">{formatDate(l.txn.txn_date)}</p>
 
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <select
@@ -300,7 +300,7 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
                               />
                             )}
                             {createsRecord(l) && (
-                              <label className="inline-flex items-center gap-1 text-2xs text-ink-3">
+                              <label className="inline-flex items-center gap-1 text-xs text-ink-3">
                                 Incentive ₹
                                 <input
                                   aria-label="Incentive / commission in this transfer"
@@ -316,7 +316,7 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
                               <button
                                 type="button"
                                 onClick={() => setIncentive((m) => ({ ...m, [l.txn.id]: String(suggestedIncentive(l)) }))}
-                                className="text-2xs text-amber-ink hover:underline"
+                                className="text-xs text-amber-ink hover:underline"
                                 title="The transfer is more than this employee's monthly salary"
                               >
                                 {rupee(suggestedIncentive(l))} monthly salary se zyada — incentive/commission hai?
@@ -341,17 +341,17 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
                               </Badge>
                             )}
                           </div>
-                          <p className={`mt-1 text-3xs ${plan.ok ? "text-ink-3" : "text-rose-ink"}`}>{plan.text}</p>
+                          <p className={`mt-1 text-xs ${plan.ok ? "text-ink-3" : "text-rose-ink"}`}>{plan.text}</p>
                           {/* Said in words, not only in a badge that read "director — unticked" even
                               after the operator had ticked it. Ticked, it warns what booking here does. */}
                           {l.parsed.director && (
                             isOn(l) ? (
-                              <p className="mt-1 text-3xs text-amber-ink leading-snug">
+                              <p className="mt-1 text-xs text-amber-ink leading-snug">
                                 Director ki payment payroll mein <b>staff salary</b> ki tarah jaayegi (Salaries, payslip, project salary ka pool).
                                 Agar ye Director&apos;s Remuneration hai to untick karo aur Reconcile se book karo — wahan category pehle se bhari aati hai.
                               </p>
                             ) : (
-                              <p className="mt-1 text-3xs text-ink-3 leading-snug">
+                              <p className="mt-1 text-xs text-ink-3 leading-snug">
                                 Director ki payment — isliye tick nahi hui. Ise line ke <b>Reconcile</b> se book karo (Expense → Director&apos;s Remuneration).
                                 Whole-time director ho aur payslip chahiye to hi yahan tick karo — aur saal bhar ek hi tareeka rakho.
                               </p>
@@ -365,7 +365,7 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
               </ul>
 
               {anyCreatesRecord && (
-                <p className="text-3xs text-ink-3">
+                <p className="text-xs text-ink-3">
                   A new salary record is booked with <b>gross = the amount paid</b> and no TDS / PF / ESI
                   deductions — the bank line only shows the net. If deductions applied, delete the
                   record in Payroll before it is reconciled, or adjust it with your CA.

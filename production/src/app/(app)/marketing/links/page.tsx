@@ -119,15 +119,15 @@ export default function TrackingLinksPage() {
               </Select>
             )}
             <Input id="tl_campaign" placeholder="e.g. Diwali 2026" value={campaign} onChange={(e) => setCampaign(e.target.value)} />
-            {linkedCampaign && <p className="mt-1 text-2xs text-emerald">Is link ki leads &ldquo;{linkedCampaign.name}&rdquo; campaign mein ginengi.</p>}
-            <p className="mt-1 text-2xs text-ink-3">Ek campaign ke saare ads mein same naam — tab uski saari leads ek saath ginti hain. Link mein: <code>{slugCampaign(campaign) || "general"}</code></p>
+            {linkedCampaign && <p className="mt-1 text-xs text-emerald">Is link ki leads &ldquo;{linkedCampaign.name}&rdquo; campaign mein ginengi.</p>}
+            <p className="mt-1 text-xs text-ink-3">Ek campaign ke saare ads mein same naam — tab uski saari leads ek saath ginti hain. Link mein: <code>{slugCampaign(campaign) || "general"}</code></p>
           </FormField>
           <FormField label="Kaunsa ad / post (optional)" htmlFor="tl_content">
             <Input id="tl_content" placeholder="e.g. video-1, carousel" value={content} onChange={(e) => setContent(e.target.value)} />
           </FormField>
           <FormField label="Medium" htmlFor="tl_medium">
             <Input id="tl_medium" placeholder={defaultMedium(channel)} value={medium} onChange={(e) => setMedium(e.target.value)} />
-            <p className="mt-1 text-2xs text-ink-3">Khaali chhodo to &ldquo;{defaultMedium(channel)}&rdquo; lagega.</p>
+            <p className="mt-1 text-xs text-ink-3">Khaali chhodo to &ldquo;{defaultMedium(channel)}&rdquo; lagega.</p>
           </FormField>
         </div>
 
@@ -135,7 +135,7 @@ export default function TrackingLinksPage() {
           <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Aapka link</p>
           <p className="font-mono text-xs text-ink break-all">{url || "—"}</p>
           {isLocal && (
-            <p className="mt-1.5 text-2xs text-amber-ink">
+            <p className="mt-1.5 text-xs text-amber-ink">
               Ye localhost ka link hai — asli ad mein live site ka link chahiye. NEXT_PUBLIC_APP_URL set hone par wahi aayega.
             </p>
           )}
@@ -144,7 +144,7 @@ export default function TrackingLinksPage() {
           <Button variant="outline" icon="copy" onClick={() => copy(url)} disabled={!url}>Copy</Button>
           <Button onClick={save} disabled={!url || create.isPending}>{create.isPending ? "Saving…" : "Save link"}</Button>
         </div>
-        <p className="text-2xs text-ink-3">
+        <p className="text-xs text-ink-3">
           Link seedha form wale page par le jaata hai. Home page ka link dene se, form tak pahunchte-pahunchte source kho jaata hai.
         </p>
       </Card>
@@ -175,7 +175,7 @@ export default function TrackingLinksPage() {
                   <tr key={l.id} className="border-b border-hairline last:border-0 align-top">
                     <td className="px-3 py-2 text-sm">
                       <div className="font-medium text-ink">{l.label}</div>
-                      <div className="font-mono text-2xs text-ink-3 break-all max-w-[26rem]">{l.full_url}</div>
+                      <div className="font-mono text-xs text-ink-3 break-all max-w-[26rem]">{l.full_url}</div>
                     </td>
                     <td className="px-3 py-2 text-sm text-ink-2">{sourceLabel(l.channel)}</td>
                     <td className="px-3 py-2 text-sm text-ink-2">{l.utm_campaign}{l.utm_content ? <span className="text-ink-3"> · {l.utm_content}</span> : null}</td>
