@@ -1942,7 +1942,20 @@ Consequences accepted with the decision:
       Best done one page at a time, when that page is being edited anyway. The one thing the
       redundancy actually cost has now been paid: see the dead-logout entry above.
 
-- [ ] **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
+- [x] **DONE 28 Sep 2026 — the DMS palette conversion.** Served legacy classes by `scripts/palette-audit.mjs`:
+      **2,620 → 114** (in 28 files). Three passes, each browser-checked before/after on the pages it touched:
+      the customer panel (DMS `8590e845`), customer-facing pages and shared components (`f88dbc89`, fix
+      `bbc7cdaf`), and admin (`0ba504b1`) — 23 admin pages, 13 customer pages, 8 panel pages, no page errors.
+      One mapping throughout (status hues → emerald/rose/amber/indigo; greys → ink/paper/hairline; white →
+      paper; solid blue → primary). **The 114 left are deliberate:** colour maps that name more categories
+      than the tokens have hues (DNS record types, ticket categories, renewal method), purple kept where it
+      is one side of a choice against indigo (Tokens vs Subscription, New Generic vs Generic), and gradient
+      stops on solid buttons, which have no token. Two regressions were caught by the screenshots and fixed:
+      a mid-grey button fill mapped to a light token (white text lost contrast), and the script rewrote two
+      comments that record OLD class names (restored in `fc1d13ac`; the script now leaves such comments alone).
+      Not seen on screen: coloured states that need data this local account lacks (DNS records, orders,
+      tickets). Original entry follows.
+- **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
       · [x] **Customer panel (`app/dashboard`) converted 28 Sep 2026 (DMS `8590e845`).** 156 lines in 12
         files, by one mapping: green → emerald, red → rose, amber/yellow/orange → amber, blue/indigo/
         violet/purple → indigo; light backgrounds → `-soft`, text 600+ → `-ink`, light borders → `/30`,
