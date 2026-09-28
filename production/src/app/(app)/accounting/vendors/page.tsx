@@ -300,7 +300,8 @@ function VendorActions({
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={onView}><Icon name="eye" size={15} /> View details & ledger</DropdownMenuItem>
 
-        <Link href={"/vendor-portal" as never} passHref legacyBehavior>
+        {/* Was /vendor-portal — a demo screen taken down in S35. A PO is the real way to buy. */}
+        <Link href={"/purchase-orders" as never} passHref legacyBehavior>
           <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer text-primary font-semibold">
             <Icon name="cart" size={15} /> Buy products / Place PO
           </DropdownMenuItem>
@@ -623,7 +624,7 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button asChild variant="primary" icon="cart" className="w-full sm:w-auto font-bold">
-            <Link href={"/vendor-portal" as never}>🛒 Buy Products from {vendor.name}</Link>
+            <Link href={"/purchase-orders" as never}>🛒 Buy Products from {vendor.name}</Link>
           </Button>
           <Button variant="ghost" icon="edit" onClick={onEdit}>Edit vendor</Button>
         </DialogFooter>

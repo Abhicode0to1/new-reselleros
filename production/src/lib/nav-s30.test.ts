@@ -24,9 +24,23 @@ import {
 } from "./nav";
 import { USER_ROLES } from "./auth/roles";
 
-const OLD_HREFS: string[] = snapshot.hrefs;
-const OLD_ALLOWED = snapshot.allowedRoutesByRole as Record<string, string[]>;
-const OLD_MENU = snapshot.menuHrefsByRole as Record<string, string[]>;
+/**
+ * Removed from the nav ON PURPOSE after S30, each with its reason. Anything else missing is
+ * still a regression. The route itself still exists (it renders a notice), but for gated
+ * roles the middleware now bounces it — which is the intent for a page with nothing real on it.
+ *   /vendor-portal — S35, 28 Sep 2026: hardcoded demo vendor bids saved to localStorage;
+ *                    replaced by a "not built yet" notice that links to Vendors / POs.
+ */
+const REMOVED_ON_PURPOSE = ["/vendor-portal"];
+const kept = (hrefs: string[]) => hrefs.filter((h) => !REMOVED_ON_PURPOSE.includes(h));
+
+const OLD_HREFS: string[] = kept(snapshot.hrefs);
+const OLD_ALLOWED = Object.fromEntries(
+  Object.entries(snapshot.allowedRoutesByRole as Record<string, string[]>).map(([r, hs]) => [r, kept(hs)]),
+);
+const OLD_MENU = Object.fromEntries(
+  Object.entries(snapshot.menuHrefsByRole as Record<string, string[]>).map(([r, hs]) => [r, kept(hs)]),
+);
 const OLD_CRUMBS = snapshot.crumbs as Record<string, string[]>;
 
 /** New in S29/S30, owner/manager only. Everything else must match the snapshot exactly. */
@@ -69,7 +83,8 @@ function pageRoutes(dir = APP_DIR, prefix = ""): string[] {
 describe("the snapshot is the OLD nav (guard the guard)", () => {
   it("has the 81 rows and 72 distinct hrefs the old file had", () => {
     expect(snapshot.itemCount).toBe(81);
-    expect(OLD_HREFS).toHaveLength(72);
+    expect(snapshot.hrefs).toHaveLength(72);
+    expect(OLD_HREFS).toHaveLength(72 - REMOVED_ON_PURPOSE.length);
     // A snapshot regenerated from the new nav would contain /today; the old one cannot.
     expect(OLD_HREFS).not.toContain("/today");
     expect(OLD_HREFS).toContain("/accounting/pnl");
@@ -114,7 +129,7 @@ describe.each(USER_ROLES.map((r) => [r]))("role %s", (role) => {
     const newAllowed = allowedRoutesForRole(r);
     const added = addedFor(r);
     const changed = pageRoutes().filter((p) =>
-      permits(oldAllowed, p) !== permits(newAllowed, p) && !permits(added, p),
+      permits(oldAllowed, p) !== permits(newAllowed, p) && !permits(added, p) && !permits(REMOVED_ON_PURPOSE, p),
     );
     expect(changed, `${r}: guard answer changed for ${changed.join(", ")}`).toEqual([]);
   });

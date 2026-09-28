@@ -368,12 +368,10 @@ export const APP_NAV: NavSection[] = [
          it leads the group. owner/manager only, so no gated role's routes change; whether
          billing should have it is a product call. */
       { id: "purchase-inbox",  href: "/purchases/inbox",           label: "Purchase Inbox",       icon: "inbox", roles: OM, hint: "Amazon & co. ke order mails — review karo, phir expense" },
-      {
-        id: "purchase-orders", href: "/purchase-orders",           label: "Purchase Orders",      icon: "cart", roles: OMB,
-        children: [
-          { id: "vendor-portal",   href: "/vendor-portal",             label: "Vendor Portal & Bids", icon: "sparkles", roles: OMB, hint: "Vendor marketplace, wholesale license rate bids & PO sourcing." },
-        ],
-      },
+      /* "Vendor Portal & Bids" (/vendor-portal) was a child here until S35 (28 Sep 2026).
+         It showed hardcoded demo bids saved to localStorage; the route now says "not built
+         yet" and points back to Vendors / Purchase Orders. Not in the nav, on purpose. */
+      { id: "purchase-orders", href: "/purchase-orders",           label: "Purchase Orders",      icon: "cart", roles: OMB },
       { id: "vendors",         href: "/accounting/vendors",        label: "Vendors Master",       icon: "users", roles: OMB },
       { id: "bills",           href: "/accounting/bills",          label: "COGS Bills",           icon: "receipt", roles: OMB },
       { id: "bill-payments",   href: "/accounting/bill-payments",  label: "Payments Made",        icon: "rupee", roles: OMB },

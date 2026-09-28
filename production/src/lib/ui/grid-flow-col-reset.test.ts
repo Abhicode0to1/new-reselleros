@@ -66,10 +66,11 @@ describe("grid-flow-col must not sit on top of an unreset numbered grid-cols", (
   });
 
   it("finds the Kanban board, so the rule is anchored to a real usage", () => {
-    const board = files.find((f) => f.replace(/\\/g, "/").endsWith("(app)/leads/page.tsx"));
-    expect(board, "leads/page.tsx should exist — it owns the board this test exists for").toBeTruthy();
+    /* The board left (app)/leads/page.tsx for its own file in S35 (28 Sep 2026). */
+    const board = files.find((f) => f.replace(/\\/g, "/").endsWith("features/leads/leads-kanban-board.tsx"));
+    expect(board, "leads-kanban-board.tsx should exist — it owns the board this test exists for").toBeTruthy();
     const lists = classLists(readFileSync(board!, "utf8"));
-    expect(lists.length, "leads/page.tsx should still use grid-flow-col").toBeGreaterThan(0);
+    expect(lists.length, "leads-kanban-board.tsx should still use grid-flow-col").toBeGreaterThan(0);
   });
 
   it("every grid-flow-col class list either has no numbered grid-cols, or resets it", () => {
