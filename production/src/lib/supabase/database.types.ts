@@ -4594,6 +4594,11 @@ export type Database = {
       /** Self attendance for logged-in users (migration 0216). */
       set_my_employee: { Args: { p_employee_id: string }; Returns: undefined };
       my_attendance_today: { Args: Record<string, never>; Returns: unknown };
+      /** /today ranked inbox (migration 20260928160000, S29). SECURITY INVOKER. */
+      today_inbox: {
+        Args: Record<string, never>;
+        Returns: { kind: string; id: string; title: string; due_at: string | null; priority: number; href: string }[];
+      };
       mark_self_attendance: { Args: Record<string, never>; Returns: string };
       undo_my_last_punch: { Args: Record<string, never>; Returns: string };
       log_activity: { Args: { p_action: string; p_entity?: string; p_entity_id?: string | null; p_label?: string | null }; Returns: undefined };

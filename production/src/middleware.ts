@@ -17,6 +17,7 @@ import { rateLimitShared, clientIp, publicApiLimit } from "@/lib/security/rate-l
 // prefix must be added here for the auth gate + role guard to fire.
 const PROTECTED_PREFIXES = [
   "/dashboard",
+  "/today",           // S29 ranked inbox across every queue
   "/leads",
   "/deals",
   "/tasks",

@@ -185,6 +185,10 @@ export const APP_NAV: NavSection[] = [
     icon: "home",
     items: [
       { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: ["owner", "manager", "billing"] },
+      /* S29. owner/manager only for now: they bypass the middleware gate anyway, so adding
+         it changes no other role's allowed routes. Opening it to more roles is a product
+         call — today_inbox() already filters decisions by role, and RLS does the rest. */
+      { id: "today", href: "/today", label: "Today", icon: "inbox", roles: ["owner", "manager"], hint: "Har queue ka aaj ka kaam, ek list mein" },
       { id: "my-attendance", href: "/attendance/me", label: "My Attendance", icon: "calendar", roles: ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"], hint: "Apni attendance khud mark karo — login hi identity proof hai." },
       { id: "my-expenses", href: "/my-expenses", label: "Advances & Expenses", icon: "wallet", roles: ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"], hint: "Advance cash balances & mobile expense entries." },
     ],
@@ -430,6 +434,7 @@ export const CUSTOMER_NAV: NavSection[] = [
 //     re-exports from /leads). The titles still need separate entries here.
 export const SCREEN_TITLES: Record<string, string[]> = {
   "/dashboard":       ["Home", "Dashboard"],
+  "/today":           ["Home", "Today"],
   "/hosting-domains": ["Operations", "Hosting & Domains"],
   "/provisioning": ["Operations", "Activation Queue"],
   "/leads":           ["Sales", "Leads"],
