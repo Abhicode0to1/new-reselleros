@@ -86,6 +86,72 @@ node e2e/qa/run.mjs --grep buy # sirf buy page wale checks
 npm run test:e2e:ui            # checks ko browser mein chalte hue dekho
 ```
 
+### Apne laptop par poori app chalana (local setup) — jab test site band ho
+
+28 Sep 2026: test site ka database (`test-api.anutech.in`) band hai (R-029), isliye wahan login,
+leads, quotes kuch nahi chalta. Tab tak poori app **apne laptop par** chalao. Database bhi aapke
+laptop par hi hoga (Docker ke andar), khaali aur sirf aapka. Isme koi asli customer nahi hai,
+production ki koi key nahi lagti, aur email/WhatsApp/payment bahar nahi jaate
+(`npm run dev:local` saari live keys band kar deta hai).
+
+**Ek baar install karo (Windows):**
+
+| kya | kahan se | check |
+|---|---|---|
+| Git | git-scm.com | `git --version` |
+| Node.js 20 ya naya (LTS) | nodejs.org | `node --version` |
+| Docker Desktop | docker.com/products/docker-desktop | Docker Desktop khol kar "Engine running" dikhe |
+
+Docker Desktop ko kam se kam 4 GB RAM chahiye, aur 8 GB wala laptop behtar hai. Local database 10 chhote containers mein chalta hai.
+
+**Pehli baar (lagbhag 30–60 minute, zyada samay download mein jaata hai):**
+
+```bash
+git clone https://github.com/Abhicode0to1/new-reselleros.git
+cd new-reselleros/production
+npm ci
+npx playwright install chromium
+npm run setup
+```
+
+`npm run setup` ye sab khud karta hai:
+- check karta hai ki Node aur Docker hain;
+- local database chalu karta hai (pehli baar images download hoti hain);
+- usme app ki poori table structure daal deta hai.
+
+Kuch kami ho to ❌ ke saath ek line mein batata hai ki kya karna hai. Agar ye `.env.local` ki Supabase keys maange, to **kisi se keys mat maango**. Local chalane ke liye unki zaroorat nahi, `dev:local` apni local keys khud lagata hai.
+
+**Roz ka kaam:**
+
+1. Docker Desktop kholo.
+2. `production` folder mein ye chalao:
+   ```bash
+   npm run db:start
+   npm run dev:local
+   ```
+3. Browser mein **http://localhost:3001** kholo. Topbar par "Local" badge dikhega, jisse pata chalta hai ki ye aapki local app hai.
+4. Pehli baar **/signup** par apna test account banao. Email koi bhi bana hua rakho, jaise `hitesh@test.local`, aur apna asli password kabhi mat rakho. Local par email confirm karne ki zaroorat nahi. Signup ke baad setup wizard aayega, aur ye bhi ek test flow hai, isliye jo ajeeb lage wo note karo.
+5. Ab `docs/MANUAL-TEST-SCRIPT.md` ke journeys yahin chalao: lead → quote → payment → invoice. Payment ke liye simulation/test mode hi hai; asli paisa kabhi nahi katega.
+6. Automatic checks bhi local par chal sakte hain (doosri terminal window mein):
+   ```bash
+   QA_BASE_URL=http://localhost:3001 node e2e/qa/run.mjs
+   ```
+7. Din khatam: `Ctrl+C` se app band karo, phir `npm run db:stop`.
+
+**Bug card mein likho "Local par mila"** aur URL `localhost:3001/...` wala do. Owner URL ke path se usi tarah apne aap tay hoga.
+
+**Local par kya nahi hoga:** asli email/WhatsApp nahi jaayega, asli Razorpay nahi, aur Google Workspace ka asli order nahi. Ye sab test site theek hone ke baad test site par dekhna.
+
+**Kuch atka to:**
+
+| dikha | karo |
+|---|---|
+| `Docker is installed but not RUNNING` | Docker Desktop kholo, "Engine running" ka intezaar karo, phir wahi command dobara |
+| `Local Supabase nahi mila` | `npm run db:start` pehle chalao |
+| `port 54321 already in use` | pichla database abhi chal raha hai; `npm run db:stop` phir `npm run db:start` |
+| Page khulne mein 5–10 sec | pehli baar har page compile hota hai, doosri baar tez khulega. Ye bug nahi hai |
+| Kuch aur | apne Claude session mein error paste karke bolo: "docs/qa/README.md ka local setup kar raha hoon, ye error aaya" |
+
 ### Routine ka prompt (Claude app → Routines → New, weekdays 10:00, folder = repo)
 
 ```
