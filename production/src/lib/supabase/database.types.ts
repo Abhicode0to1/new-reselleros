@@ -4603,6 +4603,18 @@ export type Database = {
         Args: Record<string, never>;
         Returns: { kind: string; id: string; title: string; due_at: string | null; priority: number; href: string }[];
       };
+      /** One keyset page of leads, slim columns (migration 20260928200000, S37). SECURITY INVOKER.
+       *  Returns { rows, next_cursor } — see lib/leads/list-page.ts for the row and filter shapes. */
+      list_leads: {
+        Args: { p_cursor?: Json | null; p_limit?: number | null; p_filters?: Json };
+        Returns: Json;
+      };
+      /** One keyset page of WhatsApp conversations (migration 20260928200000, S37). SECURITY INVOKER.
+       *  Returns { rows, next_cursor } — see lib/queries/whatsapp.ts#WhatsAppConversation. */
+      list_whatsapp_threads: {
+        Args: { p_cursor?: Json | null; p_limit?: number | null };
+        Returns: Json;
+      };
       mark_self_attendance: { Args: Record<string, never>; Returns: string };
       undo_my_last_punch: { Args: Record<string, never>; Returns: string };
       log_activity: { Args: { p_action: string; p_entity?: string; p_entity_id?: string | null; p_label?: string | null }; Returns: undefined };

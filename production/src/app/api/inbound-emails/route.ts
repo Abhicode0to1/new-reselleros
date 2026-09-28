@@ -39,6 +39,9 @@ import type { InboundEmailRow } from "@/lib/supabase/database.types";
 import {
   INBOX_LIST_COLUMNS, INBOX_LIST_MAX_ROWS, idsNeedingHtml, withHtmlFallback,
 } from "@/lib/inbound/list-columns";
+import {
+  INBOX_NEXT_CURSOR_HEADER, inboxOlderThanFilter, pageFromOverfetch, parseInboxCursor,
+} from "@/lib/queries/keyset";
 
 /**
  * Only ever used by the signed-out local demo below. Never a production fallback.
@@ -63,7 +66,7 @@ const isLocalDemo = () =>
   process.env.NEXT_PUBLIC_DEMO_MODE === "true" &&
   process.env.NODE_ENV === "development";
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -91,23 +94,41 @@ export async function GET() {
     return NextResponse.json({ error: "Sign in to see your enquiries." }, { status: 401 });
   }
 
+  /* S37: keyset pages. No params = the newest INBOX_LIST_MAX_ROWS, exactly as before;
+     `?before=<created_at>&before_id=<id>` = the page strictly older than that row. The body
+     stays a bare array (useInboundEmails reads it unchanged); the next page's cursor rides
+     in a header and is absent on the last page. */
+  const { cursor, error: cursorError } = parseInboxCursor(new URL(request.url).searchParams);
+  if (cursorError) {
+    return NextResponse.json({ error: cursorError }, { status: 400 });
+  }
+
   /* S16: no body_html in the list (lib/inbound/list-columns.ts says why), and a row
      ceiling. body_html comes back only for rows with no text body, which is the only
      case the page reads it. */
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let q = admin
     .from("inbound_emails")
     .select(INBOX_LIST_COLUMNS)
-    .eq("tenant_id", tenantId)
+    .eq("tenant_id", tenantId);
+  if (cursor) q = q.or(inboxOlderThanFilter(cursor));
+  /* `id` breaks created_at ties, so the order is total and a page boundary can never fall
+     between two rows that sort equal. One extra row answers "is there a next page". */
+  const { data, error } = await q
     .order("created_at", { ascending: false })
-    .limit(INBOX_LIST_MAX_ROWS);
+    .order("id", { ascending: false })
+    .limit(INBOX_LIST_MAX_ROWS + 1);
 
   if (error) {
     console.error("[api/inbound-emails] GET error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rows = (data ?? []) as unknown as Omit<InboundEmailRow, "body_html">[];
+  const { rows: pageRows, next } = pageFromOverfetch(
+    (data ?? []) as unknown as (Omit<InboundEmailRow, "body_html">)[],
+    INBOX_LIST_MAX_ROWS,
+  );
+  const rows = pageRows;
   const needHtml = idsNeedingHtml(rows);
   const html: { id: string; body_html: string | null }[] = [];
   /* Chunked so a long id list never turns into an over-long request URL. */
@@ -126,5 +147,7 @@ export async function GET() {
 
   /* No "if empty, show somebody else's" fallback. An empty inbox is an empty inbox, and
      the page already has an empty state that says so in the folder's own words. */
-  return NextResponse.json(withHtmlFallback(rows, html));
+  const res = NextResponse.json(withHtmlFallback(rows, html));
+  if (next) res.headers.set(INBOX_NEXT_CURSOR_HEADER, JSON.stringify(next));
+  return res;
 }

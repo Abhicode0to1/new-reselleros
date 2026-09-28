@@ -28,7 +28,10 @@ describe("inbox list columns", () => {
     expect(INBOX_LIST_MAX_ROWS).toBeLessThanOrEqual(500);
     const route = readFileSync(join(process.cwd(), "src", "app", "api", "inbound-emails", "route.ts"), "utf8");
     expect(route).toMatch(/\.select\(INBOX_LIST_COLUMNS\)/);
-    expect(route).toMatch(/\.limit\(INBOX_LIST_MAX_ROWS\)/);
+    /* S37: one row over the page, to know whether a next page exists — the route serves at
+       most INBOX_LIST_MAX_ROWS (pageFromOverfetch; route.test.ts pins it). */
+    expect(route).toMatch(/\.limit\(INBOX_LIST_MAX_ROWS \+ 1\)/);
+    expect(route).toMatch(/pageFromOverfetch\([\s\S]{0,120}INBOX_LIST_MAX_ROWS,?\s*\)/);
   });
 });
 

@@ -39,7 +39,7 @@ import { useQuotes } from "@/lib/queries/quotes";
 import { useLeads } from "@/lib/queries/leads";
 import { answeredState, answeredNote, quoteButtonLabel, answeredTone } from "@/lib/inbound/answered";
 import { matchQuotesToEnquiry, weakestBasis, basisCaveat } from "@/lib/inbound/quote-match";
-import { useInboundEmails, useConvertInboundToLead, useSetInboundState, useEmailSender } from "@/lib/queries/inbound-emails";
+import { useInboundEmailPages, useConvertInboundToLead, useSetInboundState, useEmailSender } from "@/lib/queries/inbound-emails";
 import { enquiryBadge, canConvertToLead } from "@/lib/inbound/status";
 import { isBounce, bouncedAddress } from "@/lib/inbound/bounce";
 import {
@@ -172,7 +172,22 @@ function quoteHref(e: InboundEmailRow, ent: ExtractedEntities | null): string {
 /* ── Page ──────────────────────────────────────────────────────────────────── */
 
 export default function EnquiriesPage() {
-  const { data: rows, isLoading, error, refetch } = useInboundEmails();
+  /* Keyset pages (S37). Page 1 is the same newest-500 the flat hook returned; folder counts
+     and search cover what is LOADED, and "Load older mail" is how anything past page 1 is
+     reached — before this it could not be reached at all. */
+  const {
+    data: rows, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage,
+  } = useInboundEmailPages();
+  const olderMail = hasNextPage ? (
+    <div className="px-3 py-2.5 text-center">
+      <Button size="sm" variant="ghost" loading={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+        Load older mail
+      </Button>
+      <p className="mt-1 text-2xs text-ink-3">
+        Counts and search cover the mail loaded so far — older mail may be in this folder too.
+      </p>
+    </div>
+  ) : null;
   const setState = useSetInboundState();
   const convert  = useConvertInboundToLead();
 
@@ -530,6 +545,7 @@ export default function EnquiriesPage() {
                         : undefined)
                     : <Button size="sm" variant="ghost" onClick={() => setQuery("")}>Clear search</Button>}
                 />
+                {olderMail}
               </div>
             ) : (
               /* Was max-h-[calc(100vh-260px)]: a magic number measured against a header
@@ -598,6 +614,7 @@ export default function EnquiriesPage() {
                     </li>
                   );
                 })}
+                {olderMail && <li>{olderMail}</li>}
               </ul>
             )}
           </Card>

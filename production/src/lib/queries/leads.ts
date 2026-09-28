@@ -6,12 +6,17 @@
  */
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as React from "react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import { requireTenantId } from "@/lib/queries/require-tenant";
-import type { Lead, Database } from "@/lib/supabase/database.types";
+import type { Json, Lead, Database } from "@/lib/supabase/database.types";
+import { flattenPages } from "@/lib/queries/keyset";
+import {
+  toListLeadsFilters, type LeadListCursor, type LeadListFilters, type LeadListPage,
+} from "@/lib/leads/list-page";
 import type { JunkReasonId } from "@/lib/leads/qualification";
 
 // ============================================================
@@ -36,6 +41,41 @@ export function useLeads() {
       return data ?? [];
     },
   });
+}
+
+/**
+ * Leads in keyset pages from `list_leads()` (migration 20260928200000, S37) — slim rows,
+ * newest first, server-side filters.
+ *
+ * NOT a drop-in for useLeads(): the rows are LeadListRow (no notes / attribution columns),
+ * and the Sales & Pipeline screen still computes its counts and its default sort over the
+ * full set — see lib/leads/list-page.ts for why it is not switched over yet and which
+ * filters the server reproduces exactly. Under ["leads"], so every lead mutation's
+ * invalidation reaches it.
+ */
+export function useLeadsInfinite(filters: LeadListFilters = {}, limit = 50) {
+  const f = toListLeadsFilters(filters);
+  const q = useInfiniteQuery({
+    queryKey: ["leads", "pages", f, limit],
+    initialPageParam: null as LeadListCursor | null,
+    queryFn: async ({ pageParam }): Promise<LeadListPage> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("list_leads", {
+        p_cursor: pageParam as unknown as Json,
+        p_limit: limit,
+        p_filters: f as unknown as Json,
+      });
+      if (error) throw error;
+      const page = (data ?? { rows: [], next_cursor: null }) as unknown as LeadListPage;
+      return { rows: page.rows ?? [], next_cursor: page.next_cursor ?? null };
+    },
+    getNextPageParam: (last) => last.next_cursor,
+  });
+  const data = React.useMemo(
+    () => (q.data ? flattenPages(q.data.pages, (l) => l.id) : undefined),
+    [q.data],
+  );
+  return { ...q, data };
 }
 
 /**
