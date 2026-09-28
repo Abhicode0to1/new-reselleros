@@ -52,6 +52,7 @@ import { COUPONS } from "@/site/lib/money";
 import { normalisePhone, splitName, type Registrant } from "@/lib/provisioning/domain-registration";
 import { isTrialPlan, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 import { startHostingTrial } from "@/lib/hosting/start-trial";
+import { hostingLimitProblem } from "./hosting-limit";
 
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
@@ -311,6 +312,10 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       if (!started.ok) return NextResponse.json({ error: started.error }, { status: 500 });
       return NextResponse.json({ success: true, trial: true, leadId: started.leadId, trialEnds: started.trialEnds });
     }
+
+    // One hosting account per order until several can be provisioned (lib/checkout/hosting-limit.ts).
+    const tooMuchHosting = hostingLimitProblem(lines);
+    if (tooMuchHosting) return NextResponse.json({ error: tooMuchHosting, next: "/cart" }, { status: 400 });
 
     // ── Re-price every line server-side; collect anything we can't charge ──
     const items: QuoteLine[] = [];
