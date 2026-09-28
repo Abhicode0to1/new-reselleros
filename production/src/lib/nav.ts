@@ -488,7 +488,12 @@ export const APP_NAV: NavSection[] = [
       { id: "documents", href: "/documents",       label: "Company Documents",  icon: "file",    roles: OM },
       { id: "hosting-domains", href: "/hosting-domains", label: "Hosting & Domains", icon: "globe", roles: ["owner", "manager", "support"], hint: "Status of the DMS engine, and the way into its admin panel." },
       {
-        id: "help",      href: "/help",                 label: "Help & Tutorial",  icon: "question", roles: ["owner", "manager", "billing", "partner_agent"],
+        /* S36: every role. It was owner / manager / billing / partner only, so the people
+           who most need "how do I…" — sales, support, delivery, the accountant — had no way
+           in (middleware bounced /help too: its allow-list is derived from these roles).
+           The guide is static text (lib/help/content.ts), nothing tenant- or role-sensitive.
+           The Feedback child keeps its own OM gate. */
+        id: "help",      href: "/help",                 label: "Help & Tutorial",  icon: "question", roles: [...STAFF, "partner_agent"],
         children: [
           /* The triage queue for bug reports filed with Ctrl+Shift+B. Owner/manager: the
              reports quote whatever the reporter typed, often a customer's name. */

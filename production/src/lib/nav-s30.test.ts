@@ -10,8 +10,8 @@
  *   2. GATED THE SAME — does allowedRoutesForRole(), which middleware uses to bounce
  *      requests, give exactly the same answer? A page moved into a directory must not
  *      become a page the guard redirects.
- *   3. NOTHING GAINED — no role got a page it did not have, except the four named below
- *      for owner/manager (whom middleware does not gate at all).
+ *   3. NOTHING GAINED — no role got a page it did not have, except the ones named below
+ *      (four for owner/manager, whom middleware does not gate at all; /help for everyone, S36).
  */
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
@@ -34,9 +34,13 @@ const ADDED_FOR_OWNER_MANAGER = ["/today", "/activity", "/purchases/inbox", "/sc
 /** New in S33 (Trial Balance, Day Book) — same roles that already see P&L / Balance Sheet. */
 const ADDED_FOR_BOOKS = ["/accounting/trial-balance", "/accounting/day-book"];
 const BOOKS_ROLES = ["owner", "manager", "billing", "accountant"];
+/** S36: Help & Tutorial opened to every role (it was owner / manager / billing / partner).
+ *  Named here, not snapshotted over — the snapshot stays the pre-S30 nav. */
+const ADDED_FOR_EVERY_ROLE = ["/help"];
 const addedFor = (role: string) => [
   ...(role === "owner" || role === "manager" ? ADDED_FOR_OWNER_MANAGER : []),
   ...(BOOKS_ROLES.includes(role) ? ADDED_FOR_BOOKS : []),
+  ...ADDED_FOR_EVERY_ROLE,
 ];
 
 /** What a role can actually click: sidebar rows, their accordion children, and the
