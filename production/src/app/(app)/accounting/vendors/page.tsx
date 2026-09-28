@@ -40,6 +40,8 @@ import { rupee, formatDate, GST_STATE_BY_CODE, gstStateFromGstin, foreignAmount,
 import { newestFirst } from "@/lib/sort/newest-first";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import { panFromGstin, isPan, deducteeTypeFromPan, DEDUCTEE_LABEL } from "@/lib/accounting/tds-deductor";
+import { UDYAM_RE } from "@/lib/accounting/msme";
+import { toast } from "sonner";
 
 const VENDOR_SUPPLIED_PRODUCTS = [
   "Google Workspace & GCP",
@@ -173,6 +175,7 @@ export default function VendorsPage() {
                       <td className="px-4 py-2.5 align-top">
                         <div className="font-medium text-ink leading-snug">{v.name}</div>
                         {v.gstin && <div className="text-2xs text-ink-3 font-mono">{v.gstin}</div>}
+                        {v.udyam && <Badge kind="info" size="sm" className="mt-0.5" title={v.udyam}>MSME{v.msme_category ? ` · ${v.msme_category}` : ""}</Badge>}
                         {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-2xs text-ink-3">{r}</div> : null; })()}
                         {v.contact_email && <div className="text-2xs text-ink-3 truncate">{v.contact_email}</div>}
                       </td>
@@ -324,6 +327,10 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
   const [pincode, setPincode] = React.useState(vendor?.pincode ?? "");
   const [pan, setPan] = React.useState(vendor?.pan ?? "");
   const [category, setCategory] = React.useState(vendor?.default_category ?? "");
+  /* MSME (S33): Udyam + category se s.43B(h) ka 45-din flag chalta hai (Customer Aging page). */
+  const [udyam, setUdyam] = React.useState(vendor?.udyam ?? "");
+  const [msmeCategory, setMsmeCategory] = React.useState<"micro" | "small" | "medium" | "">(vendor?.msme_category ?? "");
+  const udyamBad = !!udyam.trim() && !UDYAM_RE.test(udyam.trim().toUpperCase());
   const [notes, setNotes] = React.useState(() => {
     if (!vendor?.notes) return "";
     return vendor.notes.replace(/\[Supplied Products: .*?\]/, "").trim();
@@ -355,6 +362,12 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
 
   const submit = async () => {
     if (!name.trim()) return;
+    if (udyamBad) {
+      toast.error("Udyam number sahi nahi hai", {
+        description: "Format UDYAM-SS-00-0000000 hota hai (jaise UDYAM-DL-01-0012345). Vendor ke Udyam certificate se dekh kar bharein, ya khaali chhod dein.",
+      });
+      return;
+    }
     try {
       const prodTagStr = selectedProducts.length > 0 ? `[Supplied Products: ${selectedProducts.join(", ")}]` : "";
       const cleanNotes = notes.trim();
@@ -365,6 +378,9 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
         contactName: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null,
         address: address || null, city: city || null, state: state || null, pincode: pincode || null,
         pan: pan.trim().toUpperCase() || null,
+        udyam: udyam.trim().toUpperCase() || null,
+        /* Category Udyam ke bina nahi (DB bhi yahi kehta hai). */
+        msmeCategory: udyam.trim() && msmeCategory ? msmeCategory : null,
         notes: finalNotes || null,
       });
       onClose();
@@ -392,6 +408,24 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
           <FormField label="PAN (for TDS / 26Q)" hint={pan && !isPan(pan) ? "10 characters, e.g. ABCDE1234F" : deducteeTypeFromPan(pan) ? `${DEDUCTEE_LABEL[deducteeTypeFromPan(pan)!]} — TDS rate isi se tay hota hai` : "Bina PAN ke TDS 20% kaatna padta hai (s.206AA)"}>
             <Input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} className="font-mono uppercase" />
           </FormField>
+          {/* MSME: micro/small vendor ka bill 45 din (likhit agreement na ho to 15) me na chuke
+              to s.43B(h) us saal deduction rok deta hai. Udyam bharne se Aging page flag karta hai. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FormField label="Udyam no. (MSME, optional)" hint={udyamBad ? "Format: UDYAM-SS-00-0000000" : "MSME vendor ho to — 45-din payment rule track hota hai"}>
+              <Input value={udyam} onChange={(e) => setUdyam(e.target.value.toUpperCase())} placeholder="UDYAM-DL-01-0012345" maxLength={19} className="font-mono uppercase" />
+            </FormField>
+            <FormField label="MSME category" hint={msmeCategory === "medium" ? "Medium par 43B(h) nahi lagta" : "Udyam certificate par likha hota hai"}>
+              <Select value={msmeCategory || "none"} onValueChange={(v) => setMsmeCategory(v === "none" ? "" : (v as "micro" | "small" | "medium"))} disabled={!udyam.trim()}>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— not set —</SelectItem>
+                  <SelectItem value="micro">Micro</SelectItem>
+                  <SelectItem value="small">Small</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+          </div>
           <GstinVerifyCard gstin={gstin} noPersist onFillForm={fillFromGst} />
 
           {/* Products & Services Supplied Selection */}

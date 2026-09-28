@@ -2173,6 +2173,10 @@ export type VendorRow = {
   pincode:          string | null;
   /** Deductee PAN for 26Q (migration 20260927130000). 4th letter = who they are; none → s.206AA 20%. */
   pan:              string | null;
+  /** Udyam Registration Number, UDYAM-SS-00-0000000 (migration 20260928120000). Set = MSME vendor. */
+  udyam:            string | null;
+  /** micro | small | medium — s.43B(h) 45-day rule applies to micro and small only. */
+  msme_category:    "micro" | "small" | "medium" | null;
   notes:            string | null;
   created_at:       string;
   updated_at:       string;
@@ -5514,6 +5518,10 @@ export type Database = {
       report_pnl_monthly:   { Args: { p_from: string; p_to: string }; Returns: Json };
       report_party_ledger:  { Args: { p_kind: string; p_party: string; p_from: string; p_to: string }; Returns: Json };
       report_ledger_vendors: { Args: Record<string, never>; Returns: Json };
+      /* S33 (migration 20260928120000). */
+      report_day_book:        { Args: { p_from: string; p_to: string }; Returns: Json };
+      msme_payables_aging:    { Args: { p_as_of?: string | null }; Returns: Json };
+      tds_mark_26as_verified: { Args: { p_ids: string[]; p_seen_on: string }; Returns: number };
       reconcile_salary_advance_split: {
         Args: { p_txn_id: string; p_salary_id: string; p_advance_amount: number; p_employee_name: string; p_notes?: string | null };
         Returns: undefined;

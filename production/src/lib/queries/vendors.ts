@@ -202,6 +202,9 @@ export function useUpsertVendor() {
       defaultCategory?: string | null; notes?: string | null;
       address?: string | null; city?: string | null; state?: string | null; pincode?: string | null;
       pan?: string | null;
+      /** MSME (S33). `undefined` = mat chhuo — sirf jo form ye field dikhata hai wahi bheje. */
+      udyam?: string | null;
+      msmeCategory?: "micro" | "small" | "medium" | null;
     }) => {
       const supabase = createClient();
       const { data: authData } = await supabase.auth.getUser();
@@ -223,6 +226,9 @@ export function useUpsertVendor() {
         pincode:          input.pincode?.trim() || null,
         pan:              input.pan?.trim().toUpperCase() || null,
         notes:            input.notes?.trim() || null,
+        /* Jo caller ye fields nahi bhejta (quick-add, bill se bana vendor) wo MSME data mita na de. */
+        ...(input.udyam !== undefined ? { udyam: input.udyam?.trim().toUpperCase() || null } : {}),
+        ...(input.msmeCategory !== undefined ? { msme_category: input.msmeCategory } : {}),
       };
       if (input.id) {
         const { error } = await supabase.from("vendors").update(row).eq("id", input.id);

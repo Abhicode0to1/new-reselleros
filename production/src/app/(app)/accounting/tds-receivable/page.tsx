@@ -34,6 +34,7 @@ import {
   type TdsStatus,
 } from "@/lib/queries/tds-receivable";
 import { TdsDetailDialog } from "@/components/features/accounting/tds-detail-dialog";
+import { Tds26asImport } from "@/components/features/accounting/tds-26as-import";
 
 // ────────────────────────────────────────────────────────────────
 // Status color mapping
@@ -108,6 +109,7 @@ export default function TdsReceivablePage() {
             <Icon name="trending_up" size={12} />
             Year-end summary
           </Link>
+          <Tds26asImport />
         </div>
       </div>
 

@@ -27,6 +27,7 @@ import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { primaryContactsFor } from "@/lib/contacts/primary";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { MsmePayablesCard } from "@/components/features/accounting/msme-payables-card";
 
 // ────────────────────────────────────────────────────────────────
 // Aggregation hook
@@ -340,6 +341,9 @@ export default function AgingPage() {
           </ul>
         </>
       )}
+
+      {/* Payables side: MSME vendors ka 45-din (s.43B(h)) flag — S33. */}
+      <MsmePayablesCard />
     </div>
   );
 }
