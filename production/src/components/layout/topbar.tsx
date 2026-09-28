@@ -59,6 +59,10 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
       {process.env.NEXT_PUBLIC_APP_ENV === "staging" && (
         <span className="shrink-0 rounded bg-amber text-ink text-3xs font-bold uppercase tracking-wider px-2 py-0.5" title="Ye staging hai — demo data, koi customer nahi">Staging</span>
       )}
+      {/* LOCAL — `npm run dev:local` (S8): local database, live integrations band. */}
+      {process.env.NEXT_PUBLIC_APP_ENV === "local" && (
+        <span className="shrink-0 rounded bg-amber text-ink text-3xs font-bold uppercase tracking-wider px-2 py-0.5" title="Local database — production nahi, koi email/payment/WhatsApp bahar nahi jaata">Local</span>
+      )}
       {/* Mobile hamburger */}
       <button
         type="button"

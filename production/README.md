@@ -37,10 +37,17 @@ a Postgres error.
 Your database is yours alone. ⚠️ A `.env.local` copied from someone else may point at
 **production** — check `NEXT_PUBLIC_SUPABASE_URL` before running anything.
 
+**`npm run dev:local` (S8)** removes that risk without touching `.env.local`: it points the
+app at the local Supabase from `supabase status` (and refuses anything that is not
+localhost), and blanks every other `.env.local` key except a short allowlist — Razorpay,
+Resend, Gupshup, Vapi/Retell, Google reseller, GST IRP, Gemini are all off, so nothing leaves
+the laptop. The topbar shows a **Local** badge. See `scripts/dev-local.mjs`.
+
 ### Daily
 
 ```bash
-npm run dev          # the app          → http://localhost:3000
+npm run dev:local    # the app on YOUR local DB, live keys off → http://localhost:3001  (use this)
+npm run dev          # the app with whatever .env.local says    → http://localhost:3000
 npm run db:studio    # browse your DB   → http://localhost:54323
 npm run db:stop      # stop the DB      (it keeps running otherwise)
 ```
