@@ -1882,7 +1882,9 @@ Consequences accepted with the decision:
       requests.** The earlier "0 console errors" was measured on `/login` alone and was never a
       statement about the app — `/cart` was logging three the whole time.
 
-- [ ] **`/hosting` and `/` are set to DRAFT in DMS — worth your decision, not a bug.**
+- [x] **CLOSED 28 Sep 2026 — superseded.** DMS's `/` and `/hosting` no longer exist (owner, 24 Sep 2026:
+      DMS has no public pages); measured locally, both answer 307 to ResellerOS, so the draft setting
+      below no longer decides anything. Original entry: **`/hosting` and `/` are set to DRAFT in DMS.**
       Found while checking where to point "Pricing". `settings.page_visibility` reads
       `{ hosting: 'draft', home: 'draft' }`, updated **2026-07-21** — two months before any of
       the federation work, so it is your content decision and nothing here changed it. The
