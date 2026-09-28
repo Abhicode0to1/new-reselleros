@@ -90,8 +90,10 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       accepted/received, notes "Ordered from your hosting control panel.", lead `L-MUKVBRL6` won, one
       ₹708 payment, the SAME customer reused (two Starter subscriptions now), provisioning queued and held
       → DMS Invoices lists both paid orders, PDF 200 `application/pdf`, ₹600 + ₹54 + ₹54. The panel page
-      logged 21 console errors, including a 503 on some resource that was not identified (most of them are
-      Razorpay/Stripe iframe noise: "Refused to get unsafe header"). Trial not rerun: this test customer
+      logged 21 console errors. The one 5xx is `GET /api/user/hosting/stats` → 503 `DA_SERVER_DOWN`: local
+      DMS has no DirectAdmin login in `.env.docker` (only `DIRECTADMIN_URL`), so that is this environment,
+      not a fault, and the Hosting page says "Server is currently unreachable. Please try again later." with
+      a Try Again button. The rest is Razorpay/Stripe iframe noise ("Refused to get unsafe header"). Trial not rerun: this test customer
       has already had one, so it is correctly refused.
 - [ ] **Found by the end-to-end run:**
       - [x] **FIXED 28 Sep 2026 (DMS `caa634ae`):** bill links on the server address now move to
