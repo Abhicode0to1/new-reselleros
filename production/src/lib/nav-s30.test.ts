@@ -31,7 +31,13 @@ const OLD_CRUMBS = snapshot.crumbs as Record<string, string[]>;
 
 /** New in S29/S30, owner/manager only. Everything else must match the snapshot exactly. */
 const ADDED_FOR_OWNER_MANAGER = ["/today", "/activity", "/purchases/inbox", "/scorecard"];
-const addedFor = (role: string) => (role === "owner" || role === "manager" ? ADDED_FOR_OWNER_MANAGER : []);
+/** New in S33 (Trial Balance, Day Book) — same roles that already see P&L / Balance Sheet. */
+const ADDED_FOR_BOOKS = ["/accounting/trial-balance", "/accounting/day-book"];
+const BOOKS_ROLES = ["owner", "manager", "billing", "accountant"];
+const addedFor = (role: string) => [
+  ...(role === "owner" || role === "manager" ? ADDED_FOR_OWNER_MANAGER : []),
+  ...(BOOKS_ROLES.includes(role) ? ADDED_FOR_BOOKS : []),
+];
 
 /** What a role can actually click: sidebar rows, their accordion children, and the
  *  directory rows on landing pages it can open. */
