@@ -85,8 +85,11 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       lead `L-MUIB5W2J`, a repeat returns the same lead. No email provider locally, so every send is
       logged `failed` ("No email provider is configured") — nothing reached a real inbox.
 - [ ] **Found by the end-to-end run:**
-      - **The bill PDF link on the DMS Invoices page is built from the address DMS used to call
-        ResellerOS** (`/api/v1` makes `pdf_url` from the request host). Locally that is
+      - [x] **FIXED 28 Sep 2026 (DMS `caa634ae`):** bill links on the server address now move to
+        `NEXT_PUBLIC_RESELLEROS_URL`; browser-checked, the Invoices page's PDF link opens (200,
+        `application/pdf`, ₹708 quote). Original finding: **the bill PDF link on the DMS Invoices page
+        is built from the address DMS used to call ResellerOS** (`/api/v1` makes `pdf_url` from the
+        request host). Locally that is
         `http://host.docker.internal:4320/...`, which the customer's browser cannot open (the same PDF
         answers 200 on `localhost`). It works in production only if `RESELLEROS_SERVER_URL` is also the
         public address. Fix: DMS should rewrite links to ResellerOS's PUBLIC origin
