@@ -65,8 +65,12 @@ still takes is flagged "raise the bill in ResellerOS", never billed silently. DM
 renewal is a double-collection with no detector. Do not re-enable it or build a second
 invoice series in DMS without being asked. **Hosting prices are ResellerOS's too**
 (`LANDING_PLANS` in `site/lib/data/hosting-landing.ts`); DMS's `hostingplans` prices are
-disregarded and must not be read as a price source; DMS charges them plus 18% GST
-(`lib/pricing/hosting-price.ts` in DMS). Full record: `Todos.md` §0A.
+disregarded and must not be read as a price source. **DMS keeps no copy of them** (owner, 28 Sep
+2026: "Read prices live from ResellerOS"): ResellerOS publishes `GET /api/public/hosting-prices`,
+computed by the same `hostingRate` its checkout charges with (`lib/checkout/hosting-prices.ts`), and
+DMS reads it (`lib/reselleros/hosting-prices.ts`, `hooks/useHostingPrices.ts`) with no fallback figure:
+if ResellerOS cannot be read, DMS prices nothing and says so. Do not put a price back in DMS's
+`config/hosting-plans.ts`; a DMS test fails if one appears. Full record: `Todos.md` §0A.
 
 **The site cart charges only what the server can price** (24 Sep 2026). Every site
 `cart.add` must carry a `sku`, and a domain line must also carry the exact `domain` —
@@ -150,6 +154,18 @@ there is one trial path for both apps and ResellerOS can remind, quote the conve
 The panel's "can I have a trial?" pre-check asks `POST /api/dms/trial-eligibility`, which runs the
 same `checkTrialEligibility` that `startHostingTrial` decides with; an unreadable history is never
 "eligible".
+
+**A first purchase happens in ResellerOS; a renewal happens inside the DMS panel** (owner, 28 Sep
+2026: "Do these in ResellerOS if user buys for first time. But if existing user renew either hosting
+or domain, then that part should happen inside the DMS customer portal itself"). The renewal quote and
+the bill stay ResellerOS's; DMS's Renew dialog asks `POST /api/dms/renewal-order` (panel key, the
+customer's email matched exactly, renewal quotes only) for the Razorpay order and pays it in the
+panel. `/api/v1` quotes carry `renews` (vendor + domain), so a service's Renew offers only the bill
+that renews THAT service. Multi-year domains and several hosting plans in one order are for the
+ResellerOS cart; they are not built yet (the parts that are Abhishek's and Pardeep's are written up
+in `Todos.md`), and until they are, **checkout refuses a second hosting plan or a hosting quantity
+above 1** (`lib/checkout/hosting-limit.ts`) — before that, such an order was charged in full and only
+the first account was set up. Do not lift that stop-gap before one hosting request per plan exists.
 
 Open items for the integration are tracked in `Todos.md`, not here.
 
