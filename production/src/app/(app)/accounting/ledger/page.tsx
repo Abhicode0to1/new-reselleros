@@ -16,9 +16,9 @@
  * vendor owes us money.
  *
  * ─── OPENING BALANCE IS FETCHED, NOT ASSUMED ────────────────────────────────
- * The hooks return the party's ENTIRE history and buildLedger derives the opening from
- * whatever falls before the window. A date-filtered query would be cheaper and would
- * quietly start every statement at zero.
+ * The opening is the signed sum of everything before the window — computed in SQL by
+ * report_party_ledger since S17 (28 Sep 2026), never assumed to be zero. A plain
+ * date-filtered query would quietly start every statement at zero.
  */
 "use client";
 
@@ -38,10 +38,10 @@ import { cn, rupee } from "@/lib/utils";
 import { useCustomers } from "@/lib/queries/customers";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import {
-  useCustomerLedgerEntries, useVendorLedgerEntries, useLedgerVendors,
+  useCustomerLedger, useVendorLedger, useLedgerVendors,
 } from "@/lib/queries/ledger";
 import {
-  buildLedger, fyOf, fyPeriod, quarterPeriod, monthPeriod,
+  fyOf, fyPeriod, quarterPeriod, monthPeriod,
   type LedgerKind, type LedgerPeriod, type LedgerStatement,
 } from "@/lib/accounting/ledger";
 import {
@@ -107,17 +107,14 @@ function LedgerPageInner() {
   const vendorsQ = useLedgerVendors();
   const { data: me } = useCurrentUser();
 
-  const custEntriesQ = useCustomerLedgerEntries(kind === "customer" ? partyId : null);
-  const vendEntriesQ = useVendorLedgerEntries(kind === "vendor" ? vendorName : null);
+  const custLedgerQ = useCustomerLedger(kind === "customer" ? partyId : null, period);
+  const vendLedgerQ = useVendorLedger(kind === "vendor" ? vendorName : null, period);
 
-  const entriesQ = kind === "customer" ? custEntriesQ : vendEntriesQ;
+  const entriesQ = kind === "customer" ? custLedgerQ : vendLedgerQ;
   const customer = (customersQ.data ?? []).find((c) => c.id === partyId) ?? null;
   const partyName = kind === "customer" ? (customer?.name ?? "") : (vendorName ?? "");
 
-  const statement: LedgerStatement | null = React.useMemo(() => {
-    if (!entriesQ.data) return null;
-    return buildLedger(kind, entriesQ.data, period);
-  }, [entriesQ.data, kind, period]);
+  const statement: LedgerStatement | null = entriesQ.data ?? null;
 
   const selected = kind === "customer" ? !!partyId : !!vendorName;
 

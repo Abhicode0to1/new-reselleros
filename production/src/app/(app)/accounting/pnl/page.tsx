@@ -28,6 +28,7 @@ import { rupee } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import { createClient } from "@/lib/supabase/client";
 import { usePnL } from "@/lib/queries/pnl";
+import { rpcValueOrThrow } from "@/lib/accounting/report-rpc";
 import { PnLDrilldownDialog, type PnLDrillKind } from "@/components/features/accounting/pnl-drilldown-dialog";
 import { PnlWaterfall, HundredRupeeBar } from "@/components/features/accounting/pnl-waterfall";
 import { MoneyFlow } from "@/components/features/accounting/money-flow";
@@ -126,28 +127,14 @@ function useMonthlyTrend(fyStartYear: number, cogsRatio: number, enabled: boolea
     enabled,
     queryFn: async (): Promise<MonthPoint[]> => {
       const supabase = createClient();
-      const [inv, exp] = await Promise.all([
-        supabase.from("invoices")
-          .select("invoice_date, amount, taxable_value, tax_rate")
-          .gte("invoice_date", from).lte("invoice_date", to)
-          .in("status", ["pending", "paid", "overdue"]),
-        supabase.from("expenses")
-          .select("expense_date, amount")
-          .gte("expense_date", from).lte("expense_date", to),
-      ]);
-      if (inv.error) throw inv.error;
-      if (exp.error) throw exp.error;
-
-      /* Taxable value, never the GST-inclusive amount — output GST is money owed to the
-         government, not income. Same rule as the headline query above it. */
-      const revenue = (inv.data ?? []).map((i) => ({
-        date: i.invoice_date as string,
-        amount: i.taxable_value ?? Math.round((i.amount ?? 0) * 100 / (100 + (i.tax_rate ?? 18))),
-      }));
-      const expenses = (exp.data ?? []).map((e) => ({
-        date: e.expense_date as string,
-        amount: e.amount ?? 0,
-      }));
+      /* S17: mahine-war jod SQL me (report_pnl_monthly) — saal bhar ki har invoice aur
+         expense browser me nahi. Taxable value, never the GST-inclusive amount — same rule
+         as the headline. monthlySeries mahine se hi bucket karta hai, isliye har mahine ki
+         ek row (pehli tareekh par) wahi series deti hai. */
+      const res = await supabase.rpc("report_pnl_monthly", { p_from: from, p_to: to });
+      const months = rpcValueOrThrow<{ month: string; revenue: number; expenses: number }[]>(res, "report_pnl_monthly");
+      const revenue = months.map((m) => ({ date: `${m.month}-01`, amount: m.revenue }));
+      const expenses = months.map((m) => ({ date: `${m.month}-01`, amount: m.expenses }));
 
       return monthlySeries({
         fyStartYear, revenue, expenses, cogsRatio,

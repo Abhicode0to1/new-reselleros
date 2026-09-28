@@ -28,6 +28,11 @@ export interface ItcInput {
   category: string | null | undefined;
   /** The vendor's GSTIN, from the vendor master (expenses.vendor_id → vendors.gstin). */
   vendorGstin: string | null | undefined;
+  /**
+   * Kitni asli expense rows is row me judi hain (S17: SQL (bill_type, category, GSTIN) par
+   * group karke bhejta hai, gst_paid unka jod). Na ho to 1. Sirf `count` par asar.
+   */
+  n?: number;
 }
 
 export interface ItcVerdict {
@@ -71,7 +76,7 @@ export function splitItc(rows: ItcInput[]): ItcSplit {
     blocked += g;
     const k = v.reason ?? "—";
     const cur = by.get(k) ?? { amount: 0, count: 0 };
-    cur.amount += g; cur.count++;
+    cur.amount += g; cur.count += r.n ?? 1;
     by.set(k, cur);
   }
   return {

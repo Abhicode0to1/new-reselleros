@@ -5506,6 +5506,14 @@ export type Database = {
         Args: { p_bank_txn_id: string; p_expense_ids: string[] };
         Returns: undefined;
       };
+      /* S17 report functions (migration 20260928110000). Row shapes live next to their
+         mappers — BalanceSheetRpcRow (lib/accounting/report-rpc.ts), PnlRpcRow
+         (lib/accounting/pnl-assemble.ts), PartyLedgerRpc (lib/queries/ledger.ts). */
+      report_balance_sheet: { Args: { p_as_of?: string | null }; Returns: Json };
+      report_pnl:           { Args: { p_from: string; p_to: string }; Returns: Json };
+      report_pnl_monthly:   { Args: { p_from: string; p_to: string }; Returns: Json };
+      report_party_ledger:  { Args: { p_kind: string; p_party: string; p_from: string; p_to: string }; Returns: Json };
+      report_ledger_vendors: { Args: Record<string, never>; Returns: Json };
       reconcile_salary_advance_split: {
         Args: { p_txn_id: string; p_salary_id: string; p_advance_amount: number; p_employee_name: string; p_notes?: string | null };
         Returns: undefined;
