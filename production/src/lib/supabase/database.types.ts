@@ -4569,6 +4569,14 @@ export type Database = {
         Args: Record<string, never>;
         Returns: { created: boolean };
       };
+      /** S16 (migration 20260928130000). Sidebar badge counts, SECURITY INVOKER. */
+      nav_badges: {
+        Args: { p_approval_tiers?: string[] };
+        Returns: {
+          leads: number; enquiries: number; deals: number; tasks: number;
+          renewals: number; invoices: number; payments: number; quotes: number;
+        };
+      };
       restore_tenant_backup: {
         Args: { p_id: string };
         Returns: { restored_tables: number; restored_at: string };

@@ -77,6 +77,9 @@ export function useIdentity(): { status: IdentityStatus; email: string | null } 
       return authData?.user ? { email: authData.user.email ?? null } : null;
     },
     staleTime: 5 * 60_000,
+    /* S16: only needed when there is NO profile to explain. With a profile the answer is
+       "member" and this second auth.getUser round trip on every page was waste. */
+    enabled: !isLoading && !data,
   });
 
   if (isLoading || auth.isLoading) return { status: "loading", email: null };

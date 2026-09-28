@@ -35,6 +35,10 @@
  */
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import type { InboundEmailRow } from "@/lib/supabase/database.types";
+import {
+  INBOX_LIST_COLUMNS, INBOX_LIST_MAX_ROWS, idsNeedingHtml, withHtmlFallback,
+} from "@/lib/inbound/list-columns";
 
 /**
  * Only ever used by the signed-out local demo below. Never a production fallback.
@@ -87,19 +91,40 @@ export async function GET() {
     return NextResponse.json({ error: "Sign in to see your enquiries." }, { status: 401 });
   }
 
+  /* S16: no body_html in the list (lib/inbound/list-columns.ts says why), and a row
+     ceiling. body_html comes back only for rows with no text body, which is the only
+     case the page reads it. */
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("inbound_emails")
-    .select("*")
+    .select(INBOX_LIST_COLUMNS)
     .eq("tenant_id", tenantId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(INBOX_LIST_MAX_ROWS);
 
   if (error) {
     console.error("[api/inbound-emails] GET error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const rows = (data ?? []) as unknown as Omit<InboundEmailRow, "body_html">[];
+  const needHtml = idsNeedingHtml(rows);
+  const html: { id: string; body_html: string | null }[] = [];
+  /* Chunked so a long id list never turns into an over-long request URL. */
+  for (let i = 0; i < needHtml.length; i += 100) {
+    const { data: h, error: hErr } = await admin
+      .from("inbound_emails")
+      .select("id, body_html")
+      .eq("tenant_id", tenantId)
+      .in("id", needHtml.slice(i, i + 100));
+    if (hErr) {
+      console.error("[api/inbound-emails] GET html fallback error:", hErr);
+      return NextResponse.json({ error: hErr.message }, { status: 500 });
+    }
+    html.push(...(h ?? []));
+  }
+
   /* No "if empty, show somebody else's" fallback. An empty inbox is an empty inbox, and
      the page already has an empty state that says so in the folder's own words. */
-  return NextResponse.json(data ?? []);
+  return NextResponse.json(withHtmlFallback(rows, html));
 }

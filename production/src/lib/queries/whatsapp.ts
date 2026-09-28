@@ -70,21 +70,29 @@ export function useWhatsAppConversations() {
   });
 }
 
+/** How many of the latest messages one thread poll loads. */
+export const WHATSAPP_THREAD_MAX = 200;
+
 export function useWhatsAppThread(contactPhone: string | null) {
   return useQuery({
     queryKey: ["whatsapp", "thread", contactPhone ?? "none"],
     enabled:  Boolean(contactPhone),
     queryFn: async (): Promise<WhatsAppMessageRow[]> => {
       const supabase = createClient();
+      /* S16: bounded. This polls every 10s and used to fetch the WHOLE history with
+         this number each time. Newest WHATSAPP_THREAD_MAX first, then flipped back to
+         oldest-first, which is the order the thread renders in. */
       const { data, error } = await supabase
         .from("whatsapp_messages")
         .select("*")
         .eq("contact_phone", contactPhone!)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(WHATSAPP_THREAD_MAX);
       if (error) throw error;
-      return (data ?? []) as WhatsAppMessageRow[];
+      return ((data ?? []) as WhatsAppMessageRow[]).reverse();
     },
     refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 }
 

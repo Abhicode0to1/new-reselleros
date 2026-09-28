@@ -48,9 +48,10 @@ export function useInboundEmails() {
        show nothing new — the same bug wearing a shorter delay. An inbox has no use
        for a cached answer; that is what the interval above is for. */
     staleTime: 0,
-    /* Keep polling while the tab is in the background, so switching to it shows mail
-       that arrived while it was hidden rather than starting the wait over. */
-    refetchIntervalInBackground: true,
+    /* A hidden tab does not poll (S16). It used to, every 20s, for every open tab all
+       day. Switching back is already covered: refetchOnWindowFocus above fetches the
+       moment the tab is shown, so mail that arrived while hidden still appears at once. */
+    refetchIntervalInBackground: false,
   });
 }
 
