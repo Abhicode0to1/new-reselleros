@@ -5,6 +5,9 @@ import {
   offsiteWindowStart,
   offsiteEnvelope,
   offsiteRefusal,
+  offsiteTenantObjectName,
+  offsiteTenantMonthlyName,
+  offsiteManifestName,
   OFFSITE_WINDOW_HOURS,
   type OffsiteSnapshot,
 } from "./offsite";
@@ -151,5 +154,42 @@ describe("offsiteRefusal — khaali backup bhejne se behtar hai kuch na bhejna",
        par khaali payload phir bhi khaali hai. */
     expect(offsiteRefusal(offsiteEnvelope(now, "x", [snap("t1", "A")]), 0)).toBeNull();
     expect(offsiteRefusal(offsiteEnvelope(now, "x", []), 0)).toContain("koi snapshot nahi");
+  });
+});
+
+describe("per-tenant naam (S15) — ek tenant, ek object", () => {
+  const T = "fbb976f1-9090-4f10-9726-0901bd144e42";
+
+  it("daily/<IST tareekh>/<tenant_id>.json — tareekh wahi jo offsiteObjectName deta hai", () => {
+    const now = new Date("2026-08-28T18:30:00Z"); // 29 Aug 00:00 IST
+    expect(offsiteTenantObjectName(now, T)).toBe("daily/2026-08-29/fbb976f1-9090-4f10-9726-0901bd144e42.json");
+    expect(offsiteTenantObjectName(now, T).startsWith(offsiteObjectName(now).replace(".json", "/"))).toBe(true);
+  });
+
+  it("alag tenant alag naam, ek din me ek hi (dobara chalane par overwrite)", () => {
+    const a = new Date("2026-08-28T18:30:00Z"), b = new Date("2026-08-29T11:47:13Z");
+    expect(offsiteTenantObjectName(a, T)).toBe(offsiteTenantObjectName(b, T));
+    expect(offsiteTenantObjectName(a, T)).not.toBe(offsiteTenantObjectName(a, "3caa0f07-44d1-42ee-91b3-2123e04853b1"));
+  });
+
+  it("monthly sirf 1 tareekh (IST) ko, us mahine ke folder me", () => {
+    expect(offsiteTenantMonthlyName(new Date("2026-09-30T18:30:00Z"), T)).toBe(`monthly/2026-10/${T}.json`);
+    expect(offsiteTenantMonthlyName(new Date("2026-10-01T18:30:00Z"), T)).toBeNull();
+  });
+
+  it("daily/ aur monthly/ prefix wahi — bucket ka 400-din / 3000-din niyam bina badle lagta hai", () => {
+    const now = new Date("2026-09-30T18:30:00Z");
+    expect(offsiteTenantObjectName(now, T).startsWith("daily/")).toBe(true);
+    expect(offsiteTenantMonthlyName(now, T)!.startsWith("monthly/")).toBe(true);
+  });
+
+  it("tenant id uuid na ho to phatta hai — '../' se doosre din ki file par likhna mana (ASLI JAAL)", () => {
+    const now = new Date("2026-08-28T18:30:00Z");
+    expect(() => offsiteTenantObjectName(now, "../2026-08-01/x")).toThrow(/uuid/);
+    expect(() => offsiteTenantObjectName(now, "")).toThrow(/uuid/);
+  });
+
+  it("manifest usi folder me, uuid se na takraane wale naam par", () => {
+    expect(offsiteManifestName(new Date("2026-08-28T18:30:00Z"))).toBe("daily/2026-08-29/_manifest.json");
   });
 });

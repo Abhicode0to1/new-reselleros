@@ -59,6 +59,42 @@ export function offsiteMonthlyName(now: Date): string | null {
   return `monthly/${y}-${m}.json`;
 }
 
+/* ─── S15 (28 Sep 2026): ek tenant, ek object ─────────────────────────────────
+ * Pehle raat ka ek hi object tha — sab tenants ek JSON me, jo Cloud Run ki RAM me ek string
+ * banta tha. 50 tenant par wo jsonb ki 1 GB seema aur container ki memory, dono ki taraf
+ * jaata. Ab har tenant ka alag object, usi din ke folder me:
+ *
+ *   daily/2026-08-29/<tenant_id>.json      monthly/2026-10/<tenant_id>.json
+ *
+ * Naam upar wale `offsiteObjectName` / `offsiteMonthlyName` se hi bante hain — IST wali
+ * tareekh ka niyam ek hi jagah rahe. `daily/` aur `monthly/` prefix wahi, to bucket ka
+ * lifecycle (400 din / 3000 din) bina badle lagta hai. */
+
+/* Tenant id path me jaata hai; sirf uuid — `../` ya `/` wala id doosre din ki file par likh
+   sakta tha. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertTenantId(tenantId: string): string {
+  if (!UUID_RE.test(tenantId)) throw new Error(`offsite: tenant id uuid nahi hai: ${JSON.stringify(tenantId)}`);
+  return tenantId.toLowerCase();
+}
+
+/** `daily/YYYY-MM-DD/<tenant_id>.json` — IST ki tareekh. */
+export function offsiteTenantObjectName(now: Date, tenantId: string): string {
+  return `${offsiteObjectName(now).replace(/\.json$/, "")}/${assertTenantId(tenantId)}.json`;
+}
+
+/** 1 tareekh (IST) ko `monthly/YYYY-MM/<tenant_id>.json`, warna `null`. */
+export function offsiteTenantMonthlyName(now: Date, tenantId: string): string | null {
+  const m = offsiteMonthlyName(now);
+  return m ? `${m.replace(/\.json$/, "")}/${assertTenantId(tenantId)}.json` : null;
+}
+
+/** Us raat ki suchi — kaun upload hua, kaun reh gaya. `_` se shuru, taaki uuid se na takraye. */
+export function offsiteManifestName(now: Date): string {
+  return `${offsiteObjectName(now).replace(/\.json$/, "")}/_manifest.json`;
+}
+
 /** Kis waqt ke baad ke snapshot lene hain. */
 export function offsiteWindowStart(now: Date, hours = OFFSITE_WINDOW_HOURS): Date {
   return new Date(now.getTime() - hours * 3600_000);

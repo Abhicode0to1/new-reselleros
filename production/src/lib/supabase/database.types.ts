@@ -4459,6 +4459,16 @@ export type Database = {
           results:     Array<{ tenant: string; ok: boolean; bytes?: number; tables?: number; error?: string }>;
         };
       };
+      /** S15, service_role ONLY (migration 20260928141000). Ek tenant ka nightly snapshot. */
+      backup_tenant: {
+        Args: { p_tenant: string; p_label?: string | null };
+        Returns: Json;
+      };
+      /** S15, service_role ONLY. Ek tenant ka sabse naya snapshot (p_since ke baad), ya null. */
+      export_tenant_snapshot_for_offsite: {
+        Args: { p_tenant: string; p_since: string };
+        Returns: Json;
+      };
       /**
        * service_role ONLY (migration 20260829040000). Har tenant ka sabse naya snapshot,
        * taaki nightly cron use database ke BAHAR Cloud Storage par rakh sake —
