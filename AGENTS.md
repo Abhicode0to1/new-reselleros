@@ -12,6 +12,13 @@ The long version is `production/CLAUDE.md` (25 sections). This file is the subse
 must not be got wrong, plus the things that are true of this repo *today*. Where the two
 disagree, **this file wins** — CLAUDE.md has been wrong before, see §1.
 
+**Canonical (S25, 28 Sep 2026):** the two files stay separate on purpose — every
+teammate's session loads both. `AGENTS.md` is canonical for **rules** (what must not go
+wrong); `production/CLAUDE.md` is canonical for **conventions and patterns** (how code is
+written). Write a new rule here and link to it from CLAUDE.md rather than copying it.
+Decisions and their history go in [`docs/adr/`](docs/adr/), which also holds the comment
+convention.
+
 Two agents work here: **Claude Code** and **Antigravity**. Both read this file. Keeping
 one rulebook is the point of it existing.
 

@@ -19,6 +19,9 @@ This file is read by Claude Code on every session. It contains all conventions, 
 > **If you change a rule here, change it there too.** Two rulebooks that drift apart are
 > worse than one that is merely long — the second agent will follow the stale copy and
 > nobody will see it happen.
+>
+> **Canonical (S25):** `AGENTS.md` for rules, this file for conventions and patterns — see
+> the note at the top of `AGENTS.md`. Decisions + the comment convention: `../docs/adr/`.
 
 ---
 
