@@ -49,6 +49,9 @@ import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
 import { reportCron } from "@/lib/ops/cron-report";
 import { mapLimit, chunk, uniq } from "@/lib/ops/p-limit";
+import { createReminderSender } from "@/lib/marketing/whatsapp-reminders.server";
+import { renewalReminderKind } from "@/lib/marketing/whatsapp-reminders";
+import { rupee } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -70,6 +73,8 @@ interface CronResult {
   lapsed:           number;
   errors:           { subscription_id: string; message: string }[];
   details:          { subscription_id: string; customer: string; step: string; daysUntil: number; emailStatus?: string }[];
+  /** S28 — WhatsApp copy of each reminder. `disabled` = switch OFF (the default). */
+  whatsapp?:        { sent: number; skipped: number; failed: number; disabled: number };
 }
 
 export async function GET(req: Request) {
@@ -234,6 +239,10 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
      Each row's own steps stay in order; rows never share state except the counters on
      `result`, which JS mutates on one thread. Quote numbers come from
      next_document_number(), an atomic upsert, so two rows of one tenant cannot collide. */
+  /* S28: ek sender poore run ke liye. Default OFF — kuch nahi bhejta jab tak switch ON na ho.
+     Tenant config ek shared promise me cache hota hai, isliye 5-at-a-time bhi ek hi read. */
+  const wa = createReminderSender();
+
   await mapLimit(allSubs, RENEWALS_CONCURRENCY, async (sub) => {
     try {
       const tenant = tenantById.get(sub.tenant_id) ?? null;
@@ -392,6 +401,34 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
           );
         }
         const recipient = resolvedContact.email;
+
+        /* ── S28: WhatsApp copy — email ke "no recipient" skip se PEHLE ───────────
+           Jiska email nahi hai uska WhatsApp ho sakta hai, isliye ye yahan hai. Sender kabhi
+           throw nahi karta, aur (subscription, step) par ek hi baar bhejta hai — to kal ka
+           email-retry isse dobara nahi bhejega. */
+        const waOut = await wa.send({
+          tenantId:    sub.tenant_id,
+          kind:        renewalReminderKind(decision.tone),
+          subjectType: "subscription",
+          subjectId:   sub.id,
+          step:        decision.targetState,
+          customerId:  sub.customer_id,
+          values: {
+            customer_name: resolvedContact.name || customer?.contact_name || customer?.name || sub.customer_name,
+            seller_name:   tenant.name,
+            plan:          sub.plan,
+            amount:        renewalQuote ? rupee(renewalQuote.amount) : null,
+            due_date:      new Date(sub.renewal_date!).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+            days:          Math.abs(decision.daysUntilRenewal),
+            link:          renewalQuoteId && renewalToken
+              ? quoteAcceptUrl(process.env.NEXT_PUBLIC_APP_URL, renewalQuoteId, renewalToken)
+              : null,
+          },
+        });
+        if (waOut.status === "failed") {
+          result.errors.push({ subscription_id: sub.id, message: `whatsapp: ${waOut.error}` });
+        }
+
         if (!recipient) {
           await supabase.from("renewal_email_log").insert({
             tenant_id:       sub.tenant_id,
@@ -556,6 +593,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
     }
   });
 
+  result.whatsapp = { ...wa.totals };
   return NextResponse.json(reportCron("renewals", result));
 }
 

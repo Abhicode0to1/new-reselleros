@@ -32,6 +32,8 @@ import { primaryContactEmail } from "@/lib/contacts/primary";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { rupee, formatDate } from "@/lib/utils";
 import { reportCron } from "@/lib/ops/cron-report";
+import { createReminderSender } from "@/lib/marketing/whatsapp-reminders.server";
+import { dunningReminderKind } from "@/lib/marketing/whatsapp-reminders";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -58,6 +60,8 @@ interface DunningResult {
   skipped: number;
   details: { invoice_id: string; step: DunningStep; action: string; days_overdue: number; reason: string }[];
   errors: { invoice_id: string; message: string }[];
+  /** S28 — WhatsApp copy of each step. `disabled` = company ne switch ON nahi kiya (default). */
+  whatsapp?: { sent: number; skipped: number; failed: number; disabled: number };
 }
 
 async function handle(req: Request): Promise<NextResponse<DunningResult | { error: string }>> {
@@ -129,6 +133,9 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
       lastStepByInvoice.set(l.invoice_id, l.dunning_step as DunningStep);
     }
   }
+
+  /* S28: ek sender poore run ke liye — tenant ka switch/template ek hi baar padha jaata hai. */
+  const wa = createReminderSender();
 
   for (const inv of invoices ?? []) {
     result.considered++;
@@ -283,7 +290,33 @@ automatically. Decide whether to call them, agree a plan, or pause the service.`
         status: "failed", error_message: message.slice(0, 500),
       });
     }
+
+    /* ── S28: WhatsApp copy, try/catch ke BAHAR ───────────────────────────────
+       Email step upar log ho chuka. WhatsApp ka koi bhi failure email ko dobara bhejne ya
+       dunning step ko "failed" likhne ka kaaran nahi banna chahiye — sender kabhi throw
+       nahi karta. Default OFF: switch ON + approved template ke bina ye kuch nahi bhejta. */
+    const waOut = await wa.send({
+      tenantId: inv.tenant_id,
+      kind: dunningReminderKind(decision.step),
+      subjectType: "invoice",
+      subjectId: inv.id,
+      step: decision.step,
+      customerId: inv.customer_id,
+      values: {
+        customer_name: inv.customer_name,
+        seller_name: tenant?.name ?? null,
+        invoice_id: inv.id,
+        amount: rupee(amountDue),
+        due_date: formatDate(inv.due_date!),
+        days: Math.abs(decision.daysOverdue),
+        link: null,
+      },
+    });
+    if (waOut.status === "failed") {
+      result.errors.push({ invoice_id: inv.id, message: `whatsapp: ${waOut.error}` });
+    }
   }
+  result.whatsapp = { ...wa.totals };
 
   return NextResponse.json(reportCron("invoice-dunning", result));
 }
