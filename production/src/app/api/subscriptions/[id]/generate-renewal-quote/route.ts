@@ -30,7 +30,8 @@ import { createOrGetRenewalQuote } from "@/lib/renewals/create-renewal-quote";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // ── 1. Authn ─────────────────────────────────────────────────────
   const userClient = createClient();
   const { data: authData } = await userClient.auth.getUser();

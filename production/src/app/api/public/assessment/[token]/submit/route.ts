@@ -23,7 +23,8 @@ const bodySchema = z.object({
   paste_count: z.number().int().min(0).max(10000).optional(),
 });
 
-export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   let body;
   try { body = bodySchema.parse(await req.json()); }
   catch { return NextResponse.json({ error: "Invalid submission." }, { status: 400 }); }

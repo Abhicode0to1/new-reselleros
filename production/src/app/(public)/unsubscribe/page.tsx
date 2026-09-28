@@ -13,7 +13,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function UnsubscribePage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function UnsubscribePage(
+  props: { searchParams: Promise<Record<string, string | string[] | undefined>> }
+) {
+  const searchParams = await props.searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
   return (
     <PublicShell title="Unsubscribe" subtitle="Marketing mail band karna">

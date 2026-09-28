@@ -19,11 +19,12 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function ExpenseClaimPage({
-  searchParams,
-}: {
-  searchParams: { tid?: string; sig?: string };
-}) {
+export default async function ExpenseClaimPage(
+  props: {
+    searchParams: Promise<{ tid?: string; sig?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const tid = (searchParams.tid ?? "").trim();
   const sig = (searchParams.sig ?? "").trim();
 

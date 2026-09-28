@@ -27,10 +27,8 @@ const schema = z.object({
   role:   z.string().optional().nullable(),
 });
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: authData } = await supabase.auth.getUser();
   if (!authData?.user) {

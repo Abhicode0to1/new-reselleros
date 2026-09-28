@@ -16,7 +16,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-export default function HostingTrialPage({ searchParams }: { searchParams: { confirmed?: string } }) {
+export default async function HostingTrialPage(props: { searchParams: Promise<{ confirmed?: string }> }) {
+  const searchParams = await props.searchParams;
   const status = typeof searchParams.confirmed === "string" ? searchParams.confirmed : "";
   if (!status) redirect("/hosting#choose");
   return <HostingTrialStatus status={status} />;

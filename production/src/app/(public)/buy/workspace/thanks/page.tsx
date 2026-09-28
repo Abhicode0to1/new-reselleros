@@ -61,11 +61,12 @@ async function fetchOrder(quoteId: string): Promise<ThanksOrder | null> {
   };
 }
 
-export default async function ThanksPage({
-  searchParams,
-}: {
-  searchParams: { order?: string; sim?: string };
-}) {
+export default async function ThanksPage(
+  props: {
+    searchParams: Promise<{ order?: string; sim?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const quoteId = (searchParams.order ?? "").trim();
   const order   = quoteId ? await fetchOrder(quoteId) : null;
   const isSim   = searchParams.sim === "1";

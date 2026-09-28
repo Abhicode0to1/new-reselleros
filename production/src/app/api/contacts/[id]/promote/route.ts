@@ -25,7 +25,8 @@ const schema = z.object({
   notes:  z.string().max(2000).optional(),
 }).default({});
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const userClient = createClient();
   const { data: authData } = await userClient.auth.getUser();
   if (!authData?.user) {

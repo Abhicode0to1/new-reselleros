@@ -21,7 +21,8 @@ function deny(status: number, msg: string) {
   return new Response(msg, { status, headers: { "content-type": "text/plain" } });
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props0: { params: Promise<{ id: string }> }) {
+  const params = await props0.params;
   const id = params.id;
   const token = req.nextUrl.searchParams.get("token") ?? "";
   const admin = createAdminClient();

@@ -21,4 +21,5 @@
  * That gate has now been removed (nav.ts), so every sales user can reach this page.
  * Pardeep confirmed the restriction is obsolete on 17 Aug 2026.
  */
-export { default } from "../leads/page";
+export { /* @next-codemod-error `default` export is re-exported. Check if this component uses `params` or `searchParams`*/
+default } from "../leads/page";

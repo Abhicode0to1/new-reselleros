@@ -48,7 +48,8 @@ function clientIp(request: NextRequest): string | null {
   return request.headers.get("x-real-ip");
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createAdminClient();
 
   // 1. Fetch the quote to validate state + authorize the caller by token

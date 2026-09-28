@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
 
 const ALLOWED = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const paymentId = params.id;
   if (!paymentId) return NextResponse.json({ error: "No payment id" }, { status: 400 });
 

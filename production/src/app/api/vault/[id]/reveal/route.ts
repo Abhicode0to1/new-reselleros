@@ -28,10 +28,8 @@ import { vaultDb } from "@/lib/vault/db";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const db = vaultDb(supabase);
   const { data: authData } = await supabase.auth.getUser();
