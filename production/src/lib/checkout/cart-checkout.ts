@@ -54,7 +54,7 @@ import { isTrialPlan, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 import { startHostingTrial } from "@/lib/hosting/start-trial";
 import { hostingLimitProblem } from "./hosting-limit";
 
-const BUY_PAGE_TENANT_ID =
+export const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
 const ENV_RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID?.trim() || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || "";
 const ENV_RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET?.trim() || "";
