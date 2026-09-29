@@ -100,12 +100,13 @@ export function useRunFinder() {
       const res = await fetch("/api/leads/finder/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ profileId }) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error ?? "Run failed");
-      return body as { discovered: number; skippedDupe: number; saved: number; errors: string[] };
+      return body as { discovered: number; skippedDupe: number; saved: number; noContact?: number; errors: string[] };
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: FINDER_KEY });
-      if (r.saved === 0) toast.warning(`${r.discovered} mili, ${r.skippedDupe} pehle se thi — nayi koi nahi`);
-      else toast.success(`${r.saved} nayi companies mili (${r.skippedDupe} pehle se thi)`);
+      const drop = r.noContact ? ` · ${r.noContact} ka contact nahi mila, Rejected mein` : "";
+      if (r.saved === 0) toast.warning(`${r.discovered} mili, ${r.skippedDupe} pehle se thi — contact wali nayi koi nahi${drop}`);
+      else toast.success(`${r.saved} nayi companies, sabka phone/email hai (${r.skippedDupe} pehle se thi${drop})`);
       if (r.errors?.length) toast.warning(r.errors[0]);
     },
     onError: (e) => { qc.invalidateQueries({ queryKey: FINDER_KEY }); toastError(e); },
@@ -120,12 +121,12 @@ export function useFindContacts() {
       const res = await fetch("/api/leads/finder/contacts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error ?? "Contact check failed");
-      return body as { checked: number; found: number };
+      return body as { checked: number; found: number; removed?: number };
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: FINDER_KEY }); qc.invalidateQueries({ queryKey: ["leads"] });
       if (r.checked === 0) toast.success("Sab companies ka contact pehle hi check ho chuka hai");
-      else toast.success(`${r.checked} websites padhi — ${r.found} ka contact mila`);
+      else toast.success(`${r.checked} websites padhi — ${r.found} ka contact mila${r.removed ? `, ${r.removed} bina contact wali Rejected mein gayi` : ""}`);
     },
     onError: (e) => toastError(e),
   });

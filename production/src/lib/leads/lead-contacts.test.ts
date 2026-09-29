@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanEmail, cleanPhone, extractContacts, pickEmail, pickPhone, readContact } from "./lead-contacts";
+import { cleanEmail, cleanPhone, contactBonus, extractContacts, pickEmail, pickPhone, reachable, readContact, type ContactResult } from "./lead-contacts";
 
 describe("cleanPhone — Indian numbers only", () => {
   it.each([
@@ -53,4 +53,16 @@ describe("pick", () => {
 describe("readContact", () => {
   it("reads the stored block", () => expect(readContact({ contact: { email: "a@b.in", phone: null, emails: [], phones: [], source_url: null, checked_at: "2026-09-28" } })?.email).toBe("a@b.in"));
   it("null when never checked", () => { expect(readContact({ mx_hosts: [] })).toBeNull(); expect(readContact(null)).toBeNull(); });
+});
+
+describe("reachable / contactBonus", () => {
+  const c = (email: string | null, phone: string | null): ContactResult => ({ email, phone, emails: [], phones: [], source_url: null, checked_at: "x" });
+  it("nothing found is not reachable", () => { expect(reachable(c(null, null))).toBe(false); expect(reachable(null)).toBe(false); });
+  it("email or phone is reachable", () => { expect(reachable(c("a@b.in", null))).toBe(true); expect(reachable(c(null, "01123456789"))).toBe(true); });
+  it("mobile > landline > email > none", () => {
+    expect(contactBonus(c(null, "+919876543210"))).toBe(10);
+    expect(contactBonus(c(null, "01123456789"))).toBe(6);
+    expect(contactBonus(c("a@b.in", null))).toBe(4);
+    expect(contactBonus(c(null, null))).toBe(0);
+  });
 });

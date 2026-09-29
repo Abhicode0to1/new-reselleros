@@ -54,6 +54,7 @@ export function discoveryPrompt(p: FinderProfile, excludeDomains: readonly strin
     p.must_have ? `Must have: ${p.must_have}.` : "",
     p.exclude ? `Exclude: ${p.exclude}.` : "",
     "Prefer small and mid-size businesses that likely run their own email and website and are growing (hiring, new office, new product).",
+    "Strongly prefer companies whose own website shows a phone number or email for enquiries (a contact page) — we can only use a company we can call or write to.",
     excludeDomains.length ? `Skip these domains (already known): ${excludeDomains.slice(0, 200).join(", ")}.` : "",
   ].filter(Boolean).join("\n");
   return { system, user };

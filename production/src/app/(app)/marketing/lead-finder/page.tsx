@@ -88,7 +88,7 @@ export default function LeadFinderPage() {
         <div className="p-4 pb-2 flex items-center justify-between gap-3 flex-wrap">
           <div>
             <p className="text-sm font-semibold text-ink">Mili hui companies</p>
-            <p className="text-xs text-ink-3">Score = signals se (Workspace par nahi, SSL nahi, purani site…). Approve → Sales &amp; Pipeline mein lead, source &quot;AI Lead Finder&quot;.</p>
+            <p className="text-xs text-ink-3">Score = signals se (Workspace par nahi, SSL nahi, purani site…). Review mein sirf wahi companies aati hain jinka phone ya email unki website par mila. Approve → Sales &amp; Pipeline mein lead, source &quot;AI Lead Finder&quot;.</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Company, domain, city…" className="w-56" aria-label="Search" />
@@ -212,7 +212,7 @@ function CandidateRow({ c, onApprove, onReject, onUndo, onFindContact, busy, fin
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
             {contact?.email && <a href={`mailto:${contact.email}`} className="text-ink underline">✉ {contact.email}</a>}
             {contact?.phone && <a href={`tel:${contact.phone}`} className="text-ink underline tabular-nums">☎ {contact.phone}</a>}
-            {contact && !contact.email && !contact.phone && <span className="text-amber-ink">Website par email/phone nahi mila</span>}
+            {contact && !contact.email && !contact.phone && <span className="text-amber-ink">{(c.signals as { auto_rejected?: string } | null)?.auto_rejected ? "Apne aap hataya — website par email/phone nahi mila" : "Website par email/phone nahi mila"}</span>}
             {!contact && <span className="text-ink-3">Contact check nahi hua</span>}
             {(!contact || (!contact.email && !contact.phone)) && (
               <button type="button" className="text-amber-ink underline disabled:opacity-50" onClick={onFindContact} disabled={finding}>{contact ? "Dobara dekho" : "Contact dhoondho"}</button>

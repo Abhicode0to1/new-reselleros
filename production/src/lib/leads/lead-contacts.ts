@@ -127,3 +127,14 @@ export function readContact(signals: unknown): ContactResult | null {
   const c = (signals as { contact?: ContactResult } | null)?.contact;
   return c && typeof c === "object" && "checked_at" in c ? c : null;
 }
+
+/** A lead nobody can call or write to is not a lead — it stays out of Review. */
+export const reachable = (c: ContactResult | null): boolean => !!(c && (c.phone || c.email));
+
+/** Score bonus: phone beats email, a mobile beats a landline. */
+export function contactBonus(c: ContactResult | null): number {
+  if (!c) return 0;
+  if (c.phone?.startsWith("+91")) return 10;
+  if (c.phone) return 6;
+  return c.email ? 4 : 0;
+}
