@@ -109,7 +109,7 @@ export function previewTemplate(html: string): string {
 
 /** Variables used in a template that the send route will NOT fill — they would go out raw. */
 export function unknownVariables(...parts: (string | null | undefined)[]): string[] {
-  const known = new Set(["name", "company", "sender", "offer_code", "discount", "expires"]);
+  const known = new Set(["name", "company", "sender", "offer_code", "discount", "expires", "pitch"]);
   const found = new Set<string>();
   for (const p of parts) for (const m of (p ?? "").matchAll(/\{\{(\w+)\}\}/g)) if (!known.has(m[1])) found.add(m[1]);
   return [...found];

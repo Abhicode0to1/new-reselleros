@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  normaliseDomain, parseDiscovery, mxProvider, siteNote, baselineScore, mergeScores, discoveryPrompt, leadNotes, type ScoreInput,
+  normaliseDomain, parseDiscovery, mxProvider, siteNote, baselineScore, mergeScores, discoveryPrompt, leadNotes, splitList, spreadByIndustryCity, cleanPitch, type ScoreInput,
 } from "./lead-finder";
 
 const site = (over: Partial<ReturnType<typeof siteNote>> = {}) => ({ https: true, status: 200, note: "Website theek hai", ...over });
@@ -65,7 +65,38 @@ describe("lead finder", () => {
     expect(p.system).toMatch(/Do not use Google Maps/);
   });
 
+  it("multi-city, multi-industry profile asks for a spread and names each value", () => {
+    const p = discoveryPrompt({ name: "x", cities: "Gurgaon, Noida", industries: "dental clinics, diagnostic labs, play schools", company_size: "5-100", products: ["workspace"], must_have: "", exclude: "", daily_limit: 10 }, [], 24);
+    expect(p.user).toContain("Cities (all of them): Gurgaon | Noida");
+    expect(p.user).toContain("Industries (all of them): dental clinics | diagnostic labs | play schools");
+    expect(p.user).toMatch(/cover EVERY city and EVERY industry/);
+    expect(p.system).toContain("industry");
+  });
+
+  it("splitList handles commas, slashes and 'and'", () => expect(splitList("Gurgaon, Noida / Delhi and Faridabad")).toEqual(["Gurgaon", "Noida", "Delhi", "Faridabad"]));
+
+  it("spreadByIndustryCity mixes a lopsided answer", () => {
+    const dental = Array.from({ length: 6 }, (_, i) => ({ id: "d" + i, industry: "dental clinics", city: i % 2 ? "Noida" : "Gurgaon" }));
+    const labs = [{ id: "l0", industry: "diagnostic labs", city: "Noida" }, { id: "l1", industry: "diagnostic labs", city: "Gurgaon" }];
+    const school = [{ id: "s0", industry: "play schools", city: "Gurgaon" }];
+    const first4 = spreadByIndustryCity([...dental, ...labs, ...school]).slice(0, 4).map((x) => x.industry);
+    expect(new Set(first4)).toEqual(new Set(["dental clinics", "diagnostic labs", "play schools"]));
+    const dentalOrder = spreadByIndustryCity(dental).slice(0, 2).map((x) => x.city);
+    expect(new Set(dentalOrder)).toEqual(new Set(["Gurgaon", "Noida"]));
+  });
+
   it("lead notes list the signals", () => {
     expect(leadNotes({ fit_reason: "r", pitch: "p", mx_provider: "zoho", site_note: "ok", source_url: "https://s", description: null })).toBe("AI Lead Finder\nWhy: r\nEmail: Zoho Mail\nWebsite: ok\nPitch: p\nSource: https://s");
   });
+});
+
+describe("cleanPitch", () => {
+  it.each([
+    ["Namaste! Shree Dental Clinic ke patient records ke liye Workspace lein.", "Shree Dental Clinic ke patient records ke liye Workspace lein."],
+    ["Sir, algindia.com ke liye Workspace sabse secure hai.", "Algindia.com ke liye Workspace sabse secure hai."],
+    ["Namaste ji, Hello! aapki clinic Gmail par hai.", "Aapki clinic Gmail par hai."],
+    ["Aapki site par SSL nahi hai.", "Aapki site par SSL nahi hai."],
+    ["Hindustan Times mein aapka naam aaya — Workspace se team fast hogi.", "Hindustan Times mein aapka naam aaya — Workspace se team fast hogi."],
+  ])("%s", (raw, want) => expect(cleanPitch(raw)).toBe(want));
+  it("empty stays empty", () => { expect(cleanPitch(null)).toBe(""); expect(cleanPitch("Namaste!")).toBe(""); });
 });

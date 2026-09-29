@@ -4,6 +4,8 @@
  * pin down without a network lives here.
  */
 
+import { ASK_FOR_OWNER } from "./lead-contacts";
+
 export interface FinderProfile {
   name: string;
   cities: string;
@@ -23,7 +25,12 @@ export const PRODUCT_LABEL: Record<string, string> = {
   whatsapp: "WhatsApp Business API",
 };
 
-export interface DiscoveredCompany { company: string; domain: string; website?: string | null; city?: string | null; description?: string | null; source_url?: string | null }
+export interface DiscoveredCompany { company: string; domain: string; website?: string | null; city?: string | null; industry?: string | null; description?: string | null; source_url?: string | null }
+
+/** "Gurgaon, Noida / Delhi" → ["Gurgaon", "Noida", "Delhi"] — the profile's free-text lists. */
+export function splitList(s: string | null | undefined): string[] {
+  return [...new Set((s ?? "").split(/[,;/\n]|\band\b/i).map((x) => x.trim()).filter((x) => x.length > 1))];
+}
 
 /** Normalise "https://www.Example.co.in/about" → "example.co.in"; null when not a domain. */
 export function normaliseDomain(input: string | null | undefined): string | null {
@@ -44,16 +51,25 @@ export function discoveryPrompt(p: FinderProfile, excludeDomains: readonly strin
     "You are a B2B prospect researcher for an Indian IT services reseller (Google Workspace, websites, hosting, custom software). " +
     "Using web search, find REAL, currently operating companies that match the profile. Only companies with their own website domain. " +
     "Never invent a company or a domain; if unsure, leave it out. Do not use Google Maps / Business Profile listings as a source — use company websites, directories, news, job posts. " +
-    "Answer ONLY with a JSON array (no prose) of objects: {company, domain, website, city, description, source_url}. domain = bare domain (example.co.in).";
+    "Answer ONLY with a JSON array (no prose) of objects: {company, domain, website, city, industry, description, source_url}. " +
+    "domain = bare domain (example.co.in); city and industry = one of the values from the lists given, copied exactly.";
+  const cities = splitList(p.cities), industries = splitList(p.industries);
+  // Asked for "clinics, labs, schools in Gurgaon, Noida", the model returned ten Gurgaon dental
+  // clinics (29 Sep). Name every city and industry and ask for a spread.
+  const spread = cities.length > 1 || industries.length > 1
+    ? `Spread the results: cover EVERY city and EVERY industry listed, roughly equally — about ${Math.max(1, Math.ceil(want / Math.max(1, industries.length)))} per industry and ${Math.max(1, Math.ceil(want / Math.max(1, cities.length)))} per city. Do not return mostly one kind of business or one city.`
+    : "";
   const user = [
     `Find up to ${want} companies.`,
-    `Location: ${p.cities || "India"}.`,
-    `Industry: ${p.industries || "any SME"}.`,
+    cities.length > 1 ? `Cities (all of them): ${cities.join(" | ")}.` : `Location: ${p.cities || "India"}.`,
+    industries.length > 1 ? `Industries (all of them): ${industries.join(" | ")}.` : `Industry: ${p.industries || "any SME"}.`,
+    spread,
     `Size: ${p.company_size}.`,
     `We want to sell: ${products}.`,
     p.must_have ? `Must have: ${p.must_have}.` : "",
     p.exclude ? `Exclude: ${p.exclude}.` : "",
     "Prefer small and mid-size businesses that likely run their own email and website and are growing (hiring, new office, new product).",
+    "Strongly prefer companies whose own website shows a phone number or email for enquiries (a contact page) — we can only use a company we can call or write to.",
     excludeDomains.length ? `Skip these domains (already known): ${excludeDomains.slice(0, 200).join(", ")}.` : "",
   ].filter(Boolean).join("\n");
   return { system, user };
@@ -79,6 +95,7 @@ export function parseDiscovery(text: string | null | undefined): DiscoveredCompa
       company: company.slice(0, 120), domain,
       website: x.website ? String(x.website).slice(0, 300) : `https://${domain}`,
       city: x.city ? String(x.city).slice(0, 80) : null,
+      industry: x.industry ? String(x.industry).slice(0, 80) : null,
       description: x.description ? String(x.description).slice(0, 400) : null,
       source_url: x.source_url ? String(x.source_url).slice(0, 500) : null,
     });
@@ -170,7 +187,8 @@ export function scoringPrompt(items: readonly ScoreInput[], baselines: readonly 
   const system =
     "You are a sales analyst for an Indian IT reseller. For each company you get public signals and a baseline score. " +
     "Return ONLY a JSON array, same order, of {domain, score (0-100), product (one of the allowed keys), fit_reason (Hinglish, ≤160 chars, concrete), pitch (Hinglish, ≤220 chars, one line the salesperson can say on WhatsApp)}. " +
-    "Keep the score within ±20 of the baseline unless a signal clearly contradicts it. Never promise prices or discounts.";
+    "Keep the score within ±20 of the baseline unless a signal clearly contradicts it. Never promise prices or discounts. " +
+    "The pitch is pasted after our own greeting, so it must NOT start with a greeting or address (no Namaste, Hello, Hi, Sir, Dear) — start with the point.";
   const user = JSON.stringify(items.map((i, k) => ({
     domain: i.domain, company: i.company, city: i.city, description: i.description,
     email_provider: MX_LABEL[i.mx], website: i.site.note, allowed_products: i.products, baseline: baselines[k],
@@ -189,9 +207,21 @@ export function mergeScores(items: readonly ScoreInput[], baselines: readonly Sc
     const bounded = Math.max(b.score - 20, Math.min(b.score + 20, score));
     const product = typeof a.product === "string" && i.products.includes(a.product) ? a.product : b.product;
     const fit_reason = typeof a.fit_reason === "string" && a.fit_reason.trim() ? a.fit_reason.trim().slice(0, 200) : b.fit_reason;
-    const pitch = typeof a.pitch === "string" && a.pitch.trim() && !/₹|\brs\.?\s?\d|discount|% off/i.test(a.pitch) ? a.pitch.trim().slice(0, 260) : b.pitch;
+    const pitch = typeof a.pitch === "string" && cleanPitch(a.pitch) && !/₹|\brs\.?\s?\d|discount|% off/i.test(a.pitch) ? cleanPitch(a.pitch).slice(0, 260) : b.pitch;
     return { score: bounded, product, fit_reason, pitch };
   });
+}
+
+/**
+ * The pitch is pasted after a greeting ("Namaste {{name}} ji, {{pitch}}"), so one that opens
+ * with its own "Namaste!" or "Sir," greeted twice (29 Sep preview). Strip a leading greeting
+ * or address, however many, and capitalise what is left.
+ */
+export function cleanPitch(p: string | null | undefined): string {
+  let s = (p ?? "").trim();
+  const lead = /^(namaste|namaskar|hello|hi|hey|dear|greetings|good (morning|afternoon|evening)|sir|ma'?am|sir\/ma'?am)\b[\s!,.:\-–—]*(ji\b[\s!,.:\-–—]*)?/i;
+  for (let i = 0; i < 3 && lead.test(s); i++) s = s.replace(lead, "").trim();
+  return s ? s[0].toUpperCase() + s.slice(1) : "";
 }
 
 /** Lead note written on approval — everything the salesperson needs on the card. */
@@ -205,4 +235,72 @@ export function leadNotes(c: { fit_reason: string | null; pitch: string | null; 
     c.pitch ? `Pitch: ${c.pitch}` : "",
     c.source_url ? `Source: ${c.source_url}` : "",
   ].filter(Boolean).join("\n");
+}
+
+/**
+ * The first follow-up an approved candidate gets (29 Sep 2026): approving without a task
+ * meant the lead sat in the pipeline until someone remembered it. Call if there is a phone,
+ * else email. Due in business hours, IST, Mon–Sat 10:00–18:00:
+ *   before 10:00 on a working day → 11:00 that day
+ *   10:00–17:00                   → one hour from now
+ *   after 17:00, or Sunday         → 11:00 the next working day
+ */
+export function firstTouchTask(
+  c: { company: string; pitch: string | null; fit_reason: string | null; domain: string },
+  contact: { email: string | null; phone: string | null; person?: { name: string; role: string | null; from: "page" | "email" | "search" } | null } | null,
+  now: Date = new Date(),
+): { kind: "call" | "email"; title: string; notes: string; dueAt: Date } {
+  const kind = contact?.phone ? "call" : "email";
+  const title = kind === "call" ? `Call karo: ${c.company}` : `Email bhejo: ${c.company}`;
+  const who = contact?.person;
+  const notes = [
+    who ? `Kisse baat karni hai: ${who.name}${who.role ? ` (${who.role})` : ""}${who.from === "email" ? " — naam email se andaza hai" : who.from === "search" ? " — public record se, call par confirm karo" : ""}` : kind === "call" ? ASK_FOR_OWNER : "",
+    contact?.phone ? `Phone: ${contact.phone}` : "",
+    contact?.email ? `Email: ${contact.email}` : "",
+    `Website: https://${c.domain}`,
+    c.fit_reason ? `Kyun: ${c.fit_reason}` : "",
+    cleanPitch(c.pitch) ? `Kya bolna hai: ${cleanPitch(c.pitch)}` : "",
+  ].filter(Boolean).join("\n");
+  return { kind, title, notes, dueAt: firstTouchDue(now) };
+}
+
+const IST_MS = 330 * 60_000;
+export function firstTouchDue(now: Date): Date {
+  const ist = new Date(now.getTime() + IST_MS);                   // wall clock in IST, read via UTC getters
+  const at = (dayOffset: number, h: number, m = 0) => {
+    const d = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() + dayOffset, h, m));
+    return new Date(d.getTime() - IST_MS);
+  };
+  const working = (off: number) => new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() + off)).getUTCDay() !== 0;
+  const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  if (working(0) && mins < 10 * 60) return at(0, 11);
+  if (working(0) && mins < 17 * 60) return new Date(now.getTime() + 60 * 60_000);
+  let off = 1;
+  while (!working(off)) off++;
+  return at(off, 11);
+}
+
+/**
+ * Order companies so that taking the first N gives a spread: round-robin over industry, and
+ * within an industry over city. The model is asked for a spread; this makes sure a lopsided
+ * answer still fills the day's limit with a mix. Unknown industry/city form their own group.
+ */
+export function spreadByIndustryCity<T extends { industry?: string | null; city?: string | null }>(items: T[]): T[] {
+  const key = (s: string | null | undefined) => (s ?? "").trim().toLowerCase() || "?";
+  const byInd = new Map<string, Map<string, T[]>>();
+  for (const it of items) {
+    const ind = byInd.get(key(it.industry)) ?? new Map<string, T[]>();
+    const list = ind.get(key(it.city)) ?? [];
+    list.push(it); ind.set(key(it.city), list); byInd.set(key(it.industry), ind);
+  }
+  // each industry's own queue, cities interleaved
+  const queues = [...byInd.values()].map((cities) => {
+    const lists = [...cities.values()];
+    const out: T[] = [];
+    for (let i = 0; lists.some((l) => i < l.length); i++) for (const l of lists) if (i < l.length) out.push(l[i]);
+    return out;
+  });
+  const out: T[] = [];
+  for (let i = 0; queues.some((q) => i < q.length); i++) for (const q of queues) if (i < q.length) out.push(q[i]);
+  return out;
 }

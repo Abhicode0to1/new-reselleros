@@ -125,6 +125,15 @@
         "production/src/lib/workspace/",
         "production/src/app/(app)/online-orders/"
       ]
+    },
+    "hitesh": {
+      "name": "Hitesh",
+      "branch": "hitesh-qa",
+      "covers": "Software testing (QA): user flows check karna, bug report aur review dena. App code nahi badalta; bug mile to area owner ke naam R-nnn request.",
+      "paths": [
+        "production/e2e/",
+        "docs/qa/"
+      ]
     }
   },
   "shared": {
