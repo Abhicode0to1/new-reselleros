@@ -28,6 +28,7 @@ import { Icon } from "@/components/ui/icon";
 import { GST_STATE_BY_CODE } from "@/lib/utils";
 import type { SitePromoRow, SitePromoBannerStyle } from "@/lib/supabase/database.types";
 import { thanksUrl } from "./thanks/thanks-url";
+import { COMPANY, WHATSAPP_NUMBER, WHATSAPP_READY, whatsappDisplay } from "@/site/lib/config";
 
 // ──────────────────────────────────────────────────────────────────────
 // Site promo — fetched from /api/public/site-promo/current. Updates as
@@ -134,15 +135,18 @@ function SitePromoBanner({ promo }: { promo: SitePromoRow }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Pardeep / ANUTECH contact constants — used everywhere we link to
-// WhatsApp or phone. Single source of truth.
+// Contact — from the site config, one place for the whole site (owner,
+// 29 Sep 2026). This page used to carry Pardeep's personal number. While
+// the site's WhatsApp number is still the placeholder, WHATSAPP_READY is
+// false and the WhatsApp / call buttons are hidden: the "Email me a GST
+// quote" form and the support email remain, and a dead button on the
+// page's main action would lose the enquiry. The founder card itself
+// (name, photo, signed promise) is content and is left as it was.
 // ──────────────────────────────────────────────────────────────────────
-const PARDEEP_PHONE         = "9999930300";              // raw, for tel: + wa.me
-const PARDEEP_PHONE_E164    = "919999930300";            // country code + number
-const PARDEEP_PHONE_DISPLAY = "+91 99999 30300";         // shown to humans
+const phoneDisplay = () => whatsappDisplay(WHATSAPP_NUMBER);
 
 function whatsappLink(message: string): string {
-  return `https://wa.me/${PARDEEP_PHONE_E164}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -698,7 +702,7 @@ function PremierBadgeShowcase() {
  *   │   — Pardeep                      │
  *   ├────────────────────────────────┤
  *   │  [▓▓▓▓ WhatsApp +91… ▓▓▓▓]    │
- *   │  or call +91 99999 30300         │
+ *   │  or call (site-config number)     │
  *   └────────────────────────────────┘
  */
 function FounderHero({ waMessage }: { waMessage: string }) {
@@ -749,30 +753,42 @@ function FounderHero({ waMessage }: { waMessage: string }) {
           You&apos;ll have my WhatsApp from day one.&rdquo;
         </blockquote>
 
-        {/* Dominant WhatsApp button — the page's primary action */}
-        <a
-          href={whatsappLink(waMessage)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl font-medium text-paper text-base transition-transform hover:scale-[1.02] mb-2.5"
-          style={{ background: "#25D366", boxShadow: "0 10px 24px rgba(37,211,102,0.30)" }}
-        >
-          <Icon name="whatsapp" size={20} className="text-paper" />
-          WhatsApp {PARDEEP_PHONE_DISPLAY}
-        </a>
+        {WHATSAPP_READY ? (
+          <>
+            {/* Dominant WhatsApp button — the page's primary action */}
+            <a
+              href={whatsappLink(waMessage)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl font-medium text-paper text-base transition-transform hover:scale-[1.02] mb-2.5"
+              style={{ background: "#25D366", boxShadow: "0 10px 24px rgba(37,211,102,0.30)" }}
+            >
+              <Icon name="whatsapp" size={20} className="text-paper" />
+              WhatsApp {phoneDisplay()}
+            </a>
 
-        {/* Tap-to-call fallback */}
-        <a
-          href={`tel:+${PARDEEP_PHONE_E164}`}
-          className="flex items-center justify-center gap-2 w-full py-2 text-sm text-ink-3 hover:text-ink transition-colors"
-        >
-          <Icon name="phone" size={14} />
-          or call {PARDEEP_PHONE_DISPLAY}
-        </a>
+            {/* Tap-to-call fallback */}
+            <a
+              href={`tel:+${WHATSAPP_NUMBER}`}
+              className="flex items-center justify-center gap-2 w-full py-2 text-sm text-ink-3 hover:text-ink transition-colors"
+            >
+              <Icon name="phone" size={14} />
+              or call {phoneDisplay()}
+            </a>
+          </>
+        ) : (
+          <a
+            href={`mailto:${COMPANY.supportEmail}?subject=${encodeURIComponent("Google Workspace quote")}&body=${encodeURIComponent(waMessage)}`}
+            className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl font-medium text-paper text-base bg-ink mb-2.5"
+          >
+            <Icon name="mail" size={20} className="text-paper" />
+            Email {COMPANY.supportEmail}
+          </a>
+        )}
 
         {/* Support hours micro-line */}
         <div className="text-2xs text-ink-3 text-center mt-3 pt-3 border-t border-hairline">
-          Live phone support · 9am–9pm IST · Mon–Sat · Hindi + English
+          {WHATSAPP_READY ? "Phone support" : "Email support"} · {COMPANY.hours} · Hindi + English
         </div>
       </div>
     </div>
@@ -1262,8 +1278,8 @@ export function BuyWorkspaceClient({
   const heroFinalTotal      = heroPostPromoSubtot + heroFinalGst;
 
   const waMessage = calc.isCustom
-    ? `Hi Pardeep, I'm interested in Google Workspace Enterprise for ${seats} user${seats === 1 ? "" : "s"}. Can you send a custom quote?`
-    : `Hi Pardeep, I'm interested in Google Workspace ${selectedTierObj.name} for ${seats} user${seats === 1 ? "" : "s"}. Can you send a GST quote?`;
+    ? `Hi, I'm interested in Google Workspace Enterprise for ${seats} user${seats === 1 ? "" : "s"}. Can you send a custom quote?`
+    : `Hi, I'm interested in Google Workspace ${selectedTierObj.name} for ${seats} user${seats === 1 ? "" : "s"}. Can you send a GST quote?`;
 
   return (
     <div className="min-h-screen bg-paper">
@@ -1530,16 +1546,18 @@ export function BuyWorkspaceClient({
             {/* Dual CTA — WhatsApp first (primary, Indian SMEs' fastest path),
                 form second. Both pre-fill the seat count so no information is lost. */}
             <div className="flex flex-col sm:flex-row gap-3 mb-3">
-              <a
-                href={whatsappLink(waMessage)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium text-paper transition-transform hover:scale-[1.02] text-base"
-                style={{ background: "#25D366", boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
-              >
-                <Icon name="whatsapp" size={20} className="text-paper" />
-                WhatsApp Pardeep — quote in 10 min
-              </a>
+              {WHATSAPP_READY && (
+                <a
+                  href={whatsappLink(waMessage)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium text-paper transition-transform hover:scale-[1.02] text-base"
+                  style={{ background: "#25D366", boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
+                >
+                  <Icon name="whatsapp" size={20} className="text-paper" />
+                  WhatsApp us — quote in 10 min
+                </a>
+              )}
               <Button
                 variant="default"
                 size="lg"
@@ -1919,17 +1937,19 @@ export function BuyWorkspaceClient({
       {/* ── Sticky WhatsApp chip — always accessible "talk to a human" path.
             Uses the same calculator seat count in its message so the chip is
             never out-of-sync with what the visitor is looking at. ── */}
-      <a
-        href={whatsappLink(waMessage)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg text-paper font-medium text-sm transition-transform hover:scale-105"
-        style={{ background: "#25D366" }}
-        aria-label="Chat with Pardeep on WhatsApp"
-      >
-        <Icon name="whatsapp" size={18} className="text-paper" />
-        <span className="hidden sm:inline">Chat with Pardeep</span>
-      </a>
+      {WHATSAPP_READY && (
+        <a
+          href={whatsappLink(waMessage)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg text-paper font-medium text-sm transition-transform hover:scale-105"
+          style={{ background: "#25D366" }}
+          aria-label="Chat with us on WhatsApp"
+        >
+          <Icon name="whatsapp" size={18} className="text-paper" />
+          <span className="hidden sm:inline">Chat with us</span>
+        </a>
+      )}
 
       {/* ── Enquiry dialog ──
           Bound to the hero calculator: `seats` flows from the same state
@@ -3348,7 +3368,6 @@ function BuyNowDialog({
 // evolution is visible. The `void` reads below satisfy TS6133
 // (noUnusedLocals) without affecting runtime.
 // ──────────────────────────────────────────────────────────────────────
-void PARDEEP_PHONE;
 void COMPARE_CATEGORIES;
 void WORKSPACE_APPS;
 void HeroVisual;
