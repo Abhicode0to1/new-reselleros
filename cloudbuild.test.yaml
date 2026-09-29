@@ -72,9 +72,24 @@ steps:
       - --build-arg=NEXT_PUBLIC_APP_ENV=$_APP_ENV
       - .
 
+  # 1b. PUSH, and it is not optional — 29 Sep 2026, build 242c3243.
+  #
+  #     The `images:` block at the bottom pushes these tags, but Cloud Build does that
+  #     AFTER every step has finished. So the deploy step below ran while the image
+  #     existed only on the build worker's local docker, and died with
+  #     "Image ...:89493fd not found" — after a gate and a build that had both PASSED.
+  #     That reads as a broken build and is a missing push.
+  #
+  #     `cloudbuild.yaml` (production) has always had this step. This file was written
+  #     from it and dropped the one step whose absence nothing catches until deploy.
+  - id: push
+    waitFor: [build]
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, $_IMAGE]
+
   # 2. Deploy, pinned to the commit's own tag rather than :latest.
   - id: deploy
-    waitFor: [build]
+    waitFor: [push]
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
