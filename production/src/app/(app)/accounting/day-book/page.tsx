@@ -2,8 +2,8 @@
  * Day Book — tareekh-war har voucher (Tally ka "Day Book").
  *
  * Data `report_day_book` (migration 20260928120000) se: Sales, Receipt, Refund, Credit /
- * Debit Note, Purchase, Payment. Salary alag nahi dikhti kyunki har salary pehle se ek
- * expense (Purchase) row hai; bank statement ki lines voucher nahi hain. Ek baar me max
+ * Debit Note, Purchase, Payment, Journal. Salary ka kharcha Journal voucher hai (Tally jaisa,
+ * migration 20260929185929), uska bhugtan Payment; bank statement ki lines voucher nahi hain. Ek baar me max
  * 366 din — default is mahina.
  */
 "use client";
@@ -27,7 +27,7 @@ import {
 
 const TONE: Record<DayBookVoucher, "success" | "info" | "warning" | "danger" | "muted"> = {
   Sales: "success", Receipt: "info", Refund: "warning", "Credit Note": "warning",
-  "Debit Note": "muted", Purchase: "danger", Payment: "muted",
+  "Debit Note": "muted", Purchase: "danger", Payment: "muted", Journal: "info",
 };
 
 export default function DayBookPage() {
@@ -59,7 +59,7 @@ export default function DayBookPage() {
           <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Day Book</h1>
           <p className="text-sm text-ink-3 mt-1 max-w-2xl">
             Every voucher, date by date — invoices, receipts, refunds, notes, bills and payments.
-            Salaries appear as their expense entry, once.
+            Salary ka kharcha Journal voucher hai (Tally jaisa), aur uska bhugtan Payment.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
