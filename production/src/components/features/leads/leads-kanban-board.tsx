@@ -11,13 +11,14 @@ import { LeadCard } from "@/components/features/leads/lead-card";
 import { Icon } from "@/components/ui/icon";
 import { rupee, cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
 import type { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { DEAL_STAGES, LEAD_STAGES } from "@/lib/leads/stage-meta";
 
 export interface LeadsKanbanBoardProps {
-  boardLeads: Lead[];
+  boardLeads: LeadListRow[];
   changeStage: ReturnType<typeof useChangeLeadStage>["changeStage"];
-  setSelected: (l: Lead) => void;
+  setSelected: (l: LeadListRow) => void;
   setAddOpen: (open: boolean) => void;
 }
 

@@ -7,8 +7,8 @@
  */
 import { describe, it, expect } from "vitest";
 import type { Lead } from "@/lib/supabase/database.types";
-import { inWorkspace, isOpenLead, searchLeads } from "./list-selectors";
-import { matchesListLeadsFilters, toListLeadsFilters, type LeadListFilters } from "./list-page";
+import { inWorkspace, isOpenLead, searchLeads, UNASSIGNED } from "./list-selectors";
+import { matchesListLeadsFilters, toLeadCountsFilters, toListLeadsFilters, type LeadListFilters } from "./list-page";
 
 let n = 0;
 const mk = (over: Partial<Lead>): Lead => {
@@ -99,5 +99,34 @@ describe("parity with the page's other cuts", () => {
     expect(ids(server)).toEqual(ids(rows.filter((l) => l.is_junk)));
     expect(ids(pageJunkView)).toContain(suspectNotJunk.id);
     expect(ids(server)).not.toContain(suspectNotJunk.id);
+  });
+});
+
+/* ── S40: the keys that let the whole page read the server ─────────────────── */
+
+describe("S40 filter keys", () => {
+  it("toListLeadsFilters keeps the new keys only when they narrow something", () => {
+    expect(toListLeadsFilters({ owners: [], folder: "all", sort: "created" })).toEqual({});
+    expect(toListLeadsFilters({ owners: ["u2", UNASSIGNED], smart_view: "hot", folder: "quoted", sort: "wait" }))
+      .toEqual({ owners: [UNASSIGNED, "u2"].sort(), smart_view: "hot", folder: "quoted", sort: "wait" });
+  });
+
+  it("the counts get the list's filters minus the paging-only keys (one count per list state)", () => {
+    const f = toLeadCountsFilters({ search: "acme", smart_view: "all", sort: "wait", dup_of: "L1", dup_like: { company: "x" } });
+    expect(f).toEqual({ search: "acme", smart_view: "all" });
+    /* Changing only the ORDER must not refetch the counts. */
+    expect(JSON.stringify(toLeadCountsFilters({ search: "acme", sort: "wait" })))
+      .toBe(JSON.stringify(toLeadCountsFilters({ search: "acme", sort: "created" })));
+  });
+
+  it("owners (\"Kiska\") ↔ searchLeads' ownerFilter, UNASSIGNED included", () => {
+    for (const owners of [["u1"], ["u2"], [UNASSIGNED], ["u2", UNASSIGNED], []]) {
+      const page = searchLeads(ROWS, {
+        search: "", stageFilter: [], priorityFilter: [], ownerFilter: owners, smartView: "everything",
+        currentUser: null, dupFlagged: new Set(), now: NOW,
+      });
+      const server = ROWS.filter((l) => matchesListLeadsFilters(l, toListLeadsFilters({ owners })));
+      expect(ids(server)).toEqual(ids(page));
+    }
   });
 });

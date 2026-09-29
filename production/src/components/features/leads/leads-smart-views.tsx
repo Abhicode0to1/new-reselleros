@@ -23,8 +23,12 @@
  *   All leads (default) · All open · Mine · Today (arrived today) · Overdue · Hot · New
  *   Duplicates and Junk appear only when they have something in them.
  *
+ * S40: the counts come in from lead_counts().views — the server counts the open leads of
+ * the workspace with the same rules this file used to run over the whole lead list in the
+ * browser (which, past PostgREST's 1000-row cap, was counting only the newest 1000).
+ *
  * @example
- *   <LeadsSmartViews leads={leads} currentUserId={me.userId} active={view} onChange={setView} />
+ *   <LeadsSmartViews counts={counts.views} currentUserId={me.userId} active={view} onChange={setView} />
  */
 "use client";
 
@@ -40,16 +44,14 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { isHotLead } from "@/lib/leads/heat";
-import { localDateISO } from "@/lib/leads/outcomes";
-import { staleDeals, STAGE_SLA_DAYS } from "@/lib/leads/velocity";
-import type { Lead } from "@/lib/supabase/database.types";
-import { istToday } from "@/lib/dates/ist";
+import { STAGE_SLA_DAYS } from "@/lib/leads/velocity";
+import type { LeadCounts } from "@/lib/leads/list-page";
 
 export type SmartView = "everything" | "all" | "mine" | "waiting" | "today" | "overdue" | "hot" | "new" | "closing" | "stalled" | "won-mtd" | "duplicates" | "junk";
 
 interface LeadsSmartViewsProps {
-  leads: Lead[];
+  /** Counts over the workspace's OPEN leads (lead_counts().views). */
+  counts: LeadCounts["views"];
   /** Current user's UUID — used to compute "Mine" count. */
   currentUserId?: string;
   /** Count of leads flagged as likely duplicates (computed on the page). The
@@ -97,48 +99,31 @@ interface ViewDef {
 }
 
 export function LeadsSmartViews({
-  leads, currentUserId, everythingCount, duplicateCount = 0, junkCount = 0, junkSuspectCount = 0, active, onChange,
+  counts, currentUserId, everythingCount, duplicateCount = 0, junkCount = 0, junkSuspectCount = 0, active, onChange,
   folders = [], activeFolder = "all", onFolder,
 }: LeadsSmartViewsProps) {
-  const today = istToday();
-
-  // ── Counts ────────────────────────────────────────────────────────────────
-  // Working views never count junk — it lives only under the Junk view.
-  const working  = leads.filter((l) => !l.is_junk);
-  const all      = working.length;
-  const mine     = currentUserId ? working.filter((l) => l.owner_id === currentUserId).length : 0;
-  // Leads that ARRIVED today (created today) — matches the operator's mental
-  // model of "what came in today?". Follow-up due belongs to Overdue.
-  /* Leads the AI sales agent stopped on and asked for a person. Counted from the flag the
-     agent itself sets, so this number IS the queue — not a heuristic about it.
-
-     Until 24 Aug 2026 nothing read that flag: the agent handed a lead over, wrote the
-     reason, and the only way to find it was to open that one lead. A handover nobody can
-     see is a handover that did not happen. */
-  const waiting  = working.filter((l) => l.requires_human_attention === true).length;
-  const todayDue = working.filter((l) => l.created_at?.slice(0, 10) === today).length;
-  // Overdue = follow-up date in the past, still open. The most actionable bucket
-  // for a rep, which is why it also shows on the trigger.
-  const overdue  = working.filter((l) => l.follow_up_date && l.follow_up_date < today && l.stage !== "won" && l.stage !== "lost").length;
-  // "Hot" = priority high OR late-funnel stage — same isHotLead the row tags
-  // use, so the count always matches the number of Hot-tagged rows.
-  const hot      = working.filter(isHotLead).length;
-  const newCt    = working.filter((l) => l.stage === "new").length;
-  /* Month end via localDateISO, not a local copy of the same formatting. toISOString()
-     before 05:30 IST returns the previous day, which at a month boundary silently drops
-     a whole month of deals — and a second implementation is a second place for that bug
-     to come back. */
-  const monthEnd = (() => {
-    const d = new Date();
-    return localDateISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-  })();
-  /* Stalled = open and sitting in the same stage past the SLA. Deals with no recorded
-     stage-change date are NOT counted — the code cannot claim they are stale without
-     knowing when they last moved, and updated_at will not do (it bumps on any edit). */
-  const stalledCt = staleDeals(working).length;
-  const closingCt = working.filter((l) =>
-    l.expected_close_date && l.expected_close_date <= monthEnd &&
-    l.stage !== "won" && l.stage !== "lost").length;
+  // ── Counts (server — lead_counts().views, S40) ────────────────────────────
+  // Working views never count junk — it lives only under the Junk view. The rules each
+  // count uses are the list's own (list-selectors.ts#searchLeads), run in SQL:
+  //   • Today = ARRIVED today (the IST date it was created); follow-up due is Overdue's.
+  //   • Waiting = the AI sales agent stopped and asked for a person — the flag the agent
+  //     itself sets, so this number IS the queue. (Until 24 Aug 2026 nothing read that
+  //     flag; a handover nobody can see is a handover that did not happen.)
+  //   • Overdue = follow-up date in the past, still open — the most actionable bucket,
+  //     which is why it also shows on the trigger.
+  //   • Hot = priority high OR late-funnel stage (heat.ts#isHotLead), as the row tags.
+  //   • Stalled = open and in the same stage past the SLA; deals with no recorded
+  //     stage-change date are NOT counted (updated_at bumps on any edit).
+  //   • Closing = expected close on or before the IST month end; undated deals excluded.
+  const all       = counts.all;
+  const mine      = currentUserId ? counts.mine : 0;
+  const waiting   = counts.waiting;
+  const todayDue  = counts.today;
+  const overdue   = counts.overdue;
+  const hot       = counts.hot;
+  const newCt     = counts.new;
+  const stalledCt = counts.stalled;
+  const closingCt = counts.closing;
 
   const views: ViewDef[] = [
     /* Labelled "All open", not "All", and the hint says what is missing.

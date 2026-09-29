@@ -25,6 +25,7 @@ import { SwipeLeadCard } from "@/components/features/leads/swipe-lead-card";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow as LeadRowData } from "@/lib/leads/list-page";
 import { STAGE_LABEL } from "@/lib/leads/stage-meta";
 import { openTaskIndex, sortLeads, type SortCol } from "@/lib/leads/list-selectors";
 import {
@@ -37,8 +38,46 @@ import { LeadListFooter } from "@/components/features/leads/lead-list-footer";
 
 export type { SortCol };
 
+/** The list is paged (S40): how many rows the view holds, and how to load the next page. */
+export interface LeadListPaging {
+  /** Rows the whole view holds — lead_counts().list.matching. */
+  total: number;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}
+
+/* "Showing 50 of 1,240 · Load 50 more". The count is the server's, so the rep knows how
+   much of the view is on screen — a paged list that does not say so reads as the whole
+   list, which is the same mistake as a chip counting a window. When the rows were sorted
+   in the browser (any column but Wait / Created), it also says the sort covers only the
+   rows loaded so far. */
+function LeadListPager({ paging, shown, sortedLocally }: { paging: LeadListPaging; shown: number; sortedLocally: boolean }) {
+  if (!paging.hasMore && shown >= paging.total) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-3 py-2 text-xs text-ink-3">
+      <span className="tabular-nums">
+        Showing {shown.toLocaleString("en-IN")} of {paging.total.toLocaleString("en-IN")}
+        {sortedLocally && paging.hasMore ? " · this sort covers only the loaded rows" : ""}
+      </span>
+      {paging.hasMore && (
+        <button
+          type="button"
+          onClick={paging.onLoadMore}
+          disabled={paging.loadingMore}
+          className="rounded border border-hairline px-2 py-0.5 font-semibold text-ink-2 hover:bg-paper-2 disabled:opacity-60"
+        >
+          {paging.loadingMore ? "Loading…" : "Load 50 more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function LeadListView({
   leads,
+  serverSorted = false,
+  paging,
   sortBy,
   sortDir,
   onSort,
@@ -49,15 +88,19 @@ export function LeadListView({
   onMerge,
   dupIds,
 }: {
-  leads: Lead[];
+  leads: LeadRowData[];
+  /** The rows already arrive in the chosen order (the server's wait / created order) —
+   *  re-sorting them in the browser could only disagree with the next page. */
+  serverSorted?: boolean;
+  paging?: LeadListPaging;
   sortBy: SortCol;
   sortDir: "asc" | "desc";
   onSort: (col: SortCol) => void;
-  onRowClick: (l: Lead) => void;
-  onSendQuote: (l: Lead) => void;
-  onFollowUp: (l: Lead) => void;
-  onWhatsApp?: (l: Lead) => void;
-  onMerge: (l: Lead) => void;
+  onRowClick: (l: LeadRowData) => void;
+  onSendQuote: (l: LeadRowData) => void;
+  onFollowUp: (l: LeadRowData) => void;
+  onWhatsApp?: (l: LeadRowData) => void;
+  onMerge: (l: LeadRowData) => void;
   dupIds: Set<string>;
 }) {
   /* Har lead ki quote — PLAN cell ka pill isi se banta hai. Ek map, ek query. */
@@ -172,12 +215,12 @@ export function LeadListView({
   /* The sort itself is lib/leads/list-selectors.ts#sortLeads (tested). The dependency
      list is the one this memo always had. */
   const sorted = React.useMemo(
-    () => sortLeads(leads, sortBy, sortDir, {
+    () => serverSorted ? leads : sortLeads(leads, sortBy, sortDir, {
       firstReplies,
       now: nowForWait,
       ownerName: (id) => ownerById.get(id)?.full_name,
     }),
-    [leads, sortBy, sortDir, firstReplies, nowForWait],
+    [leads, serverSorted, sortBy, sortDir, firstReplies, nowForWait],
   );
 
 
@@ -281,6 +324,9 @@ export function LeadListView({
       })}
       {sorted.length === 0 && (
         <li className="py-8 text-center text-sm text-ink-3">No leads match.</li>
+      )}
+      {paging && (
+        <li><LeadListPager paging={paging} shown={sorted.length} sortedLocally={!serverSorted} /></li>
       )}
     </ul>
     {/* ─── End of mobile list — old inline card markup retired ─── */}
@@ -444,6 +490,7 @@ export function LeadListView({
       {sorted.length === 0 && (
         <div className="p-8 text-center text-sm text-ink-3 italic">No leads match.</div>
       )}
+      {paging && <LeadListPager paging={paging} shown={sorted.length} sortedLocally={!serverSorted} />}
       <LeadListFooter
         density={density}
         setDensity={setDensity}

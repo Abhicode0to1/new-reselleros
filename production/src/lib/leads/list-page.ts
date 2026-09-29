@@ -1,26 +1,26 @@
 /**
- * The client half of `list_leads()` (migration 20260928200000, S37) — pure, tested.
+ * The client half of `list_leads()` and `lead_counts()` — pure, tested.
  *
- * ─── WHAT THIS IS FOR, AND WHAT IT IS NOT YET WIRED TO ───────────────────────
- * `list_leads(p_cursor, p_limit, p_filters)` returns ONE keyset page of slim lead rows
- * (created_at desc, id desc) plus the cursor for the next page. `useLeadsInfinite()` in
- * lib/queries/leads.ts pages it with useInfiniteQuery.
+ * S37 (migration 20260928200000) gave list_leads() keyset pages of slim rows. S40
+ * (migration 20260929130000) taught it the rest of the page's filters — the owner ("Kiska")
+ * filter, the View menu, the folder cut, the "wait" order, a merge cluster — and added
+ * lead_counts(), which returns every number the Sales & Pipeline screen shows. The list
+ * view pages through list_leads() and every chip reads lead_counts(), so at 20,000 leads the
+ * page no longer downloads every lead to count them.
  *
- * The Sales & Pipeline screen does NOT read it yet, on purpose: every count on that screen
- * (folder chips, smart views, junk suspects, duplicates, the board, the KPI tiles) and the
- * default "wait" sort are computed over the WHOLE lead set in the browser
- * (list-selectors.ts), and three layout panels (command palette, notifications, quick
- * actions) load that same full set on every page. Swapping only the list to pages would add
- * requests and remove none, and would make the list disagree with its own chips. The
- * filter keys below are the subset of searchLeads() the server can reproduce EXACTLY; the
- * SQL test (supabase/tests/list_rpcs.test.sql) and list-page.test.ts pin that parity so the
- * switch-over can happen view by view without a silent behaviour change.
+ * The filter keys mirror lib/leads/list-selectors.ts#searchLeads / #listCut. Parity is
+ * pinned three ways: list-page.test.ts (this file's TS oracle against the page's own
+ * selectors), supabase/tests/list_rpcs.test.sql (S37's keys) and
+ * supabase/tests/lead_counts.test.sql (every view × folder: count = rows paged out).
  */
 import type { Lead } from "@/lib/supabase/database.types";
+import type { SmartView } from "@/components/features/leads/leads-smart-views";
+import type { SalesFolder } from "@/lib/leads/folders";
+import { UNASSIGNED } from "@/lib/leads/list-selectors";
 
 /**
- * The columns list_leads() returns — must equal the migration's select list (checked by
- * list-rpcs-sql-copy.test.ts). Everything the row, card and counts read; none of the free
+ * The columns list_leads() returns — must equal the LATEST migration's select list (checked
+ * by lead-counts-sql-copy.test.ts). Everything the row, card and counts read; none of the free
  * text that made select("*") heavy.
  */
 export const LEAD_LIST_COLUMNS = [
@@ -29,15 +29,25 @@ export const LEAD_LIST_COLUMNS = [
   "is_junk", "created_at", "updated_at", "follow_up_date", "expected_close_date",
   "stage_changed_at", "enquiry_type", "project_id", "customer_id",
   "requires_human_attention", "pipeline", "subscription_type", "lost_reason",
+  /* S40: the heat score (lib/leads/heat-score.ts) reads the company domain, and the
+     board card shows why the AI handed a lead over. */
+  "domain", "human_attention_reason",
 ] as const satisfies readonly (keyof Lead)[];
 
-export type LeadListRow = Pick<Lead, (typeof LEAD_LIST_COLUMNS)[number]>;
+/**
+ * One list row. `is_duplicate` is computed by list_leads() for the rows of a page (another
+ * workspace lead shares the phone or company key — lib/leads/duplicates.ts); rows read any
+ * other way (the board's slim query) do not carry it.
+ */
+export type LeadListRow = Pick<Lead, (typeof LEAD_LIST_COLUMNS)[number]> & { is_duplicate?: boolean };
 
-/** The keyset cursor, exactly as the server returned it — never rebuilt client-side. */
-export interface LeadListCursor {
-  created_at: string;
-  id: string;
-}
+/**
+ * The keyset cursor, exactly as the server returned it — never rebuilt client-side. Its
+ * shape follows the order in use: created_at for 'created', wait_key for 'wait'.
+ */
+export type LeadListCursor =
+  | { created_at: string; id: string }
+  | { wait_key: string; id: string };
 
 export interface LeadListPage {
   rows: LeadListRow[];
@@ -56,6 +66,18 @@ export interface LeadListFilters {
   owner_id?: string;
   /** Not won, not lost, not junk. */
   open_only?: boolean;
+  /** "Kiska": owner ids any-of; UNASSIGNED keeps leads with no owner. */
+  owners?: string[];
+  /** The View menu. When set, it also decides the junk cut (and `junk` is ignored). */
+  smart_view?: SmartView;
+  /** The folder cut — applied only together with smart_view. */
+  folder?: SalesFolder | "all";
+  /** 'created' (newest first) or 'wait' (lib/leads/waiting.ts#waitPriority). */
+  sort?: "created" | "wait";
+  /** Only the OTHER leads that duplicate this one (the merge dialog's cluster). */
+  dup_of?: string;
+  /** Leads that a lead being TYPED would duplicate (the Add-lead form's warning). */
+  dup_like?: { company?: string; contact_phone?: string; exclude_id?: string };
 }
 
 /**
@@ -74,6 +96,12 @@ export function toListLeadsFilters(input: LeadListFilters): LeadListFilters {
   if (input.owner_ids) out.owner_ids = [...input.owner_ids].sort();
   if (input.owner_id) out.owner_id = input.owner_id;
   if (input.open_only) out.open_only = true;
+  if (input.owners && input.owners.length > 0) out.owners = [...input.owners].sort();
+  if (input.smart_view) out.smart_view = input.smart_view;
+  if (input.folder && input.folder !== "all") out.folder = input.folder;
+  if (input.sort && input.sort !== "created") out.sort = input.sort;
+  if (input.dup_of) out.dup_of = input.dup_of;
+  if (input.dup_like) out.dup_like = input.dup_like;
   return out;
 }
 
@@ -100,5 +128,51 @@ export function matchesListLeadsFilters(l: LeadListRow, f: LeadListFilters): boo
   if (f.owner_ids && l.owner_id && !f.owner_ids.includes(l.owner_id)) return false;
   if (f.owner_id && l.owner_id !== f.owner_id) return false;
   if (f.open_only && (l.stage === "won" || l.stage === "lost" || l.is_junk)) return false;
+  if (f.owners && f.owners.length > 0
+      && !(l.owner_id ? f.owners.includes(l.owner_id) : f.owners.includes(UNASSIGNED))) return false;
   return true;
+}
+
+// ── lead_counts() ───────────────────────────────────────────────────────────
+
+/** Folder / flag ids, as lead_counts().folders keys them — the same ids as folders.ts. */
+export type LeadFolderCounts = Record<SalesFolder, number>;
+
+/**
+ * What lead_counts(p_filters) returns (migration 20260929130000). Each section is counted
+ * over the base the page used for it — see the function's header for which is which.
+ */
+export interface LeadCounts {
+  /** The IST date every date rule used. */
+  today: string;
+  /** Every lead the caller can see, no filter: team-toggle note, Kiska counts, KPI tiles. */
+  pool: { total: number; unassigned: number; high_priority: number; by_owner: Record<string, number> };
+  /** The team cut only: "All leads", the Junk entry. */
+  workspace: { junk: number; everything: number; suspects: number };
+  /** Open leads in the workspace: the View menu. */
+  views: {
+    all: number; mine: number; waiting: number; today: number; overdue: number; hot: number;
+    new: number; stalled: number; closing: number; duplicates: number;
+  };
+  /** Every filter + the view: the folder rows. */
+  folders: LeadFolderCounts;
+  /** The list itself (filters + view + folder). */
+  list: {
+    matching: number;
+    /** Quote / trial rows in the list — the hot-lead card. */
+    hot: number;
+    /** The highest-value one of those. */
+    hot_top: Pick<Lead, "id" | "company" | "contact_name" | "contact_email" | "contact_phone" | "plan" | "value" | "stage"> | null;
+  };
+  /** Non-junk workspace: "Show the numbers". */
+  kpi: { open_count: number; open_value: number; open_value_project: number; won: number; lost: number };
+}
+
+/** lead_counts() takes the list's filters minus the paging-only keys. */
+export function toLeadCountsFilters(input: LeadListFilters): LeadListFilters {
+  const f = toListLeadsFilters(input);
+  delete f.sort;
+  delete f.dup_of;
+  delete f.dup_like;
+  return f;
 }

@@ -13,6 +13,7 @@
  */
 import type { Lead } from "@/lib/supabase/database.types";
 import type { SmartView } from "@/components/features/leads/leads-smart-views";
+import type { LeadListRow } from "@/lib/leads/list-page";
 import { looksLikeJunk } from "@/lib/leads/junk";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { isHotLead } from "@/lib/leads/heat";
@@ -52,7 +53,9 @@ export interface JunkCounts {
   suspects: number;
 }
 
-export function junkCounts(workspaceLeads: readonly Lead[]): JunkCounts {
+/* S40: the selectors take any row that carries the list columns (LeadListRow) — a full
+   Lead does, and so does the Kanban board's slim row — and hand back the same type. */
+export function junkCounts(workspaceLeads: readonly LeadListRow[]): JunkCounts {
   return {
     junk: workspaceLeads.filter((l) => l.is_junk).length,
     everything: workspaceLeads.filter((l) => !l.is_junk).length,
@@ -85,9 +88,9 @@ export const UNASSIGNED = "__unassigned";
  * Search + filter + smart view — applied BEFORE the folder cut so each view respects them.
  * This is the page's old `searched` memo.
  */
-export function searchLeads(workspaceLeads: readonly Lead[], input: SearchInput): Lead[] {
+export function searchLeads<T extends LeadListRow>(workspaceLeads: readonly T[], input: SearchInput): T[] {
   const { search, stageFilter, priorityFilter, smartView, currentUser, dupFlagged, now } = input;
-  let list: Lead[] = [...workspaceLeads];
+  let list: T[] = [...workspaceLeads];
   // 0. Junk cut — confirmed junk is hidden from EVERY working view. The "Junk"
   //    view is the cleanup workspace: confirmed junk + heuristic SUSPECTS (so
   //    you can review + mark them). Suspects still appear in working views
@@ -135,8 +138,11 @@ export function searchLeads(workspaceLeads: readonly Lead[], input: SearchInput)
          somebody has since won or lost is history. */
       list = list.filter((l) => l.requires_human_attention === true && l.stage !== "won" && l.stage !== "lost");
     } else if (smartView === "today") {
-      // Arrived today (new inbound).
-      list = list.filter((l) => l.created_at?.slice(0, 10) === todayStr);
+      /* Arrived today (new inbound) — by the IST date it arrived. This compared created_at's
+         UTC date prefix, so a lead that came in between 00:00 and 05:30 IST was not "today"
+         until the next day. Fixed with S40, alongside lead_counts() which counts it the same
+         way (supabase/tests/lead_counts.test.sql). */
+      list = list.filter((l) => !!l.created_at && localDateISO(new Date(l.created_at)) === todayStr);
     } else if (smartView === "overdue") {
       // Follow-up overdue + still open — the rep's most actionable bucket.
       list = list.filter((l) => l.follow_up_date && l.follow_up_date < todayStr && l.stage !== "won" && l.stage !== "lost");
@@ -172,9 +178,9 @@ export function searchLeads(workspaceLeads: readonly Lead[], input: SearchInput)
  * What the LIST shows: the folder chips are the filter. The chip counts and the list BOTH
  * call inSalesFolder(), so a chip can never advertise a number the list contradicts.
  */
-export function listCut(
-  searched: readonly Lead[], folder: SalesFolder | "all", smartView: SmartView, todayISO: string,
-): Lead[] {
+export function listCut<T extends LeadListRow>(
+  searched: readonly T[], folder: SalesFolder | "all", smartView: SmartView, todayISO: string,
+): T[] {
   if (smartView === "junk") return [...searched];
   if (folder === "all" && smartView === "everything") return [...searched];
   if (folder === "all") return searched.filter(isOpenLead);
@@ -186,9 +192,9 @@ export function listCut(
  * its base is every non-junk, non-lost lead (open + won), so a deal dragged to Won lands
  * there. Picking a folder hands control back to the list cut, unchanged.
  */
-export function boardCut(
-  searched: readonly Lead[], filtered: readonly Lead[], folder: SalesFolder | "all", smartView: SmartView,
-): Lead[] {
+export function boardCut<T extends LeadListRow>(
+  searched: readonly T[], filtered: readonly T[], folder: SalesFolder | "all", smartView: SmartView,
+): T[] {
   return folder === "all" && smartView !== "junk"
     ? searched.filter((l) => isOpenLead(l) || l.stage === "won")
     : [...filtered];
@@ -238,7 +244,7 @@ export interface SortContext {
  * The list view's sort — strictly by the chosen column. Blank values always sort LAST in
  * both directions (the `cmpText` rule). This is the old `sorted` memo from LeadListView.
  */
-export function sortLeads(leads: readonly Lead[], sortBy: SortCol, sortDir: "asc" | "desc", ctx: SortContext): Lead[] {
+export function sortLeads<T extends LeadListRow>(leads: readonly T[], sortBy: SortCol, sortDir: "asc" | "desc", ctx: SortContext): T[] {
   const { firstReplies, now: nowForWait, ownerName } = ctx;
   const out = [...leads];
   const dir = sortDir === "asc" ? 1 : -1;
