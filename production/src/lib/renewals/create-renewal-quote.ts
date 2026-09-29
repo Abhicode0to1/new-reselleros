@@ -26,6 +26,7 @@ import { grossAmount } from "@/lib/quotes/amounts";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { renewalTerm } from "@/lib/renewals/renewal-term";
 import { renewalCost } from "@/lib/renewals/renewal-cost";
+import { istToday, toIstDate } from "@/lib/dates/ist";
 
 // The actual typed Supabase client. createAdminClient() returns this shape,
 // so the strict rpc/from overloads stay intact when callers pass it in.
@@ -232,8 +233,13 @@ export async function createOrGetRenewalQuote(
     status:         "sent",
     payment_status: "awaiting",
     owner_id:       null,
-    created_date:   new Date().toISOString().slice(0, 10),
-    expires_date:   validUntil.toISOString().slice(0, 10),
+    /* R-012, third item. These were `new Date().toISOString().slice(0, 10)`, which is
+       UTC — so between midnight and 05:30 IST every renewal quote was stamped with
+       YESTERDAY's date, and its validity window with it (AGENTS.md §6). The renewals
+       cron runs at 09:00 IST so it never saw this, but "Generate renewal quote" from
+       the subscription page is pressed by a person, and reps here work early. */
+    created_date:   istToday(),
+    expires_date:   toIstDate(validUntil),
     line_items:     lineItems,
     subtotal:       annualAmount,
     total_cost:     cost.total,

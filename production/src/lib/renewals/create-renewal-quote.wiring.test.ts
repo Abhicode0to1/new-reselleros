@@ -73,3 +73,50 @@ describe("what R-012 said NOT to touch", () => {
     expect(ext).toMatch(/extension_months/);
   });
 });
+
+describe("R-012 follow-ups from Pawan's brief", () => {
+  it("dates come from IST, never from a UTC slice", () => {
+    /* `new Date().toISOString().slice(0, 10)` is UTC, so between midnight and 05:30
+       IST every renewal quote was stamped with YESTERDAY's date (AGENTS.md §6). The
+       cron runs at 09:00 so it never saw this; the operator's "Generate renewal quote"
+       button does, and reps here work early. */
+    expect(code).toContain("created_date:   istToday()");
+    expect(code).toContain("expires_date:   toIstDate(validUntil)");
+    expect(code).not.toContain("toISOString().slice(0, 10)");
+  });
+
+  it("returns an existing quote untouched — no re-pricing, no new cost", () => {
+    /* Path 1 must hand back what is stored. Re-deriving it here would change a quote
+       the customer may already be looking at, and the accept link is live. */
+    /* Anchor on CODE, not on the "Path 2" comment — `code` has comments stripped, so
+       indexOf on a comment returns -1 and the slice silently runs to end of file. It
+       did exactly that on the first run and the test failed for the wrong reason. */
+    const path1 = code.slice(
+      code.indexOf("if (existingQuoteId)"),
+      code.indexOf('next_document_number'),
+    );
+    expect(path1).toContain("created:     false");
+    expect(path1).not.toContain("renewalCost(");
+    expect(path1).not.toContain("extension_months");
+  });
+
+  it("leaves createExtensionQuote's deliberate 24/36 alone", () => {
+    const ext = readFileSync("src/lib/renewals/create-extension-quote.ts", "utf8");
+    expect(ext).toContain("extension_months");
+  });
+});
+
+describe("a zero cost reaches readers that already call it unknown", () => {
+  /* The brief asks which readers a 0 touches. Measured: every margin reader in the
+     Billing screens uses the same `cost <= 0 && rate > 0` rule, so an unpriced renewal
+     shows "unknown" rather than 100% margin. Pinned here because if any of them ever
+     starts trusting `quotes.total_cost` again, this fix quietly becomes a lie. */
+  it.each([
+    ["src/lib/quotes/approval-economics.ts", "approval matrix"],
+    ["src/app/(app)/quotes/page.tsx",        "quotes list"],
+    ["src/lib/quotes/configure.ts",          "quote configurator"],
+    ["src/app/(app)/quotes/[id]/page.tsx",   "quote detail"],
+  ])("%s (%s) treats a zero cost as unknown", (file) => {
+    expect(readFileSync(file, "utf8")).toMatch(/cost <= 0 && l?\w*\.?rate > 0/);
+  });
+});

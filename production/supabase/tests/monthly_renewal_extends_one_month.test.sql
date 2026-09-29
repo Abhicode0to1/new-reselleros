@@ -130,3 +130,72 @@ begin
 end $$;
 
 rollback;
+
+-- ── MONTH-END: what record_payment actually does, recorded not corrected ─────
+--
+-- Pardeep/Pawan asked for this to be FLAGGED, not fixed — `record_payment` and the
+-- migrations are out of scope for R-012. So this block asserts the CURRENT behaviour
+-- on purpose, and its message says what the right answer would be.
+--
+-- Since 11 Sep 2026 `renewal_date` is the LAST COVERED DAY, inclusive. The next term
+-- therefore starts the day after, and its last covered day is `(d + 1) + 1 month - 1 day`.
+-- `record_payment` does `d + 1 month`, which is right mid-month and short at month ends:
+--
+--     30 Nov -> 30 Dec   (should be 31 Dec)   1 day short
+--     28 Feb -> 28 Mar   (should be 31 Mar)   3 days short
+--     30 Apr -> 30 May   (should be 31 May)   1 day short
+--
+-- And it STICKS: a subscription that lands on the 28th stays on the 28th for ever, so a
+-- month-end customer loses 2-3 days of service every month from then on. Measured by
+-- rolling 2026-01-31 forward eight times: 28 Feb, 28 Mar, 28 Apr ... never 31 again.
+--
+-- This block turns red the day somebody fixes it — which is the point. Read the message,
+-- then delete the block.
+begin;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+insert into public.tenants (id, name, email, state_code)
+  values ('dd012000-0000-4000-8000-00000000a003', 'R012 Month End Tenant', 'r012e@test.invalid', '07');
+insert into public.customers (id, tenant_id, name)
+  values ('dd012000-0000-4000-8000-00000000c003', 'dd012000-0000-4000-8000-00000000a003', 'R012 Month End Cust');
+insert into public.document_series (tenant_id, doc_type, fiscal_year, prefix, last_number)
+  values ('dd012000-0000-4000-8000-00000000a003', 'purchase_order', public.indian_fiscal_year(current_date), 'PO', 993000);
+
+insert into public.quotes (id, tenant_id, customer_id, customer_name, amount, status, payment_status, line_items, is_renewal, extension_months)
+  values ('Q-R012-MONTHEND', 'dd012000-0000-4000-8000-00000000a003', 'dd012000-0000-4000-8000-00000000c003',
+          'R012 Month End Cust', 295, 'sent', 'awaiting',
+          '[{"name":"Hosting Starter","qty":1,"rate":250,"cost":0,"commitment":"monthly"}]'::jsonb,
+          true, 1);
+
+-- Term ends 30 Nov 2026. The next month's term should end 31 Dec 2026.
+insert into public.subscriptions (id, tenant_id, customer_id, customer_name, plan, vendor, seats, mrr, status, term_months, renewal_date, renewal_state, renewal_quote_id)
+  values ('dd012000-0000-4000-8000-00000000b003', 'dd012000-0000-4000-8000-00000000a003',
+          'dd012000-0000-4000-8000-00000000c003', 'R012 Month End Cust',
+          'Hosting Starter', 'hosting', 1, 250, 'active', 1,
+          date '2026-11-30', 'reminder_2', 'Q-R012-MONTHEND');
+
+do $$
+declare
+  v_renew   date;
+  v_correct date := ((date '2026-11-30' + 1) + interval '1 month' - interval '1 day')::date;  -- 2026-12-31
+begin
+  perform public.record_payment('Q-R012-MONTHEND', 295, 'razorpay', 'rzp_r012_monthend');
+
+  select renewal_date into v_renew from public.subscriptions
+   where id = 'dd012000-0000-4000-8000-00000000b003';
+
+  if v_renew = v_correct then
+    raise exception
+      'MONTH-END IS NOW CORRECT (% = %). record_payment has been fixed since this was written — delete this block, it exists only to record the old behaviour.',
+      v_renew, v_correct;
+  end if;
+
+  if v_renew <> date '2026-12-30' then
+    raise exception 'FAIL month-end: expected the KNOWN-WRONG 2026-12-30, got % (correct would be %)', v_renew, v_correct;
+  end if;
+
+  raise notice 'FLAGGED (not a failure): a term ending 30 Nov rolled to % ; the last covered day should be %. One day of service short, and a month-end subscription pinned to the 28th after February loses 2-3 days EVERY month. record_payment is out of scope for R-012 — Pardeep/Pawan to decide.',
+    v_renew, v_correct;
+end $$;
+
+rollback;
