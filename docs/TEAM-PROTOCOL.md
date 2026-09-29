@@ -14,7 +14,7 @@ Collections:
 
 | collection | one doc = | key fields |
 |---|---|---|
-| `tasks` | one piece of work, id `R-nnn` (someone asked another area) or `Snn` (roadmap) | `kind` request/roadmap · `owner` pardeep/abhishek/pawan/hitesh/sab · `from` · `priority` p0–p3 · `bucket` · `title` · `why` · `fix` · `where` · `doneWhen` · `status` · `commits[]` · `dependsOn[]` · `outcome` · `statusNote` · `nextStep` · `waitingOn` · `updatedAt` |
+| `tasks` | one piece of work, id `R-nnn` (someone asked another area) or `Snn` (roadmap) | `plain` (one Hinglish line, max 90 chars: what the work achieves, no jargon — the card headline) · `kind` request/roadmap · `owner` pardeep/abhishek/pawan/hitesh/sab · `from` · `priority` p0–p3 · `bucket` · `title` · `why` · `fix` · `where` · `doneWhen` · `status` · `commits[]` · `dependsOn[]` · `outcome` · `statusNote` · `nextStep` · `waitingOn` · `updatedAt` |
 | `changes` | one thing others must know (a migration, a changed RPC signature, a new env var, a data note) | `at` · `owner` (who changed it) · `title` · `body_html` · `affects[]` (owners) · `migrations[]` · `commit` · `acked{}` |
 | `messages` | a chat message | `ch` general/requests/roadmap/deploy/accounting/billing/customer/qa · `text` · `by` · `at` |
 
