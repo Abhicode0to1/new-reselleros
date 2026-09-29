@@ -148,9 +148,14 @@ export async function noteProvisioning(id: string, note: string): Promise<boolea
 export async function markProvisioningActivated(id: string, vendorRef: string): Promise<void> {
   const db = bare();
   if (!db) return;
+  /* activated_at WITH the status. Until 29 Sep 2026 only status, vendor_ref and updated_at
+     were written, so the first real engine activation (e2esife250) showed "activated" with
+     no activation time; the column exists for exactly this, and the immutability trigger
+     (20260921100000) lists it among the fields that may still change. */
+  const now = new Date().toISOString();
   const { error } = await db
     .from("provisioning_requests")
-    .update({ status: "activated", vendor_ref: vendorRef, updated_at: new Date().toISOString() })
+    .update({ status: "activated", vendor_ref: vendorRef, activated_at: now, updated_at: now })
     .eq("id", id);
   if (error) console.error("[provisioning] mark activated failed:", error.message);
 }
