@@ -58,6 +58,11 @@ steps:
       - --tag=$_IMAGE:latest
       - --build-arg=BUILD_SHA=$SHORT_SHA
       - --build-arg=BUILD_ID=$BUILD_ID
+      # Next 15's type-check pass was OOM-killed at the Dockerfile's default 6144 MB
+      # inside an 8 GB machine. A LOWER cap is not a downgrade here: Node collects
+      # earlier and stays inside the container, instead of the container being killed
+      # with no message at all.
+      - --build-arg=NODE_HEAP_MB=4096
       # NEXT_PUBLIC_* is substituted into the CLIENT BUNDLE by `next build`, so these
       # must be build args. Supplying them to the running container instead arrives as
       # undefined in the browser (CLAUDE.md L42/L43 — this cost two rebuilds to learn).
@@ -114,23 +119,13 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  # ─── E2_HIGHCPU_8 WAS NOT ENOUGH. MEMORY, NOT CORES. ────────────────────────
-  # The first run (build ce797692, 29 Sep 2026) died silently inside `next build`, during
-  # "Linting and checking validity of types", after 26 minutes — INTERNAL_ERROR with an
-  # EMPTY failureInfo and no error line in the log. A process killed by the kernel writes
-  # nothing, which is exactly that shape. The same commit builds in 2.6 minutes on a
-  # laptop, so it is not the code.
-  #
-  # The arithmetic: E2_HIGHCPU_8 is 8 vCPU / 8 GB, and production/Dockerfile sets
-  # NODE_OPTIONS=--max-old-space-size=6144 — six of those eight GB reserved for one heap
-  # before webpack's workers ask for theirs.
-  #
-  # The production file warns that 32 cores were tried and gave no SPEED benefit. That is
-  # true, and it is a different axis: this is raised for the 32 GB that comes with the
-  # size, not for the cores. Anyone here chasing build TIME should believe that warning.
-  machineType: E2_HIGHCPU_32
+  # E2_HIGHCPU_32 was tried on 29 Sep 2026 and REFUSED before the build even started:
+  # "due to quota restrictions, Cloud Build cannot run builds of this machine type in
+  # this region". So 8 GB is what there is, and the build is made to fit it instead --
+  # see NODE_HEAP_MB above and the note in production/Dockerfile.
+  machineType: E2_HIGHCPU_8
 
-# 1800s was nearly the second cause. The failed run used 28m35s of a 30m budget, so even
-# a healthy build had about ninety seconds of margin — and a build that times out deploys
-# nothing while looking like a code failure.
+# The first attempt used 28m35s of a 30m budget, so even a healthy build had about ninety
+# seconds of margin. A build that times out deploys nothing while reading like a code
+# failure, which is the worst way to lose an afternoon.
 timeout: 3600s
