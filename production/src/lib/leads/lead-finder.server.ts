@@ -15,7 +15,7 @@ import {
 } from "@/lib/leads/lead-finder";
 import {
   CONTACT_PATHS, contactBonus, extractContacts, nameFromEmail, pageText, parsePersonSearch, personIsGrounded, personPrompt, personSearchPrompt, pickEmail, pickPhone,
-  reachable, readContact, roleSnippets, teamLinks, type ContactResult, type ContactPerson,
+  reachable, readContact, roleSnippets, sourceVerdict, teamLinks, type ContactResult, type ContactPerson,
 } from "@/lib/leads/lead-contacts";
 
 type Admin = SupabaseClient<Database>;
@@ -97,6 +97,15 @@ export async function findContacts(domain: string, website?: string | null): Pro
     if (page) { take(page, url); teamPages++; }
   }
   return { email: pickEmail(emails, domain), phone: pickPhone(phones), emails: emails.slice(0, 5), phones: phones.slice(0, 5), source_url: source, checked_at: new Date().toISOString(), snippets };
+}
+
+/** Open a cited page. `finalUrl` is where it landed — grounding links are Google redirects that expire. */
+async function checkSource(url: string, name: string): Promise<{ verdict: "ok" | "blocked" | "bad"; finalUrl: string }> {
+  try {
+    const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(8000), headers: UA });
+    const body = res.ok ? (await res.text()).slice(0, 400_000) : null;
+    return { verdict: sourceVerdict(res.status, body, name), finalUrl: res.url || url };
+  } catch { return { verdict: sourceVerdict(null, null, name), finalUrl: url }; }
 }
 
 /** SiteScan → what is stored: the snippets stay out of the database. */
@@ -216,8 +225,16 @@ export async function searchPeople(admin: Admin, tenantId: string, opts: { ids?:
     await Promise.all(todo.slice(i, i + 3).map(async (c) => {
       const pp = personSearchPrompt({ company: c.company, domain: c.domain, city: c.city });
       const text = await geminiGroundedText({ apiKey: ai.apiKey!, model: ai.model, system: pp.system, user: pp.user, temperature: 0, timeoutMs: 45_000, label: "leads/finder-person-search" }).catch(() => null);
-      const hit = parsePersonSearch(text, c.company);
-      const contact: ContactResult = { ...readContact(c.signals)!, person_searched: true, ...(hit ? { person: { name: hit.name, role: hit.role, from: "search" as const, source_url: hit.source_url } } : {}) };
+      let hit = parsePersonSearch(text, c.company);
+      // Open the cited page: a made-up link (it happened — a Tracxn 404) takes its name with it.
+      let verified = false;
+      if (hit) {
+        const { verdict, finalUrl } = await checkSource(hit.source_url, hit.name);
+        if (verdict === "bad") hit = null;
+        else hit = { ...hit, source_url: finalUrl.slice(0, 500) };
+        verified = verdict === "ok";
+      }
+      const contact: ContactResult = { ...readContact(c.signals)!, person_searched: true, ...(hit ? { person: { name: hit.name, role: hit.role, from: "search" as const, source_url: hit.source_url, verified } } : {}) };
       if (hit) found++;
       const signals = { ...((c.signals as Record<string, unknown>) ?? {}), contact };
       await admin.from("lead_finder_candidates").update({ signals: signals as never }).eq("id", c.id).eq("tenant_id", tenantId);

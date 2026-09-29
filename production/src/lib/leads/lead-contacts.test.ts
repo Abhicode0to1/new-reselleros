@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanEmail, cleanPhone, contactBonus, extractContacts, nameFromEmail, parsePersonSearch, personIsGrounded, pickEmail, pickPhone, reachable, readContact, roleSnippets, teamLinks, type ContactResult } from "./lead-contacts";
+import { cleanEmail, cleanPhone, contactBonus, extractContacts, nameFromEmail, parsePersonSearch, sourceVerdict, personIsGrounded, pickEmail, pickPhone, reachable, readContact, roleSnippets, teamLinks, type ContactResult } from "./lead-contacts";
 
 describe("cleanPhone — Indian numbers only", () => {
   it.each([
@@ -120,5 +120,14 @@ describe("teamLinks", () => {
       .toEqual(["https://x.in/management-team"]));
   it("skips other sites, PDFs, home and unrelated pages", () => {
     expect(got.join()).not.toMatch(/facebook|pdf|practice|contact/);
+  });
+});
+
+describe("sourceVerdict", () => {
+  it("404 is bad", () => expect(sourceVerdict(404, "", "Manish Mahajan")).toBe("bad"));
+  it("bot-blocked is blocked", () => { expect(sourceVerdict(403, null, "Prakhar Garg")).toBe("blocked"); expect(sourceVerdict(null, null, "X Y")).toBe("blocked"); });
+  it("200 with the surname is ok, without it is bad", () => {
+    expect(sourceVerdict(200, "<h2>Dr. Varun Gaur, Director</h2>", "Dr. Varun Gaur")).toBe("ok");
+    expect(sourceVerdict(200, "<h2>Our clinic</h2>", "Dr. Varun Gaur")).toBe("bad");
   });
 });

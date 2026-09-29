@@ -216,7 +216,7 @@ function CandidateRow({ c, onApprove, onReject, onUndo, onFindContact, onFindPer
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
             {contact?.person && (
               <span className="text-ink font-medium" title={contact.person.from === "email" ? "Naam email address se andaza hai — call par confirm karo" : contact.person.from === "search" ? "Public record (MCA / ICAI / news) se — purana ho sakta hai, call par confirm karo" : "Company ki website par likha hai"}>
-                👤 {contact.person.name}{contact.person.role ? ` · ${contact.person.role}` : ""}{contact.person.from === "email" ? " (email se)" : contact.person.from === "search" ? " (search se)" : ""}
+                👤 {contact.person.name}{contact.person.role ? ` · ${contact.person.role}` : ""}{contact.person.from === "email" ? " (email se)" : contact.person.from === "search" ? (contact.person.verified === false ? " (search se · link check nahi ho paya)" : " (search se)") : ""}
               </span>
             )}
             {contact?.person?.from === "search" && contact.person.source_url && <a href={contact.person.source_url} target="_blank" rel="noreferrer" className="text-ink-3 underline">naam kahan se</a>}

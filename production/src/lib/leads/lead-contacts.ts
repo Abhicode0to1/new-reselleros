@@ -153,7 +153,7 @@ export function contactBonus(c: ContactResult | null): number {
  * away, so the model cannot invent a person. Failing that, a first.last@ address gives a
  * name, marked as a guess from the email. */
 
-export type ContactPerson = { name: string; role: string | null; from: "page" | "email" | "search"; source_url: string | null };
+export type ContactPerson = { name: string; role: string | null; from: "page" | "email" | "search"; source_url: string | null; /** search only: false = source site blocked the check */ verified?: boolean };
 
 export const ROLE_RE = /\b(founder|co-?founder|director|managing director|md|ceo|chief executive|partner|managing partner|proprietor|owner|principal|chairman|president|head|manager|ca\b|advocate|chartered accountant)\b/i;
 
@@ -273,4 +273,19 @@ export function teamLinks(html: string, pageUrl: string): string[] {
     if (!seen.has(url) || rank < seen.get(url)!) seen.set(url, rank);
   }
   return [...seen.entries()].sort((a, b) => a[1] - b[1]).map(([u]) => u).slice(0, 4);
+}
+
+/**
+ * A search answer's source link, checked by opening it (29 Sep 2026): the model once gave a
+ * Tracxn URL that was a 404, with a name nobody could confirm. Pure verdict from the fetch:
+ *   "ok"      page opened and shows the surname
+ *   "blocked" the site refuses automated readers (401/403/406/429/503) — cannot tell
+ *   "bad"     the page does not exist, or opened without the name → drop the name
+ */
+export function sourceVerdict(status: number | null, body: string | null, name: string): "ok" | "blocked" | "bad" {
+  if (status === null) return "blocked";                                   // timeout / TLS — not proof either way
+  if ([401, 403, 406, 429, 503].includes(status)) return "blocked";
+  if (status >= 400) return "bad";
+  const surname = name.replace(/^(mr|mrs|ms|dr|ca|adv|shri|smt)\.?\s+/i, "").trim().split(/\s+/).pop()?.toLowerCase() ?? "";
+  return surname.length > 1 && (body ?? "").toLowerCase().includes(surname) ? "ok" : "bad";
 }
