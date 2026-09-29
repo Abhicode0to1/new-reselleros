@@ -153,7 +153,7 @@ function ConsentCard({ retentionDays }: { retentionDays: number }) {
       <Button className="w-full mt-6" disabled={record.isPending} onClick={() => record.mutate()}>
         {record.isPending ? "…" : "Main samajh gaya — consent deta hoon"}
       </Button>
-      <p className="text-2xs text-ink-3 mt-3 text-center">DPDP Act 2023 ke hisaab se — aapki marzi se hi data liya jaata hai.</p>
+      <p className="text-xs text-ink-3 mt-3 text-center">DPDP Act 2023 ke hisaab se — aapki marzi se hi data liya jaata hai.</p>
     </Card>
   );
 }
@@ -204,7 +204,7 @@ function EnrollFaceCard() {
           {!camOn && (
             <button type="button" onClick={start}
               className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3">
-              <Icon name="eye" size={20} /><span className="text-3xs">Tap</span>
+              <Icon name="eye" size={20} /><span className="text-xs">Tap</span>
             </button>
           )}
         </div>
@@ -502,7 +502,7 @@ function CheckInCard({
                 <Icon name="laptop" size={16} />
                 <span>Desktop PC (No Webcam) Mode</span>
               </div>
-              <p className="text-2xs text-ink-3">
+              <p className="text-xs text-ink-3">
                 System detected desktop PC without webcam. Authenticated via Google Account.
               </p>
             </div>
@@ -523,7 +523,7 @@ function CheckInCard({
                   className="mx-auto flex h-28 w-28 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3 hover:border-amber/50 hover:text-amber-ink"
                 >
                   <Icon name="eye" size={24} />
-                  <span className="text-3xs leading-tight">Camera on karne ke liye tap</span>
+                  <span className="text-xs leading-tight">Camera on karne ke liye tap</span>
                 </button>
               )}
               <p className={cn("mt-2 text-xs", camErrMsg ? "text-rose" : "text-ink-3")}>
@@ -549,7 +549,7 @@ function CheckInCard({
             placeholder="6-digit"
             className="mt-1 w-full rounded-lg border border-hairline bg-paper px-4 py-3 text-center font-mono text-2xl tracking-[0.4em] tabular-nums focus:border-amber focus:outline-none"
           />
-          <p className="mt-1.5 text-2xs text-ink-3">
+          <p className="mt-1.5 text-xs text-ink-3">
             Office tablet pe abhi jo code chal raha hai wahi daalo — isse pata chalta hai aap office me hi ho.
           </p>
         </div>
@@ -612,7 +612,7 @@ function CheckInCard({
         )}
       </div>
 
-      <p className="text-2xs text-ink-3 mt-4">
+      <p className="text-xs text-ink-3 mt-4">
         {[
           "Google Auth Login",
           noCamDetected ? "desktop mode" : requireSelfie ? "selfie" : null,

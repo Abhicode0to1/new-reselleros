@@ -37,8 +37,18 @@ import {
   splitLinesByCategory,
   EXPENSE_CATEGORIES,
   PAYMENT_METHODS,
+  useCommissionToPayeeThisFy,
+  useVendorTdsThisFy,
   type Expense,
 } from "@/lib/queries/expenses";
+import { COMMISSION_CATEGORY, TDS_194H_THRESHOLD, commissionTdsView } from "@/lib/accounting/commission-tds";
+import { AD_CHANNELS, isMarketingCategory, suggestAdChannel } from "@/lib/marketing/ad-channels";
+import { useCampaignOptions } from "@/lib/queries/marketing-campaigns";
+import { localDateISO } from "@/lib/leads/outcomes";
+import { useEmployees } from "@/lib/queries/payroll";
+import { compactName } from "@/lib/banking/salary-lines";
+import { TDS_SECTION_RATES, tdsBase } from "@/lib/accounting/tds-rates";
+import { tdsDecision, panFromGstin } from "@/lib/accounting/tds-deductor";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useVendors, ensureVendor } from "@/lib/queries/vendors";
 import { useAddReimbursement } from "@/lib/queries/reimbursements";
@@ -46,6 +56,7 @@ import { toast } from "sonner";
 import { uploadBillAttachment } from "@/lib/queries/vendor-bills";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { expenseCategoryError } from "@/lib/accounting/expense-category";
+import { istToday } from "@/lib/dates/ist";
 
 const CURRENCY_OPTIONS = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD", "CAD"] as const;
 
@@ -78,8 +89,11 @@ export function AddExpenseDialog({
   expense,
   projectId,
   projectTitle,
+  defaultCategory,
 }: {
   onClose: () => void;
+  /** Category a NEW expense starts on — e.g. "Advertising" from /marketing/spend. */
+  defaultCategory?: string;
   expense?: Expense | null;
   /** When set, this expense is tagged as a cost of that project (per-project P&L). */
   projectId?: string | null;
@@ -89,7 +103,7 @@ export function AddExpenseDialog({
   const create = useCreateExpense();
   const update = useUpdateExpense();
   const isEdit = Boolean(expense);
-  const today  = new Date().toISOString().slice(0, 10);
+  const today  = istToday();
   const { data: bankAccounts } = useBankAccounts();
   const cashAccounts = (bankAccounts ?? []).filter((a) => a.account_type === "cash");
   const bankOnlyAccounts = (bankAccounts ?? []).filter((a) => a.account_type !== "cash");
@@ -123,6 +137,14 @@ export function AddExpenseDialog({
   const [fxError, setFxError]   = React.useState<string | null>(null);
   const isForeign = currency !== "INR";
   const rate = isForeign ? Number(fxRate || 0) : 1;
+  /* Reverse charge on an imported service (Google Ireland, Meta, AWS…): the buyer pays
+     the IGST himself in 3B 3.1(d) and claims it in 4(A)(3). Suggested on for a foreign-
+     currency bill; the tax is 18% of the ₹ amount unless typed over (lib/gst/gstr3b.ts). */
+  const [rcm, setRcm] = React.useState<boolean>(expense?.rcm ?? false);
+  const [rcmEdited, setRcmEdited] = React.useState<boolean>(Boolean(expense?.rcm));
+  const [rcmTax, setRcmTax] = React.useState<string>(expense?.rcm_tax ? String(expense.rcm_tax) : "");
+  React.useEffect(() => { if (!rcmEdited && !expense) setRcm(isForeign); }, [isForeign, rcmEdited, expense]);
+  const inrPreview = (n: number) => Math.round(n * (rate > 0 ? rate : 0));
 
   // How the expense is supported: proper GST tax invoice, a kaccha (informal /
   // non-GST) bill, or no bill at all (petty cash). Only a GST invoice carries
@@ -242,7 +264,8 @@ export function AddExpenseDialog({
   // Category is auto-picked from the "what was this for?" text — until the
   // operator changes it manually (then we stop overriding). On edit we respect
   // the saved category from the start.
-  const [categoryTouched, setCategoryTouched] = React.useState<boolean>(isEdit);
+  // A caller-chosen category counts as chosen — the keyword auto-pick must not flip it.
+  const [categoryTouched, setCategoryTouched] = React.useState<boolean>(isEdit || Boolean(defaultCategory));
   const [categoryAuto, setCategoryAuto] = React.useState(false);
 
   // Open the just-uploaded bill (a local File, not yet stored) in a new tab.
@@ -410,7 +433,7 @@ export function AddExpenseDialog({
         }
       : {
           expense_date: today,
-          category: "Hosting",
+          category: defaultCategory ?? "Hosting",
           payment_method: "bank_transfer",
           amount: 0,
           gst_paid: 0,
@@ -425,6 +448,58 @@ export function AddExpenseDialog({
   const itemText = lines.map((l) => l.description).filter(Boolean).join(" ");
   const noteText = watch("description") ?? "";
   const vendorNameWatch = watch("vendor_name") ?? "";
+
+  /* Marketing spend carries its channel, so Marketing → ROAS & CAC can set it against the
+     leads that channel brought in. Offered from the vendor's name until the operator picks. */
+  const isMarketing = isMarketingCategory(watch("category"));
+  const [channel, setChannel] = React.useState<string>(expense?.channel ?? "");
+  const [channelTouched, setChannelTouched] = React.useState<boolean>(Boolean(expense?.channel));
+  /* Marketing campaign (migration 20260926240000) — puts this spend against a budget. */
+  const campaignOptions = useCampaignOptions();
+  const [campaignId, setCampaignId] = React.useState<string>(expense?.campaign_id ?? "");
+  React.useEffect(() => {
+    if (!isMarketing || channelTouched) return;
+    const s = suggestAdChannel(`${vendorNameWatch} ${noteText} ${itemText}`);
+    if (s) setChannel(s);
+  }, [isMarketing, channelTouched, vendorNameWatch, noteText, itemText]);
+
+  /* Commission to an outside agent: the payee is required, and one person's commission for
+     the year decides s.194H (lib/accounting/commission-tds.ts). */
+  const isCommission = watch("category") === COMMISSION_CATEGORY;
+  const { data: commissionSoFar } = useCommissionToPayeeThisFy(
+    isCommission ? vendorNameWatch : "",
+    watch("expense_date") || localDateISO(new Date()),
+    expense?.id ?? null,
+  );
+  /* TDS decides itself (lib/accounting/tds-deductor.ts, 27 Sep 2026): the section's
+     threshold against what this payee got this FY, the rate from the vendor's PAN (1% for
+     an individual contractor, 20% with no PAN), 194Q only above ₹50L — until the operator
+     types an amount; an existing entry's recorded TDS is never overwritten on open. */
+  const [tdsEdited, setTdsEdited] = React.useState<boolean>(Boolean(expense && (expense.tds_amount ?? 0) > 0));
+  const tdsSectionNow = watch("tds_section") || "";
+  const tdsBaseNow = tdsBase(Number(watch("amount")) || 0, isGstBill ? Number(watch("gst_paid")) || 0 : 0);
+  const tdsRate = TDS_SECTION_RATES[tdsSectionNow] ?? null;
+  const tdsVendor = vendorId ? (vendors ?? []).find((v) => v.id === vendorId) ?? null : null;
+  const { data: vendorTdsSoFar } = useVendorTdsThisFy(vendorId, vendorNameWatch, tdsSectionNow, watch("expense_date") || localDateISO(new Date()), expense?.id ?? null);
+  const tdsView = tdsSectionNow && vendorTdsSoFar
+    ? tdsDecision({ section: tdsSectionNow, base: tdsBaseNow, fyBaseSoFar: vendorTdsSoFar.base, fyBaseWithoutTds: vendorTdsSoFar.baseWithoutTds, pan: tdsVendor?.pan ?? panFromGstin(tdsVendor?.gstin) })
+    : null;
+  const tdsSuggested = tdsView ? tdsView.tds : null;
+  React.useEffect(() => {
+    if (tdsEdited || tdsSuggested === null) return;
+    setValue("tds_amount", tdsSuggested);
+  }, [tdsEdited, tdsSuggested, setValue]);
+
+  /* Same letters as an employee's name ("abhishek" = "Abhishek", "Hites H Babu" = "Hitesh Babu"). */
+  const { data: employeeList } = useEmployees();
+  const payeeEmployee = React.useMemo(() => {
+    const key = compactName(vendorNameWatch);
+    if (!isCommission || key.length < 3) return null;
+    return (employeeList ?? []).find((e) => e.is_active !== false && compactName(e.name) === key) ?? null;
+  }, [isCommission, vendorNameWatch, employeeList]);
+  const commissionView = isCommission && commissionSoFar && vendorNameWatch.trim().length >= 2
+    ? commissionTdsView({ amount: Number(watch("amount")) || 0, earlier: commissionSoFar.earlier, earlierWithoutTds: commissionSoFar.earlierWithoutTds })
+    : null;
   // Category source = the note in simple mode, the item rows in itemised mode.
   const catText = showItems ? itemText : noteText;
   React.useEffect(() => {
@@ -498,6 +573,12 @@ export function AddExpenseDialog({
     }
 
     const payee = values.vendor_name?.trim() || "";
+    /* A commission with no payee cannot be totalled per person, so s.194H cannot be checked —
+       and the question "who did we pay commission to?" has no answer. */
+    if (values.category === COMMISSION_CATEGORY && !payee) {
+      toast.error("Commission kisko diya? — 'Kisko diya' mein us vyakti ka naam daalo.");
+      return;
+    }
     // Only GST-invoice suppliers belong in the Vendors master. So: an already-
     // picked vendor keeps its link; a NEW typed payee is added to Vendors only
     // when this is a GST bill (GST paid entered). Non-GST / one-off payees stay
@@ -522,6 +603,9 @@ export function AddExpenseDialog({
       try { attachment_url = await uploadBillAttachment(attachFile); }
       catch { /* keep saving the expense even if the file upload fails */ }
     }
+    // Marketing channel (0232) — only on marketing rows, NULL everywhere else.
+    const channelFor = (cat: string) => (isMarketingCategory(cat) ? (channel || null) : null);
+    const campaignFor = (cat: string) => (isMarketingCategory(cat) ? (campaignId || null) : null);
     const shared = {
       /* Bill se naapa hua GST batwara. Iske bina GST report har kharche ko intra-state
          MAAN leti hai (aadha CGST, aadha SGST, IGST shunya) — aur Amazon jaise
@@ -548,6 +632,8 @@ export function AddExpenseDialog({
       project_id: projectId ?? expense?.project_id ?? null,
       // TDS deducted on this payment (26Q, deductor side). Stored in ₹ as typed.
       tds_section: values.tds_section?.trim() || null,
+      rcm,
+      rcm_tax: rcm ? (rcmTax.trim() !== "" ? Math.max(0, Math.round(Number(rcmTax) || 0)) : Math.round(inr(Number(values.amount) || 0) * 0.18)) : 0,
       tds_amount:  Math.round(values.tds_amount || 0),
       // Source bank account for a bank/UPI/card/cheque payment (not cash).
       bank_account_id: paid && values.payment_method !== "cash" ? (bankAccountId || null) : null,
@@ -590,6 +676,8 @@ export function AddExpenseDialog({
         await create.mutateAsync({
           ...shared,
           category:   g.category,
+          channel:    channelFor(g.category),
+          campaign_id: campaignFor(g.category),
           line_items: g.items,
           amount:     inr(g.amount + (isGstBill ? g.gst : 0)),   // subtotal + its GST share
           gst_paid:   isGstBill ? inr(g.gst) : 0,
@@ -642,14 +730,14 @@ export function AddExpenseDialog({
     if (expense) {
       await update.mutateAsync({
         id: expense.id,
-        patch: { ...shared, category, line_items, amount: amountInr, gst_paid: gstAmt, description: derivedDescription },
+        patch: { ...shared, category, channel: channelFor(category), campaign_id: campaignFor(category), line_items, amount: amountInr, gst_paid: gstAmt, description: derivedDescription },
       });
       onClose();
       return;
     }
     await create.mutateAsync({
       ...shared,
-      category, line_items, amount: amountInr, gst_paid: gstAmt,
+      category, channel: channelFor(category), campaign_id: campaignFor(category), line_items, amount: amountInr, gst_paid: gstAmt,
       description: derivedDescription,
       pettyCashAccountId: pettyCash,
     });
@@ -697,7 +785,7 @@ export function AddExpenseDialog({
                 </button>
               ))}
             </div>
-            <p className={cn("mt-1.5 text-3xs leading-snug", isGstBill ? "text-ink-3" : "text-amber-ink")}>
+            <p className={cn("mt-1.5 text-xs leading-snug", isGstBill ? "text-ink-3" : "text-amber-ink")}>
               {billType === "gst"
                 ? "GST tax invoice — input GST claimable, vendor saved to your Vendors master."
                 : billType === "kaccha"
@@ -707,7 +795,7 @@ export function AddExpenseDialog({
           </div>
 
           {!isEdit && (
-            <p className="text-2xs text-ink-3 leading-relaxed">
+            <p className="text-xs text-ink-3 leading-relaxed">
               Salary de rahe ho?{" "}
               <button type="button" onClick={() => { onClose(); router.push("/accounting/payroll" as never); }}
                 className="text-amber-ink font-medium underline hover:no-underline">Payroll &amp; Leave me book karo →</button>{" "}
@@ -723,7 +811,7 @@ export function AddExpenseDialog({
                   <Icon name="sparkles" size={16} className="text-amber-ink shrink-0" />
                   <div className="min-w-0">
                     <p className="text-[12px] font-medium text-ink">Bill upload karo — AI khud bhar dega</p>
-                    <p className="text-3xs text-ink-3">Photo/PDF — AI fields + items nikaal dega, aap confirm karke Save karo</p>
+                    <p className="text-xs text-ink-3">Photo/PDF — AI fields + items nikaal dega, aap confirm karke Save karo</p>
                   </div>
                 </div>
                 <Button type="button" variant="primary" size="sm" icon="upload" loading={reading} onClick={() => fileRef.current?.click()}>
@@ -737,8 +825,8 @@ export function AddExpenseDialog({
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBillFile(f); e.target.value = ""; }}
                 />
               </div>
-              {aiNote && <p className="mt-2 flex items-start gap-1.5 text-2xs text-emerald"><Icon name="check_circle" size={12} className="mt-0.5 shrink-0" /> {aiNote}</p>}
-              {aiError && <p className="mt-2 flex items-start gap-1.5 text-2xs text-rose"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> {aiError}</p>}
+              {aiNote && <p className="mt-2 flex items-start gap-1.5 text-xs text-emerald"><Icon name="check_circle" size={12} className="mt-0.5 shrink-0" /> {aiNote}</p>}
+              {aiError && <p className="mt-2 flex items-start gap-1.5 text-xs text-rose"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> {aiError}</p>}
 
               {/* Confirmation gate — AI read something; confirm before it fills. */}
               {pending && (() => {
@@ -758,7 +846,7 @@ export function AddExpenseDialog({
                   <div className="mt-2.5 rounded-md border border-amber/40 bg-paper p-3">
                     <p className="text-[12px] font-medium text-ink mb-2">AI ne ye padha — sahi hai? Confirm karo tabhi bharega.</p>
                     {dupInReview && (
-                      <div className="mb-2 flex items-start gap-1.5 rounded-md bg-amber-soft/60 px-2.5 py-2 text-2xs text-amber-ink">
+                      <div className="mb-2 flex items-start gap-1.5 rounded-md bg-amber-soft/60 px-2.5 py-2 text-xs text-amber-ink">
                         <Icon name="alert" size={13} className="mt-0.5 shrink-0" />
                         <span>Isi bill{` (${pending.billNo ? `#${pending.billNo}` : `${formatDate(dupInReview.expense_date)} · ${rupee(dupInReview.amount)}`})`} ki ek entry pehle se hai. Agar ye <b>alag category ka hissa</b> hai to theek — warna duplicate ho jayega.</span>
                       </div>
@@ -810,7 +898,7 @@ export function AddExpenseDialog({
                             `title` isliye ki jo kata wo hover par poora mile — a11y §4. */}
                         <ul className="space-y-0.5 max-h-28 overflow-y-auto">
                           {pending.items.map((it, i) => (
-                            <li key={i} className="flex justify-between gap-2 text-2xs">
+                            <li key={i} className="flex justify-between gap-2 text-xs">
                               <span className="min-w-0 truncate text-ink-2" title={it.description || undefined}>
                                 {it.description || "—"}{it.qty ? ` × ${it.qty}` : ""}
                               </span>
@@ -824,7 +912,7 @@ export function AddExpenseDialog({
                       <Button type="button" variant="primary" size="sm" icon="check" onClick={applyExtract}>Haan, sahi hai — bhar do</Button>
                       <Button type="button" variant="default" size="sm" onClick={discardExtract}>Galat — main khud bharunga</Button>
                     </div>
-                    <p className="mt-2 text-3xs text-ink-3">Kaise bhi karo, 📎 <button type="button" onClick={openLocalFile} className="text-amber-ink underline hover:no-underline">{attachFile?.name}</button> bill attach ho jayega. (click karke dekho)</p>
+                    <p className="mt-2 text-xs text-ink-3">Kaise bhi karo, 📎 <button type="button" onClick={openLocalFile} className="text-amber-ink underline hover:no-underline">{attachFile?.name}</button> bill attach ho jayega. (click karke dekho)</p>
                     {previewUrl && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={previewUrl} alt="Invoice preview" onClick={openLocalFile}
@@ -836,7 +924,7 @@ export function AddExpenseDialog({
 
               {attachFile && !pending && (
                 <div className="mt-2">
-                  <p className="flex items-center gap-1.5 text-2xs text-ink-2">
+                  <p className="flex items-center gap-1.5 text-xs text-ink-2">
                     <Icon name="file" size={12} />
                     <button type="button" onClick={openLocalFile} className="text-amber-ink underline hover:no-underline">{attachFile.name}</button>
                     — expense ke saath attach hoga
@@ -867,8 +955,43 @@ export function AddExpenseDialog({
                     </SelectContent>
                   </Select>
                   {categoryAuto && !categoryTouched && (
-                    <p className="mt-1 flex items-center gap-1 text-3xs text-amber-ink">
+                    <p className="mt-1 flex items-center gap-1 text-xs text-amber-ink">
                       <Icon name="sparkles" size={10} /> Auto-chuni — galat ho to badal do.
+                    </p>
+                  )}
+                  {isMarketing && (
+                    <div className="mt-2">
+                      <label htmlFor="ad-channel" className="text-xs font-medium text-ink-2">Channel (kis marketing ke liye)</label>
+                      <Select value={channel || "none"} onValueChange={(v) => { setChannel(v === "none" ? "" : v); setChannelTouched(true); }}>
+                        <SelectTrigger id="ad-channel" className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Pata nahi / general</SelectItem>
+                          {AD_CHANNELS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <p className="mt-1 text-xs text-ink-3 leading-snug">
+                        Marketing → ROAS &amp; CAC isi se ad kharch ko us channel ki leads ke saath milata hai. Bina channel ke ye kharch wahan nahi gina jaata.
+                      </p>
+                      {(campaignOptions.data ?? []).length > 0 && (
+                        <div className="mt-2">
+                          <label htmlFor="ad-campaign" className="text-xs font-medium text-ink-2">Campaign (optional)</label>
+                          <Select value={campaignId || "none"} onValueChange={(v) => setCampaignId(v === "none" ? "" : v)}>
+                            <SelectTrigger id="ad-campaign" className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Kisi campaign ka nahi</SelectItem>
+                              {(campaignOptions.data ?? []).filter((c) => !c.cancelled || c.id === campaignId).map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {isCommission && (
+                    <p className="mt-1 text-xs text-ink-3 leading-snug">
+                      Bahar ke agent / broker ka commission. Neeche <b>&quot;Kisko diya&quot;</b> mein naam zaroor bharo — us vyakti ka
+                      saal ka jod aur 194H TDS isi se tay hota hai. Apne employee ka incentive Payroll mein jaata hai.
                     </p>
                   )}
                 </FormField>
@@ -906,7 +1029,7 @@ export function AddExpenseDialog({
                     <div key={i} className="rounded-md border border-hairline bg-paper p-2 space-y-2">
                       {/* Line 1: what it is + remove */}
                       <div className="flex items-center gap-2">
-                        <Input wrapperClassName="flex-1" placeholder="e.g. Laptop / A4 paper"
+                        <Input aria-label="Item description" wrapperClassName="flex-1" placeholder="e.g. Laptop / A4 paper"
                           value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />
                         <button type="button" onClick={() => removeLine(i)} aria-label="Remove item"
                           className="shrink-0 text-ink-3 hover:text-rose p-1">
@@ -915,15 +1038,15 @@ export function AddExpenseDialog({
                       </div>
                       {/* Line 2: qty × unit = amount · category */}
                       <div className="grid grid-cols-12 gap-2 items-center">
-                        <Input wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" min={0} step="any" placeholder="Qty"
+                        <Input aria-label="Qty" wrapperClassName="col-span-3 sm:col-span-2" className="text-right" type="number" min={0} step="any" placeholder="Qty"
                           value={l.qty} onChange={(e) => setQtyUnit(i, { qty: e.target.value })} />
                         <span className="col-span-1 text-center text-ink-3 text-xs">×</span>
-                        <Input wrapperClassName="col-span-4 sm:col-span-2" className="text-right" type="number" step="any" placeholder={`Price ${isForeign ? currency : "₹"}`}
+                        <Input aria-label="Price" wrapperClassName="col-span-4 sm:col-span-2" className="text-right" type="number" step="any" placeholder={`Price ${isForeign ? currency : "₹"}`}
                           value={l.unit_price} onChange={(e) => setQtyUnit(i, { unit_price: e.target.value })} />
                         {/* Amount = qty×price (auto), editable; negatives allowed for credit lines */}
-                        <Input wrapperClassName="col-span-4 sm:col-span-3" className="text-right font-medium" type="number" step="any" placeholder={`Amount ${isForeign ? currency : "₹"}`}
+                        <Input aria-label="Amount" wrapperClassName="col-span-4 sm:col-span-3" className="text-right font-medium" type="number" step="any" placeholder={`Amount ${isForeign ? currency : "₹"}`}
                           value={l.amount} onChange={(e) => setLine(i, { amount: e.target.value })} />
-                        <select
+                        <select aria-label="Category"
                           className="col-span-12 sm:col-span-4 h-9 rounded-md border border-hairline bg-paper px-2 text-[13px] text-ink"
                           value={l.category || headerCategory}
                           onChange={(e) => setLine(i, { category: e.target.value })}
@@ -940,7 +1063,7 @@ export function AddExpenseDialog({
 
                 {/* Split preview — >1 category ⇒ auto-split into that many entries. */}
                 {splitGroups.length > 1 && (
-                  <div className="mt-2 rounded-md bg-amber-soft/40 px-2.5 py-2 text-2xs text-amber-ink leading-snug">
+                  <div className="mt-2 rounded-md bg-amber-soft/40 px-2.5 py-2 text-xs text-amber-ink leading-snug">
                     <b>{splitGroups.length} categories</b> → Save par {splitGroups.length} alag entries banengi (ek hi bill se judi):
                     <span className="block mt-0.5 text-ink-2">
                       {splitGroups.map((g) => `${g.category} ${isForeign ? "" : "₹"}${g.amount.toLocaleString("en-IN")}`).join("  ·  ")}
@@ -953,7 +1076,7 @@ export function AddExpenseDialog({
             {/* Toggle simple note ↔ itemised (hidden for payroll postings). */}
             {!isPayroll && (
               <button type="button" onClick={() => setShowItems((v) => !v)}
-                className="text-2xs text-amber-ink hover:underline">
+                className="text-xs text-amber-ink hover:underline">
                 {showItems ? "− Simple note pe wapas" : "+ Itemise (bill ke line items daalo)"}
               </button>
             )}
@@ -990,7 +1113,7 @@ export function AddExpenseDialog({
                   </div>
                 )}
                 {!isForeign && (
-                  <p className="text-3xs text-ink-3">GST is the input tax credit portion of the amount above — claimable in your GST return.</p>
+                  <p className="text-xs text-ink-3">GST is the input tax credit portion of the amount above — claimable in your GST return.</p>
                 )}
               </>
             ) : (
@@ -999,10 +1122,25 @@ export function AddExpenseDialog({
               </FormField>
             )}
 
+            {/* Reverse charge — imported services. */}
+            <label className="flex items-start gap-2 rounded-md border border-hairline p-2.5 cursor-pointer">
+              <input type="checkbox" checked={rcm} onChange={(e) => { setRcm(e.target.checked); setRcmEdited(true); }} className="mt-0.5 rounded border-hairline" />
+              <span className="text-xs text-ink-2">
+                <b className="text-ink">Reverse charge (RCM)</b> — videshi vendor ka bill (Google Ireland, Meta, AWS, OpenAI): GST unhone nahi lagaya, IGST hum khud 3B mein cash se bharte hain aur usi mahine credit lete hain.
+                {rcm && (
+                  <span className="mt-1.5 flex items-center gap-2">
+                    <span>IGST @18% ₹</span>
+                    <Input type="number" min={0} value={rcmTax} onChange={(e) => setRcmTax(e.target.value)} placeholder={String(Math.round(inrPreview(Number(watch("amount")) || 0) * 0.18))} className="w-32" />
+                    <span className="text-xs text-ink-3">khaali = 18% apne-aap</span>
+                  </span>
+                )}
+              </span>
+            </label>
+
             {/* TDS deducted (26Q) — optional; for rent / professional / contractor payments. */}
             <div className="grid grid-cols-12 gap-3">
               <FormField label="TDS deducted?" htmlFor="tds_section" className="col-span-5 sm:col-span-5">
-                <Select value={watch("tds_section") || "none"} onValueChange={(v) => setValue("tds_section", v === "none" ? "" : v)}>
+                <Select value={watch("tds_section") || "none"} onValueChange={(v) => { setValue("tds_section", v === "none" ? "" : v); setTdsEdited(false); }}>
                   <SelectTrigger id="tds_section"><SelectValue placeholder="No TDS" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No TDS</SelectItem>
@@ -1017,12 +1155,23 @@ export function AddExpenseDialog({
               </FormField>
               {(watch("tds_section") || "") !== "" && (
                 <FormField label="TDS amount (₹)" htmlFor="tds_amount" className="col-span-7 sm:col-span-4">
-                  <Input id="tds_amount" type="number" min={0} step="any" {...register("tds_amount")} />
+                  <Input id="tds_amount" type="number" min={0} step="any" {...register("tds_amount", { onChange: () => setTdsEdited(true) })} />
                 </FormField>
               )}
             </div>
             {(watch("tds_section") || "") !== "" && (
-              <p className="text-3xs text-ink-3">Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.</p>
+              <p className="text-xs text-ink-3">
+                {tdsView ? (
+                  <>
+                    <span className={tdsView.noPan && tdsView.applies ? "text-rose" : tdsView.applies ? "text-ink-2" : "text-emerald"}>{tdsView.reason}</span>
+                    {tdsView.applies && !tdsEdited ? ` ${tdsView.ratePct}% of ${rupee(tdsBaseNow)}${isGstBill && (Number(watch("gst_paid")) || 0) > 0 ? " (GST ke bina)" : ""} = ${rupee(tdsView.tds)} apne-aap bhara, badal sakte ho.` : ""}
+                    {tdsView.applies && tdsRate?.note ? ` ${tdsRate.note}` : ""}{" "}
+                  </>
+                ) : tdsRate && !tdsEdited
+                  ? <>{tdsRate.ratePct}% of {rupee(tdsBaseNow)} — apne-aap bhara, badal sakte ho. </>
+                  : null}
+                Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.
+              </p>
             )}
           </section>
 
@@ -1034,21 +1183,21 @@ export function AddExpenseDialog({
                 className={cn("rounded-md border px-3 py-2 text-sm text-left transition-colors",
                   paid && !reimburse ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
                 <span className="font-medium">Haan, de diya</span>
-                <span className="block text-3xs text-ink-3">Company ne pay kiya (cash/UPI/bank)</span>
+                <span className="block text-xs text-ink-3">Company ne pay kiya (cash/UPI/bank)</span>
               </button>
               {!isEdit && (
                 <button type="button" onClick={() => { setReimburse(true); }}
                   className={cn("rounded-md border px-3 py-2 text-sm text-left transition-colors",
                     reimburse ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
                   <span className="font-medium">Kisi aur ne diya</span>
-                  <span className="block text-3xs text-ink-3">Reimbursement — company use wapas degi</span>
+                  <span className="block text-xs text-ink-3">Reimbursement — company use wapas degi</span>
                 </button>
               )}
               <button type="button" onClick={() => { setPaid(false); setReimburse(false); }}
                 className={cn("rounded-md border px-3 py-2 text-sm text-left transition-colors",
                   !paid && !reimburse ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
                 <span className="font-medium">Nahi, baad me</span>
-                <span className="block text-3xs text-ink-3">Udhaar — vendor ko dena baaki</span>
+                <span className="block text-xs text-ink-3">Udhaar — vendor ko dena baaki</span>
               </button>
             </div>
           </div>
@@ -1057,7 +1206,7 @@ export function AddExpenseDialog({
             <FormField label="Kisne diya? (person)" htmlFor="reimburse_person">
               <Input id="reimburse_person" placeholder="e.g. Prateek / Darshan / self"
                 value={reimbursePerson} onChange={(e) => setReimbursePerson(e.target.value)} />
-              <p className="text-3xs text-ink-3 mt-1">
+              <p className="text-xs text-ink-3 mt-1">
                 Kharcha company ka hai (P&amp;L me jayega), par paisa <b>{reimbursePerson.trim() || "is vyakti"}</b> ne apne pocket se diya —
                 company ab unhe wapas degi (Reimbursements me &quot;payable&quot; ban jayega, baad me Settle karo).
               </p>
@@ -1076,7 +1225,7 @@ export function AddExpenseDialog({
           ) : (
             <FormField label="Kab tak dena hai? (due date — optional)" htmlFor="due_date">
               <Input id="due_date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-              <p className="text-3xs text-ink-3 mt-1">P&amp;L mein aaj hi count hoga; bank/cash tab minus hoga jab &quot;Mark paid&quot; karoge.</p>
+              <p className="text-xs text-ink-3 mt-1">P&amp;L mein aaj hi count hoga; bank/cash tab minus hoga jab &quot;Mark paid&quot; karoge.</p>
             </FormField>
           )}
 
@@ -1094,7 +1243,7 @@ export function AddExpenseDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-3xs text-ink-3 mt-1">Kis bank se paisa gaya. Banking me isi account ki statement line se reconcile ho jayega.</p>
+              <p className="text-xs text-ink-3 mt-1">Kis bank se paisa gaya. Banking me isi account ki statement line se reconcile ho jayega.</p>
             </FormField>
           )}
 
@@ -1109,34 +1258,52 @@ export function AddExpenseDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-3xs text-ink-3 mt-1">Cash-in-hand se ye amount minus ho jayega.</p>
+              <p className="text-xs text-ink-3 mt-1">Cash-in-hand se ye amount minus ho jayega.</p>
             </FormField>
           )}
 
           {/* ── Who — vendor / payee (optional; lives at the end since it's the
               last thing you fill after the money details). GSTIN for GST bills. ── */}
-          <FormField label={isGstBill ? "Vendor (GST invoice)" : "Paid to (optional)"} htmlFor="vendor_name">
+          <FormField
+            label={isCommission ? "Kisko diya (commission paane wala)" : isGstBill ? "Vendor (GST invoice)" : "Paid to (optional)"}
+            required={isCommission}
+            htmlFor="vendor_name"
+          >
             <div className="relative">
               <Input
                 id="vendor_name"
                 autoComplete="off"
-                placeholder="e.g. Anthropic / Airtel / Office Landlord"
+                placeholder={isCommission ? "e.g. Ramesh Kumar" : "e.g. Anthropic / Airtel / Office Landlord"}
                 {...register("vendor_name", { onChange: () => { setVendorId(null); setVendorMatch(null); setVendorOpen(true); } })}
                 onFocus={() => setVendorOpen(true)}
                 onBlur={() => setTimeout(() => setVendorOpen(false), 130)}
               />
-              {vendorOpen && (vendors ?? []).length > 0 && (() => {
+              {vendorOpen && ((vendors ?? []).length > 0 || (isCommission && (employeeList ?? []).length > 0)) && (() => {
                 const query = (watch("vendor_name") || "").trim().toLowerCase();
                 const matches = (vendors ?? []).filter((v) => !query || v.name.toLowerCase().includes(query)).slice(0, 8);
-                if (matches.length === 0) return null;
+                /* For a commission, our own employees are offered too — tagged, so "abhish" already
+                   shows "Abhishek · Employee" and the warning below is one click away, not a
+                   fully-typed name away. */
+                const empMatches = isCommission
+                  ? (employeeList ?? []).filter((e) => e.is_active !== false && (!query || e.name.toLowerCase().includes(query))).slice(0, 6)
+                  : [];
+                if (matches.length === 0 && empMatches.length === 0) return null;
                 return (
                   <div className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-md border border-hairline bg-paper shadow-lg">
+                    {empMatches.map((e) => (
+                      <button key={`emp-${e.id}`} type="button"
+                        onMouseDown={(ev) => { ev.preventDefault(); setValue("vendor_name", e.name); setVendorId(null); setVendorMatch(null); setVendorOpen(false); }}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2">
+                        <span className="text-ink truncate">{e.name}</span>
+                        <span className="shrink-0 rounded bg-rose/10 px-1.5 py-0.5 text-3xs font-semibold text-rose">Employee · Payroll</span>
+                      </button>
+                    ))}
                     {matches.map((v) => (
                       <button key={v.id} type="button"
                         onMouseDown={(e) => { e.preventDefault(); setValue("vendor_name", v.name); setVendorId(v.id); setVendorMatch({ kind: "existing", name: v.name }); setVendorOpen(false); }}
                         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2">
                         <span className="text-ink truncate">{v.name}</span>
-                        {v.gstin && <span className="text-3xs text-ink-3 font-mono shrink-0">{v.gstin}</span>}
+                        {v.gstin && <span className="text-xs text-ink-3 font-mono shrink-0">{v.gstin}</span>}
                       </button>
                     ))}
                   </div>
@@ -1145,16 +1312,55 @@ export function AddExpenseDialog({
             </div>
             {vendorMatch && (
               vendorMatch.kind === "existing" ? (
-                <p className="mt-1 flex items-center gap-1.5 text-2xs text-emerald">
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald">
                   <Icon name="check_circle" size={12} /> Existing vendor mil gaya{aiGstin ? " (GSTIN se)" : ""} — isi se link hoga.
                 </p>
               ) : isGstBill ? (
-                <p className="mt-1 flex items-center gap-1.5 text-2xs text-amber-ink">
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-amber-ink">
                   <Icon name="plus" size={12} /> Naya vendor &ldquo;{vendorMatch.name}&rdquo;{aiGstin ? ` (GSTIN ${aiGstin})` : ""} — Save par Vendors master me add hoga.
                 </p>
               ) : (
-                <p className="mt-1 text-2xs text-ink-3">Naya payee — kaccha/no-bill hone se Vendors master me add nahi hoga.</p>
+                <p className="mt-1 text-xs text-ink-3">Naya payee — kaccha/no-bill hone se Vendors master me add nahi hoga.</p>
               )
+            )}
+            {/* The payee is one of OUR employees: their commission is salary (incentive, TDS 192),
+                not an agent's commission (194H) — a ₹5L "commission to abhishek" was booked here
+                on 26 Sep 2026 and had to be moved to Payroll. */}
+            {isCommission && payeeEmployee && (
+              <div className="mt-1.5 rounded-md border border-rose/40 bg-rose/5 px-2.5 py-2 text-xs text-ink-2 space-y-1">
+                <p>
+                  <b>{payeeEmployee.name}</b> aapka employee hai. Employee ka commission / incentive <b>salary</b> ka hissa hai —
+                  Payroll mein uski salary ke saath &quot;Incentive&quot; mein daalo (TDS 192, Form 16 mein aayega). Yahan agent ki tarah
+                  (194H) book karne se TDS aur Form 16 dono galat honge.
+                </p>
+                <button type="button" onClick={() => { onClose(); router.push("/accounting/payroll" as never); }}
+                  className="font-semibold text-rose underline underline-offset-2">
+                  Payroll mein incentive daalo →
+                </button>
+              </div>
+            )}
+            {/* One person's commission for the year, and s.194H — lib/accounting/commission-tds.ts. */}
+            {isCommission && commissionView && !payeeEmployee && (
+              <div className="mt-1.5 rounded-md border border-hairline bg-paper-2/40 px-2.5 py-2 text-xs text-ink-2 space-y-1">
+                <p>
+                  Is FY mein <b>{vendorNameWatch.trim()}</b> ko ab tak <b>{rupee(commissionView.earlier)}</b> commission ·
+                  is entry ke saath <b>{rupee(commissionView.yearTotal)}</b>
+                  {" "}({commissionView.crosses ? "₹20,000 ki seema paar" : `₹20,000 ki seema tak ${rupee(Math.max(0, TDS_194H_THRESHOLD - commissionView.yearTotal))} baaki`}).
+                </p>
+                {commissionView.crosses && (watch("tds_section") || "") !== "194H" && (
+                  <div className="flex flex-wrap items-center gap-2 text-amber-ink">
+                    <span>194H TDS (2%) katna chahiye{commissionView.earlierUntaxed > 0 ? ` — pehle ke ${rupee(commissionView.earlierUntaxed)} par bhi` : ""}.</span>
+                    <button
+                      type="button"
+                      onClick={() => { setValue("tds_section", "194H"); setValue("tds_amount", commissionView.tdsOnThis); }}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      194H · {rupee(commissionView.tdsOnThis)} lagao
+                    </button>
+                  </div>
+                )}
+                <p className="text-xs text-ink-3">Seema ek vyakti ko poore saal ke commission par lagti hai. Bhugtaan se pehle CA se confirm kar lena.</p>
+              </div>
             )}
           </FormField>
 
@@ -1162,7 +1368,7 @@ export function AddExpenseDialog({
           {isGstBill && (
             <FormField label="Bill / invoice no. (optional)" htmlFor="bill_no">
               <Input id="bill_no" placeholder="e.g. INV-2026-0042" value={billNo} onChange={(e) => setBillNo(e.target.value)} />
-              <p className="text-3xs text-ink-3 mt-1">
+              <p className="text-xs text-ink-3 mt-1">
                 Ek hi invoice mein alag-alag category ka saaman? Har category ki <b>alag entry</b> banao — <b>same bill no.</b> daalo. Wo ek hi invoice ke hisse maane jayenge (duplicate warning nahi aayegi).
               </p>
             </FormField>
@@ -1176,7 +1382,7 @@ export function AddExpenseDialog({
               placeholder="e.g. Ranjeet ka birthday gift — company ne Prateek ke a/c me bheja, Prateek ne cash Ranjeet ko diya"
               {...register("notes")}
             />
-            <p className="text-3xs text-ink-3 mt-1">Koi bhi extra detail — kis liye, kiske through, koi note. Report/detail me dikhega.</p>
+            <p className="text-xs text-ink-3 mt-1">Koi bhi extra detail — kis liye, kiske through, koi note. Report/detail me dikhega.</p>
           </FormField>
 
           <DialogFooter>

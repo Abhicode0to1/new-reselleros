@@ -18,10 +18,11 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { rupee } from "@/lib/utils";
 import { PAYMENT_METHODS, useMarkExpensePaid, type Expense } from "@/lib/queries/expenses";
 import { useBankAccounts } from "@/lib/queries/bank";
+import { istToday } from "@/lib/dates/ist";
 
 export function MarkPaidDialog({ expense, onClose }: { expense: Expense; onClose: () => void }) {
   const markPaid = useMarkExpensePaid();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const [paidDate, setPaidDate] = React.useState<string>(today);
   const [method, setMethod] = React.useState<string>(expense.payment_method ?? "bank_transfer");
   const { data: bankAccounts } = useBankAccounts();
@@ -76,7 +77,7 @@ export function MarkPaidDialog({ expense, onClose }: { expense: Expense; onClose
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-3xs text-ink-3 mt-1">Cash-in-hand se ye amount ab minus hoga.</p>
+              <p className="text-xs text-ink-3 mt-1">Cash-in-hand se ye amount ab minus hoga.</p>
             </FormField>
           )}
         </div>

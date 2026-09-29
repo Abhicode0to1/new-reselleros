@@ -22,7 +22,7 @@ import {
   Smartphone, Sun, Moon, Building2, Briefcase, SlidersHorizontal,
   List, Grid3x3, Send,
   Eye, Bug, Wallet, Printer, Laptop, Camera, Menu, Circle, Image as ImageIcon,
-  Mic, MicOff, Square,
+  Mic, MicOff, Square, MapPin,
   type LucideIcon,
 } from "lucide-react";
 
@@ -88,6 +88,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   // System
   settings: Settings,
   shield: Shield,
+  map_pin: MapPin,
   globe: Globe,
   lock: Lock,
   logout: LogOut,

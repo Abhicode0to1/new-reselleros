@@ -62,7 +62,8 @@ const bodySchema = z.object({
   ai_draft_body:    z.string().trim().max(20_000).optional(),
 });
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -206,7 +207,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
  * can say "you already replied" once too often, which costs a rep three seconds of
  * reading, where the opposite silently permits the duplicate this exists to prevent.
  */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });

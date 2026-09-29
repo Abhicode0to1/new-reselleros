@@ -53,10 +53,15 @@ import { Icon } from "@/components/ui/icon";
 import { useCreateLead, useUpdateLead, useLeads } from "@/lib/queries/leads";
 import { normPhone, normCompany } from "@/lib/leads/duplicates";
 import { PROJECT_PLAN_LABEL } from "@/lib/leads/enquiry";
+import { amountInIndianWords } from "@/lib/accounting/amount-words";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { sourceOptions } from "@/lib/leads/lead-sources";
+import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
+import { useCustomers } from "@/lib/queries/customers";
 import type { Lead, LeadPriority } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 const STAGES = [
   { value: "new",     label: "New" },
@@ -75,15 +80,8 @@ const STAGES = [
 const RAW_LEAD_STAGE_VALUES   = ["new", "contact", "lost"] as const;
 const POST_QUOTE_STAGE_VALUES = ["quote", "demo", "trial", "won", "lost"] as const;
 
-const SOURCES = [
-  { value: "manual",            label: "Added manually" },
-  { value: "buy-workspace-v2",  label: "Buy Workspace page" },
-  { value: "csv",               label: "CSV import" },
-  { value: "whatsapp",          label: "WhatsApp" },
-  { value: "referral",          label: "Referral" },
-  { value: "tele-calling",      label: "Tele calling" },
-  { value: "google-ads",        label: "Google Ads" },
-] as const;
+// Source options live in lib/leads/lead-sources.ts — their keys must match the ad-spend
+// channels, so they are not a local list any more.
 
 const PLANS = [
   "Google Workspace Business Starter",
@@ -169,7 +167,7 @@ function Review({ label, value, mono, note }: {
       <dt className="text-3xs uppercase tracking-wider text-ink-3">{label}</dt>
       {v ? (
         <dd className={cn("break-words text-[13px] font-medium text-ink", mono && "font-mono")}>
-          {v}{note && <span className="ml-1 font-sans text-2xs font-normal text-ink-3">· {note}</span>}
+          {v}{note && <span className="ml-1 font-sans text-xs font-normal text-ink-3">· {note}</span>}
         </dd>
       ) : (
         <dd className="text-[12px] italic text-ink-3">not set</dd>
@@ -255,6 +253,12 @@ interface AddLeadFormProps {
 export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: AddLeadFormProps) {
   const router    = useRouter();
   const createLead = useCreateLead();
+  /* An existing customer's new need — more seats, another product, a software project
+     (migration 20260926250000). Picking the customer fills the contact fields from it and
+     links the lead, so an upsell is not re-keyed as a stranger. */
+  const { data: customerList } = useCustomers();
+  const [forCustomer, setForCustomer] = React.useState<boolean>(Boolean(editingLead?.customer_id));
+  const [customerId, setCustomerId] = React.useState<string>(editingLead?.customer_id ?? "");
   const updateLead = useUpdateLead();
   const isEditing  = !!editingLead;
   const { data: me } = useCurrentUser();
@@ -390,9 +394,12 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
     return allLeads.find(
       (l) =>
         l.id !== editingLead?.id &&
+        /* For an existing customer, their closed (won / lost) leads are history, not a
+           duplicate — a new need from them is exactly what this lead is. */
+        !(forCustomer && (l.stage === "won" || l.stage === "lost")) &&
         ((p && normPhone(l.contact_phone) === p) || (c && normCompany(l.company) === c)),
     ) ?? null;
-  }, [allLeads, wPhone, wCompany, editingLead?.id]);
+  }, [allLeads, wPhone, wCompany, editingLead?.id, forCustomer]);
 
   /**
    * Open the native Contacts Picker (Android Chrome / Edge Mobile only).
@@ -496,6 +503,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       setPlan("");
       setPriority("medium");
       setEnquiry("subscription");
+      setForCustomer(false);
+      setCustomerId("");
       // For a fresh "Add lead" the owner defaults to the currently logged-in
       // user — sales reps own their own intake by default. They can re-assign.
       setOwnerId(me?.userId ?? "");
@@ -528,6 +537,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       setPriority((editingLead.priority as LeadPriority) ?? "medium");
       setOwnerId(editingLead.owner_id ?? "");
       setEnquiry(editingLead.enquiry_type ?? "subscription");
+      setForCustomer(Boolean(editingLead.customer_id));
+      setCustomerId(editingLead.customer_id ?? "");
     } else {
       // New-lead default: owner = current user.
       setOwnerId(me?.userId ?? "");
@@ -601,6 +612,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         owner_id:       data.owner_id       || null,
         subscription_type: project ? null : (data.subscription_type || null),
         notes:          data.notes          || null,
+        customer_id:    forCustomer ? (customerId || null) : null,
       };
 
       if (isEditing && editingLead) {
@@ -744,6 +756,35 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
 
           <Step show={!useSteps || step === 1}>
 
+          <div className="flex gap-2" role="group" aria-label="Lead kiska hai">
+            {[{ v: false, label: "Naya business" }, { v: true, label: "Existing customer" }].map((o) => (
+              <button key={o.label} type="button" onClick={() => { setForCustomer(o.v); if (!o.v) setCustomerId(""); }}
+                aria-pressed={forCustomer === o.v}
+                className={cn("rounded-full border px-3 py-1 text-xs",
+                  forCustomer === o.v ? "border-amber bg-amber-soft/40 text-ink font-medium" : "border-hairline text-ink-2 hover:border-amber/60")}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {forCustomer && (
+            <FormField label="Kaunsa customer" htmlFor="lead-customer">
+              <CustomerCombobox id="lead-customer" value={customerId} placeholder="Customer dhoondho…"
+                onChange={(id) => {
+                  setCustomerId(id);
+                  const c = (customerList ?? []).find((x) => x.id === id);
+                  if (!c) return;
+                  const person = [c.contact_first_name, c.contact_last_name].filter(Boolean).join(" ") || c.contact_name || "";
+                  setValue("company", c.display_name || c.name, { shouldDirty: true });
+                  if (person) setValue("contact_name", person, { shouldDirty: true });
+                  if (c.contact_email) setValue("contact_email", c.contact_email, { shouldDirty: true });
+                  const phone = c.contact_mobile || c.contact_phone;
+                  if (phone) setValue("contact_phone", commitPhone(phone), { shouldDirty: true });
+                  if (c.gstin) setValue("gstin", c.gstin, { shouldDirty: true });
+                }} />
+              <p className="mt-1 text-xs text-ink-3">Upsell, zyada seats ya naya project — customer ki details khud bhar jaati hain, badal bhi sakte ho.</p>
+            </FormField>
+          )}
+
           {/* Company name — ab MARZI se. Contact zaroori hai, wajah schema par likhi hai.
               `autoFocus` bhi contact par chala gaya: cursor us khaane me khulna chahiye jise
               bharna hi hai. */}
@@ -854,7 +895,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 Haryana has caught a wrong paste before it became a tax head. */}
             <FieldPill check={checkGstin(watch("gstin") ?? "")} />
             {!(watch("gstin") ?? "").trim() && (
-              <p className="text-3xs text-ink-3">
+              <p className="text-xs text-ink-3">
                 Optional. Helps auto-fill legal name + address on conversion.
               </p>
             )}
@@ -883,7 +924,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   )}
                 >
                   <div className="text-sm font-medium text-ink">{t.label}</div>
-                  <div className="text-2xs text-ink-3">{t.hint}</div>
+                  <div className="text-xs text-ink-3">{t.hint}</div>
                 </button>
               ))}
             </div>
@@ -900,7 +941,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-amber resize-y"
                   {...register("requirement")}
                 />
-                <p className="text-2xs text-ink-3 mt-1">
+                <p className="text-xs text-ink-3 mt-1">
                   {(watch("requirement") ?? "").trim()
                     ? "Requirement hai — Deal Pipeline mein qualified project opportunity ki tarah jaayegi."
                     : "Khaali chhodo to Lead Inbox mein jaayegi — baad mein requirement likh sakte ho."}
@@ -923,6 +964,9 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                     onBlur={() => setValueText((t) => commitMoney(t))}
                   />
                   <FieldPill check={checkMoney(valueText)} />
+                  {(parseMoney(valueText) ?? 0) > 0 && (
+                    <p className="mt-1 text-xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
+                  )}
                 </FormField>
                 <FormField label="Kab tak chahiye?" htmlFor="project_timeline">
                   <Input id="project_timeline" placeholder="e.g. 3 months, Diwali se pehle" {...register("project_timeline")} />
@@ -953,7 +997,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </SelectContent>
             </Select>
             <input type="hidden" {...register("plan")} value={plan} />
-            <p className="text-2xs text-ink-3 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               {plan
                 ? "Will go straight into Deal Pipeline as a qualified opportunity."
                 : "Leave empty to drop into Lead Inbox — you can qualify later."}
@@ -996,6 +1040,9 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 onBlur={() => setValueText((t) => commitMoney(t))}
               />
               <FieldPill check={checkMoney(valueText)} />
+              {(parseMoney(valueText) ?? 0) > 0 && (
+                <p className="mt-1 text-xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
+              )}
               {/* Auto-calc hint */}
               {PLAN_PRICE_PER_SEAT_PM[plan] && (watchedSeats ?? 0) >= 1 && (
                 <p className="mt-1 text-xs text-ink-3">
@@ -1038,7 +1085,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </Select>
               <input type="hidden" {...register("stage")} value={stage} />
               {!isProject && !plan && (
-                <p className="mt-1 text-3xs text-ink-3 leading-snug">
+                <p className="mt-1 text-xs text-ink-3 leading-snug">
                   Pick a plan to unlock Demo / Trial / Quote / Won.
                 </p>
               )}
@@ -1055,7 +1102,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {SOURCES.map((s) => (
+                  {sourceOptions(source).map((s) => (
                     <SelectItem key={s.value} value={s.value}>
                       {s.label}
                     </SelectItem>
@@ -1103,7 +1150,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               <option value="fresh">Fresh subscription (new)</option>
               <option value="switch">Switching vendor (already subscribed elsewhere)</option>
             </select>
-            <p className="mt-1 text-3xs text-ink-3 leading-snug">
+            <p className="mt-1 text-xs text-ink-3 leading-snug">
               &ldquo;Switching&rdquo; = they already use this product, just moving billing/reseller to you (migration).
             </p>
           </FormField>
@@ -1115,10 +1162,10 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               <Input
                 id="follow_up_date"
                 type="date"
-                min={new Date().toISOString().slice(0, 10)}
+                min={istToday()}
                 {...register("follow_up_date")}
               />
-              <p className="mt-1 text-3xs text-ink-3">
+              <p className="mt-1 text-xs text-ink-3">
                 Drives your daily worklist · reminder ping the morning of.
               </p>
             </FormField>
@@ -1199,7 +1246,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               {/* Blanks are stated, not shown as gaps — a blank row reads as a
                   rendering fault and an operator cannot tell it apart from a value
                   that failed to load. See the same rule on the enquiry panel. */}
-              <p className="mt-2.5 border-t border-hairline pt-2 text-3xs leading-snug text-ink-3">
+              <p className="mt-2.5 border-t border-hairline pt-2 text-xs leading-snug text-ink-3">
                 Anything marked “not set” will be saved empty. Go back to any step above to
                 fill it — nothing is lost.
               </p>

@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { rupee, cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 interface LeadsRightRailProps {
   leads: Lead[];
@@ -66,7 +67,7 @@ export function LeadsRightRail({
   className,
 }: LeadsRightRailProps) {
   const isBelow = orientation === "below";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const open  = leads.filter((l) => l.stage !== "won" && l.stage !== "lost");
 
   // ── Today's plan ─────────────────────────────────────
@@ -193,7 +194,7 @@ export function LeadsRightRail({
                       </Badge>
                     </div>
                     {l.contact_name && (
-                      <div className="text-2xs text-ink-3 truncate mt-0.5 group-hover:text-ink-2">
+                      <div className="text-xs text-ink-3 truncate mt-0.5 group-hover:text-ink-2">
                         {l.contact_name}
                         {l.contact_phone && ` · ${l.contact_phone}`}
                       </div>
@@ -225,7 +226,7 @@ export function LeadsRightRail({
                       {l.value ? rupee(l.value, { compact: true }) : "—"}
                     </span>
                   </div>
-                  <div className="text-2xs text-ink-3 mt-0.5 inline-flex items-center gap-1.5">
+                  <div className="text-xs text-ink-3 mt-0.5 inline-flex items-center gap-1.5">
                     <span className="capitalize">{STAGE_LABEL[l.stage]}</span>
                     {l.seats && <span>· {l.seats} seats</span>}
                   </div>
@@ -245,7 +246,7 @@ export function LeadsRightRail({
                 <div className="text-sm text-ink font-medium">
                   {noFollowUp} lead{noFollowUp === 1 ? "" : "s"} without a follow-up date
                 </div>
-                <p className="text-2xs text-ink-3 mt-0.5 leading-snug">
+                <p className="text-xs text-ink-3 mt-0.5 leading-snug">
                   Schedule one so they don't fall through the cracks.
                 </p>
               </li>
@@ -255,7 +256,7 @@ export function LeadsRightRail({
                 <div className="text-sm text-ink font-medium">
                   {staleLeads} stale lead{staleLeads === 1 ? "" : "s"} (14+ days no activity)
                 </div>
-                <p className="text-2xs text-ink-3 mt-0.5 leading-snug">
+                <p className="text-xs text-ink-3 mt-0.5 leading-snug">
                   Touch base or mark lost to clean the pipeline.
                 </p>
               </li>

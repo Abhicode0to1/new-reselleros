@@ -18,6 +18,7 @@ import { FormField } from "@/components/ui/label";
 import { rupee } from "@/lib/utils";
 import { gstinState, liveMoney, commitMoney, parseMoney } from "@/lib/forms/poka-yoke";
 import { MILESTONE_SPLITS, milestonesFor, withGst, interStateFor } from "@/lib/leads/enquiry";
+import { amountInIndianWords, magnitudeWarning } from "@/lib/accounting/amount-words";
 import { useCreateProjectQuoteFromLead, useSellerState, useCustomerForLead } from "@/lib/queries/leads";
 import type { Lead } from "@/lib/supabase/database.types";
 
@@ -105,9 +106,14 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
               onBlur={() => setPriceText((t) => commitMoney(t))}
             />
             {taxable > 0 && (
-              <p className="mt-1 text-2xs text-ink-3 tabular-nums">
-                {rupee(priced.taxable)} + GST {GST_RATE}% {rupee(priced.gst)} = <b className="text-ink">{rupee(priced.total)}</b>
+              <p className="mt-1 text-xs text-ink-3 tabular-nums">
+                <b className="text-ink">{amountInIndianWords(taxable)}</b> · {rupee(priced.taxable)} + GST {GST_RATE}% {rupee(priced.gst)} = <b className="text-ink">{rupee(priced.total)}</b>
               </p>
+            )}
+            {/* Once accepted and invoiced a price can only be corrected with a credit / debit
+                note — a slipped zero against the lead's own budget is caught here instead. */}
+            {magnitudeWarning(taxable, lead?.value, "lead ka budget") && (
+              <p className="mt-1 text-xs text-rose">{magnitudeWarning(taxable, lead?.value, "lead ka budget")}</p>
             )}
           </FormField>
 
@@ -115,7 +121,7 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
             {derived !== null ? (
               <p className="text-sm text-ink">
                 {derived ? "Inter-state — IGST" : "Intra-state — CGST + SGST"}
-                <span className="block text-2xs text-ink-3">
+                <span className="block text-xs text-ink-3">
                   client ka state {clientState}{matchedCustomer && !lead?.state_code && !lead?.gstin ? ` (customer "${matchedCustomer.name}" se)` : ""} · aapka {sellerState}
                 </span>
               </p>
@@ -126,7 +132,7 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
                   <option value="intra">Aapke hi state mein — CGST + SGST</option>
                   <option value="inter">Doosre state mein — IGST</option>
                 </select>
-                <p className="mt-1 text-2xs text-amber-ink">
+                <p className="mt-1 text-xs text-amber-ink">
                   Lead mein client ka state / GSTIN nahi hai{sellerState ? "" : " (aur aapki company ka state bhi darj nahi hai)"} — isliye poochh rahe hain.
                 </p>
               </>
@@ -138,13 +144,13 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
               {MILESTONE_SPLITS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
             {milestones.length > 0 && (
-              <ul className="mt-1.5 text-2xs text-ink-2 tabular-nums space-y-0.5">
+              <ul className="mt-1.5 text-xs text-ink-2 tabular-nums space-y-0.5">
                 {milestones.map((m) => (
                   <li key={m.label} className="flex justify-between"><span>{m.label}</span><span>{rupee(m.total_amount)}</span></li>
                 ))}
               </ul>
             )}
-            <p className="mt-1 text-3xs text-ink-3">Baad mein Project Sales mein milestones badal sakte ho.</p>
+            <p className="mt-1 text-xs text-ink-3">Baad mein Project Sales mein milestones badal sakte ho.</p>
           </FormField>
         </div>
 

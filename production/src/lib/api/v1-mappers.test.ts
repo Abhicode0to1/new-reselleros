@@ -115,6 +115,11 @@ describe("mapQuote", () => {
     expect(mapQuote({ ...base, status: "rejected" }, "x").status).toBe("expired");
     expect(mapQuote({ ...base, status: "expired" }, "x").status).toBe("expired");
   });
+  it("carries `renews` only when looked up — [] means renews nothing, absent means not looked up", () => {
+    expect(mapQuote(base, "x")).not.toHaveProperty("renews");
+    expect(mapQuote(base, "x", null, []).renews).toEqual([]);
+    expect(mapQuote(base, "x", null, [{ vendor: "hosting", domain: "acme.in" }]).renews).toEqual([{ vendor: "hosting", domain: "acme.in" }]);
+  });
 });
 
 describe("mapPayment", () => {

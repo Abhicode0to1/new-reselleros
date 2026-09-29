@@ -14,6 +14,14 @@
  * tenant that will one day need it. Meanwhile the page already promised restore
  * points are taken "apne aap roz". This makes the promise true.
  *
+ * ─── S15 (28 Sep 2026): EK-EK TENANT ────────────────────────────────────────
+ * Ab har tenant apna `backup_tenant()` call (apna transaction) aur apna GCS object
+ * (`daily/YYYY-MM-DD/<tenant_id>.json` + `_manifest.json`) — lib/backup/per-tenant.ts.
+ * Pehle sab tenants ek transaction aur ek jsonb me the; 50 tenant par wo design girta.
+ * Migration 20260928141000 abhi na lagi ho (function nahi mila) to PURANA raasta
+ * (`backup_all_tenants` + ek combined object) — deploy aur migration kisi bhi kram me hon,
+ * raat ka backup nahi rukta.
+ *
  * ─── ORDER OF THE GUARDS ────────────────────────────────────────────────────
  * Fail closed on a missing secret (503) BEFORE looking at the header, and use a
  * constant-time compare — the same shape as the other five crons here, on
@@ -26,10 +34,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { runSweepWithRetry } from "@/lib/backup/sweep-retry";
+import { runPerTenantBackup, type TenantBackupInfo } from "@/lib/backup/per-tenant";
 import { reportCron } from "@/lib/ops/cron-report";
 import {
   OFFSITE_BUCKET,
   offsiteObjectName,
+  offsiteMonthlyName,
   offsiteWindowStart,
   offsiteEnvelope,
   offsiteRefusal,
@@ -39,7 +49,63 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+type Admin = ReturnType<typeof createAdminClient>;
+
+function projectRef(): string {
+  return (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/^https?:\/\//, "").split(".")[0] || "unknown";
+}
+
 /**
+ * GCS uploader — token metadata server se, EK baar (per-tenant raaste par 50 upload ke liye
+ * 50 token nahi). Koi key file, koi env var, koi nayi dependency (CLAUDE.md §17). Local dev
+ * me metadata server hota hi nahi, aur wahan ye chalna bhi nahi chahiye.
+ */
+function makeUploader(): (name: string, body: string) => Promise<string | null> {
+  let tokenP: Promise<{ token: string } | { error: string }> | null = null;
+  const getToken = () =>
+    (tokenP ??= (async () => {
+      try {
+        const r = await fetch(
+          "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+          { headers: { "Metadata-Flavor": "Google" }, signal: AbortSignal.timeout(5_000) },
+        );
+        if (!r.ok) return { error: `metadata token nahi mila: ${r.status}` };
+        const t = ((await r.json()) as { access_token?: string }).access_token;
+        return t ? { token: t } : { error: "metadata token khaali aaya" };
+      } catch {
+        return { error: "metadata server tak nahi pahunch paye — ye route sirf Cloud Run par chalta hai" };
+      }
+    })());
+
+  return async (name, body) => {
+    const tk = await getToken();
+    if ("error" in tk) return tk.error;
+    const up = await fetch(
+      `https://storage.googleapis.com/upload/storage/v1/b/${OFFSITE_BUCKET}/o` +
+        `?uploadType=media&name=${encodeURIComponent(name)}`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${tk.token}`, "content-type": "application/json" },
+        body,
+        signal: AbortSignal.timeout(120_000),
+      },
+    );
+    if (!up.ok) {
+      /* §24: kya hua, kyun, ab kya. 403 ka matlab lagbhag hamesha ek hi cheez hai. */
+      const text = (await up.text()).slice(0, 200);
+      const hint = up.status === 403
+        ? ` — bucket par grant chahiye: gcloud storage buckets add-iam-policy-binding gs://${OFFSITE_BUCKET}` +
+          ` --member="serviceAccount:1005662057478-compute@developer.gserviceaccount.com" --role="roles/storage.objectAdmin"`
+        : "";
+      return `upload ${name} ${up.status}: ${text}${hint}`;
+    }
+    console.log(`[cron/backup] off-site: gs://${OFFSITE_BUCKET}/${name}`);
+    return null;
+  };
+}
+
+/**
+ * PURANA raasta (S15 se pehle ka) — sirf tab jab `backup_tenant` function abhi DB me nahi.
  * Snapshot ko database ke BAHAR rakho — Cloud Storage par, doosre region me.
  *
  * `backup.snapshots` usi database ke andar hai jiska wo backup hai. Wo backup ek galat DELETE
@@ -50,7 +116,7 @@ export const runtime = "nodejs";
  * lautane par Scheduler poora sweep dobara chalata — off-site ki naakami ka ilaaj us DB
  * backup ko dobara lena nahi hai.
  */
-async function putOffsite(admin: ReturnType<typeof createAdminClient>): Promise<string | null> {
+async function putOffsiteCombined(admin: Admin, upload: ReturnType<typeof makeUploader>): Promise<string | null> {
   const now = new Date();
 
   const { data, error } = await admin.rpc("export_snapshots_for_offsite", {
@@ -63,54 +129,77 @@ async function putOffsite(admin: ReturnType<typeof createAdminClient>): Promise<
      `offsiteRefusal` 0 ko "ginti nahi pata" maanta hai, "koi tenant nahi" nahi. */
   const { count } = await admin.from("tenants").select("id", { count: "exact", head: true });
 
-  const env = offsiteEnvelope(
-    now,
-    (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/^https?:\/\//, "").split(".")[0] || "unknown",
-    (data ?? []) as OffsiteSnapshot[],
-  );
+  const env = offsiteEnvelope(now, projectRef(), (data ?? []) as OffsiteSnapshot[]);
 
   const refusal = offsiteRefusal(env, count ?? 0);
   if (refusal) return refusal;
 
-  /* Token metadata server se — koi key file, koi env var, koi nayi dependency (CLAUDE.md §17).
-     Local dev me metadata server hota hi nahi, aur wahan ye chalna bhi nahi chahiye. */
-  let token: string;
-  try {
-    const r = await fetch(
-      "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
-      { headers: { "Metadata-Flavor": "Google" }, signal: AbortSignal.timeout(5_000) },
+  const body = JSON.stringify(env);
+  const dailyError = await upload(offsiteObjectName(now), body);
+  if (dailyError) return dailyError;
+
+  /* Mahine ki 1 tareekh: lambi retention wali copy (S4). Daily ho chuka hai, to iski naakami
+     alag se report hoti hai — raat ka backup phir bhi bacha hai. */
+  const monthly = offsiteMonthlyName(now);
+  return monthly ? upload(monthly, body) : null;
+}
+
+/** S15 se pehle ka poora sweep — function-missing fallback. Vyavhaar badla nahi. */
+async function legacySweep(admin: Admin, upload: ReturnType<typeof makeUploader>) {
+  /* Retried, because on 21 Aug 2026 this exact call answered "JWT issued at future"
+   * once and the night's backup was simply never taken — the Cloud Scheduler job has
+   * no retryCount, so nothing tried again until the next midnight. Only failures a
+   * second attempt could survive are retried; see lib/backup/sweep-retry.ts, which
+   * refuses to retry a bad grant or an unapplied migration on purpose. */
+  const run = await runSweepWithRetry(async () => {
+    const { data, error } = await admin.rpc("backup_all_tenants", { p_label: null });
+    return error ? { ok: false as const, message: error.message } : { ok: true as const, data };
+  });
+
+  if (run.retriedBecause.length > 0) {
+    console.warn(
+      `[cron/backup] retried ${run.retriedBecause.length}x — ${run.retriedBecause.join(" | ")}`,
     );
-    if (!r.ok) return `metadata token nahi mila: ${r.status}`;
-    const t = ((await r.json()) as { access_token?: string }).access_token;
-    if (!t) return "metadata token khaali aaya";
-    token = t;
-  } catch {
-    return "metadata server tak nahi pahunch paye — ye route sirf Cloud Run par chalta hai";
   }
 
-  const name = offsiteObjectName(now);
-  const up = await fetch(
-    `https://storage.googleapis.com/upload/storage/v1/b/${OFFSITE_BUCKET}/o` +
-      `?uploadType=media&name=${encodeURIComponent(name)}`,
-    {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify(env),
-      signal: AbortSignal.timeout(120_000),
-    },
-  );
-  if (!up.ok) {
-    /* §24: kya hua, kyun, ab kya. 403 ka matlab lagbhag hamesha ek hi cheez hai. */
-    const body = (await up.text()).slice(0, 200);
-    const hint = up.status === 403
-      ? ` — bucket par grant chahiye: gcloud storage buckets add-iam-policy-binding gs://${OFFSITE_BUCKET}` +
-        ` --member="serviceAccount:1005662057478-compute@developer.gserviceaccount.com" --role="roles/storage.objectAdmin"`
-      : "";
-    return `upload ${up.status}: ${body}${hint}`;
+  if (!run.result.ok) {
+    /* Keeps the "[cron/backup] sweep failed" prefix the 21 Aug incident was found by. */
+    console.error(
+      `[cron/backup] sweep failed after ${run.attemptsMade} attempt(s):`,
+      run.result.message,
+    );
+    return NextResponse.json(
+      { ok: false, error: run.result.message, attempts: run.attemptsMade },
+      { status: 500 },
+    );
   }
 
-  console.log(`[cron/backup] off-site: gs://${OFFSITE_BUCKET}/${name} — ${env.tenant_count} tenant`);
-  return null;
+  const result = run.result.data;
+  /* The function's `ok` is a COUNT of tenants; the response's `ok` is a boolean. */
+  const body = {
+    mode:       "legacy" as const,
+    label:      result.label,
+    backed_up:  result.ok,
+    failed:     result.failed,
+    total_bytes: result.total_bytes,
+    results:    result.results,
+  };
+
+  if (result.failed > 0) {
+    const broken = result.results.filter((r) => !r.ok).map((r) => `${r.tenant}: ${r.error}`);
+    console.error("[cron/backup] some tenants failed:", broken.join(" | "));
+    return NextResponse.json({ ok: false, ...body }, { status: 500 });
+  }
+
+  console.log(`[cron/backup] ${result.label} — ${result.ok} tenants, ${result.total_bytes} bytes`);
+  const offsiteError = await putOffsiteCombined(admin, upload);
+
+  return NextResponse.json(reportCron("backup", {
+    ok: true,
+    ...body,
+    offsite: offsiteError ? "failed" : "ok",
+    errors: offsiteError ? [`off-site copy: ${offsiteError}`] : [],
+  }));
 }
 
 export async function GET(req: NextRequest) {
@@ -124,78 +213,81 @@ export async function GET(req: NextRequest) {
   }
 
   const admin = createAdminClient();
+  const upload = makeUploader();
 
-  /* Retried, because on 21 Aug 2026 this exact call answered "JWT issued at future"
-   * once and the night's backup was simply never taken — the Cloud Scheduler job has
-   * no retryCount, so nothing tried again until the next midnight. Only failures a
-   * second attempt could survive are retried; see lib/backup/sweep-retry.ts, which
-   * refuses to retry a bad grant or an unapplied migration on purpose. */
-  const run = await runSweepWithRetry(async () => {
-    const { data, error } = await admin.rpc("backup_all_tenants", { p_label: null });
-    return error ? { ok: false as const, message: error.message } : { ok: true as const, data };
-  });
-
-  /* Logged even when the retry WORKED. A backup that only succeeds on the second try
-   * is still a warning worth reading — silently absorbing it is how a clock drifting
-   * further every night stays invisible until the night it exceeds the retry budget. */
-  if (run.retriedBecause.length > 0) {
-    console.warn(
-      `[cron/backup] retried ${run.retriedBecause.length}x — ${run.retriedBecause.join(" | ")}`,
-    );
+  let report;
+  try {
+    report = await runPerTenantBackup({
+      now: new Date(),
+      projectRef: projectRef(),
+      listTenants: async () => {
+        const { data, error } = await admin.from("tenants").select("id, name").order("created_at");
+        return error ? { ok: false, message: error.message } : { ok: true, data: data ?? [] };
+      },
+      backupTenant: async (tenantId) => {
+        const { data, error } = await admin.rpc("backup_tenant", { p_tenant: tenantId, p_label: null });
+        return error
+          ? { ok: false, message: error.message }
+          : { ok: true, data: (data ?? {}) as TenantBackupInfo };
+      },
+      exportTenant: async (tenantId, since) => {
+        const { data, error } = await admin.rpc("export_tenant_snapshot_for_offsite", {
+          p_tenant: tenantId,
+          p_since: since.toISOString(),
+        });
+        return error
+          ? { ok: false, message: error.message }
+          : { ok: true, data: (data ?? null) as OffsiteSnapshot | null };
+      },
+      upload,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[cron/backup] sweep failed after 1 attempt(s):", message);
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 
-  if (!run.result.ok) {
-    /* Keeps the "[cron/backup] sweep failed" prefix the 21 Aug incident was found by,
-     * so any log filter or search built on it still matches — with the attempt count
-     * added, which is the thing that was missing that night. */
-    console.error(
-      `[cron/backup] sweep failed after ${run.attemptsMade} attempt(s):`,
-      run.result.message,
-    );
-    return NextResponse.json(
-      { ok: false, error: run.result.message, attempts: run.attemptsMade },
-      { status: 500 },
-    );
+  if (report.missingFunction) {
+    console.warn("[cron/backup] backup_tenant() nahi mila — migration 20260928141000 lagao; aaj purana sweep");
+    return legacySweep(admin, upload);
   }
 
-  const result = run.result.data;
+  const retried = report.results.flatMap((r) => r.retried.map((m) => `${r.tenant}: ${m}`));
+  if (retried.length > 0) {
+    console.warn(`[cron/backup] retried ${retried.length}x — ${retried.join(" | ")}`);
+  }
 
-  /* The function's `ok` is a COUNT of tenants; the response's `ok` is a boolean
-   * for the caller. Spreading one over the other silently overwrote the count,
-   * so the fields are mapped by hand and renamed to say what they are. */
   const body = {
-    label:      result.label,
-    backed_up:  result.ok,
-    failed:     result.failed,
-    total_bytes: result.total_bytes,
-    results:    result.results,
+    mode:        "per-tenant" as const,
+    label:       report.label,
+    backed_up:   report.backed_up,
+    failed:      report.failed,
+    total_bytes: report.total_bytes,
+    offsite_ok:  report.offsite_ok,
+    results:     report.results.map(({ retried: _r, ...rest }) => rest),
   };
 
   /* A partial failure is reported, not swallowed. One tenant without tonight's
    * backup means the scheduler must see a non-2xx, or the run shows up green
-   * with a note nobody reads. The tenants that DID succeed keep their snapshots
-   * either way — the sweep never rolls back for one bad tenant. */
-  if (result.failed > 0) {
-    const broken = result.results.filter((r) => !r.ok).map((r) => `${r.tenant}: ${r.error}`);
+   * with a note nobody reads. Baaki tenants ka DB snapshot AUR off-site copy
+   * (S15 se) dono ho chuke hain — ek kharab tenant kisi aur ko nahi rokta. */
+  if (report.failed > 0) {
+    const broken = report.results.filter((r) => !r.ok).map((r) => `${r.tenant}: ${r.error}`);
     console.error("[cron/backup] some tenants failed:", broken.join(" | "));
-    return NextResponse.json({ ok: false, ...body }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, ...body, errors: report.offsite_errors.map((e) => `off-site copy: ${e}`) },
+      { status: 500 },
+    );
   }
 
-  console.log(`[cron/backup] ${result.label} — ${result.ok} tenants, ${result.total_bytes} bytes`);
+  console.log(`[cron/backup] ${report.label} — ${report.backed_up} tenants, ${report.total_bytes} bytes`);
 
-  /* DB ka backup ho chuka. Ab uski ek copy database ke BAHAR — kyunki `backup.snapshots`
-     usi project me hai, aur project khone par backup bhi saath chala jayega.
-
-     Naakami response ko 500 nahi banati (upar wali tippani dekhein), par chup bhi nahi
-     rehti: `errors` me jaakar `reportCron` se stderr par likhi jaati hai, aur agli subah
-     08:30 wali health digest use utha leti hai. Ek backup jo chup-chaap band pad jaye wo
-     backup na hone se bura hai — kyunki dikhta hai backup jaisa. */
-  const offsiteError = await putOffsite(admin);
-
+  /* Off-site ki naakami 500 nahi banati (DB backup ho chuka; 500 par Scheduler sab dobara
+     leta), par chup bhi nahi rehti: `errors` → reportCron → stderr → 08:30 health digest. */
   return NextResponse.json(reportCron("backup", {
     ok: true,
     ...body,
-    offsite: offsiteError ? "failed" : "ok",
-    errors: offsiteError ? [`off-site copy: ${offsiteError}`] : [],
+    offsite: report.offsite_errors.length ? "failed" : "ok",
+    errors: report.offsite_errors.map((e) => `off-site copy: ${e}`),
   }));
 }

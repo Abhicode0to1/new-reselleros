@@ -24,8 +24,9 @@ import { useBalanceSheetAuto } from "@/lib/queries/balance-sheet";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { Icon } from "@/components/ui/icon";
 import { CashFlowMonthSheet } from "@/components/features/accounting/cash-flow-month-sheet";
-import type { CashFlowTxn } from "@/lib/accounting/cash-flow-lines";
+import { cashFlowByActivity, type CashFlowTxn } from "@/lib/accounting/cash-flow-lines";
 import { monthRows, runway as computeRunway, type MonthRow } from "@/lib/accounting/cash-flow-summary";
+import { utcDateISO } from "@/lib/dates/ist";
 
 type RangeKey = "month" | "fy" | "12m" | "all";
 
@@ -35,7 +36,7 @@ function fyStart(d: Date): Date {
 }
 function rangeBounds(key: RangeKey): { from: string | null; to: string | null; label: string } {
   const now = new Date(Date.now() + 5.5 * 3600 * 1000);
-  const iso = (dt: Date) => dt.toISOString().slice(0, 10);
+  const iso = utcDateISO;   // `now` pehle se IST-shifted hai
   const today = iso(now);
   if (key === "month") return { from: iso(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))), to: today, label: "This month" };
   if (key === "fy")    return { from: iso(fyStart(now)), to: today, label: "This financial year" };
@@ -131,6 +132,8 @@ export default function CashFlowPage() {
   const maxFlow = Math.max(1, ...months.map((r) => Math.max(r.cashIn, r.cashOut)));
   const empty = !isLoading && !error && months.length === 0;
 
+  /* Cash flow statement by activity (direct method) — lib/accounting/cash-flow-lines.ts. */
+  const byActivity = React.useMemo(() => cashFlowByActivity(lines ?? []), [lines]);
   const exportCsv = () => {
     downloadCSV(
       `cash-flow-${range}.csv`,
@@ -138,6 +141,11 @@ export default function CashFlowPage() {
       [
         ...months.map((r): [string, number, number, number, number] => [monthLabel(r.ym), r.cashIn, r.cashOut, r.net, r.balanceEnd]),
         ["Total", totals.cashIn, totals.cashOut, totals.net, months.length ? months[months.length - 1].balanceEnd : 0],
+        ["", "", "", "", ""],
+        ["Cash flow statement (direct method)", "Cash in", "Cash out", "Net", ""],
+        ...byActivity.map((g): [string, number, number, number, string] => [g.label, g.cashIn, g.cashOut, g.net, ""]),
+        ["Opening cash (range start)", "", "", flow?.balanceBefore ?? 0, ""],
+        ["Closing cash", "", "", months.length ? months[months.length - 1].balanceEnd : 0, ""],
       ],
     );
   };
@@ -176,6 +184,35 @@ export default function CashFlowPage() {
         />
       )}
 
+      {/* Cash flow statement by activity — what the CA's "cash flow statement" is, from the same lines. */}
+      {!empty && !error && byActivity.length > 0 && (
+        <Card className="mb-5 p-3.5">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+            <p className="text-sm font-semibold text-ink">Cash flow statement — by activity (direct method)</p>
+            <span className="text-xs text-ink-3">reconciliation se classify; transfers alag; unreconciled alag</span>
+          </div>
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-hairline">
+              {byActivity.map((g) => (
+                <tr key={g.activity} className={g.activity === "transfer" || g.activity === "unreconciled" ? "text-ink-3" : ""}>
+                  <td className="py-1.5 pr-3">{g.label}<span className="ml-1 text-xs text-ink-3">({g.count})</span></td>
+                  <td className="py-1.5 px-2 text-right font-mono tabular-nums text-emerald">{g.cashIn ? rupee(g.cashIn) : "—"}</td>
+                  <td className="py-1.5 px-2 text-right font-mono tabular-nums text-rose">{g.cashOut ? rupee(g.cashOut) : "—"}</td>
+                  <td className={`py-1.5 pl-2 text-right font-mono tabular-nums font-semibold ${g.net >= 0 ? "text-emerald" : "text-rose"}`}>{g.net < 0 ? "−" : ""}{rupee(Math.abs(g.net))}</td>
+                </tr>
+              ))}
+              <tr className="font-semibold text-ink">
+                <td className="py-1.5 pr-3">Net change in cash</td>
+                <td className="py-1.5 px-2 text-right font-mono tabular-nums">{rupee(totals.cashIn)}</td>
+                <td className="py-1.5 px-2 text-right font-mono tabular-nums">{rupee(totals.cashOut)}</td>
+                <td className={`py-1.5 pl-2 text-right font-mono tabular-nums ${totals.net >= 0 ? "text-emerald" : "text-rose"}`}>{totals.net < 0 ? "−" : ""}{rupee(Math.abs(totals.net))}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs text-ink-3">Opening cash {rupee(flow?.balanceBefore ?? 0)} → closing {rupee(months.length ? months[months.length - 1].balanceEnd : 0)}. Indirect method (net profit ± working capital) ke liye P&amp;L aur Balance Sheet — ye direct method hai, jo chhoti company ke liye CA aksar yahi maangta hai.</p>
+        </Card>
+      )}
+
       {/* Runway callout */}
       {!empty && !error && runway != null && (() => {
         const tight = runway.atTrend !== null && runway.atTrend < 3;
@@ -191,21 +228,21 @@ export default function CashFlowPage() {
                 <div className="font-serif text-2xl text-ink tabular-nums">
                   {runway.ifNoIncome === null ? "—" : <>≈ {fmtMonths(runway.ifNoIncome)} mahine</>}
                 </div>
-                <div className="text-2xs text-ink-3">average kharcha {rupee(runway.spendPerMonth)}/mahina</div>
+                <div className="text-xs text-ink-3">average kharcha {rupee(runway.spendPerMonth)}/mahina</div>
               </div>
               <div>
                 <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Pichhle {runway.months} mahine jaisa chale</div>
                 <div className={`font-serif text-2xl tabular-nums ${tight ? "text-rose" : "text-ink"}`}>
                   {runway.atTrend === null ? "Paisa badh raha hai" : <>≈ {fmtMonths(runway.atTrend)} mahine</>}
                 </div>
-                <div className="text-2xs text-ink-3">
+                <div className="text-xs text-ink-3">
                   {runway.netPerMonth < 0
                     ? <>income ke baad bhi average {rupee(-runway.netPerMonth)}/mahina ghat raha hai</>
                     : <>average {rupee(runway.netPerMonth)}/mahina badh raha hai</>}
                 </div>
               </div>
             </div>
-            {tight && <p className="text-2xs text-rose mt-2">Tight — receivables jaldi collect karo ya non-essential kharcha roko.</p>}
+            {tight && <p className="text-xs text-rose mt-2">Tight — receivables jaldi collect karo ya non-essential kharcha roko.</p>}
           </Card>
         );
       })()}
@@ -293,7 +330,7 @@ export default function CashFlowPage() {
         accountName={accountName}
       />
 
-      <p className="text-2xs text-ink-3 mt-3 leading-relaxed">
+      <p className="text-xs text-ink-3 mt-3 leading-relaxed">
         Click a month to see the bank lines behind it.{" "}
         Cash flow = actual bank credits (in) minus debits (out) per month, from your imported/connected statements.
         Balance (month end) = opening balance + every line up to that month — it should match your statement.

@@ -18,6 +18,7 @@ import { FormField } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { rupee } from "@/lib/utils";
 import { useBulkMarkExpensesPaid, type Expense } from "@/lib/queries/expenses";
+import { istToday } from "@/lib/dates/ist";
 
 // Cash is deliberately excluded — petty-cash needs a per-expense account.
 const BULK_METHODS = ["bank_transfer", "upi", "card", "cheque"] as const;
@@ -30,7 +31,7 @@ export function BulkMarkPaidDialog({
   onDone: () => void;
 }) {
   const bulk = useBulkMarkExpensesPaid();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const [paidDate, setPaidDate] = React.useState<string>(today);
   const [method, setMethod] = React.useState<string>("bank_transfer");
 
@@ -71,7 +72,7 @@ export function BulkMarkPaidDialog({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-3xs text-ink-3 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               Paying by cash? Use each row&apos;s own <b>Mark paid</b> so the right petty-cash account is deducted.
             </p>
           </FormField>

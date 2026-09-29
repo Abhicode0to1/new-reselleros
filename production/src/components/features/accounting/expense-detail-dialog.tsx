@@ -121,7 +121,7 @@ export function ExpenseDetailDialog({ expense, onEdit, onClose }: {
               <span className="font-mono tabular-nums text-ink-2">{money(subDisp)}</span>
             </div>
             {itemsMatch !== null && (
-              <div className={`flex items-center gap-1.5 text-2xs ${itemsMatch ? "text-emerald" : "text-amber-ink"}`}>
+              <div className={`flex items-center gap-1.5 text-xs ${itemsMatch ? "text-emerald" : "text-amber-ink"}`}>
                 <Icon name={itemsMatch ? "check_circle" : "alert"} size={12} />
                 {itemsMatch ? "Items add up to the subtotal" : `Items (${money(itemsSum)}) don't match the subtotal (${money(subDisp)}) — check the entry`}
               </div>
@@ -134,7 +134,7 @@ export function ExpenseDetailDialog({ expense, onEdit, onClose }: {
               <span className="font-semibold text-ink">Total</span>
               <span className="text-right">
                 <span className="font-mono tabular-nums font-semibold text-ink">{money(totDisp)}</span>
-                {foreign && <span className="block text-2xs font-normal text-ink-3">= {rupee(totInr)}</span>}
+                {foreign && <span className="block text-xs font-normal text-ink-3">= {rupee(totInr)}</span>}
               </span>
             </div>
           </div>
@@ -154,7 +154,7 @@ export function ExpenseDetailDialog({ expense, onEdit, onClose }: {
             </button>
           )}
 
-          <p className="text-2xs text-ink-3">
+          <p className="text-xs text-ink-3">
             Amounts shown in {foreign ? `${cur} (the bill's currency), with ₹ for the total` : "₹"}.
             {expense.attachment_url ? " Open the attached bill to compare." : ""}
           </p>

@@ -10,13 +10,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { allowedRoutesForRole, ROLE_HOME, type UserRole } from "@/lib/nav";
-import { rateLimit, clientIp, publicApiLimit } from "@/lib/security/rate-limit";
+import { rateLimitShared, clientIp, publicApiLimit } from "@/lib/security/rate-limit";
 
 // Routes that require authentication (the entire app shell).
 // Keep this in sync with APP_NAV in src/lib/nav.ts — any new section's
 // prefix must be added here for the auth gate + role guard to fire.
 const PROTECTED_PREFIXES = [
   "/dashboard",
+  "/today",           // S29 ranked inbox across every queue
   "/leads",
   "/deals",
   "/tasks",
@@ -37,7 +38,11 @@ const PROTECTED_PREFIXES = [
   "/compliance",      // Pvt Ltd statutory compliance tracker
   "/accounting",      // /accounting/bills, /accounting/pnl, etc.
   "/whatsapp",
-  "/automations",
+  "/automation",     // was "/automations" — the page was never gated (deep study, 27 Sep 2026)
+  "/activity",
+  "/help",
+  "/scorecard",
+  "/purchases",
   "/campaigns",
   "/online-promos",
   "/coupons",
@@ -49,6 +54,7 @@ const PROTECTED_PREFIXES = [
   "/partners",
   "/mobile",
   "/lead-gen",
+  "/marketing",       // Hub, Spend, ROAS & CAC, Tracking links — was missing, so the shells rendered signed-out
   /* Internal bug-report triage queue. The role gate is the nav-derived one further
      down (owner + manager); this list is only the "must be signed in" half. */
   "/admin",
@@ -111,11 +117,12 @@ export async function middleware(request: NextRequest) {
      Auth se PEHLE, kyunki ye routes bina session ke hi chalte hain — aur inme
      paid Gemini (agent/chat), email + auto-quote (enquiry), aur PIN-jaanch
      (expense-claim) baithe hain. Seemayein aur unke kyun: lib/security/
-     rate-limit.ts. Per-instance hai — Cloud Armor ka badla nahi, kharche ka
-     dhakkan hai. */
+     rate-limit.ts. Cloud Armor ka badla nahi, kharche ka dhakkan hai.
+     S20: RATE_LIMIT_STORE=postgres par ginti sab instances me saanjhi; warna
+     (aur DB gadbad par) per-instance memory. */
   const rl = publicApiLimit(pathname);
   if (rl) {
-    const verdict = rateLimit(`pub:${pathname.split("/").slice(0, 4).join("/")}:${clientIp(request.headers)}`, rl);
+    const verdict = await rateLimitShared(`pub:${pathname.split("/").slice(0, 4).join("/")}:${clientIp(request.headers)}`, rl);
     if (!verdict.ok) {
       return NextResponse.json(
         {

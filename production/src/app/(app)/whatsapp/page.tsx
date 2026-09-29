@@ -59,7 +59,7 @@ const STATUS_GLYPH: Record<WhatsAppMessageStatus, string> = {
 function ConversationList({
   selected, onSelect,
 }: { selected: string | null; onSelect: (phone: string) => void }) {
-  const { data: convos, isLoading, error } = useWhatsAppConversations();
+  const { data: convos, isLoading, error, hasNextPage, fetchNextPage, isFetchingNextPage } = useWhatsAppConversations();
 
   if (isLoading) return (
     <div className="p-2 space-y-1">
@@ -117,6 +117,15 @@ function ConversationList({
           </li>
         );
       })}
+      {/* S37: conversations come in pages (list_whatsapp_threads). Older ones used to be
+          missing outright; now they are one click away. */}
+      {hasNextPage && (
+        <li className="p-2 text-center">
+          <Button size="sm" variant="ghost" loading={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+            Load older conversations
+          </Button>
+        </li>
+      )}
     </ul>
   );
 }

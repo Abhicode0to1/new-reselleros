@@ -66,6 +66,10 @@ export default function BankingPage() {
           <Button icon="list" onClick={() => router.push("/accounting/banking/rules" as Route)}>
             Category rules
           </Button>
+          {/* Month-end: bank balance vs book balance, every difference named (lib/banking/brs.ts). */}
+          <Button icon="check" onClick={() => router.push("/accounting/banking/brs" as Route)}>
+            Bank reconciliation
+          </Button>
           {(accounts?.length ?? 0) >= 2 && (
             <Button icon="refresh" onClick={() => setTransferOpen(true)}>
               Move money / withdraw
@@ -84,14 +88,14 @@ export default function BankingPage() {
             <div>
               <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Total balance</p>
               <p className="font-serif text-2xl text-ink mt-1">{rupee(totalBalance, { compact: true })}</p>
-              <p className="text-2xs text-ink-3 mt-0.5">
+              <p className="text-xs text-ink-3 mt-0.5">
                 {cardOwed > 0 ? <>Cash &amp; bank · <span className="text-rose">{rupee(cardOwed, { compact: true })} cards ka owe / udhari</span></> : "Across all accounts"}
               </p>
             </div>
             <div>
               <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Accounts</p>
               <p className="font-serif text-2xl text-ink mt-1">{accounts.length}</p>
-              <p className="text-2xs text-ink-3 mt-0.5">Active</p>
+              <p className="text-xs text-ink-3 mt-0.5">Active</p>
             </div>
             <div className="md:col-span-2">
               <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">Tips</p>
@@ -236,7 +240,7 @@ function BankAccountCard({
               <p className={`font-serif text-2xl mt-1 ${balance < 0 ? "text-rose" : "text-emerald"}`}>
                 {rupee(Math.abs(balance))}
               </p>
-              <p className="text-3xs text-ink-3 mt-0.5">
+              <p className="text-xs text-ink-3 mt-0.5">
                 {balance < 0 ? "card par owe / udhari" : balance > 0 ? "extra jama (credit)" : "koi owe / udhari nahi"}
               </p>
             </>
@@ -247,12 +251,12 @@ function BankAccountCard({
           )}
           {/* Data-integrity guard: cash-in-hand can never be negative in reality. */}
           {account.account_type === "cash" && balance < 0 && (
-            <div className="mt-2 flex items-start gap-1.5 rounded-md bg-rose/10 px-2 py-1.5 text-2xs text-rose">
+            <div className="mt-2 flex items-start gap-1.5 rounded-md bg-rose/10 px-2 py-1.5 text-xs text-rose">
               <Icon name="alert" size={12} className="mt-0.5 shrink-0" />
               <span>Cash can&apos;t be negative — you likely missed a cash deposit/top-up. Add it via <b>Move money</b>, or reconcile the missing entry.</span>
             </div>
           )}
-          <p className="text-2xs text-ink-3 mt-1 inline-flex items-center gap-1">
+          <p className="text-xs text-ink-3 mt-1 inline-flex items-center gap-1">
             <Icon name="arrow_right" size={11} /> View transactions
           </p>
         </div>

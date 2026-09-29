@@ -42,6 +42,8 @@ import {
   useBookBankCredit,
   useBookBankAdvance,
   useBookBankTxnAsStatutory,
+  useBookBankTxnAsVendorBill,
+  useBookBankTxnAsCommission,
   useBookCreditAsInvoice,
   useReconcileSalaryAdvanceSplit,
   type BankTransactionRow,
@@ -61,6 +63,8 @@ import { useBookSalaryLines } from "@/lib/queries/salary-from-bank";
 import { detectGovtPayment } from "@/lib/banking/govt-payment";
 import { payeeFromNarration, TEST_TRANSFER_MAX } from "@/lib/banking/narration";
 import { usePrepaidAdvances, useBookBankTxnAsPrepaid } from "@/lib/queries/prepaid-advances";
+import { useVendorBills } from "@/lib/queries/vendor-bills";
+import { useReferralCommissions } from "@/lib/queries/referral-commissions";
 import { AddCustomerForm } from "@/components/features/customers/add-customer-form";
 import { ProjectPaymentSection } from "@/components/features/banking/project-payment-section";
 
@@ -232,6 +236,51 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
     } catch { /* hook toasts */ }
   };
 
+  /* Vendor bill / referral commission paid from this line (money-out). Settles the
+     bill / commission against THIS imported line; a synthetic line the Bills or
+     Referrals page had made for the same payment is replaced (migration 20260927190000).
+     Candidates: open bills, plus paid ones whose synthetic line matches this amount. */
+  const bookBill = useBookBankTxnAsVendorBill();
+  const bookCommission = useBookBankTxnAsCommission();
+  const { data: allBills } = useVendorBills();
+  const { data: allCommissions } = useReferralCommissions();
+  const [showBill, setShowBill] = React.useState(false);
+  const [billPick, setBillPick] = React.useState("");
+  const [showCommission, setShowCommission] = React.useState(false);
+  const [commissionPick, setCommissionPick] = React.useState("");
+  React.useEffect(() => { setShowBill(false); setBillPick(""); setShowCommission(false); setCommissionPick(""); }, [transaction?.id]);
+  const billCandidates = React.useMemo(() => {
+    const amt = transaction?.debit ?? 0;
+    return (allBills ?? [])
+      .filter((b) => (b.total - (b.paid_amount ?? 0)) > 0 || (b.paid_amount ?? 0) === amt || b.total === amt)
+      .sort((a, b) => {
+        const ax = Math.abs(a.total - (a.paid_amount ?? 0) - amt), bx = Math.abs(b.total - (b.paid_amount ?? 0) - amt);
+        return ax - bx || b.bill_date.localeCompare(a.bill_date);
+      })
+      .slice(0, 40);
+  }, [allBills, transaction?.debit]);
+  const commissionCandidates = React.useMemo(() => {
+    const amt = transaction?.debit ?? 0;
+    return (allCommissions ?? [])
+      .filter((c) => c.status !== "cancelled" && (c.status === "earned" || c.net_payable === amt))
+      .sort((a, b) => Math.abs(a.net_payable - amt) - Math.abs(b.net_payable - amt) || b.earned_date.localeCompare(a.earned_date))
+      .slice(0, 40);
+  }, [allCommissions, transaction?.debit]);
+  const handleBookBill = async () => {
+    if (!transaction || !billPick) return;
+    try {
+      await bookBill.mutateAsync({ transactionId: transaction.id, accountId: transaction.bank_account_id, billId: billPick, method: null });
+      onOpenChange(false);
+    } catch { /* hook toasts */ }
+  };
+  const handleBookCommission = async () => {
+    if (!transaction || !commissionPick) return;
+    try {
+      await bookCommission.mutateAsync({ transactionId: transaction.id, accountId: transaction.bank_account_id, commissionId: commissionPick });
+      onOpenChange(false);
+    } catch { /* hook toasts */ }
+  };
+
   const handleBookExpense = async () => {
     if (!transaction || !bookCategory) return;
     try {
@@ -337,6 +386,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const [statutoryKind, setStatutoryKind] = React.useState<"esi" | "pf" | "tds" | "mixed" | "gst" | "income_tax">("esi");
   const bookTax = useBookBankTxnAsTax();
   const [gstPeriod, setGstPeriod] = React.useState("");
+  const [duesPeriod, setDuesPeriod] = React.useState("");
+  const [challanNo, setChallanNo] = React.useState("");
   const [taxInterest, setTaxInterest] = React.useState("");
   const [taxLateFee, setTaxLateFee] = React.useState("");
   const [itKind, setItKind] = React.useState<"advance_tax" | "self_assessment_tax">("advance_tax");
@@ -421,6 +472,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
           accountId:     transaction.bank_account_id,
           kind:          statutoryKind,
           notes:         transaction.description,
+          challanNo:     challanNo.trim() || null,
+          period:        duesPeriod || null,
         });
       }
       onOpenChange(false);
@@ -482,7 +535,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
         </button>
         {showStatutory && (
           <div className="mt-2 space-y-2">
-            <p className="text-2xs text-ink-3">
+            <p className="text-xs text-ink-3">
               Records this {rupee(amount)} as a payment to the government. Pick what it is:
             </p>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
@@ -505,25 +558,25 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
             {/* What each choice does to the books — said before the click. */}
             {statutoryKind === "gst" ? (
               <div className="space-y-2">
-                <p className="text-2xs text-ink-3">
+                <p className="text-xs text-ink-3">
                   Reduces GST payable for the return month. Interest and late fee paid with it are booked as a
                   <b> Rates &amp; Taxes</b> expense — they are a cost, the tax is not.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <label className="text-3xs text-ink-3 space-y-0.5">
+                  <label className="text-xs text-ink-3 space-y-0.5">
                     <span className="block">Return month</span>
                     <Input type="month" value={gstPeriod} onChange={(e) => setGstPeriod(e.target.value)} aria-label="GST return month" />
                   </label>
-                  <label className="text-3xs text-ink-3 space-y-0.5">
+                  <label className="text-xs text-ink-3 space-y-0.5">
                     <span className="block">Interest ₹ (if any)</span>
                     <Input type="number" min={0} value={taxInterest} onChange={(e) => setTaxInterest(e.target.value)} placeholder="0" aria-label="Interest" />
                   </label>
-                  <label className="text-3xs text-ink-3 space-y-0.5">
+                  <label className="text-xs text-ink-3 space-y-0.5">
                     <span className="block">Late fee ₹ (if any)</span>
                     <Input type="number" min={0} value={taxLateFee} onChange={(e) => setTaxLateFee(e.target.value)} placeholder="0" aria-label="Late fee" />
                   </label>
                 </div>
-                <p className={`text-2xs tabular-nums ${taxPortion > 0 ? "text-ink-2" : "text-rose-ink"}`}>
+                <p className={`text-xs tabular-nums ${taxPortion > 0 ? "text-ink-2" : "text-rose-ink"}`}>
                   {taxPortion > 0
                     ? <>GST (tax) <b>{rupee(taxPortion)}</b>{interestNum + lateFeeNum > 0 && <> · expense <b>{rupee(interestNum + lateFeeNum)}</b></>}</>
                     : "Interest + late fee cannot be the whole amount — there must be some tax in it."}
@@ -531,7 +584,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
               </div>
             ) : statutoryKind === "income_tax" ? (
               <div className="space-y-2">
-                <p className="text-2xs text-ink-3">
+                <p className="text-xs text-ink-3">
                   Shows as <b>Advance tax paid</b> on the balance sheet for that year, and counts in the ITR pack. Not an expense.
                 </p>
                 <div className="flex flex-wrap items-end gap-2">
@@ -542,13 +595,13 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                         type="button"
                         aria-pressed={itKind === k}
                         onClick={() => pickItKind(k)}
-                        className={`rounded-md border px-2 py-1 text-2xs font-medium ${itKind === k ? "border-indigo bg-indigo/10 text-indigo" : "border-hairline text-ink-2"}`}
+                        className={`rounded-md border px-2 py-1 text-xs font-medium ${itKind === k ? "border-indigo bg-indigo/10 text-indigo" : "border-hairline text-ink-2"}`}
                       >
                         {label}
                       </button>
                     ))}
                   </div>
-                  <label className="text-3xs text-ink-3 space-y-0.5">
+                  <label className="text-xs text-ink-3 space-y-0.5">
                     <span className="block">For financial year</span>
                     <select
                       value={itFy}
@@ -564,7 +617,13 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 </div>
               </div>
             ) : (
-              <p className="text-2xs text-ink-3">Clears it from your TDS / PF / ESI “dues payable”.</p>
+              <div className="space-y-2">
+                <p className="text-xs text-ink-3">Clears it from your TDS / PF / ESI “dues payable”. Mahina aur challan number likh do — 26Q / ECR mein quote hota hai.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Input type="month" value={duesPeriod} onChange={(e) => setDuesPeriod(e.target.value)} aria-label="Month the challan paid for" />
+                  <Input value={challanNo} onChange={(e) => setChallanNo(e.target.value)} placeholder="Challan / CIN no. (optional)" maxLength={40} aria-label="Challan number" />
+                </div>
+              </div>
             )}
 
             <Button
@@ -619,11 +678,11 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                     {transaction.description}
                   </p>
                   {transaction.reference && (
-                    <p className="text-2xs text-ink-3 font-mono mt-1">
+                    <p className="text-xs text-ink-3 font-mono mt-1">
                       Ref: {transaction.reference}
                     </p>
                   )}
-                  <p className="text-2xs text-ink-3 mt-1">
+                  <p className="text-xs text-ink-3 mt-1">
                     {formatDate(transaction.txn_date)}
                   </p>
                 </div>
@@ -647,7 +706,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 <div className="rounded-md border border-dashed border-hairline bg-paper-2/20 px-4 py-6 text-center">
                   <Icon name="info" size={18} className="text-ink-3 mx-auto mb-1" />
                   <p className="text-sm text-ink-2">No close matches found</p>
-                  <p className="text-2xs text-ink-3 mt-1">
+                  <p className="text-xs text-ink-3 mt-1">
                     We looked for {isCredit ? "payments" : "expenses"} within ±₹100 and
                     ±7 days. Use &ldquo;Mark reconciled manually&rdquo; below for bank
                     charges, interest, or owner transfers.
@@ -673,7 +732,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                         <p className="text-sm font-medium text-ink truncate">
                           {s.match_label}
                         </p>
-                        <p className="text-2xs text-ink-3">
+                        <p className="text-xs text-ink-3">
                           {rupee(s.match_amount)} · {formatDate(s.match_date)}
                         </p>
                       </div>
@@ -699,7 +758,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
             {isCredit && (
               <div className="rounded-md border border-amber/50 bg-amber-soft/25 p-3">
                 <p className="text-xs font-semibold text-ink-2 mb-1">Kisi sale / customer ka paisa?</p>
-                <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
+                <p className="text-xs text-ink-3 mb-3 leading-relaxed">
                   Income aksar invoice se aati hai. Is {rupee(amount)} ki invoice abhi nahi bani? Yahan se invoice (ya project payment) banao — uska payment record karte hi ye line neeche <b>suggested match</b> me aa jayegi, phir ek click me reconcile.
                 </p>
                 {showProject && transaction ? (
@@ -787,8 +846,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                         autoFocus
                       />
                     )}
-                    <Input value={invTaxable} onChange={(e) => setInvTaxable(e.target.value)} type="number" min={0} placeholder="Taxable amount ₹ (ex-GST)" />
-                    <p className="text-3xs text-ink-3">GST customer ke place-of-supply se apne-aap lagega. {rupee(amount)} received ka taxable (÷1.18) prefill kiya — theek kar lena.</p>
+                    <Input aria-label="Taxable amount ₹ (ex-GST)" value={invTaxable} onChange={(e) => setInvTaxable(e.target.value)} type="number" min={0} placeholder="Taxable amount ₹ (ex-GST)" />
+                    <p className="text-xs text-ink-3">GST customer ke place-of-supply se apne-aap lagega. {rupee(amount)} received ka taxable (÷1.18) prefill kiya — theek kar lena.</p>
                     <div className="flex gap-2 pt-1">
                       <Button
                         size="sm"
@@ -812,7 +871,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
             {isCredit && (
               <div className="rounded-md border border-emerald/40 bg-emerald/5 p-3">
                 <p className="text-xs font-semibold text-ink-2 mb-1">Money put into the business?</p>
-                <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
+                <p className="text-xs text-ink-3 mb-3 leading-relaxed">
                   Account opening / promoter funds — this {rupee(amount)} is <b>not income</b>. Book it correctly and reconcile in one step.
                 </p>
                 <div className="space-y-2">
@@ -821,18 +880,18 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                       <input type="radio" name="creditKind" checked={creditKind === "capital"} onChange={() => setCreditKind("capital")} className="mt-1" />
                       <span>
                         <span className="block text-sm text-ink">Owner&apos;s capital <span className="text-ink-3">(equity)</span></span>
-                        <span className="block text-2xs text-ink-3">Poonji — business me daali, wapas nahi leni.</span>
+                        <span className="block text-xs text-ink-3">Poonji — business me daali, wapas nahi leni.</span>
                       </span>
                     </label>
                     <label className={`flex items-start gap-2 rounded-md border px-3 py-2 cursor-pointer ${creditKind === "director_loan" ? "border-emerald bg-emerald/10" : "border-hairline"}`}>
                       <input type="radio" name="creditKind" checked={creditKind === "director_loan"} onChange={() => setCreditKind("director_loan")} className="mt-1" />
                       <span>
                         <span className="block text-sm text-ink">Director&apos;s loan <span className="text-ink-3">(liability)</span></span>
-                        <span className="block text-2xs text-ink-3">Temporary daala — company wapas degi.</span>
+                        <span className="block text-xs text-ink-3">Temporary daala — company wapas degi.</span>
                       </span>
                     </label>
                   </div>
-                  <Input
+                  <Input aria-label="Ledger label"
                     value={creditLabel}
                     onChange={(e) => setCreditLabel(e.target.value)}
                     placeholder={creditKind === "capital" ? "Label (default: Owner's capital)" : "Label (default: Director's loan)"}
@@ -859,12 +918,12 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 <p className="text-xs font-semibold text-ink-2">
                   Looks like salary{salaryHint.name ? <> for <b>{titleCaseName(salaryHint.name)}</b></> : ""}
                 </p>
-                <p className="text-2xs text-ink-3 leading-relaxed">
+                <p className="text-xs text-ink-3 leading-relaxed">
                   Books this {rupee(amount)} as the employee&apos;s salary for the month — the salary record is created in
                   Payroll (or the existing one is used) and this line is reconciled to it.
                 </p>
                 {salaryHint.director && (
-                  <p className="text-2xs text-amber-ink bg-amber-soft/40 rounded px-2 py-1">
+                  <p className="text-xs text-amber-ink bg-amber-soft/40 rounded px-2 py-1">
                     The narration says <b>director</b>. If the director is on the payroll (salary, TDS u/s 192), book it here.
                     Otherwise book it below as a <b>Director&apos;s Remuneration</b> expense — check with your CA which applies.
                   </p>
@@ -883,7 +942,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   <Input type="month" value={salaryPeriod} onChange={(e) => setSalaryPeriod(e.target.value)} aria-label="Salary month" />
                 </div>
                 {!salaryHint.periodFromNarration && (
-                  <p className="text-3xs text-amber-ink">No month in the narration — assumed the month before payment. Change it if needed.</p>
+                  <p className="text-xs text-amber-ink">No month in the narration — assumed the month before payment. Change it if needed.</p>
                 )}
                 <Button
                   size="sm"
@@ -902,7 +961,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 so (ESIC, EPFO, ITNS 281, GST CIN…), lead with the statutory / tax booking. */}
             {govtHint && (
               <div className="space-y-1.5">
-                <p className="text-2xs text-indigo-ink bg-indigo-soft/40 border border-indigo/20 rounded-md px-3 py-2">
+                <p className="text-xs text-indigo-ink bg-indigo-soft/40 border border-indigo/20 rounded-md px-3 py-2">
                   Looks like a <b>{govtHint.label}</b> — a payment to the government, not an expense. Book it below.
                 </p>
                 {statutorySection}
@@ -918,7 +977,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 <p className="text-xs font-semibold text-ink-2 mb-1">
                   {expenseSuggestion ? <>Looks like a <b>{expenseSuggestion.category}</b> expense</> : "Book as a new expense"}
                 </p>
-                <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
+                <p className="text-xs text-ink-3 mb-3 leading-relaxed">
                   {expenseSuggestion
                     ? <>Category filled from <b>{expenseSuggestion.reason}</b> — change it if that&apos;s wrong. </>
                     : "Not in your books yet? "}
@@ -937,8 +996,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                     {EXPENSE_CATEGORIES.filter((c) => c !== "Salaries").map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <div className="grid grid-cols-2 gap-2">
-                    <Input value={bookVendor} onChange={(e) => setBookVendor(e.target.value)} placeholder="Vendor / payee (optional)" />
-                    <Input value={bookGst} onChange={(e) => setBookGst(e.target.value)} type="number" min={0} placeholder="GST paid ₹ (optional)" />
+                    <Input aria-label="Vendor / payee (optional)" value={bookVendor} onChange={(e) => setBookVendor(e.target.value)} placeholder="Vendor / payee (optional)" />
+                    <Input aria-label="GST paid ₹ (optional)" value={bookGst} onChange={(e) => setBookGst(e.target.value)} type="number" min={0} placeholder="GST paid ₹ (optional)" />
                   </div>
                 </div>
                 <Button
@@ -952,7 +1011,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 >
                   {bookCategory ? `Book ${rupee(amount)} as ${bookCategory}` : `Book ${rupee(amount)} expense`}
                 </Button>
-                <p className="mt-2.5 text-2xs text-ink-3 leading-relaxed">
+                <p className="mt-2.5 text-xs text-ink-3 leading-relaxed">
                   Paying a salary?{" "}
                   <button
                     type="button"
@@ -963,6 +1022,57 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   </button>{" "}
                   run it there (payslip + statutory), then reconcile this line to it under “Combine multiple expenses”.
                 </p>
+              </div>
+            )}
+
+            {/* Vendor bill (COGS) paid from this line — settled against THIS line, never a second one. */}
+            {!isCredit && (
+              <div className="rounded-md border border-hairline p-3">
+                <button type="button" onClick={() => setShowBill((v) => !v)} aria-expanded={showBill} className="w-full flex items-center justify-between text-left">
+                  <span className="text-xs font-semibold text-ink-2">Vendor bill (Google / Microsoft / Zoho…) ka payment?</span>
+                  <Icon name={showBill ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
+                </button>
+                {!showBill ? (
+                  <p className="text-xs text-ink-3 mt-1 leading-relaxed">Bill yahin se settle karo — Bills page se "Pay" karne par ek alag manual bank line banti hai, jo statement aane par double ho jaati hai.</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <select value={billPick} onChange={(e) => setBillPick(e.target.value)} aria-label="Vendor bill" className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40">
+                      <option value="">Bill chuno…</option>
+                      {billCandidates.map((b) => {
+                        const due = b.total - (b.paid_amount ?? 0);
+                        return <option key={b.id} value={b.id}>{b.vendor_name} · {b.bill_no ? `${b.bill_no} · ` : ""}{formatDate(b.bill_date)} · {due > 0 ? `due ${rupee(due)}` : `paid ${rupee(b.total)} (manual line replace hogi)`}</option>;
+                      })}
+                    </select>
+                    {billCandidates.length === 0 && <p className="text-xs text-ink-3">Koi open bill nahi — pehle Bills page par bill banao.</p>}
+                    <Button size="sm" variant="primary" icon="check" disabled={!billPick || bookBill.isPending} loading={bookBill.isPending} onClick={handleBookBill}>
+                      Book {rupee(amount)} against this bill
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Referral commission paid from this line. */}
+            {!isCredit && commissionCandidates.length > 0 && (
+              <div className="rounded-md border border-hairline p-3">
+                <button type="button" onClick={() => setShowCommission((v) => !v)} aria-expanded={showCommission} className="w-full flex items-center justify-between text-left">
+                  <span className="text-xs font-semibold text-ink-2">Referral partner ki commission?</span>
+                  <Icon name={showCommission ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
+                </button>
+                {showCommission && (
+                  <div className="mt-2 space-y-2">
+                    <select value={commissionPick} onChange={(e) => setCommissionPick(e.target.value)} aria-label="Referral commission" className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40">
+                      <option value="">Commission chuno…</option>
+                      {commissionCandidates.map((c) => (
+                        <option key={c.id} value={c.id}>{c.partner_name ?? "partner"} · {formatDate(c.earned_date)} · net {rupee(c.net_payable)}{c.status === "paid" ? " (paid — manual line replace hogi)" : ""}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-ink-3">Line ki raqam commission ke net payable ke barabar honi chahiye (TDS kaat kar).</p>
+                    <Button size="sm" variant="primary" icon="check" disabled={!commissionPick || bookCommission.isPending} loading={bookCommission.isPending} onClick={handleBookCommission}>
+                      Book {rupee(amount)} as commission paid
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -981,13 +1091,13 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   <Icon name={showPrepaid ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
                 </button>
                 {!showPrepaid ? (
-                  <p className="text-2xs text-ink-3 mt-1 leading-relaxed">
+                  <p className="text-xs text-ink-3 mt-1 leading-relaxed">
                     Ad platforms take money first and invoice what was used later. Book the top-up as an <b>advance</b>;
                     the monthly invoice then becomes the expense.
                   </p>
                 ) : (
                   <div className="mt-2 space-y-2">
-                    <p className="text-2xs text-ink-3 leading-relaxed">
+                    <p className="text-xs text-ink-3 leading-relaxed">
                       Holds this {rupee(amount)} as a <b>prepaid asset</b> — no expense today. When the invoice comes, book it on
                       Prepaid / Advances: it is drawn from the oldest top-ups first.
                     </p>
@@ -1032,7 +1142,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 settled. Two choices cover all four cases. */}
             <div className="rounded-md border border-indigo/40 bg-indigo-soft/25 p-3">
               <p className="text-xs font-semibold text-ink-2 mb-1">Loan / advance with a person?</p>
-              <p className="text-2xs text-ink-3 mb-2.5 leading-relaxed">
+              <p className="text-xs text-ink-3 mb-2.5 leading-relaxed">
                 This {rupee(amount)} is <b>not income or expense</b> — it&apos;s a loan/advance. Pick who lent, so it books correctly (P&amp;L stays clean).
               </p>
               <div className="grid grid-cols-1 gap-1.5 mb-2.5">
@@ -1042,7 +1152,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                     <span className="block text-sm text-ink">
                       {isCredit ? "A loan/advance I GAVE has come back" : "I am GIVING a loan/advance"}
                     </span>
-                    <span className="block text-2xs text-ink-3">Maine diya — paisa mera, wapas aana hai (asset).</span>
+                    <span className="block text-xs text-ink-3">Maine diya — paisa mera, wapas aana hai (asset).</span>
                   </span>
                 </label>
                 <label className={`flex items-start gap-2 rounded-md border px-3 py-2 cursor-pointer ${advanceKind === "received" ? "border-indigo bg-indigo/10" : "border-hairline"}`}>
@@ -1051,11 +1161,11 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                     <span className="block text-sm text-ink">
                       {isCredit ? "Someone GAVE me a loan" : "I am REPAYING a loan someone gave me"}
                     </span>
-                    <span className="block text-2xs text-ink-3">Mujhe mila — paisa unka, wapas dena hai (liability).</span>
+                    <span className="block text-xs text-ink-3">Mujhe mila — paisa unka, wapas dena hai (liability).</span>
                   </span>
                 </label>
               </div>
-              <Input
+              <Input aria-label="Person's name (e.g. Julie Rawat)"
                 value={advanceParty}
                 onChange={(e) => setAdvanceParty(e.target.value)}
                 placeholder="Person's name (e.g. Julie Rawat)"
@@ -1081,10 +1191,10 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
             {!isCredit && (payableSalaries ?? []).some((s) => s.remaining > 0 && s.remaining < amount) && (
               <div className="rounded-md border border-indigo/40 bg-indigo-soft/20 p-3">
                 <p className="text-xs font-semibold text-ink-2 mb-1">Overpaid a salary? (salary + advance)</p>
-                <p className="text-2xs text-ink-3 mb-2.5 leading-relaxed">
+                <p className="text-xs text-ink-3 mb-2.5 leading-relaxed">
                   Paid more than the salary by mistake? Pick the salary — its balance is settled and the EXTRA is booked as a recoverable <b>advance</b> (recover it later via a salary deduction). No double cash-out — this line is the payment.
                 </p>
-                <select
+                <select aria-label="Salary to settle"
                   value={splitSalaryId}
                   onChange={(e) => setSplitSalaryId(e.target.value)}
                   className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-indigo/40 mb-2"
@@ -1100,7 +1210,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   const advance = amount - sal.remaining;
                   return (
                     <>
-                      <p className="text-2xs text-ink-2 mb-2">
+                      <p className="text-xs text-ink-2 mb-2">
                         <span className="text-emerald font-medium">{rupee(sal.remaining)}</span> → salary (paid)
                         {" · "}
                         <span className="text-amber-ink font-medium">{rupee(advance)}</span> → advance (recoverable)
@@ -1131,7 +1241,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   <Icon name={showSalary ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
                 </button>
                 {!showSalary ? (
-                  <p className="text-2xs text-ink-3 mt-1 leading-relaxed">
+                  <p className="text-xs text-ink-3 mt-1 leading-relaxed">
                     Paid a salary from this {rupee(amount)}? Pick it — if it&apos;s less than the full salary, the rest stays owed as a balance.
                   </p>
                 ) : (
@@ -1146,7 +1256,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                               <span className="block text-sm text-ink truncate">
                                 {s.employee_name} · {s.period}
                               </span>
-                              <span className="block text-3xs text-ink-3">
+                              <span className="block text-xs text-ink-3">
                                 {s.paid_status === "partial"
                                   ? `Paid ${rupee(s.paid_amount)} / ${rupee(s.net)} · ${rupee(s.remaining)} left`
                                   : `Salary ${rupee(s.net)}`}
@@ -1183,7 +1293,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   <Icon name={showSplit ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
                 </button>
                 {!showSplit && (
-                  <p className="text-2xs text-ink-3 mt-1 leading-relaxed">
+                  <p className="text-xs text-ink-3 mt-1 leading-relaxed">
                     Paid several bills — or 2 months&apos; salary — in one transfer? Tick the expenses that add up to {rupee(amount)}.
                   </p>
                 )}
@@ -1203,7 +1313,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                               <span className="block text-sm text-ink truncate">
                                 {e.category}{e.vendor_name ? ` · ${e.vendor_name}` : ""}
                               </span>
-                              <span className="block text-3xs text-ink-3 truncate">
+                              <span className="block text-xs text-ink-3 truncate">
                                 {formatDate(e.expense_date)}{e.description ? ` · ${e.description}` : ""}
                               </span>
                             </span>
@@ -1238,7 +1348,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
               <p className="text-xs font-semibold text-ink-2 mb-1">
                 None of these match? / Failed or reversed?
               </p>
-              <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
+              <p className="text-xs text-ink-3 mb-3 leading-relaxed">
                 Mark this reconciled without any income/expense entry. Use it for
                 bank charges, interest, own-account transfers — and for a{" "}
                 <b>failed / reversed transaction</b> (e.g. ATM didn&apos;t dispense

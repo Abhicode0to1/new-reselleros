@@ -34,7 +34,9 @@ function tsxFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) tsxFiles(full, out);
-    else if (/\.tsx$/.test(entry.name) && !/\.test\.tsx$/.test(entry.name)) out.push(full);
+    /* .ts too since S35: the lead drawer's "View invoice" label now lives in
+       lib/leads/next-action.ts, a pure module, and a .tsx-only scan would stop seeing it. */
+    else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) out.push(full);
   }
   return out;
 }
@@ -78,7 +80,8 @@ describe("a control naming one invoice opens that invoice", () => {
       .filter(({ src }) => /\/invoices\?open=/.test(src))
       .map(({ file }) => file.replace(/\\/g, "/"));
     expect(withDeepLink.join("\n")).toMatch(/quotes\/\[id\]\/page\.tsx/);
-    expect(withDeepLink.join("\n")).toMatch(/leads\/page\.tsx/);
+    /* The lead drawer's rule moved out of leads/page.tsx into next-action.ts (S35). */
+    expect(withDeepLink.join("\n")).toMatch(/lib\/leads\/next-action\.ts/);
     // And the ones that were already right, which is how the fix was found at all.
     expect(withDeepLink.length).toBeGreaterThanOrEqual(6);
   });

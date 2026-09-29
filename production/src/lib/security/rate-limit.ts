@@ -8,6 +8,9 @@
  * (10,000 koshish = pakka). Enquiry route ka apna comment kehta tha:
  * "Rate limit TODO: bolt on at the edge later" — edge kabhi aaya nahi.
  *
+ * S20 (28 Sep 2026): IP ab XFF ki right se aati hai (clientIp), aur `rateLimitShared`
+ * RATE_LIMIT_STORE=postgres par sab instances ki ek ginti rakhta hai — neeche dekho.
+ *
  * ─── DESIGN: fixed-window, in-memory, PER-INSTANCE ──────────────────────────
  * Ye Cloud Armor/Cloudflare ka badla nahi hai — Cloud Run ke N instances me
  * har ek ki apni ginti hai (wahi seemā jo gemini.ts ke circuit-breaker par
@@ -84,17 +87,122 @@ export function resetRateLimiter(): void {
 }
 
 /**
- * Request ka IP — Cloud Run par `x-forwarded-for` ki PEHLI entry hi client
- * hai (aage wali proxy ki hoti hain). Header hi na ho (seedha container par
- * curl) to sab ek hi balti me girte hain — wo bhi bounded hai, khula nahi.
+ * Kitni proxy-hops HUMARI hain (right se ginti). Env `TRUSTED_PROXY_HOPS`, default 1.
+ *
+ * - 1 = seedha Cloud Run (domain mapping, Cloudflare DNS-only — aaj ka setup). Google ka
+ *   front-end asli client IP ko XFF ke AAKHIR me jodta hai.
+ * - 2 = Cloud Run ke aage ek aur proxy jo khud XFF me jodti hai (HTTPS Load Balancer, ya
+ *   Cloudflare orange-cloud). Tab client aakhri se ek pehle hai.
+ * Galat number: kam rakha to sab ek proxy-IP ki balti me (bounded, khula nahi); zyada rakha
+ * to attacker phir se ek entry chun sakta hai. Isliye infra badle to ye bhi badlo.
  */
-export function clientIp(headers: Headers): string {
+export function trustedProxyHops(): number {
+  const n = Number(process.env.TRUSTED_PROXY_HOPS);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : 1;
+}
+
+/**
+ * Request ka IP — `x-forwarded-for` ki right se `hops`-vi entry.
+ *
+ * ⚠️ S20 (28 Sep 2026) tak ye PEHLI (left-most) entry leta tha. Wo entry CLIENT KHUD bhejta
+ * hai: `curl -H "X-Forwarded-For: 1.2.3.$RANDOM"` par Cloud Run use aage bina chhede bhejta
+ * hai aur apni entry peeche jodta hai. Yaani har request nayi balti = rate limit ZERO — chat
+ * par anant paid Gemini, enquiry par anant email. Sirf right wali entries humari infra
+ * likhti hai; wahi bharose layak hain.
+ *
+ * XFF me `hops` se kam entries hon (koi proxy chhoot gayi) to sabse left wali — wo bhi
+ * infra ki likhi hai, client ki nahi. Header hi na ho (seedha container par curl) to sab
+ * ek hi balti me — bounded hai, khula nahi.
+ */
+export function clientIp(headers: Headers, hops: number = trustedProxyHops()): string {
   const fwd = headers.get("x-forwarded-for");
   if (fwd) {
-    const first = fwd.split(",")[0]?.trim();
-    if (first) return first;
+    const parts = fwd.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length) return parts[Math.max(0, parts.length - hops)];
   }
   return headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+/* ─── Shared store (Postgres) — opt-in, memory par fallback ──────────────────
+ *
+ * Per-instance ginti ka matlab asli seema `limit × instances`. `RATE_LIMIT_STORE=postgres`
+ * par ginti `public.rate_limit_hit()` RPC (migration 20260928140000, service_role only) me
+ * hoti hai — sab instances ek hi ginti dekhte hain.
+ *
+ * Default OFF: har public request par ek DB round-trip judta hai, to pehle naap kar on karo
+ * (docs/SECURITY-RUNBOOK.md). DB dheema/band ho to memory wali ginti — limiter kabhi public
+ * raasta band NAHI karta, aur kabhi khula bhi nahi chhodta. Ek baar fail hone par 30s tak DB
+ * ko chhoda jaata hai, warna har request timeout ki keemat deti.
+ */
+const SHARED_TIMEOUT_MS = 300;
+const SHARED_COOLDOWN_MS = 30_000;
+let sharedDownUntil = 0;
+
+type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+/* Key me IP hai; DB me kacha IP rakhne ki zaroorat nahi — ginti ke liye hash kaafi hai. */
+async function hashKey(key: string): Promise<string> {
+  const bytes = new TextEncoder().encode(key);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function sharedHit(
+  key: string,
+  opts: { limit: number; windowMs: number },
+  fetchImpl: FetchLike,
+): Promise<RateLimitResult | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !svc) return null;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), SHARED_TIMEOUT_MS);
+  try {
+    const r = await fetchImpl(`${url.replace(/\/$/, "")}/rest/v1/rpc/rate_limit_hit`, {
+      method: "POST",
+      headers: { apikey: svc, authorization: `Bearer ${svc}`, "content-type": "application/json" },
+      body: JSON.stringify({ p_key: await hashKey(key), p_limit: opts.limit, p_window_ms: opts.windowMs }),
+      cache: "no-store",
+      signal: ctl.signal,
+    });
+    if (!r.ok) return null;
+    const rows = (await r.json()) as Array<{ allowed: boolean; hits: number; retry_after_sec: number }>;
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row || typeof row.allowed !== "boolean") return null;
+    return {
+      ok: row.allowed,
+      retryAfterSec: row.allowed ? 0 : Math.max(1, row.retry_after_sec),
+      remaining: Math.max(0, opts.limit - row.hits),
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * `rateLimit` jaisa hi, par `RATE_LIMIT_STORE=postgres` par sab instances ki saanjhi ginti.
+ * Koi bhi gadbad (env nahi, timeout, RPC nahi bani, 5xx) → memory wala `rateLimit`.
+ */
+export async function rateLimitShared(
+  key: string,
+  opts: { limit: number; windowMs: number },
+  fetchImpl: FetchLike = fetch,
+): Promise<RateLimitResult> {
+  if (process.env.RATE_LIMIT_STORE !== "postgres" || Date.now() < sharedDownUntil) {
+    return rateLimit(key, opts);
+  }
+  const shared = await sharedHit(key, opts, fetchImpl);
+  if (shared) return shared;
+  sharedDownUntil = Date.now() + SHARED_COOLDOWN_MS;
+  console.warn("[rate-limit] shared store unavailable — memory fallback for 30s");
+  return rateLimit(key, opts);
+}
+
+/** Test ke liye — cooldown saaf. */
+export function resetSharedStoreState(): void {
+  sharedDownUntil = 0;
 }
 
 /**

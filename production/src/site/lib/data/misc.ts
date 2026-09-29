@@ -114,7 +114,7 @@ export const LEGAL: Readonly<Record<"terms" | "privacy" | "refund", LegalPage>> 
   refund: {
     title: "Refund policy",
     updated: "Last updated 31 August 2026",
-    intro: "What is refundable, what is not, and how long it takes. Placeholder draft — have your counsel review before publishing.",
+    intro: "What is refundable, what is not, and how long it takes.",
     blocks: [
       { h: "Hosting", p: "Full refund inside thirty days of a first hosting order, less any domain registered free with it. Renewals are refundable inside seven days if the account was not used in that period." },
       { h: "Licences", p: "Google Workspace, Microsoft 365 and Zoho subscriptions follow the vendor's cancellation terms. Annual commitments generally cannot be cancelled mid-term; monthly plans stop at the end of the paid month." },

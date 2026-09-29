@@ -16,13 +16,14 @@ import type { ProjectQuoteLine } from "@/lib/supabase/database.types";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectQuotePage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { t?: string };
-}) {
+export default async function ProjectQuotePage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ t?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const supabase = createAdminClient();
 
   const { data: project } = await supabase

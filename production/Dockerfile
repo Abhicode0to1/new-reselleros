@@ -64,6 +64,12 @@ ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_APP_URL="https://reselleros.anutech.in"
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
+# Which environment this image is for — "" (production) or "staging". Baked in like the
+# rest, because the topbar shows a STAGING banner from it and that must be in the bundle.
+# docs/STAGING.md.
+ARG NEXT_PUBLIC_APP_ENV=""
+ENV NEXT_PUBLIC_APP_ENV=$NEXT_PUBLIC_APP_ENV
+
 # Web-push VAPID PUBLIC key. Public by design — the browser sends it to the push
 # service when subscribing, so it ends up in the client bundle either way (RFC 8292).
 #

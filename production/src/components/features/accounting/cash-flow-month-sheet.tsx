@@ -73,7 +73,7 @@ export function CashFlowMonthSheet({ open, onOpenChange, monthLabel, lines, acco
                 </button>
               ))}
             </div>
-            <label className="text-2xs text-ink-3 flex items-center gap-1.5">
+            <label className="text-xs text-ink-3 flex items-center gap-1.5">
               Sort
               <select
                 value={sort}
@@ -121,7 +121,7 @@ export function CashFlowMonthSheet({ open, onOpenChange, monthLabel, lines, acco
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-[12px] text-ink truncate" title={l.description ?? ""}>{l.description || "—"}</p>
-                        <p className="text-3xs text-ink-3 mt-0.5">
+                        <p className="text-xs text-ink-3 mt-0.5">
                           {formatDate(l.txn_date)} · {accountName(l.bank_account_id)} ·{" "}
                           <span className={label === NOT_RECONCILED ? "text-amber-ink font-medium" : ""}>{label}</span>
                         </p>

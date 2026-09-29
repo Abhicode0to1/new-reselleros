@@ -38,8 +38,9 @@ import type { Database } from "@/lib/supabase/database.types";
 export type SweepResult = Database["public"]["Functions"]["backup_all_tenants"]["Returns"];
 
 /** One go at the sweep: either the RPC's payload, or the message it failed with. */
-export type SweepAttempt =
-  | { ok: true;  data: SweepResult }
+/** S15: generic — per-tenant cron `backup_tenant` ka jawab bhi isi retry se guzarta hai. */
+export type SweepAttempt<T = SweepResult> =
+  | { ok: true;  data: T }
   | { ok: false; message: string };
 
 /**
@@ -131,9 +132,9 @@ export interface RunSweepOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-export interface SweepRun {
+export interface SweepRun<T = SweepResult> {
   /** The last attempt's outcome — success, or the final failure. */
-  result: SweepAttempt;
+  result: SweepAttempt<T>;
   attemptsMade: number;
   /** The message behind each retry, in order. Empty when nothing was retried. */
   retriedBecause: string[];
@@ -151,17 +152,17 @@ const realSleep = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms); 
  *
  * A PARTIAL sweep (`data.failed > 0`) is a success as far as this function is
  * concerned and is handed straight back. It must never be retried: the sweep
- * already skips past a bad tenant, and `backup._take` keeps only the newest 30
+ * already skips past a bad tenant, and `backup._take` keeps only the newest 7 (S15; was 30)
  * snapshots per tenant — so re-running it would write duplicates for the tenants
  * that already succeeded and push genuine older restore points off the shelf.
  */
-export async function runSweepWithRetry(
-  attempt: () => Promise<SweepAttempt>,
+export async function runSweepWithRetry<T = SweepResult>(
+  attempt: () => Promise<SweepAttempt<T>>,
   opts: RunSweepOptions = {},
-): Promise<SweepRun> {
+): Promise<SweepRun<T>> {
   const sleep = opts.sleep ?? realSleep;
   const retriedBecause: string[] = [];
-  let last: SweepAttempt = { ok: false, message: "sweep never ran" };
+  let last: SweepAttempt<T> = { ok: false, message: "sweep never ran" };
 
   for (let i = 0; i < SWEEP_RETRY.attempts; i++) {
     try {

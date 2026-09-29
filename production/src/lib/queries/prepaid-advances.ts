@@ -58,6 +58,8 @@ export function useCreatePrepaidAdvance() {
       vendor_name: string; category: string; total_amount: number;
       paid_date: string; payment_method?: string | null; bank_account_id?: string | null;
       vendor_id?: string | null; notes?: string | null;
+      /** Marketing channel; left out → the database guesses it from the vendor name. */
+      channel?: string | null;
     }) => {
       const supabase = createClient();
       const { data: auth } = await supabase.auth.getUser();
@@ -72,6 +74,7 @@ export function useCreatePrepaidAdvance() {
         payment_method: input.payment_method ?? null,
         bank_account_id: input.bank_account_id ?? null,
         notes: input.notes ?? null,
+        channel: input.channel ?? null,
         created_by: auth!.user!.id,
       });
       if (error) throw error;
@@ -80,6 +83,25 @@ export function useCreatePrepaidAdvance() {
       qc.invalidateQueries({ queryKey: KEY });
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
       toast.success("Advance recorded (held as prepaid asset). Reconcile its bank line in Banking.");
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+}
+
+/** Change the channel an advance pays for — its invoices follow (trigger, 20260926180000). */
+export function useSetPrepaidAdvanceChannel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, channel }: { id: string; channel: string | null }) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("prepaid_advances").update({ channel }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["marketing-report"] });
+      toast.success("Channel updated — is advance ke invoices bhi.");
     },
     onError: (err) => toast.error((err as Error).message),
   });
@@ -164,7 +186,13 @@ export function useBookBankTxnAsPrepaid() {
 export function useConsumePrepaidFifo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { vendorName: string; amount: number; gst: number; date: string; note?: string | null; attachment?: string | null }) => {
+    mutationFn: async (input: {
+      vendorName: string; amount: number; gst: number; date: string; note?: string | null; attachment?: string | null;
+      /** Vendor master link (GSTIN → ITC), bill number, GST by head, TDS — migration 20260927210000. */
+      vendorId?: string | null; billNo?: string | null;
+      heads?: { igst: number; cgst: number; sgst: number } | null;
+      tdsSection?: string | null; tdsAmount?: number;
+    }) => {
       const supabase = createClient();
       const { data, error } = await supabase.rpc("consume_prepaid_fifo", {
         p_vendor_name: input.vendorName.trim(),
@@ -173,6 +201,13 @@ export function useConsumePrepaidFifo() {
         p_date: input.date,
         p_note: input.note ?? null,
         p_attachment: input.attachment ?? null,
+        p_vendor_id: input.vendorId ?? null,
+        p_bill_no: input.billNo ?? null,
+        p_igst: input.heads ? Math.round(input.heads.igst) : null,
+        p_cgst: input.heads ? Math.round(input.heads.cgst) : null,
+        p_sgst: input.heads ? Math.round(input.heads.sgst) : null,
+        p_tds_section: input.tdsAmount && input.tdsAmount > 0 ? (input.tdsSection ?? null) : null,
+        p_tds_amount: Math.round(input.tdsAmount ?? 0),
       });
       if (error) throw new Error(error.message);
       return data as number;
@@ -182,7 +217,8 @@ export function useConsumePrepaidFifo() {
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["advance_expenses"] });
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
-      toast.success(`Invoice booked to P&L. ${input.vendorName.trim()} advance left: ₹${left}.`);
+      qc.invalidateQueries({ queryKey: ["vendors"] });
+      toast.success(`Invoice booked to P&L. ${input.vendorName.trim()} advance left: ₹${left}.${input.tdsAmount ? ` TDS ₹${input.tdsAmount} recorded — challan mein jodo; vendor ko TDS certificate se credit milega.` : ""}`);
     },
     onError: (err) => toast.error((err as Error).message),
   });

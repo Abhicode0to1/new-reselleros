@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSalaryNarration, matchEmployee, previousPeriod, titleCaseName } from "./salary-lines";
+import { parseSalaryNarration, matchEmployee, previousPeriod, titleCaseName, compactName, payeeKey, bestNameVariant } from "./salary-lines";
 
 describe("parseSalaryNarration", () => {
   it("reads name and month + year", () => {
@@ -85,5 +85,44 @@ describe("parseSalaryNarration — NEFT DR / RTGS DR", () => {
   it("flags a director's salary", () => {
     expect(parseSalaryNarration("RTGS DR-ICIC0000828-PARDEEP SHARMA-NETBANK, MUM-HDFCR52026071684013560-SALARY TO DIRECTOR", "2026-07-16"))
       .toMatchObject({ name: "PARDEEP SHARMA", director: true });
+  });
+});
+
+/* 26 Sep 2026: one PDF import made 15 employees for 8 people — names broken where the
+   statement's column wrapped. These are the real narrations. */
+describe("one person, many spellings", () => {
+  const hitesh = [
+    "50100784857182-TPT-SALARY EMP-HITESH BAB U",
+    "50100784857182-TPT-EMP MAY SALARY-HITESH BABU",
+    "50100784857182-TPT-JULY SALARY-HITESH BA BU",
+    "50100784857182-TPT-SALARY AUG 2026-HITES H BABU",
+  ];
+
+  it("an existing employee matches however the statement split the name", () => {
+    const emps = [{ id: "h", name: "Hitesh Babu" }, { id: "r", name: "Ranjeet Raj" }];
+    expect(matchEmployee("HITES H BABU", emps)).toEqual({ kind: "match", id: "h" });
+    expect(matchEmployee("RANJE ET RAJ", emps)).toEqual({ kind: "match", id: "r" });
+    expect(matchEmployee("RANJEET R AJ", emps)).toEqual({ kind: "match", id: "r" });
+  });
+
+  it("the payee account is the same on every line — one key, not four", () => {
+    const keys = new Set(hitesh.map(payeeKey));
+    expect([...keys]).toEqual(["acct:50100784857182"]);
+  });
+
+  it("IMPS and NEFT lines get a key too", () => {
+    expect(payeeKey("IMPS-622258187163-DARSHAN-PUNB-XXXXXXXX X3174-JUNE SALARY")).toBe("imps:PUNB:3174");
+    expect(payeeKey("NEFT DR-BKID0006087-PRATIK-NETBANK, MUM- HDFCH01182738271-JULY SALARY")).toBe("ifsc:BKID0006087:PRATIK");
+    expect(payeeKey("SALARY CASH")).toBeNull();
+  });
+
+  it("the best spelling wins for a new employee", () => {
+    expect(bestNameVariant(["HITESH BAB U", "HITES H BABU", "HITESH BABU", "HITESH BA BU"])).toBe("Hitesh Babu");
+    expect(bestNameVariant(["RANJE ET RAJ", "RANJEET R AJ", "RANJEET RAJ"])).toBe("Ranjeet Raj");
+    expect(bestNameVariant(["ABHI", "ABHIS", "ABHI SHEK"])).toBe("Abhi Shek");   // editable before booking
+  });
+
+  it("compactName ignores spaces and case", () => {
+    expect(compactName("Hites H Babu")).toBe(compactName("HITESH BABU"));
   });
 });

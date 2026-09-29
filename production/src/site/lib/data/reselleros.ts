@@ -117,7 +117,7 @@ export const OS_MORE = [
   { title: "Razorpay + buy pages", body: "Public checkout, coupons, site promos." },
   { title: "Accounting layer", body: "P&L, aging, MRR/ARR/churn/LTV." },
   { title: "TDS receivable", body: "Form 16A upload, 26AS reconcile." },
-  { title: "Customer portal", body: "Magic-link, invoices, tickets." },
+  { title: "Customer quote links", body: "Open, accept and pay a quote — no login." },
   { title: "WhatsApp + email", body: "Gupshup BSP, Resend, PDF send." },
   { title: "Procurement", body: "POs, PO ↔ bill matching." },
   { title: "Partner channel", body: "Distributor ↔ reseller sync." },
@@ -155,13 +155,13 @@ export const OS_CHANGELOG = [
   { date: "AUG 2026", title: "Subscription pro-rata on mid-term seat changes", body: "Add or remove seats inside a term and the next invoice carries the adjustment automatically." },
   { date: "JUL 2026", title: "Setu Account Aggregator live fetch", body: "Bank feed without CSV upload for HDFC and ICICI, with the other five following." },
   { date: "JUN 2026", title: "TDS receivable and 26AS reconcile", body: "Form 16A upload with matching against booked receivables." },
-  { date: "MAY 2026", title: "Customer portal with magic-link sign-in", body: "Clients see their invoices, subscriptions and tickets without a password." },
+  { date: "MAY 2026", title: "Customer quote links", body: "Clients open, accept and pay a quote from a link — no password." },
 ] as const;
 
 export const OS_TIERS = [
   { name: "Beta", price: "₹0", note: "Now — first 10 resellers", highlighted: true, lines: ["Every module, no seat limits", "Onboarding done with you personally", "You decide when to start paying"] },
   { name: "Starter", price: "TBA", note: "Launches at ₹15K MRR", highlighted: false, lines: ["Single operator", "Subscriptions, quotes, invoices", "GST and renewals"] },
-  { name: "Growth", price: "TBA", note: "Launches at ₹15K MRR", highlighted: false, lines: ["Small team, roles and audit log", "Banking reconciliation, TDS", "Customer portal"] },
+  { name: "Growth", price: "TBA", note: "Launches at ₹15K MRR", highlighted: false, lines: ["Small team, roles and audit log", "Banking reconciliation, TDS", "Customer quote links"] },
   { name: "Pro", price: "TBA", note: "Launches at ₹15K MRR", highlighted: false, lines: ["Partner channel and procurement", "API access and webhooks", "Priority escalation"] },
 ] as const;
 

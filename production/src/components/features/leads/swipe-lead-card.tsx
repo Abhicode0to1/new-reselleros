@@ -56,6 +56,7 @@ import { heatScore, heatBadge } from "@/lib/leads/heat-score";
 import { decideSwipe, SWIPE_TRIGGER_PX } from "@/lib/leads/swipe-gesture";
 import { chipsForStage, type LeadOutcome } from "@/lib/leads/outcomes";
 import type { Lead } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 // LEAD_STAGES mirrors the array in leads/page.tsx — kept here as a small
 // constant to avoid coupling the swipe card to that file's internals. If
@@ -302,7 +303,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                   .filter((v): v is string => Boolean(v && v.trim()))
                   .map((v, i) => (
                     <span key={v} className="min-w-0 max-w-full truncate text-xs text-ink-3" title={v}>
-                      {i > 0 && <span className="text-ink-4"> · </span>}
+                      {i > 0 && <span className="text-ink-3"> · </span>}
                       {v}
                     </span>
                   ))}
@@ -324,7 +325,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 {lead.value ? rupee(lead.value, { compact: true }) : "—"}
               </p>
               {lead.seats && (
-                <p className="text-3xs text-ink-3 tabular-nums mt-0.5">{lead.seats} seats</p>
+                <p className="text-xs text-ink-3 tabular-nums mt-0.5">{lead.seats} seats</p>
               )}
               {/* Quote ka sach mobile par bhi — wahi pill jo desktop ke PLAN cell me
                   hai (Pardeep, 31 Aug 2026). Tap quote kholta hai; stopPropagation
@@ -362,7 +363,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               {stageMeta && (
                 <span
                   title="Stage khud badalta hai — baat hone, demo, trial ya quote jane par. Badalna ho to lead kholiye."
-                  className="inline-flex items-center gap-1 text-3xs font-medium text-ink-2 px-1.5 py-0.5 shrink-0"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-ink-2 px-1.5 py-0.5 shrink-0"
                 >
                   <span className={cn("w-1.5 h-1.5 rounded-full", stageMeta.dot)} />
                   {stageMeta.label}
@@ -381,8 +382,12 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                   {followUp.text}
                 </span>
               )}
+              {/* An existing customer's new need (leads.customer_id) — says upsell, not stranger. */}
+              {lead.customer_id && (
+                <span className="text-3xs px-1.5 py-0.5 rounded bg-emerald/10 text-emerald shrink-0">Existing customer</span>
+              )}
               {/* Plan text — truncates when space tight. Shown for context. */}
-              <span className="text-2xs text-ink-3 truncate min-w-0">
+              <span className="text-xs text-ink-3 truncate min-w-0">
                 {lead.plan || "No plan"}
               </span>
             </div>
@@ -515,7 +520,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               nahi ki phone par swipe ka pata sirf isi se chalta hai — gesture apne aap me
               invisible hota hai jab tak koi bataye na. */}
           {hasPhone && (
-            <p className="mt-1.5 hidden text-3xs leading-none text-ink-3 [@media(pointer:coarse)]:block">
+            <p className="mt-1.5 hidden text-xs leading-none text-ink-3 [@media(pointer:coarse)]:block">
               Swipe → contacted · ← tomorrow · ↑ WhatsApp
             </p>
           )}
@@ -543,7 +548,7 @@ function followUpLabel(
   date: string | null,
 ): { text: string; tone: "rose" | "amber" | "ink-3" } | null {
   if (!date) return null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   if (date <  today)  return { text: "Overdue", tone: "rose"  };
   if (date === today) return { text: "Today",   tone: "amber" };
   const d = new Date(date);

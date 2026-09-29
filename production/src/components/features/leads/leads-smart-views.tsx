@@ -44,6 +44,7 @@ import { isHotLead } from "@/lib/leads/heat";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { staleDeals, STAGE_SLA_DAYS } from "@/lib/leads/velocity";
 import type { Lead } from "@/lib/supabase/database.types";
+import { istToday } from "@/lib/dates/ist";
 
 export type SmartView = "everything" | "all" | "mine" | "waiting" | "today" | "overdue" | "hot" | "new" | "closing" | "stalled" | "won-mtd" | "duplicates" | "junk";
 
@@ -99,7 +100,7 @@ export function LeadsSmartViews({
   leads, currentUserId, everythingCount, duplicateCount = 0, junkCount = 0, junkSuspectCount = 0, active, onChange,
   folders = [], activeFolder = "all", onFolder,
 }: LeadsSmartViewsProps) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
 
   // ── Counts ────────────────────────────────────────────────────────────────
   // Working views never count junk — it lives only under the Junk view.
@@ -227,7 +228,7 @@ export function LeadsSmartViews({
           <span className="hidden text-ink-3 sm:inline">{"View: "}</span>
           <span className="font-medium">{triggerLabel}</span>
           {triggerCount !== undefined && (
-            <span className="text-3xs tabular-nums opacity-70">{triggerCount}</span>
+            <span className="text-xs tabular-nums opacity-70">{triggerCount}</span>
           )}
           {showOverdueAlert && (
             <span
@@ -305,7 +306,7 @@ function ViewRow({ view, active, onSelect }: { view: Omit<ViewDef, "id">; active
           {view.label}
         </span>
         {view.hint ? (
-          <span className="block text-3xs text-ink-3">{view.hint}</span>
+          <span className="block text-xs text-ink-3">{view.hint}</span>
         ) : null}
       </span>
       {view.count !== undefined && (

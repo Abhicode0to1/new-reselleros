@@ -33,6 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { rupee } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { NavDirectory } from "@/components/layout/nav-directory";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -278,7 +279,7 @@ export default function ReportsPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <p className="mb-0.5 text-xs font-medium uppercase tracking-widest text-ink-3">
-            Engage
+            Books
           </p>
           <h1 className="font-serif text-3xl text-ink">Reports</h1>
           <p className="mt-1 text-sm text-ink-3">
@@ -293,6 +294,13 @@ export default function ReportsPage() {
         >
           Profit by product <span aria-hidden>→</span>
         </Link>
+      </div>
+
+      {/* ── Reports directory (S30) — every report in one place, from APP_NAV. P&L,
+             Balance Sheet, GST, TDS, Aging, ESI… are no longer sidebar rows; they are
+             listed here, role-filtered exactly like the sidebar. ── */}
+      <div className="mb-8">
+        <NavDirectory parentId="reports" title="All reports" />
       </div>
 
       {/* ── KPIs — sab live subscriptions se; trend-badge sirf jab history ho.

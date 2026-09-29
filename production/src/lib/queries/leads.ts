@@ -6,11 +6,17 @@
  */
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as React from "react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
-import type { Lead, Database } from "@/lib/supabase/database.types";
+import { requireTenantId } from "@/lib/queries/require-tenant";
+import type { Json, Lead, Database } from "@/lib/supabase/database.types";
+import { flattenPages } from "@/lib/queries/keyset";
+import {
+  toListLeadsFilters, type LeadListCursor, type LeadListFilters, type LeadListPage,
+} from "@/lib/leads/list-page";
 import type { JunkReasonId } from "@/lib/leads/qualification";
 
 // ============================================================
@@ -35,6 +41,41 @@ export function useLeads() {
       return data ?? [];
     },
   });
+}
+
+/**
+ * Leads in keyset pages from `list_leads()` (migration 20260928200000, S37) — slim rows,
+ * newest first, server-side filters.
+ *
+ * NOT a drop-in for useLeads(): the rows are LeadListRow (no notes / attribution columns),
+ * and the Sales & Pipeline screen still computes its counts and its default sort over the
+ * full set — see lib/leads/list-page.ts for why it is not switched over yet and which
+ * filters the server reproduces exactly. Under ["leads"], so every lead mutation's
+ * invalidation reaches it.
+ */
+export function useLeadsInfinite(filters: LeadListFilters = {}, limit = 50) {
+  const f = toListLeadsFilters(filters);
+  const q = useInfiniteQuery({
+    queryKey: ["leads", "pages", f, limit],
+    initialPageParam: null as LeadListCursor | null,
+    queryFn: async ({ pageParam }): Promise<LeadListPage> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("list_leads", {
+        p_cursor: pageParam as unknown as Json,
+        p_limit: limit,
+        p_filters: f as unknown as Json,
+      });
+      if (error) throw error;
+      const page = (data ?? { rows: [], next_cursor: null }) as unknown as LeadListPage;
+      return { rows: page.rows ?? [], next_cursor: page.next_cursor ?? null };
+    },
+    getNextPageParam: (last) => last.next_cursor,
+  });
+  const data = React.useMemo(
+    () => (q.data ? flattenPages(q.data.pages, (l) => l.id) : undefined),
+    [q.data],
+  );
+  return { ...q, data };
 }
 
 /**
@@ -243,52 +284,20 @@ export function useCreateLead() {
     mutationFn: async (lead: Omit<LeadInsert, "tenant_id">) => {
       const supabase = createClient();
 
-      let tenantId = "11111111-1111-1111-1111-111111111111"; // default dev/demo tenant
-      const { data: authData } = await supabase.auth.getUser();
-      if (authData?.user) {
-        const { data: me } = await supabase
-          .from("users")
-          .select("tenant_id")
-          .eq("id", authData.user.id)
-          .single();
-        if (me?.tenant_id) {
-          tenantId = me.tenant_id;
-        }
-      }
+      /* R-001 (raised by Abhishek back to Pardeep, 26 Sep 2026): this used to default to the
+         seed tenant when the operator could not be identified, and to hand back a fake
+         `L-<timestamp>` lead when the insert failed — so a lead could land in another
+         company, or not land at all while the toast said "Lead created". Refuse instead;
+         onError shows the reason. */
+      const tenantId = await requireTenantId(supabase);
 
-      // Insert lead with tenant_id
       const { data, error } = await supabase
         .from("leads")
         .insert({ ...lead, tenant_id: tenantId })
         .select()
         .single();
 
-      if (error) {
-        console.warn("Dev mode lead insert warning:", error.message);
-        // Dev fallback lead object so UI succeeds seamlessly
-        const lObj = lead as Record<string, unknown>;
-        const newLead: Lead = {
-          id: `L-${Date.now()}`,
-          tenant_id: tenantId,
-          company: lead.company ?? "New Prospect",
-          plan: lead.plan ?? "Google Workspace Std",
-          seats: lead.seats ?? 1,
-          value: lead.value ?? 0,
-          stage: lead.stage ?? "new",
-          source: lead.source ?? "manual",
-          contact_name: (lObj.contact_name as string) ?? null,
-          contact_email: (lObj.contact_email as string) ?? (lObj.email as string) ?? null,
-          contact_phone: (lObj.contact_phone as string) ?? (lObj.phone as string) ?? null,
-          city: (lObj.city as string) ?? null,
-          state: (lObj.state as string) ?? null,
-          is_junk: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } as unknown as Lead;
-
-        qc.setQueryData<Lead[]>(["leads"], (old) => [newLead, ...(old ?? [])]);
-        return newLead;
-      }
+      if (error) throw error;
       return data;
     },
     onSuccess: () => {

@@ -1,0 +1,98 @@
+/**
+ * Bank Reconciliation Statement — books vs the bank, one account, one date.
+ *
+ * In this app the bank table holds two kinds of line: what the BANK said (imported:
+ * csv_upload / api_fetch) and what WE booked without a statement (manual — a bill
+ * paid from the Bills page, a salary marked paid, a cheque issued). So:
+ *
+ *   balance per bank statement = opening + Σ imported (credit − debit) up to the date
+ *   balance per books          = opening + Σ all lines (credit − debit) up to the date
+ *   books − statement          = manual credits (deposits in transit)
+ *                              − manual debits  (payments not yet through the bank)
+ *
+ * and the classic BRS reads: statement balance + deposits in transit − cheques not
+ * presented = book balance. The second half of the statement is the ACTION list —
+ * imported lines nobody has booked (bank charges, interest, an unknown receipt): the
+ * bank knows about them, the books do not.
+ *
+ * If the owner types the closing balance printed on the bank's own statement, a
+ * difference from the imported balance means lines are missing from the import (or
+ * were deleted) — the one thing no amount of reconciling fixes.
+ */
+
+export interface BrsLine {
+  id: string;
+  txn_date: string;
+  description: string;
+  debit: number;
+  credit: number;
+  source: "manual" | "csv_upload" | "api_fetch";
+  matched_to_type: string | null;
+}
+
+export interface BrsInput {
+  openingBalance: number;
+  openingDate: string;           // YYYY-MM-DD — lines before this are not in the ledger
+  asOf: string;                  // YYYY-MM-DD inclusive
+  lines: BrsLine[];
+  /** Closing balance printed on the bank's statement for `asOf`, if typed. */
+  statementClosing?: number | null;
+}
+
+export interface Brs {
+  asOf: string;
+  statementBalance: number;      // per imported lines
+  bookBalance: number;           // per all lines
+  depositsInTransit: BrsLine[];  // manual credits — booked, not yet in the bank
+  paymentsNotPresented: BrsLine[]; // manual debits — booked, not yet through the bank
+  unbookedImports: BrsLine[];    // imported, unreconciled — in the bank, not in the books
+  totals: { depositsInTransit: number; paymentsNotPresented: number; unbookedImports: number };
+  /** statementClosing − statementBalance, when a closing balance was typed. Non-zero = missing lines. */
+  importGap: number | null;
+  /** Everything ties out: no unbooked imports and no import gap. */
+  clean: boolean;
+  ignoredBeforeOpening: number;  // lines dated before the opening balance date (not counted)
+}
+
+const IMPORTED = new Set(["csv_upload", "api_fetch"]);
+
+export function buildBrs(i: BrsInput): Brs {
+  const inRange = i.lines.filter((l) => l.txn_date <= i.asOf && l.txn_date >= i.openingDate);
+  const ignoredBeforeOpening = i.lines.filter((l) => l.txn_date < i.openingDate && l.txn_date <= i.asOf).length;
+  const net = (rows: BrsLine[]) => rows.reduce((s, l) => s + (l.credit || 0) - (l.debit || 0), 0);
+  const imported = inRange.filter((l) => IMPORTED.has(l.source));
+  const manual = inRange.filter((l) => !IMPORTED.has(l.source));
+  const statementBalance = Math.round(i.openingBalance + net(imported));
+  const bookBalance = Math.round(i.openingBalance + net(inRange));
+  const byDate = (a: BrsLine, b: BrsLine) => a.txn_date.localeCompare(b.txn_date) || a.description.localeCompare(b.description);
+  const depositsInTransit = manual.filter((l) => (l.credit || 0) > 0).sort(byDate);
+  const paymentsNotPresented = manual.filter((l) => (l.debit || 0) > 0).sort(byDate);
+  const unbookedImports = imported.filter((l) => l.matched_to_type === null).sort(byDate);
+  const totals = {
+    depositsInTransit: depositsInTransit.reduce((s, l) => s + l.credit, 0),
+    paymentsNotPresented: paymentsNotPresented.reduce((s, l) => s + l.debit, 0),
+    unbookedImports: unbookedImports.reduce((s, l) => s + (l.credit || 0) - (l.debit || 0), 0),
+  };
+  const importGap = i.statementClosing === null || i.statementClosing === undefined ? null : Math.round(i.statementClosing) - statementBalance;
+  return {
+    asOf: i.asOf, statementBalance, bookBalance, depositsInTransit, paymentsNotPresented, unbookedImports, totals,
+    importGap, clean: unbookedImports.length === 0 && (importGap === null || importGap === 0), ignoredBeforeOpening,
+  };
+}
+
+/** The statement as rows for a CSV / print — the way a CA reads it. */
+export function brsRows(b: Brs, accountName: string): (string | number)[][] {
+  const out: (string | number)[][] = [
+    ["Bank reconciliation statement", accountName], ["As of", b.asOf], ["", ""],
+    ["Balance as per bank statement (imported lines)", b.statementBalance],
+    ["Add: deposits in transit (booked, not yet in the bank)", b.totals.depositsInTransit],
+    ...b.depositsInTransit.map((l): [string, number] => [`    ${l.txn_date} ${l.description}`, l.credit]),
+    ["Less: payments not yet presented (booked, not yet through the bank)", b.totals.paymentsNotPresented],
+    ...b.paymentsNotPresented.map((l): [string, number] => [`    ${l.txn_date} ${l.description}`, -l.debit]),
+    ["Balance as per books", b.bookBalance], ["", ""],
+    ["In the bank, not in the books (unreconciled imported lines)", b.totals.unbookedImports],
+    ...b.unbookedImports.map((l): [string, number] => [`    ${l.txn_date} ${l.description}`, (l.credit || 0) - (l.debit || 0)]),
+  ];
+  if (b.importGap !== null) out.push(["", ""], ["Closing balance per bank's statement − imported balance (missing lines)", b.importGap]);
+  return out;
+}

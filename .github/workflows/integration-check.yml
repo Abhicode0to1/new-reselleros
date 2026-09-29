@@ -1,0 +1,108 @@
+# Nightly integration check — do the three branches still fit together?
+#
+# Three people work on three long-lived branches (pardeep-sir, abhishek-pre-merge,
+# pawan-api-system) and they meet only when somebody deploys. Every conflict and every
+# "your change broke my page" is found on deploy day, under pressure. This job finds them
+# every night instead: it merges the three into a throwaway branch in the runner, reports
+# textual conflicts file by file, and — when the merge is clean — runs the typecheck and the
+# unit tests on the combined code.
+#
+# It never pushes anything. The result is the job summary (Actions → this workflow → the
+# run). docs/TEAM-PROTOCOL.md tells each agent to glance at the latest run at session start
+# (`gh run list --workflow integration-check.yml --limit 1`).
+
+name: integration-check
+
+on:
+  schedule:
+    - cron: "30 20 * * *"   # 02:00 IST
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  merge-three:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge the three working branches
+        id: merge
+        shell: bash
+        run: |
+          set -u
+          git config user.name "integration-check"
+          git config user.email "integration-check@users.noreply.github.com"
+          BRANCHES="pardeep-sir abhishek-pre-merge pawan-api-system"
+          {
+            echo "## Integration check — $(date -u +%Y-%m-%dT%H:%MZ)"
+            echo
+            echo "| branch | head | ahead of the others' merge-base |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for b in $BRANCHES; do
+            if git rev-parse --verify -q "origin/$b" >/dev/null; then
+              echo "| \`$b\` | \`$(git rev-parse --short origin/$b)\` | $(git rev-list --count origin/pardeep-sir...origin/$b 2>/dev/null || echo ?) |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`$b\` | missing | — |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          git checkout -q -B integration origin/pardeep-sir
+          CONFLICTS=0
+          for b in abhishek-pre-merge pawan-api-system; do
+            git rev-parse --verify -q "origin/$b" >/dev/null || continue
+            if git merge --no-edit --no-ff -q "origin/$b" >/dev/null 2>&1; then
+              echo "- ✔ merged \`$b\` cleanly" >> "$GITHUB_STEP_SUMMARY"
+            else
+              CONFLICTS=1
+              echo "- ✖ **conflicts merging \`$b\`**:" >> "$GITHUB_STEP_SUMMARY"
+              git diff --name-only --diff-filter=U | sed 's/^/  - `/; s/$/`/' >> "$GITHUB_STEP_SUMMARY"
+              git merge --abort
+            fi
+          done
+          echo "conflicts=$CONFLICTS" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.merge.outputs.conflicts == '0'
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: production/package-lock.json
+
+      - name: Install
+        if: steps.merge.outputs.conflicts == '0'
+        working-directory: production
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck the combined code
+        id: tsc
+        if: steps.merge.outputs.conflicts == '0'
+        working-directory: production
+        continue-on-error: true
+        run: |
+          npx tsc --noEmit -p tsconfig.json > /tmp/tsc.txt 2>&1 && echo ok > /tmp/tsc.status || echo fail > /tmp/tsc.status
+          if [ "$(cat /tmp/tsc.status)" = fail ]; then
+            { echo; echo "### ✖ Typecheck failed on the merged code"; echo '```'; head -60 /tmp/tsc.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          else
+            echo "- ✔ typecheck clean on the merged code" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Unit tests on the combined code
+        if: steps.merge.outputs.conflicts == '0'
+        working-directory: production
+        continue-on-error: true
+        run: |
+          npx vitest run --reporter=dot > /tmp/vitest.txt 2>&1 && R=ok || R=fail
+          { echo; echo "### Unit tests: $R"; echo '```'; tail -25 /tmp/vitest.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$R" = ok ]
+
+      - name: Fail the run when the branches do not fit
+        if: steps.merge.outputs.conflicts == '1'
+        run: |
+          echo "Merge conflicts between the working branches — see the job summary." >&2
+          exit 1

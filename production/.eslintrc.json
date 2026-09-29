@@ -1,7 +1,80 @@
 {
   "extends": ["next/core-web-vitals"],
+  "ignorePatterns": ["src/lib/supabase/database.generated.ts"],
   "rules": {
     "react/no-unescaped-entities": "off",
-    "@next/next/no-img-element": "warn"
-  }
+    "@next/next/no-img-element": "warn",
+    "max-lines": ["warn", { "max": 800, "skipBlankLines": true, "skipComments": true }]
+  },
+  "overrides": [
+    {
+      "files": ["*.ts", "*.tsx"],
+      "plugins": ["@typescript-eslint"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "warn"
+      }
+    },
+    {
+      "files": [
+        "src/app/(app)/accounting/**",
+        "src/app/(app)/compliance/**",
+        "src/app/(app)/reports/**",
+        "src/app/(app)/leads/**",
+        "src/app/(app)/deals/**",
+        "src/app/(app)/enquiries/**",
+        "src/app/(app)/lead-gen/**",
+        "src/app/(app)/referrals/**",
+        "src/app/(app)/partners/**",
+        "src/app/(app)/marketing/**",
+        "src/app/(app)/campaigns/**",
+        "src/app/(app)/coupons/**",
+        "src/app/(app)/online-promos/**",
+        "src/app/(app)/attendance/**",
+        "src/app/(app)/my-expenses/**",
+        "src/app/(app)/purchases/**",
+        "src/app/(app)/purchase-orders/**",
+        "src/app/(app)/vendor-portal/**",
+        "src/app/(public)/unsubscribe/**",
+        "src/app/(public)/expense-claim/**",
+        "src/app/api/cron/**",
+        "src/app/api/marketing/**",
+        "src/app/api/leads/**",
+        "src/app/api/public/health/**",
+        "src/lib/accounting/**",
+        "src/lib/gst/**",
+        "src/lib/tax/**",
+        "src/lib/payroll/**",
+        "src/lib/banking/**",
+        "src/lib/expenses/**",
+        "src/lib/compliance/**",
+        "src/lib/leads/**",
+        "src/lib/marketing/**",
+        "src/lib/google/**",
+        "src/lib/meta/**",
+        "src/lib/ops/**",
+        "src/lib/backup/**",
+        "src/lib/attendance/**",
+        "src/lib/vendor/**",
+        "src/components/features/accounting/**",
+        "src/components/features/banking/**",
+        "src/components/features/payroll/**",
+        "src/components/features/leads/**",
+        "src/components/features/enquiries/**",
+        "src/components/features/campaigns/**",
+        "src/components/features/coupons/**",
+        "src/components/features/referrals/**",
+        "src/components/features/compliance/**",
+        "src/components/features/attendance/**",
+        "src/components/features/purchase-orders/**",
+        "src/components/features/site-promos/**"
+      ],
+      "excludedFiles": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "no-restricted-syntax": ["error",
+          {"selector":"CallExpression[callee.property.name='slice'][callee.object.type='CallExpression'][callee.object.callee.property.name='toISOString'][arguments.0.value=0][arguments.1.value=10]","message":"S21 / AGENTS.md §6: toISOString() UTC ki tareekh deta hai — 00:00–05:30 IST me KAL. Aaj ke liye istToday(), kisi instant ki IST tareekh ke liye toIstDate(d), UTC-parts se bani Date ke liye utcDateISO(d) — sab @/lib/dates/ist se."},
+          {"selector":"MemberExpression[object.type='CallExpression'][object.callee.property.name='split'][object.callee.object.type='CallExpression'][object.callee.object.callee.property.name='toISOString']","message":"S21 / AGENTS.md §6: toISOString() UTC ki tareekh deta hai — 00:00–05:30 IST me KAL. Aaj ke liye istToday(), kisi instant ki IST tareekh ke liye toIstDate(d), UTC-parts se bani Date ke liye utcDateISO(d) — sab @/lib/dates/ist se."}
+        ]
+      }
+    }
+  ]
 }

@@ -98,7 +98,7 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
           </div>
 
           {dictation.listening && (
-            <p className="flex flex-wrap items-center gap-1.5 text-2xs text-rose-ink">
+            <p className="flex flex-wrap items-center gap-1.5 text-xs text-rose-ink">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose" />
               Sun raha hoon…
               {dictation.interim && <span className="italic text-ink-3">{dictation.interim}</span>}
@@ -107,7 +107,7 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
 
           {dictation.error && (
             <div className="space-y-1">
-              <p className="text-2xs text-rose-ink">{dictation.error}</p>
+              <p className="text-xs text-rose-ink">{dictation.error}</p>
               {/* `chrome://settings` ka link bekaar hota — Chrome kisi web page se aise link
                   ko jaan-boojh kar mara hua rakhta hai. Ye button `getUserMedia` se Chrome
                   ka APNA prompt laata hai, jo asli "activate" hai. */}
@@ -115,13 +115,13 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
                 <button
                   type="button"
                   onClick={dictation.requestMic}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-amber bg-amber-soft px-2 py-1 text-2xs font-semibold text-amber-ink hover:bg-amber-soft/70"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-amber bg-amber-soft px-2 py-1 text-xs font-semibold text-amber-ink hover:bg-amber-soft/70"
                 >
                   <Icon name="mic" size={12} /> Mic chalu karein
                 </button>
               )}
               {dictation.permission && (
-                <p className="text-3xs text-ink-3">
+                <p className="text-xs text-ink-3">
                   Is tab me Chrome ka faisla:{" "}
                   <b className={dictation.permission === "granted" ? "text-emerald-ink" : "text-rose-ink"}>
                     {dictation.permission}
@@ -135,7 +135,7 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
               Hindi shabd todta hai; `hi-IN` Hindi saaf deta hai par Devanagari me. Kaun sa
               behtar hai, ye us pal par nirbhar hai ki wo kya bol raha hai. */}
           {dictation.supported && (
-            <div className="flex items-center gap-1 text-2xs text-ink-3">
+            <div className="flex items-center gap-1 text-xs text-ink-3">
               <span>Bolne ki bhasha:</span>
               {([["en-IN", "English"], ["hi-IN", "हिंदी"]] as const).map(([code, label]) => (
                 <button

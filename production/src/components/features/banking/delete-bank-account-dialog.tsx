@@ -103,10 +103,10 @@ export function DeleteBankAccountDialog({ open, onOpenChange, account }: Props) 
           )}
 
           <div>
-            <label className="text-xs text-ink-2 font-medium">
+            <label htmlFor="delete-bank-type-to-confirm" className="text-xs text-ink-2 font-medium">
               Type <b className="font-mono text-ink">{account.name}</b> to confirm
             </label>
-            <Input
+            <Input id="delete-bank-type-to-confirm"
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder={account.name}

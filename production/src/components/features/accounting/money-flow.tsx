@@ -92,7 +92,7 @@ export function MoneyFlow({ rows, scale }: {
                         {r.estimated && <Badge kind="warning" size="sm">est.</Badge>}
                       </span>
                       {r.hint && (
-                        <span className="block truncate text-2xs text-ink-3">{r.hint}</span>
+                        <span className="block truncate text-xs text-ink-3">{r.hint}</span>
                       )}
                     </span>
 
@@ -118,7 +118,7 @@ export function MoneyFlow({ rows, scale }: {
                         {g.id === "out" ? "−" : ""}{rupee(r.amount)}
                       </span>
                       {r.ofSalesPct != null && (
-                        <span className="block text-3xs text-ink-3 tabular-nums">
+                        <span className="block text-xs text-ink-3 tabular-nums">
                           {r.ofSalesPct}% of sales
                         </span>
                       )}

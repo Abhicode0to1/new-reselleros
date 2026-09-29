@@ -16,9 +16,9 @@
  * vendor owes us money.
  *
  * ─── OPENING BALANCE IS FETCHED, NOT ASSUMED ────────────────────────────────
- * The hooks return the party's ENTIRE history and buildLedger derives the opening from
- * whatever falls before the window. A date-filtered query would be cheaper and would
- * quietly start every statement at zero.
+ * The opening is the signed sum of everything before the window — computed in SQL by
+ * report_party_ledger since S17 (28 Sep 2026), never assumed to be zero. A plain
+ * date-filtered query would quietly start every statement at zero.
  */
 "use client";
 
@@ -38,10 +38,10 @@ import { cn, rupee } from "@/lib/utils";
 import { useCustomers } from "@/lib/queries/customers";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import {
-  useCustomerLedgerEntries, useVendorLedgerEntries, useLedgerVendors,
+  useCustomerLedger, useVendorLedger, useLedgerVendors,
 } from "@/lib/queries/ledger";
 import {
-  buildLedger, fyOf, fyPeriod, quarterPeriod, monthPeriod,
+  fyOf, fyPeriod, quarterPeriod, monthPeriod,
   type LedgerKind, type LedgerPeriod, type LedgerStatement,
 } from "@/lib/accounting/ledger";
 import {
@@ -49,6 +49,7 @@ import {
   ledgerWhatsAppText, ledgerWhatsAppUrl, LEDGER_CSV_HEADERS,
 } from "@/lib/accounting/ledger-export";
 import { downloadCSV } from "@/lib/csv";
+import TallyDaybookButton from "@/components/features/accounting/tally-daybook-button";
 import { localDateISO } from "@/lib/leads/outcomes";
 
 /** The FY we are in now — the default window, because that is what a CA asks for. */
@@ -106,17 +107,14 @@ function LedgerPageInner() {
   const vendorsQ = useLedgerVendors();
   const { data: me } = useCurrentUser();
 
-  const custEntriesQ = useCustomerLedgerEntries(kind === "customer" ? partyId : null);
-  const vendEntriesQ = useVendorLedgerEntries(kind === "vendor" ? vendorName : null);
+  const custLedgerQ = useCustomerLedger(kind === "customer" ? partyId : null, period);
+  const vendLedgerQ = useVendorLedger(kind === "vendor" ? vendorName : null, period);
 
-  const entriesQ = kind === "customer" ? custEntriesQ : vendEntriesQ;
+  const entriesQ = kind === "customer" ? custLedgerQ : vendLedgerQ;
   const customer = (customersQ.data ?? []).find((c) => c.id === partyId) ?? null;
   const partyName = kind === "customer" ? (customer?.name ?? "") : (vendorName ?? "");
 
-  const statement: LedgerStatement | null = React.useMemo(() => {
-    if (!entriesQ.data) return null;
-    return buildLedger(kind, entriesQ.data, period);
-  }, [entriesQ.data, kind, period]);
+  const statement: LedgerStatement | null = entriesQ.data ?? null;
 
   const selected = kind === "customer" ? !!partyId : !!vendorName;
 
@@ -258,6 +256,10 @@ function LedgerPageInner() {
             </select>
           </div>
 
+          {/* S34 — poori company ka day book (Sales + Receipt + Payment vouchers) is period ka.
+              Party chunne ki zaroorat nahi, isliye party wale buttons se alag. */}
+          <TallyDaybookButton period={period} companyName={me?.tenantName ?? ""} />
+
           {selected && statement && (
             <div className="flex items-center gap-1.5 ml-auto">
               <Button size="sm" variant="outline" icon="file" onClick={onCsv}>Excel / CSV</Button>
@@ -322,7 +324,7 @@ function SummaryStrip({ statement: s, partyName }: { statement: LedgerStatement;
           {s.closingSide && <span className="ml-1.5 text-sm font-sans font-semibold text-ink-2">{s.closingSide}</span>}
         </div>
         {/* Spelled out, because "Dr" is not plain English to the person being sent this. */}
-        <div className="text-2xs text-ink-3 mt-1.5">
+        <div className="text-xs text-ink-3 mt-1.5">
           {s.closingBalance === 0
             ? "Fully settled — nothing outstanding either way."
             : s.closingSide === (s.kind === "customer" ? "Dr" : "Cr")
@@ -389,7 +391,7 @@ function StatementTable({ statement: s }: { statement: LedgerStatement }) {
                 <td className="p-2.5 font-mono text-ink-2 whitespace-nowrap">{r.date}</td>
                 <td className="p-2.5">
                   <span className="font-mono text-ink">{r.reference}</span>
-                  {r.narration && <span className="block text-2xs text-ink-3">{r.narration}</span>}
+                  {r.narration && <span className="block text-xs text-ink-3">{r.narration}</span>}
                 </td>
                 <td className="p-2.5 whitespace-nowrap">
                   <Badge kind="muted" size="sm">{r.voucher}</Badge>
@@ -424,7 +426,7 @@ function StatementTable({ statement: s }: { statement: LedgerStatement }) {
         </table>
       </div>
 
-      <p className="px-3 py-2 text-2xs text-ink-3 border-t border-hairline flex items-center gap-1.5">
+      <p className="px-3 py-2 text-xs text-ink-3 border-t border-hairline flex items-center gap-1.5">
         <Icon name="info" size={12} />
         {s.kind === "customer"
           ? "Dr = owed to you · Cr = held on their behalf. Void invoices are excluded — a void document was never issued."

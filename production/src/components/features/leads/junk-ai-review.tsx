@@ -107,7 +107,7 @@ export function JunkAIReview({ leads }: { leads: Lead[] }) {
                       <span className="block text-sm text-ink truncate">
                         {lead.company || lead.contact_name || "Unnamed lead"}
                       </span>
-                      <span className="block text-2xs text-ink-3 truncate">{v.reason}</span>
+                      <span className="block text-xs text-ink-3 truncate">{v.reason}</span>
                     </span>
                     {isJunk ? (
                       <button

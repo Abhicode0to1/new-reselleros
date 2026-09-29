@@ -25,7 +25,8 @@ const bodySchema = z.object({
   additional_seats: z.coerce.number().int().min(1).max(5000),
 });
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const userClient = createClient();
   const { data: authData } = await userClient.auth.getUser();
   if (!authData?.user) {

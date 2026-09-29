@@ -30,13 +30,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
-import { APP_NAV } from "@/lib/nav";
+import { APP_NAV, flattenNav } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 // Pages the operator can preview in the phone-frame iframe.
 // Flattened from APP_NAV — every page they navigate to in the sidebar
 // is previewable. /mobile itself is excluded to avoid infinite frames.
-const PREVIEWABLE_PAGES = APP_NAV.flatMap((s) => s.items)
+const PREVIEWABLE_PAGES = flattenNav(APP_NAV).map((e) => e.item)
   .filter((i) => i.href !== "/mobile");
 
 const TABS: TabBarItem[] = [

@@ -20,6 +20,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { clientIp } from "@/lib/security/rate-limit";
 import { decryptSecret, isVaultConfigured } from "@/lib/crypto/vault";
 import { assessStrength } from "@/lib/vault/passwords";
 import { vaultDb } from "@/lib/vault/db";
@@ -27,10 +28,8 @@ import { vaultDb } from "@/lib/vault/db";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const db = vaultDb(supabase);
   const { data: authData } = await supabase.auth.getUser();
@@ -67,7 +66,8 @@ export async function POST(
     customer_id: row.customer_id,
     user_id: authData.user.id,
     action: "view",
-    ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+    /* S20: XFF ki pehli entry client khud likhta hai — audit me wahi IP jo humari infra ne dekhi. */
+    ip_address: ((ip) => (ip === "unknown" ? null : ip))(clientIp(req.headers)),
     user_agent: req.headers.get("user-agent"),
   });
 

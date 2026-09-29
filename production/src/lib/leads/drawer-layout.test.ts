@@ -24,10 +24,30 @@ import { join } from "node:path";
        emails in its thread still offered to introduce itself.
    ───────────────────────────────────────────────────────────────────────────── */
 
-const page = readFileSync(
-  join(process.cwd(), "src", "app", "(app)", "leads", "page.tsx"),
-  "utf8",
-);
+/* S35 (28 Sep 2026): (app)/leads/page.tsx was split into feature files. These are every
+   file that came out of it, read in the order the code sat in the OLD file (page, drawer
+   header → sheet → tabs → footer, the next-step rules, then the row menu and the list), so
+   every "X comes before Y" and "exactly N of" assertion below still means what it meant
+   when this was one file. */
+const FEATURE = ["src", "components", "features", "leads"];
+const DRAWER_FILES = [
+  ["src", "app", "(app)", "leads", "page.tsx"],
+  [...FEATURE, "leads-page-dialogs.tsx"],
+  [...FEATURE, "lead-detail-header.tsx"],
+  [...FEATURE, "lead-detail-sheet.tsx"],
+  [...FEATURE, "lead-detail-details-tab.tsx"],
+  [...FEATURE, "lead-detail-activity-tab.tsx"],
+  [...FEATURE, "lead-detail-email-tab.tsx"],
+  [...FEATURE, "lead-detail-followups-tab.tsx"],
+  [...FEATURE, "lead-detail-footer.tsx"],
+  ["src", "lib", "leads", "next-action.ts"],
+  [...FEATURE, "lead-row-actions.tsx"],
+  [...FEATURE, "lead-list-view.tsx"],
+  [...FEATURE, "lead-list-row.tsx"],
+];
+const page = DRAWER_FILES
+  .map((parts) => readFileSync(join(process.cwd(), ...parts), "utf8"))
+  .join("\n");
 
 /* Comments STRIPPED. Several assertions below are about a token being absent, or about
    where it sits — and every one of those tokens is also NAMED in a comment explaining why
@@ -383,15 +403,20 @@ describe("a pre-quote lead always has a route to a quote", () => {
      Individually each is defensible. Together they left the money step with no door, and the
      tab split from the day before is what closed the last one. */
 
+  /* S35: nextAction is now data (lib/leads/next-action.ts) — its `target.kind` is
+     "send_quote" exactly when the drawer would run handleSendQuote, so the gate below is
+     the same test the `onClick !== handleSendQuote` comparison used to be. */
   it("the footer offers a quote when there is none yet", () => {
-    expect(code).toMatch(/!hasQuotes &&[\s\S]{0,80}nextAction\?\.onClick !== handleSendQuote/);
+    expect(code).toMatch(/!hasQuotes &&[\s\S]{0,80}nextAction\?\.target\.kind !== "send_quote"/);
   });
 
   it("and suppresses it when the big CTA is already that action", () => {
     /* Otherwise this fix re-creates the two-competing-primaries bug that the removed footer
-       primary was deleted for. Gated on the HANDLER, not on the stage: the stage is not what
+       primary was deleted for. Gated on the ACTION, not on the stage: the stage is not what
        collides, being told to call is. */
-    expect(code).toContain("nextAction?.onClick !== handleSendQuote");
+    expect(code).toContain('nextAction?.target.kind !== "send_quote"');
+    /* …and "send_quote" must still mean handleSendQuote and nothing else. */
+    expect(code).toMatch(/t\.kind === "send_quote"\) \{ handleSendQuote\(\); return; \}/);
   });
 
   it("the pre-quote quote button is still inside the details tab, so the footer is the fix", () => {

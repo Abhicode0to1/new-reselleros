@@ -16,11 +16,11 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useLeads } from "@/lib/queries/leads";
 import { AddLeadForm } from "@/components/features/leads/add-lead-form";
-import { toast } from "sonner";
+import { ShareFormSheet, ENQUIRY_SHARE, BUY_SHARE, type ShareTarget } from "@/components/features/leads/share-form-sheet";
 import { KPI } from "@/components/shared/kpi";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button, IconButton } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { FAB } from "@/components/ui/fab";
@@ -32,7 +32,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
 
@@ -41,11 +40,13 @@ import type { Lead } from "@/lib/supabase/database.types";
 const SOURCE_ICON: Record<string, string> = {
   whatsapp: "whatsapp", website: "globe", referral: "award", cold: "send",
   ads: "target", linkedin: "users", email: "mail", manual: "user", import: "download",
+  facebook: "target", marketplace: "cart", seo: "globe",
 };
 const SOURCE_LABEL: Record<string, string> = {
   whatsapp: "WhatsApp Business", website: "Website form", referral: "Referral",
   cold: "Cold outreach", ads: "Google Ads", linkedin: "LinkedIn",
   email: "Email / Inbound", manual: "Manual entry", import: "CSV import",
+  facebook: "Facebook / Instagram", marketplace: "IndiaMART / JustDial", seo: "Google search / SEO",
 };
 
 /** Collapse a raw leads.source string into a canonical channel key. */
@@ -56,6 +57,10 @@ function normalizeSource(raw: string | null | undefined): string {
   if (s.startsWith("buy") || s.includes("website") || s.includes("form")) return "website";
   if (s.includes("referr")) return "referral";
   if (s.includes("linkedin")) return "linkedin";
+  // Before the generic "ads" test below — meta-ads is a Facebook ad, not a Google one.
+  if (s.includes("meta") || s.includes("facebook") || s.includes("instagram")) return "facebook";
+  if (s.includes("indiamart") || s.includes("justdial")) return "marketplace";
+  if (s.includes("google-organic")) return "seo";   // found us on Google, no ad
   if (s.includes("cold") || s.includes("apollo") || s.includes("lemlist")) return "cold";
   if (s.includes("google") || s.includes("ads") || s.includes("adword")) return "ads";
   if (s.includes("csv") || s.includes("import")) return "import";
@@ -117,136 +122,6 @@ function SourceIcon({ source }: { source: string | null }) {
     </span>
   );
 }
-
-// ─── Share form dialog (inline simple) ───────────────────────────────────────
-
-/** One of the reseller's PUBLIC pages that can be shared/embedded. */
-interface ShareTarget {
-  /** Absolute path on this app, e.g. "/enquiry" or "/buy/workspace". */
-  path: string;
-  /** Kicker shown above the sheet title, e.g. "Enquiry form". */
-  kicker: string;
-  /** Pre-filled share message (WhatsApp / email / SMS). */
-  blurb: string;
-}
-
-function ShareFormSheet({ target, onClose }: { target: ShareTarget; onClose: () => void }) {
-  // Build the absolute URL from the CURRENT host so the link always matches
-  // whatever domain the app is running on — no hardcoded placeholder domain.
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "";
-  const url = `${origin}${target.path}`;
-  const embed = `<iframe src="${url}?embed=1" width="100%" height="640" frameborder="0"></iframe>`;
-
-  const shareText = `${target.blurb} ${url}`;
-  const waLink   = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-  const mailLink = `mailto:?subject=${encodeURIComponent(target.blurb)}&body=${encodeURIComponent(shareText)}`;
-  const smsLink  = `sms:?body=${encodeURIComponent(shareText)}`;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-end bg-black/30 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-md rounded-t-xl bg-paper shadow-xl md:mr-4 md:mb-4 md:rounded-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-ink-3">{target.kicker}</p>
-            <h2 className="font-serif text-lg text-ink">Share or embed</h2>
-          </div>
-          <IconButton icon="x" variant="ghost" size="sm" aria-label="Close" onClick={onClose} />
-        </div>
-
-        <div className="space-y-4 px-5 py-4">
-          <div>
-            <p className="mb-1 text-xs font-medium text-ink">Public link</p>
-            <div className="flex gap-2">
-              <Input readOnly value={url} className="font-mono text-xs" />
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => {
-                  navigator.clipboard?.writeText(url);
-                  toast.success("Link copied to clipboard");
-                }}
-              >
-                <Icon name="copy" size={13} />
-                Copy
-              </Button>
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-1 text-xs font-medium text-ink">Embed on your website</p>
-            <textarea
-              readOnly
-              value={embed}
-              rows={3}
-              className="w-full rounded-md border border-hairline bg-paper-2 p-2 font-mono text-xs"
-            />
-            <Button
-              variant="default"
-              size="sm"
-              className="mt-1.5"
-              onClick={() => {
-                navigator.clipboard?.writeText(embed);
-                toast.success("Embed code copied");
-              }}
-            >
-              <Icon name="copy" size={12} />
-              Copy embed code
-            </Button>
-          </div>
-
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-ink">Send via</p>
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => { window.location.href = mailLink; }}
-              >
-                <Icon name="mail" size={12} />
-                Email link
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => window.open(waLink, "_blank", "noopener")}
-              >
-                <Icon name="whatsapp" size={12} />
-                WhatsApp
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => { window.location.href = smsLink; }}
-              >
-                <Icon name="message" size={12} />
-                SMS
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// The reseller's two public, shareable pages.
-const ENQUIRY_SHARE: ShareTarget = {
-  path:   "/enquiry",
-  kicker: "Enquiry form",
-  blurb:  "Tell us your requirement and we'll send you a quote:",
-};
-const BUY_SHARE: ShareTarget = {
-  path:   "/buy/workspace",
-  kicker: "Google Workspace buy page",
-  blurb:  "Buy Google Workspace with a GST invoice, in minutes:",
-};
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -409,7 +284,7 @@ export default function LeadGenPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-medium tabular-nums text-ink">{s.conv}%</p>
-                    <p className="text-3xs text-ink-3">conv rate</p>
+                    <p className="text-xs text-ink-3">conv rate</p>
                   </div>
                   <Icon name="chevron_right" size={14} className="text-ink-3 justify-self-end" />
                 </button>
@@ -460,7 +335,7 @@ export default function LeadGenPage() {
             </div>
 
             <div className="mt-2 flex items-center justify-between gap-2">
-              <code className="min-w-0 truncate rounded bg-paper-2 px-2 py-1 font-mono text-3xs text-ink-3">
+              <code className="min-w-0 truncate rounded bg-paper-2 px-2 py-1 font-mono text-xs text-ink-3">
                 {captureHost}/enquiry
               </code>
               <Button
@@ -501,7 +376,7 @@ export default function LeadGenPage() {
                 </Button>
               </div>
             </div>
-            <code className="block min-w-0 truncate rounded bg-paper-2 px-2 py-1 font-mono text-3xs text-ink-3">
+            <code className="block min-w-0 truncate rounded bg-paper-2 px-2 py-1 font-mono text-xs text-ink-3">
               {captureHost}/buy/workspace
             </code>
           </div>
@@ -608,7 +483,7 @@ export default function LeadGenPage() {
                       <SourceIcon source={lead.source} />
                       <span className="text-xs text-ink-3 truncate">· {lead.contact_name ?? "—"}</span>
                     </div>
-                    <p className="mt-1 text-2xs text-ink-3">
+                    <p className="mt-1 text-xs text-ink-3">
                       {formatDate(lead.created_at, "relative")}
                     </p>
                   </div>
@@ -657,7 +532,7 @@ export default function LeadGenPage() {
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm text-ink truncate">{l.company}</span>
-                      <span className="block text-2xs text-ink-3 truncate">
+                      <span className="block text-xs text-ink-3 truncate">
                         {l.contact_name ?? l.contact_email ?? "—"} · {formatDate(l.created_at)}
                       </span>
                     </span>

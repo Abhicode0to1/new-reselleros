@@ -26,7 +26,7 @@ export function StatementCheckCard({ check, openingBalance, openingDate, onImpor
 
   if (!off) {
     return (
-      <p className="-mt-3 mb-5 text-2xs text-emerald flex items-center gap-1.5">
+      <p className="-mt-3 mb-5 text-xs text-emerald flex items-center gap-1.5">
         <Icon name="check_circle" size={13} />
         Matches the bank statement&apos;s own balance — {rupee(check.statementBalance)} on {formatDate(check.statementDate)}.
       </p>
@@ -44,7 +44,7 @@ export function StatementCheckCard({ check, openingBalance, openingDate, onImpor
             The bank statement says <b>{rupee(check.statementBalance)}</b> on {formatDate(check.statementDate)}, but this page
             shows <b>{rupee(check.appBalance)}</b> — <b className="text-rose">{rupee(Math.abs(check.difference))}</b> apart.
           </p>
-          <p className="text-2xs text-ink-3 mt-0.5">
+          <p className="text-xs text-ink-3 mt-0.5">
             Worked out from the running balance printed on every imported line. Why:
           </p>
 
@@ -75,7 +75,7 @@ export function StatementCheckCard({ check, openingBalance, openingDate, onImpor
             ))}
           </ul>
 
-          <p className="mt-3 text-2xs text-ink-2 leading-relaxed">
+          <p className="mt-3 text-xs text-ink-2 leading-relaxed">
             <b>Fix:</b> download the full statement from the bank for the whole period as CSV/Excel (not
             &quot;Recent transactions&quot; — that shows only the last 20), then{" "}
             <button type="button" onClick={onImport} className="text-amber-ink font-medium underline hover:no-underline">

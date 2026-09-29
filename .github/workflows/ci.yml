@@ -9,11 +9,17 @@ name: CI
 # PR, so CI ran on none of them — the last run on GitHub was 15 Aug. Every one of those
 # deploys was gated only by somebody running the commands on their laptop.
 #
-# ⚠️ AND THIS STILL NOTIFIES RATHER THAN PREVENTS. Cloud Build watches the `deploy` branch
-# itself (cloudbuild.yaml), so it starts the moment the push lands — in PARALLEL with this
-# workflow, not after it. A red CI here tells you within ~2 minutes that what is deploying is
-# broken; it does not stop it. Making it a real gate means either moving the deploy into
-# Actions (so it can `needs: checks`) or merging to `deploy` only through a PR.
+# ─── WHO STOPS A BAD DEPLOY (S18, Sep 2026) ──────────────────────────────────
+# Cloud Build watches the `deploy` branch itself (cloudbuild.yaml) and starts the moment the
+# push lands — in PARALLEL with this workflow, so this file cannot stop a deploy on its own.
+# The deploy gate therefore lives in cloudbuild.yaml's first step (`gate`: npm ci, tsc,
+# vitest); a red commit fails there and never reaches Cloud Run.
+#
+# This workflow is the WIDER gate: everything below is blocking (nothing is
+# continue-on-error in `checks` any more) — typecheck, unit tests, lint with a per-rule
+# warning ratchet, migration file order, and the full `next build`. It gates MERGES once
+# GitHub branch protection marks `checks` as a required status for main/deploy (a repo
+# setting — not something this file can switch on).
 on:
   push:
     branches: [main, deploy, 'session/**']
@@ -26,16 +32,31 @@ jobs:
         working-directory: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the migration check needs the merge-base with its base ref.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: production/package-lock.json
+
+      # Migration FILES only (names, unique versions, no edited/renamed old migration, new
+      # ones newer than the base's newest) — git, no database. See the script header.
+      # Base: the PR's target branch, or for a push whatever the branch pointed at before
+      # it (a brand-new branch has no "before"; the script then skips the base checks).
+      - name: Migration order check
+        env:
+          MIGRATION_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: node scripts/migration-order-check.mjs
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test
+      # Blocking since S18. `next lint` fails on any ESLint ERROR; the ratchet fails when any
+      # rule has more WARNINGS than lint-baseline.json allows (no-explicit-any, max-lines…).
       - run: npm run lint
-        continue-on-error: true
+      - run: npm run lint:ratchet
 
       # ── The build, and why the other three do not cover it ──────────────────
       # CLAUDE.md §25.2, written after a deploy attempt found the build broken while
@@ -80,7 +101,7 @@ jobs:
   # are absent. To light them up: add the anon key as a CI secret and seed the
   # Tenant-A/B fixtures on a Supabase branch, then drop `continue-on-error`.
   #
-  # Non-blocking for now (like lint) so a transient prod blip never blocks a
+  # Non-blocking for now (unlike `checks`) so a transient prod blip never blocks a
   # merge; flip to required once it has proven stable.
   e2e-smoke:
     runs-on: ubuntu-latest
@@ -115,7 +136,7 @@ jobs:
           # link the app emails out. `resellersos-1005662057478.asia-south1.run.app` is a
           # live ALIAS for the same service and is what the Cloud Scheduler jobs call — do
           # not "fix" those to match this one.
-          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'https://resellersos-njvk4nxhdq-el.a.run.app' }}
+          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'https://resellersos-njvk4nxhdq-as.a.run.app' }}
         # suite-health.spec.ts is the tripwire the repo built for "70 auth-gated
         # tests silently skip and the run still reads green" — and then left out
         # of this very list, so it never fired (audit A6, 1 Sep 2026). It is IN

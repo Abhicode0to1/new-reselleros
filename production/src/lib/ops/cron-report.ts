@@ -18,6 +18,7 @@
  * Ye file wo line BANATI hai, likhti nahi — isliye ise bina console ko chhue test kiya ja
  * sakta hai. `reportCron` neeche use bolti hai.
  */
+import { pingHeartbeat } from "@/lib/ops/heartbeat";
 
 /**
  * Kaunsi key ka matlab "kuch nahi chala".
@@ -92,5 +93,7 @@ export function cronFailureLine(job: string, result: unknown): string | null {
 export function reportCron<T>(job: string, result: T): T {
   const line = cronFailureLine(job, result);
   if (line) console.error(line);
+  /* Dead-man ping — see lib/ops/heartbeat.ts. Fire-and-forget; never blocks the response. */
+  pingHeartbeat(job, line === null);
   return result;
 }

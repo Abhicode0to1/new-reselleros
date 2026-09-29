@@ -51,11 +51,7 @@ import {
   type ExpenseClaim,
 } from "@/lib/queries/expense-claims";
 import { toast } from "sonner";
-
-function todayISO(): string {
-  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  return ist.toISOString().slice(0, 10);
-}
+import { istToday as todayISO } from "@/lib/dates/ist";
 
 const METHOD_LABEL: Record<LoanRepaymentMethod, string> = {
   cash: "Cash", bank: "Bank transfer", salary_deduction: "Salary deduction", expense: "Spent (expense)",
@@ -278,7 +274,7 @@ function EmployeeLoansInner() {
                     </div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(l.outstanding)}</div>
                   </div>
-                  <div className="text-2xs text-ink-3 mb-1.5">
+                  <div className="text-xs text-ink-3 mb-1.5">
                     {formatDate(l.disbursed_on)} · {rupee(l.principal)} lent · {rupee(l.repaid)} repaid
                   </div>
                   <button
@@ -378,7 +374,7 @@ function PendingClaimsPanel({
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-2xs text-ink-3">
+      <p className="mt-2 text-xs text-ink-3">
         Approving books the expense under its category and reduces that employee&apos;s advance. No cash moves — it already left when the advance was given.
       </p>
     </Card>
@@ -411,8 +407,8 @@ function RejectClaimDialog({ claim, onClose }: { claim: ExpenseClaim; onClose: (
           </DialogDescription>
         </DialogHeader>
         <div className="py-1">
-          <label className="mb-1 block text-sm text-ink-2">Reason (optional)</label>
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. No receipt attached" />
+          <label htmlFor="loans-reason-optional" className="mb-1 block text-sm text-ink-2">Reason (optional)</label>
+          <Input id="loans-reason-optional" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. No receipt attached" />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -448,17 +444,17 @@ function EditClaimDialog({ claim, onClose }: { claim: ExpenseClaim; onClose: () 
         <div className="space-y-3 py-1">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs text-ink-3">Amount (₹)</label>
-              <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <label htmlFor="loans-amount" className="mb-1 block text-xs text-ink-3">Amount (₹)</label>
+              <Input id="loans-amount" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-ink-3">Date</label>
-              <Input type="date" value={spentOn} onChange={(e) => setSpentOn(e.target.value)} />
+              <label htmlFor="loans-date" className="mb-1 block text-xs text-ink-3">Date</label>
+              <Input id="loans-date" type="date" value={spentOn} onChange={(e) => setSpentOn(e.target.value)} />
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-ink-3">Category</label>
-            <select
+            <label htmlFor="loans-category" className="mb-1 block text-xs text-ink-3">Category</label>
+            <select id="loans-category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
@@ -467,8 +463,8 @@ function EditClaimDialog({ claim, onClose }: { claim: ExpenseClaim; onClose: () 
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-ink-3">Purpose</label>
-            <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="What was it for?" />
+            <label htmlFor="loans-purpose" className="mb-1 block text-xs text-ink-3">Purpose</label>
+            <Input id="loans-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="What was it for?" />
           </div>
         </div>
         <DialogFooter>
@@ -516,14 +512,14 @@ function ClaimLinkDialog({ onClose }: { onClose: () => void }) {
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <Input readOnly value={link} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                <Input aria-label="Share link" readOnly value={link} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
                 <Button variant="outline" onClick={copy}>{copied ? "Copied" : "Copy"}</Button>
               </div>
               <a href={waHref} target="_blank" rel="noopener noreferrer"
                  className="mt-3 inline-flex items-center gap-1.5 text-sm text-emerald hover:underline">
                 <Icon name="whatsapp" size={15} /> Share on WhatsApp
               </a>
-              <p className="mt-3 text-2xs text-ink-3">
+              <p className="mt-3 text-xs text-ink-3">
                 Anyone with this link can open the form, but they must enter a valid employee PIN and every claim needs your approval — so it stays safe.
               </p>
             </>
@@ -575,7 +571,7 @@ function LoanHistoryDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () 
                   {h.notes && (
                     <div className="text-xs text-ink-2">{h.method === "expense" ? "For: " : ""}{h.notes}</div>
                   )}
-                  <div className="text-2xs text-ink-3">
+                  <div className="text-xs text-ink-3">
                     {formatDate(h.repaid_on)}
                     {h.bank_account_id ? ` · ${acctName.get(h.bank_account_id) ?? "account"}` : ""}
                   </div>
@@ -629,34 +625,34 @@ function EditLoanDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () => 
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Type</label>
-            <select value={kind} onChange={(e) => setKind(e.target.value as EmployeeLoanKind)} className={selectCls}>
+            <label htmlFor="loans-type" className="block text-xs font-medium text-ink-2 mb-1">Type</label>
+            <select id="loans-type" value={kind} onChange={(e) => setKind(e.target.value as EmployeeLoanKind)} className={selectCls}>
               <option value="loan">Loan (repaid back)</option>
               <option value="salary_advance">Salary advance</option>
               <option value="expense_advance">Expense advance</option>
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Employee name</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <label htmlFor="loans-employee-name" className="block text-xs font-medium text-ink-2 mb-1">Employee name</label>
+            <Input id="loans-employee-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
-            <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <label htmlFor="loans-amount-2" className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
+            <Input id="loans-amount-2" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+            <label htmlFor="loans-paid-from" className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
+            <select id="loans-paid-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="loans-date-2" className="block text-xs font-medium text-ink-2 mb-1">Date</label>
+            <Input id="loans-date-2" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Purpose (optional)</label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <label htmlFor="loans-purpose-optional" className="block text-xs font-medium text-ink-2 mb-1">Purpose (optional)</label>
+            <Input id="loans-purpose-optional" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
@@ -726,7 +722,7 @@ function EditPurposeDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () 
           <DialogDescription>What was this {LOAN_KIND_LABEL[loan.kind].toLowerCase()} for? Shown in the list.</DialogDescription>
         </DialogHeader>
         <div>
-          <Input
+          <Input aria-label="Purpose"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="e.g. medical advance · Mumbai client visit · festival bonus"
@@ -821,15 +817,15 @@ function DisburseDialog({ onClose, initialKind }: { onClose: () => void; initial
                   )}
                 >
                   <div className={cn("text-sm font-medium", kind === opt.k ? "text-amber-ink" : "text-ink")}>{opt.label}</div>
-                  <div className="text-3xs text-ink-3 mt-0.5">{opt.desc}</div>
+                  <div className="text-xs text-ink-3 mt-0.5">{opt.desc}</div>
                 </button>
               ))}
             </div>
-            <p className="mt-1.5 text-2xs text-ink-3">{kindHint}</p>
+            <p className="mt-1.5 text-xs text-ink-3">{kindHint}</p>
           </div>
           <div className="relative">
-            <label className="block text-xs font-medium text-ink-2 mb-1">Employee</label>
-            <Input
+            <label htmlFor="loans-employee" className="block text-xs font-medium text-ink-2 mb-1">Employee</label>
+            <Input id="loans-employee"
               value={name}
               onChange={(e) => { setName(e.target.value); setNameOpen(true); }}
               onFocus={() => setNameOpen(true)}
@@ -850,23 +846,23 @@ function DisburseDialog({ onClose, initialKind }: { onClose: () => void; initial
                       className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2"
                     >
                       <span className="text-ink">{e.name}</span>
-                      <span className="text-2xs text-ink-3">{rupee(e.monthly_gross)}/mo</span>
+                      <span className="text-xs text-ink-3">{rupee(e.monthly_gross)}/mo</span>
                     </button>
                   ))}
                 </div>
               );
             })()}
             {employees.length === 0 && (
-              <p className="mt-1 text-2xs text-ink-3">No employees yet — add them in Payroll → Employees. You can still type a name.</p>
+              <p className="mt-1 text-xs text-ink-3">No employees yet — add them in Payroll → Employees. You can still type a name.</p>
             )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
-            <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 25000" />
+            <label htmlFor="loans-amount-3" className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
+            <Input id="loans-amount-3" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 25000" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+            <label htmlFor="loans-paid-from-2" className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
+            <select id="loans-paid-from-2" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
               {accounts.length === 0 && <option value="">No accounts — add one in Banking</option>}
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -876,12 +872,12 @@ function DisburseDialog({ onClose, initialKind }: { onClose: () => void; initial
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="loans-date-3" className="block text-xs font-medium text-ink-2 mb-1">Date</label>
+            <Input id="loans-date-3" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. medical advance, interest-free" />
+            <label htmlFor="loans-note-optional" className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
+            <Input id="loans-note-optional" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. medical advance, interest-free" />
           </div>
         </div>
 
@@ -945,13 +941,13 @@ function RepaymentDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () =>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
-            <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
-            {tooMuch && <p className="mt-1 text-2xs text-rose">Can&apos;t exceed the outstanding {rupee(loan.outstanding)}.</p>}
+            <label htmlFor="loans-amount-4" className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
+            <Input id="loans-amount-4" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            {tooMuch && <p className="mt-1 text-xs text-rose">Can&apos;t exceed the outstanding {rupee(loan.outstanding)}.</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Repaid via</label>
-            <select value={method} onChange={(e) => setMethod(e.target.value as LoanRepaymentMethod)} className={selectCls}>
+            <label htmlFor="loans-repaid-via" className="block text-xs font-medium text-ink-2 mb-1">Repaid via</label>
+            <select id="loans-repaid-via" value={method} onChange={(e) => setMethod(e.target.value as LoanRepaymentMethod)} className={selectCls}>
               <option value="cash">Cash</option>
               <option value="bank">Bank transfer</option>
               <option value="salary_deduction">Salary deduction (no cash moves)</option>
@@ -959,8 +955,8 @@ function RepaymentDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () =>
           </div>
           {needsAccount && (
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Received in</label>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+              <label htmlFor="loans-received-in" className="block text-xs font-medium text-ink-2 mb-1">Received in</label>
+              <select id="loans-received-in" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
                 {accounts.length === 0 && <option value="">No accounts — add one in Banking</option>}
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>{a.name}</option>
@@ -969,12 +965,12 @@ function RepaymentDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () =>
             </div>
           )}
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="loans-date-4" className="block text-xs font-medium text-ink-2 mb-1">Date</label>
+            <Input id="loans-date-4" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <label htmlFor="loans-note-optional-2" className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
+            <Input id="loans-note-optional-2" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
           {history.length > 0 && (
@@ -1048,42 +1044,42 @@ function SettleDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () => vo
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Spent on company work (₹)</label>
-            <Input type="number" min={0} value={spent} onChange={(e) => setSpent(e.target.value)} />
+            <label htmlFor="loans-spent-on-company-work" className="block text-xs font-medium text-ink-2 mb-1">Spent on company work (₹)</label>
+            <Input id="loans-spent-on-company-work" type="number" min={0} value={spent} onChange={(e) => setSpent(e.target.value)} />
           </div>
           {spentAmt > 0 && (
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Expense category</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
+              <label htmlFor="loans-expense-category" className="block text-xs font-medium text-ink-2 mb-1">Expense category</label>
+              <select id="loans-expense-category" value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
                 {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           )}
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Unspent cash returned (₹)</label>
-            <Input type="number" min={0} value={ret} onChange={(e) => setRet(e.target.value)} />
+            <label htmlFor="loans-unspent-cash-returned" className="block text-xs font-medium text-ink-2 mb-1">Unspent cash returned (₹)</label>
+            <Input id="loans-unspent-cash-returned" type="number" min={0} value={ret} onChange={(e) => setRet(e.target.value)} />
           </div>
           {needAccount && (
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Returned into</label>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+              <label htmlFor="loans-returned-into" className="block text-xs font-medium text-ink-2 mb-1">Returned into</label>
+              <select id="loans-returned-into" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
                 {accounts.length === 0 && <option value="">No accounts — add one in Banking</option>}
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
           )}
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="loans-date-5" className="block text-xs font-medium text-ink-2 mb-1">Date</label>
+            <Input id="loans-date-5" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Mumbai client visit" />
+            <label htmlFor="loans-note-optional-3" className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
+            <Input id="loans-note-optional-3" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Mumbai client visit" />
           </div>
 
-          {tooMuch && <p className="text-2xs text-rose">Spent + returned ({rupee(total)}) can&apos;t exceed the outstanding {rupee(loan.outstanding)}.</p>}
+          {tooMuch && <p className="text-xs text-rose">Spent + returned ({rupee(total)}) can&apos;t exceed the outstanding {rupee(loan.outstanding)}.</p>}
           {!tooMuch && total > 0 && total < loan.outstanding && (
-            <p className="text-2xs text-ink-3">
+            <p className="text-xs text-ink-3">
               {rupee(loan.outstanding - total)} will stay outstanding after this.
             </p>
           )}

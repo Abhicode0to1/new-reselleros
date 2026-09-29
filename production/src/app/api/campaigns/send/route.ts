@@ -25,6 +25,9 @@ import { replyToAddress } from "@/lib/email/reply-to";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
+import { unsubscribeUrl, unsubscribeFooter, normaliseEmail } from "@/lib/marketing/unsubscribe-token";
+import { fillName, greetingName, NO_NAME } from "@/lib/marketing/greeting-name";
+import { cleanPitch } from "@/lib/leads/lead-finder";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -135,9 +138,20 @@ export async function POST(req: NextRequest) {
       .map((l) => ({ lead_id: l.id, contact_name: l.contact_name, contact_email: l.contact_email!, company: l.company }));
   }
 
+  /* Opted out (migration 20260926190000): never mailed again, whichever list they are
+     picked from. Skipped silently per person, reported as a count. */
+  const { data: suppressed } = await (admin as unknown as { from: (t: string) => any })  // eslint-disable-line @typescript-eslint/no-explicit-any
+    .from("email_suppressions").select("email").eq("tenant_id", me.tenant_id);
+  const optedOut = new Set(((suppressed ?? []) as { email: string }[]).map((r) => r.email));
+  const beforeOptOut = recipients.length;
+  recipients = recipients.filter((r) => !optedOut.has(normaliseEmail(r.contact_email)));
+  const skippedOptOut = beforeOptOut - recipients.length;
+
   if (recipients.length === 0) {
     return NextResponse.json(
-      { error: "No recipients with a valid email — adjust the selection or filter" },
+      { error: skippedOptOut > 0
+          ? `Sab ${skippedOptOut} recipients ne unsubscribe kiya hua hai — kisi ko mail nahi gaya.`
+          : "No recipients with a valid email — adjust the selection or filter" },
       { status: 400 }
     );
   }
@@ -154,6 +168,9 @@ export async function POST(req: NextRequest) {
     .from("user_google_tokens").select("google_email").eq("tenant_id", me.tenant_id);
 
   const senderName = tenant?.name ?? "Your team";
+  /* Unsubscribe links need an absolute host. The configured app URL, else this request's
+     own origin — a campaign is always sent from the app, so that origin serves /unsubscribe. */
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || req.nextUrl.origin;
 
   // ── 3. Allocate campaign ID + insert campaign row ─────────────
   const { data: campaignIdRaw, error: numErr } = await admin
@@ -195,8 +212,21 @@ export async function POST(req: NextRequest) {
   let sent   = 0;
   let failed = 0;
 
+  /* {{pitch}} — the AI Lead Finder's one-line pitch for that company (29 Sep 2026). Only
+     leads that came from the finder have one; for the rest it is empty, so a template that
+     uses it should read fine without it. */
+  const pitchByLead = new Map<string, string>();
+  const usesPitch = [subject, bodyTemplate, htmlTemplate ?? ""].some((t) => t.includes("{{pitch}}"));
+  const leadIds = recipients.map((r) => r.lead_id).filter((x): x is string => !!x);
+  if (usesPitch && leadIds.length) {
+    const { data: cands } = await admin.from("lead_finder_candidates").select("lead_id, pitch").eq("tenant_id", me.tenant_id).in("lead_id", leadIds);
+    for (const c of cands ?? []) if (c.lead_id && c.pitch) pitchByLead.set(c.lead_id, c.pitch);
+  }
+
   for (const r of recipients) {
-    const firstName = (r.contact_name ?? "").split(" ")[0] || "there";
+    // {{name}} is filled first (fillName): "Dr. Kopal", or "Sir/Ma'am" without the "ji" after it.
+    const firstName = greetingName(r.contact_name) ?? NO_NAME;
+    const pitch = cleanPitch(r.lead_id ? pitchByLead.get(r.lead_id) ?? "" : "");
     const vars = {
       name:       firstName,
       company:    r.company || "",
@@ -204,11 +234,17 @@ export async function POST(req: NextRequest) {
       discount:   offer ? String(offer.discount_pct) : "",
       expires:    offerExpiresFmt,
       sender:     senderName,
+      pitch,
     };
 
-    const renderedBody    = applyTemplate(bodyTemplate, vars);
-    const renderedSubject = applyTemplate(subject,      vars);
-    const renderedHtml    = htmlTemplate ? applyTemplate(htmlTemplate, vars) : undefined;
+    /* Every campaign mail carries a way out (lib/marketing/unsubscribe-token.ts). */
+    const unsub  = unsubscribeUrl(appUrl, me.tenant_id, r.contact_email, campaignId);
+    const footer = unsub ? unsubscribeFooter(unsub, senderName) : null;
+    const renderedBody    = applyTemplate(fillName(bodyTemplate, r.contact_name), vars) + (footer?.text ?? "");
+    const renderedSubject = applyTemplate(fillName(subject, r.contact_name),      vars);
+    // The pitch is model-written text: escape it before it goes into HTML.
+    const htmlVars        = { ...vars, pitch: pitch.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") };
+    const renderedHtml    = htmlTemplate ? applyTemplate(fillName(htmlTemplate, r.contact_name), htmlVars) + (footer?.html ?? "") : undefined;
 
     let sendStatus: "sent" | "failed" | "stubbed" = "sent";
     let providerId: string | null = null;
@@ -274,6 +310,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     campaignId,
     recipientsCount: recipients.length,
+    skippedOptOut,
     sentCount:       sent,
     failedCount:     failed,
     mode:            emailMode,

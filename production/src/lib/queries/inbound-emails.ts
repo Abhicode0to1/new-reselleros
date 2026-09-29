@@ -6,9 +6,13 @@
  */
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as React from "react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { InboundEmailRow } from "@/lib/supabase/database.types";
+import {
+  INBOX_NEXT_CURSOR_HEADER, flattenPages, inboxCursorQuery, readInboxNextCursor, type InboxCursor,
+} from "@/lib/queries/keyset";
 
 /**
  * How often the inbox looks for new mail.
@@ -48,10 +52,68 @@ export function useInboundEmails() {
        show nothing new — the same bug wearing a shorter delay. An inbox has no use
        for a cached answer; that is what the interval above is for. */
     staleTime: 0,
-    /* Keep polling while the tab is in the background, so switching to it shows mail
-       that arrived while it was hidden rather than starting the wait over. */
-    refetchIntervalInBackground: true,
+    /* A hidden tab does not poll (S16). It used to, every 20s, for every open tab all
+       day. Switching back is already covered: refetchOnWindowFocus above fetches the
+       moment the tab is shown, so mail that arrived while hidden still appears at once. */
+    refetchIntervalInBackground: false,
   });
+}
+
+/** The paged inbox's cache key. Under ["inbound-emails"], so every invalidation of the
+ *  flat list reaches it too. */
+export const INBOX_PAGES_KEY = ["inbound-emails", "pages"] as const;
+
+export interface InboundEmailPage {
+  rows: InboundEmailRow[];
+  next: InboxCursor | null;
+}
+
+/**
+ * The Enquiries inbox, in keyset pages (S37).
+ *
+ * Page 1 is exactly what useInboundEmails() returns — the newest INBOX_LIST_MAX_ROWS — so a
+ * workspace under that many mails sees no difference at all. Beyond it, "Load older mail"
+ * fetches the next page instead of the mail simply not existing on screen. Same polling
+ * rules as the flat hook; a poll refetches every page already loaded, in order, each from
+ * the previous page's fresh cursor, so a page boundary moves with new mail instead of
+ * repeating or dropping a row.
+ *
+ * `data` is the flattened list (first occurrence wins), so a caller that read the flat
+ * hook's array reads this one the same way.
+ */
+export function useInboundEmailPages() {
+  const q = useInfiniteQuery({
+    queryKey: INBOX_PAGES_KEY,
+    initialPageParam: null as InboxCursor | null,
+    queryFn: async ({ pageParam }): Promise<InboundEmailPage> => {
+      const res = await fetch(`/api/inbound-emails${inboxCursorQuery(pageParam)}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Could not fetch inbound emails");
+      }
+      const rows = (await res.json()) as InboundEmailRow[];
+      return { rows, next: readInboxNextCursor(res.headers.get(INBOX_NEXT_CURSOR_HEADER)) };
+    },
+    getNextPageParam: (last) => last.next,
+    refetchInterval: INBOX_REFETCH_MS,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+    refetchIntervalInBackground: false,
+  });
+  const data = React.useMemo(
+    () => (q.data ? flattenPages(q.data.pages, (r) => r.id) : undefined),
+    [q.data],
+  );
+  return { ...q, data };
+}
+
+/** Apply one row edit to every loaded page of the paged inbox. */
+function mapInboxPages(
+  data: InfiniteData<InboundEmailPage, InboxCursor | null> | undefined,
+  fn: (r: InboundEmailRow) => InboundEmailRow,
+): InfiniteData<InboundEmailPage, InboxCursor | null> | undefined {
+  if (!data) return data;
+  return { ...data, pages: data.pages.map((p) => ({ ...p, rows: p.rows.map(fn) })) };
 }
 
 /**
@@ -91,28 +153,32 @@ export function useSetInboundState() {
     onMutate: async (input) => {
       await qc.cancelQueries({ queryKey: ["inbound-emails"] });
       const previous = qc.getQueryData<InboundEmailRow[]>(["inbound-emails"]);
-      qc.setQueryData<InboundEmailRow[]>(["inbound-emails"], (rows) =>
-        (rows ?? []).map((r) => {
-          if (r.id !== input.id) return r;
-          const now = new Date().toISOString();
-          return {
-            ...r,
-            /* Mirrors the server: a first-open stamp never overwrites an earlier one. */
-            read_at: input.read === true ? (r.read_at ?? now)
-                   : input.read === false ? null
-                   : r.read_at,
-            starred:       input.starred ?? r.starred,
-            snoozed_until: input.snoozeUntil !== undefined ? input.snoozeUntil : r.snoozed_until,
-            archived_at:   input.archived === undefined ? r.archived_at
-                         : input.archived ? now : null,
-          };
-        }),
-      );
-      return { previous };
+      const previousPages = qc.getQueryData<InfiniteData<InboundEmailPage, InboxCursor | null>>(INBOX_PAGES_KEY);
+      const now = new Date().toISOString();
+      const edit = (r: InboundEmailRow): InboundEmailRow => {
+        if (r.id !== input.id) return r;
+        return {
+          ...r,
+          /* Mirrors the server: a first-open stamp never overwrites an earlier one. */
+          read_at: input.read === true ? (r.read_at ?? now)
+                 : input.read === false ? null
+                 : r.read_at,
+          starred:       input.starred ?? r.starred,
+          snoozed_until: input.snoozeUntil !== undefined ? input.snoozeUntil : r.snoozed_until,
+          archived_at:   input.archived === undefined ? r.archived_at
+                       : input.archived ? now : null,
+        };
+      };
+      qc.setQueryData<InboundEmailRow[]>(["inbound-emails"], (rows) => (rows ?? []).map(edit));
+      /* The Enquiries page reads the PAGED cache (S37); the lead drawer the flat one. Both
+         move at once, so neither screen can show the old state while the other shows the new. */
+      qc.setQueryData<InfiniteData<InboundEmailPage, InboxCursor | null>>(INBOX_PAGES_KEY, (d) => mapInboxPages(d, edit));
+      return { previous, previousPages };
     },
 
     onError: (err, _input, ctx) => {
       if (ctx?.previous) qc.setQueryData(["inbound-emails"], ctx.previous);
+      if (ctx?.previousPages) qc.setQueryData(INBOX_PAGES_KEY, ctx.previousPages);
       toast.error((err as Error).message, {
         description: "Nothing was changed — the email is back where it was.",
       });

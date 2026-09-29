@@ -8,7 +8,11 @@
  * - Special / Flexi Allowance (₹)
  * - Professional Tax (₹)
  * - Employer & Employee PF / ESI / Gratuity toggles
+ *
+ * The PF caps come from lib/payroll/pf.ts for the month in `opts.asOf` (₹15,000 wage
+ * ceiling till Sep 2026, ₹25,000 from Oct 2026) — never a literal ₹1,800 / ₹1,250 here.
  */
+import { pfWageCeiling, pfEpsCap, PF_EMPLOYEE_RATE, PF_EMPLOYER_RATE } from "./pf";
 
 export interface CtcBreakdown {
   annualCtc: number;
@@ -34,7 +38,7 @@ export interface CtcBreakdown {
 
   // Employer Contributions (Included in CTC)
   employerPfMonthly: number; // Total 12% (capped or uncapped)
-  employerEpsMonthly: number; // 8.33% (capped at ₹1,250)
+  employerEpsMonthly: number; // 8.33% (capped at 8.33% of the PF wage ceiling)
   employerEpfShareMonthly: number; // 3.67%
   employerPfAnnual: number;
   employerEsiMonthly: number;
@@ -71,7 +75,8 @@ export function calculateCtcBreakdown(
     customMedicalMonthly?: number; // Custom medical allowance
     customSpecialMonthly?: number; // Explicit Special Allowance in ₹
     customPtMonthly?: number; // Explicit Professional Tax in ₹
-    capPfWageCeiling?: boolean; // Cap PF to ₹1,800/mo (₹15,000 basic limit)
+    capPfWageCeiling?: boolean; // Cap PF at the statutory wage ceiling for the month
+    asOf?: string; // salary month (YYYY-MM) or date — picks the PF ceiling; default today
     includeGratuity?: boolean;
     includeEsi?: boolean;
   }
@@ -82,6 +87,8 @@ export function calculateCtcBreakdown(
   const capPfWageCeiling = opts?.capPfWageCeiling ?? true;
   const includeGratuity = opts?.includeGratuity ?? true;
   const includeEsi = opts?.includeEsi ?? true;
+  const pfCeiling = pfWageCeiling(opts?.asOf);
+  const pfCapMonthly = Math.round(pfCeiling * PF_EMPLOYER_RATE);
 
   const annualCtc = Math.max(0, Math.round(annualCtcInput));
   const monthlyCtc = Math.round(annualCtc / 12);
@@ -105,12 +112,12 @@ export function calculateCtcBreakdown(
     ? Math.max(0, Math.round(opts.customMedicalMonthly))
     : (monthlyCtc >= 25000 ? 1250 : 0);
 
-  // 4. Employer PF (12% of Basic, capped at ₹1,800 if ceiling applies)
-  let employerPfMonthly = Math.round(basicMonthly * 0.12);
-  if (capPfWageCeiling && employerPfMonthly > 1800) {
-    employerPfMonthly = 1800;
+  // 4. Employer PF (12% of Basic, capped at 12% of the wage ceiling if the cap applies)
+  let employerPfMonthly = Math.round(basicMonthly * PF_EMPLOYER_RATE);
+  if (capPfWageCeiling && employerPfMonthly > pfCapMonthly) {
+    employerPfMonthly = pfCapMonthly;
   }
-  const employerEpsMonthly = Math.min(1250, Math.round(basicMonthly * 0.0833));
+  const employerEpsMonthly = Math.min(pfEpsCap(opts?.asOf), Math.round(basicMonthly * 0.0833));
   const employerEpfShareMonthly = Math.max(0, employerPfMonthly - employerEpsMonthly);
 
   // 5. Gratuity (4.81% of Basic = 15/26 / 12)
@@ -133,9 +140,9 @@ export function calculateCtcBreakdown(
   const grossMonthly = basicMonthly + hraMonthly + conveyanceMonthly + medicalMonthly + specialAllowanceMonthly;
 
   // 8. Employee Deductions
-  let employeePfMonthly = Math.round(basicMonthly * 0.12);
-  if (capPfWageCeiling && employeePfMonthly > 1800) {
-    employeePfMonthly = 1800;
+  let employeePfMonthly = Math.round(basicMonthly * PF_EMPLOYEE_RATE);
+  if (capPfWageCeiling && employeePfMonthly > pfCapMonthly) {
+    employeePfMonthly = pfCapMonthly;
   }
 
   const employeeEsiMonthly = isEsiEligible ? Math.round(grossMonthly * 0.0075) : 0;

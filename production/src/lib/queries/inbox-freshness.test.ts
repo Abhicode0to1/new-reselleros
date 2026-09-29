@@ -63,8 +63,10 @@ function refetchMs(file: string, body: string): number | null {
   return c ? Number(c[1].replace(/_/g, "")) : null;
 }
 
-describe("the enquiries inbox refreshes itself", () => {
-  const body = hookSource("inbound-emails.ts", "useInboundEmails");
+/* S37: the Enquiries page reads the PAGED hook; the lead drawer still reads the flat one.
+   Both are held to every rule below. */
+describe.each([["useInboundEmails"], ["useInboundEmailPages"]])("the enquiries inbox refreshes itself (%s)", (hook) => {
+  const body = hookSource("inbound-emails.ts", hook);
 
   it("polls, so a new customer email appears without a page reload", () => {
     const ms = refetchMs("inbound-emails.ts", body);

@@ -2,9 +2,10 @@
  * UnreconcileDialog — the confirm step before a bank line is freed, saying what the line
  * was booked as and what freeing it leaves behind.
  *
- * A line booked with "Invoice banao & reconcile" offers to undo that sale too (invoice
- * voided — number kept — and receipt removed), ticked by default: without it the invoice
- * stays, and booking the line again counts the same money twice.
+ * A line booked with "Invoice banao & reconcile" offers to undo that sale too, ticked by
+ * default: without it the invoice stays, and booking the line again counts the same money
+ * twice. An issued invoice is reversed with a full credit note (a draft is voided) — an
+ * issued tax invoice cannot vanish from the series (migration 20260927140000).
  */
 "use client";
 
@@ -52,8 +53,8 @@ export function UnreconcileDialog({ txn, onClose }: { txn: BankTransactionRow | 
             <label className="flex items-start gap-2 rounded-md border border-amber/50 bg-amber-soft/25 p-3">
               <input type="checkbox" checked={undoSale} onChange={(e) => setUndoSale(e.target.checked)} className="mt-1" />
               <span className="text-[13px] leading-snug">
-                <b>Wo sale bhi palat do</b> — invoice void hogi (number wahi rahega, P&amp;L se hat jayegi) aur receipt hat jayegi.
-                <span className="block text-2xs text-ink-3 mt-0.5">
+                <b>Wo sale bhi palat do</b> — issued invoice par poora credit note banega (invoice rahegi, kuch due nahi; draft ho to void), aur receipt hat jayegi.
+                <span className="block text-xs text-ink-3 mt-0.5">
                   Agar ye line ab kisi aur cheez (jaise project payment) mein book karni hai to ise ticked rehne do — warna wahi paisa do baar revenue mein ginega.
                 </span>
               </span>

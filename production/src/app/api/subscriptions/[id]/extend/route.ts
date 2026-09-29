@@ -32,7 +32,8 @@ const bodySchema = z.object({
   years: z.coerce.number().int().min(1).max(5),
 });
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // 1. Authn
   const userClient = createClient();
   const { data: authData } = await userClient.auth.getUser();

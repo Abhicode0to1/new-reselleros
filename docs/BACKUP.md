@@ -4,9 +4,87 @@ _Set up 2026-08-13, after the Supabase dashboard was found showing **`LAST BACKU
 
 ---
 
-## The situation
+## State on 27 Sep 2026 (read this first — the sections below describe August)
 
-The project is on the Supabase **free plan**, which has **no automatic backups and no PITR**.
+Production moved off hosted Supabase to **Cloud SQL `resellersos-db`** (Postgres 17, `asia-southeast1`, project `resellsubsos-prod`). Checked read-only on 27 Sep (S4):
+
+| Layer | State | Gap |
+|---|---|---|
+| Cloud SQL automated backups | ✅ daily 03:00 UTC, 7 kept, last five all SUCCESSFUL | 7 days only |
+| Point-in-time recovery | ✅ on, 7 days of logs | — |
+| Deletion protection | ✅ on | — |
+| Off-site JSON (`gs://resellsubsos-prod-offsite-backups/daily/`, asia-south2, versioned) | ⚠ **last file 2026-09-03** | Stopped when the scheduler still pointed at the old Mumbai URL (403). Job recreated in asia-southeast1 on 27 Sep; first run 28 Sep 00:00 IST — check that `daily/2026-09-28.json` appears |
+| Long retention for GST / income-tax (8 years) | ❌ | `daily/` is deleted after 400 days; nothing longer |
+| Outside this project and billing account | ❌ | Bucket and DB share one project + one billing account: a lapsed bill (R-017) or a lost owner account takes both |
+| Uploaded files (storage) | ❓ not verified | — |
+| Restore rehearsal | ❌ never done on Cloud SQL | do it on staging (docs/STAGING.md) |
+
+**Monthly copy (code, not yet deployed):** from the next deploy, the backup cron also writes `monthly/YYYY-MM.json` on the 1st (IST). For it to outlive 400 days, the bucket's delete rule must skip `monthly/` — run once (replaces the lifecycle; keeps the noncurrent-version rule):
+
+```bash
+cat > /tmp/lc.json <<'EOF'
+{"rule":[
+  {"action":{"type":"Delete"},"condition":{"age":400,"isLive":true,"matchesPrefix":["daily/"]}},
+  {"action":{"type":"Delete"},"condition":{"age":3000,"isLive":true,"matchesPrefix":["monthly/"]}},
+  {"action":{"type":"Delete"},"condition":{"daysSinceNoncurrentTime":30}}
+]}
+EOF
+gcloud storage buckets update gs://resellsubsos-prod-offsite-backups --lifecycle-file=/tmp/lc.json
+```
+
+(3000 days ≈ 8.2 years.) Still open and needs a person: a copy in a **different** project/billing account, a retention lock, and one real restore.
+
+## Per-tenant backup (S15, 28 Sep 2026 — code + migration, not yet deployed/applied)
+
+**Why:** `backup_all_tenants()` took every tenant's 145-table snapshot inside ONE transaction,
+and `export_snapshots_for_offsite()` returned every tenant in ONE jsonb that the Cloud Run
+container held as one string. Fine at 3 tenants; at ~50 it is a long lock-holding transaction
+and an object heading for jsonb's 1 GB cap and the container's RAM.
+
+**Now** (`lib/backup/per-tenant.ts`, cron `api/cron/backup`):
+
+| | Before | After |
+|---|---|---|
+| DB snapshot | 1 RPC, all tenants, 1 transaction | `backup_tenant(tenant)` per tenant, own transaction, 3 at a time |
+| Off-site object | `daily/YYYY-MM-DD.json` (all tenants) | `daily/YYYY-MM-DD/<tenant_id>.json` + `daily/YYYY-MM-DD/_manifest.json` |
+| Monthly (1st, IST) | `monthly/YYYY-MM.json` | `monthly/YYYY-MM/<tenant_id>.json` |
+| One tenant fails | whole route 500, **no off-site copy for anyone** | that tenant reported (500 still), every other tenant snapshotted AND uploaded |
+| In-DB restore points | newest 30 per tenant | newest **7** (`backup._take`; UI constant `SNAPSHOT_RETENTION`) |
+
+Each per-tenant file is the same envelope as before with one snapshot in `snapshots[]`, so
+`node scripts/gen-restore-rehearsal.cjs <file> <tenant_id> out.sql` works on it unchanged.
+Prefixes are still `daily/` and `monthly/`, so the lifecycle rules above apply as-is.
+
+**Deploy order does not matter.** If the migration is not applied yet, the cron sees
+"function not found" on the first tenant and runs the OLD sweep + combined object that night
+(logged `[cron/backup] backup_tenant() nahi mila`).
+
+**Retention 7 note:** the 7 includes manual and pre-reset snapshots — a pre-reset safeguard is
+now pushed off after 7 nightly runs (was 30). Off-site keeps 400 days of dailies.
+
+### Steps for Pardeep
+
+```bash
+# 1. Apply the migration on Cloud SQL, as the role that owns the backup functions (same as cloudsql/07):
+gcloud sql connect resellersos-db --user=postgres --database=resellersos --project=resellsubsos-prod
+#   resellersos=> SET ROLE resellersos_migration;
+#   resellersos=> \i production/supabase/migrations/20260928141000_backup_per_tenant.sql
+#   resellersos=> RESET ROLE;
+#   (PostgREST: notify pgrst, 'reload schema';  — so /rpc/backup_tenant is visible)
+
+# 2. Verify in a SEPARATE session — must print PASS (it rolls back):
+#   resellersos=> \i production/supabase/tests/backup_per_tenant.test.sql
+
+# 3. After the next deploy, trigger once and read the result (mode must be "per-tenant"):
+gcloud scheduler jobs run resellersos-backup --location=asia-southeast1 --project=resellsubsos-prod
+gcloud storage ls gs://resellsubsos-prod-offsite-backups/daily/$(TZ=Asia/Kolkata date +%F)/
+gcloud storage cat gs://resellsubsos-prod-offsite-backups/daily/$(TZ=Asia/Kolkata date +%F)/_manifest.json
+#    → tenant_count = number of tenants, "missing": []
+```
+
+## The situation (August 2026)
+
+The project was on the Supabase **free plan**, which has **no automatic backups and no PITR**.
 
 There was already an in-app snapshot feature (`/settings/backup`, migrations `0210`–`0212`), and its own migration header is honest about why it exists: *"the free Supabase plan has no automatic backups / PITR"*. But those snapshots are written to `backup.snapshots` — **a table inside the same database**.
 

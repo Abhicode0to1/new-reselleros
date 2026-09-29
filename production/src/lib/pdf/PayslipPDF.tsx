@@ -71,16 +71,8 @@ export function rupeesInWords(amount: number): string {
   return `${parts.join(" ")} Rupees Only`;
 }
 
-/** "2026-07" → "July 2026". */
-export function periodLabel(period: string): string {
-  const [yy, mm] = period.split("-").map(Number);
-  const MONTHS = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-  ];
-  if (!yy || !mm || mm < 1 || mm > 12) return period;
-  return `${MONTHS[mm - 1]} ${yy}`;
-}
+import { periodLabel } from "@/lib/payroll/period-label";
+export { periodLabel };
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 

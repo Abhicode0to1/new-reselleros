@@ -149,12 +149,12 @@ export function AddReferralDialog({ open, onOpenChange, customerId, customerName
                 <option value="fixed">Fixed ₹</option>
               </select>
               {basis === "percent" ? (
-                <Input type="text" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value.replace(/[^\d.]/g, ""))} placeholder="10" suffix="%" />
+                <Input aria-label="Commission percent" type="text" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value.replace(/[^\d.]/g, ""))} placeholder="10" suffix="%" />
               ) : (
-                <Input type="text" inputMode="numeric" prefix="₹" value={fixedAmount} onChange={(e) => setFixedAmount(e.target.value.replace(/[^\d]/g, ""))} placeholder="e.g. 5000" />
+                <Input aria-label="Commission amount" type="text" inputMode="numeric" prefix="₹" value={fixedAmount} onChange={(e) => setFixedAmount(e.target.value.replace(/[^\d]/g, ""))} placeholder="e.g. 5000" />
               )}
             </div>
-            <p className="mt-1 text-2xs text-ink-3">
+            <p className="mt-1 text-xs text-ink-3">
               {basis === "percent"
                 ? "Deal ke ex-GST value ka % (GST par commission nahi)."
                 : "Har qualifying payment par tay amount."}
@@ -172,17 +172,17 @@ export function AddReferralDialog({ open, onOpenChange, customerId, customerName
           {/* TDS */}
           <label className="flex items-center gap-2 text-sm text-ink cursor-pointer">
             <input type="checkbox" checked={deductTds} onChange={(e) => setDeductTds(e.target.checked)} className="h-4 w-4 rounded border-hairline text-amber focus:ring-amber/40" />
-            5% TDS (194H) deduct karo — commission ₹15,000/saal se upar ho to zaroori
+            2% TDS (194H) deduct karo — ek vyakti ko saal mein ₹20,000 se zyada commission ho to zaroori
           </label>
 
           <FormField label="Note (optional)" htmlFor="ref_label">
             <Input id="ref_label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Google Workspace — 50 seats" />
           </FormField>
 
-          <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-2xs text-amber-ink leading-relaxed">
+          <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-xs text-amber-ink leading-relaxed">
             {basis === "percent"
-              ? <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{pctNum}%</b> commission banegi{deductTds ? " (− 5% TDS)" : ""}. Manually approve karke pay karoge.</>
-              : <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{rupee(fixedNum)}</b> commission banegi{deductTds ? " (− 5% TDS)" : ""}.</>}
+              ? <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{pctNum}%</b> commission banegi{deductTds ? " (− 2% TDS)" : ""}. Manually approve karke pay karoge.</>
+              : <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{rupee(fixedNum)}</b> commission banegi{deductTds ? " (− 2% TDS)" : ""}.</>}
           </div>
         </div>
 

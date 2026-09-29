@@ -36,6 +36,7 @@ import {
   type TdsReceivable,
   type TdsStatus,
 } from "@/lib/queries/tds-receivable";
+import { istToday } from "@/lib/dates/ist";
 
 const STATUS_COLOR: Record<TdsStatus, "rose" | "emerald" | "amber" | "slate" | "indigo"> = {
   pending_cert:  "rose",
@@ -169,7 +170,7 @@ function reconcile(rows26AS: ParsedRow[], systemRows: TdsReceivable[]): MatchRes
 // ────────────────────────────────────────────────────────────────
 
 export default function TdsYearEndPage() {
-  const currentFY = fiscalYearFromDate(new Date().toISOString().slice(0, 10));
+  const currentFY = fiscalYearFromDate(istToday());
   const [fy, setFy] = React.useState<string>(currentFY);
   const { data: rows = [], isLoading } = useTdsReceivables({ fiscalYear: fy });
 
@@ -272,7 +273,7 @@ export default function TdsYearEndPage() {
       return;
     }
     downloadCSV(
-      `tds-${fy}-${new Date().toISOString().slice(0, 10)}.csv`,
+      `tds-${fy}-${istToday()}.csv`,
       [
         "TDS ID", "Date", "Customer", "TAN", "Section", "Rate %",
         "Pre-GST", "TDS amount", "Net paid", "Fiscal year",
@@ -340,7 +341,7 @@ export default function TdsYearEndPage() {
     }
     try {
       const supabase = createClient();
-      const today = new Date().toISOString().slice(0, 10);
+      const today = istToday();
       const { error } = await supabase
         .from("tds_receivable")
         .update({
@@ -374,8 +375,8 @@ export default function TdsYearEndPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Fiscal year</label>
-          <select
+          <label htmlFor="year-end-fiscal-year" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Fiscal year</label>
+          <select id="year-end-fiscal-year"
             value={fy}
             onChange={(e) => setFy(e.target.value)}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper font-mono"
@@ -485,7 +486,7 @@ export default function TdsYearEndPage() {
                         {m.matchedTdsRows.length > 0 ? (
                           <div className="space-y-0.5">
                             {m.matchedTdsRows.map((t) => (
-                              <div key={t.id} className="text-2xs">
+                              <div key={t.id} className="text-xs">
                                 <span className="font-mono text-ink-2">{t.id.slice(0, 14)}…</span>
                                 <span className="ml-1 text-ink-3">·</span>
                                 <span className="ml-1 font-mono">{rupee(t.tds_amount)}</span>
@@ -495,7 +496,7 @@ export default function TdsYearEndPage() {
                             ))}
                           </div>
                         ) : (
-                          <span className="text-ink-3 italic text-2xs">
+                          <span className="text-ink-3 italic text-xs">
                             No TDS row with matching TAN — add manually or investigate
                           </span>
                         )}
@@ -521,7 +522,7 @@ export default function TdsYearEndPage() {
         <Card className="overflow-hidden">
           <div className="px-5 py-4 border-b border-hairline">
             <h2 className="font-serif text-lg text-ink">By customer</h2>
-            <p className="text-2xs text-ink-3">Who deducted how much · sorted by total</p>
+            <p className="text-xs text-ink-3">Who deducted how much · sorted by total</p>
           </div>
           {isLoading ? (
             <div className="p-5 space-y-2">
@@ -562,7 +563,7 @@ export default function TdsYearEndPage() {
         <Card className="overflow-hidden">
           <div className="px-5 py-4 border-b border-hairline">
             <h2 className="font-serif text-lg text-ink">By section</h2>
-            <p className="text-2xs text-ink-3">Which IT section · sorted by total</p>
+            <p className="text-xs text-ink-3">Which IT section · sorted by total</p>
           </div>
           {bySection.length === 0 ? (
             <EmptyState compact icon="file" title="—" body="No data" />
@@ -575,7 +576,7 @@ export default function TdsYearEndPage() {
                     <div className="flex items-baseline justify-between mb-1">
                       <div>
                         <span className="font-mono text-sm font-semibold text-ink">{s.section}</span>
-                        <span className="text-2xs text-ink-3 ml-2">{s.count} entries</span>
+                        <span className="text-xs text-ink-3 ml-2">{s.count} entries</span>
                       </div>
                       <div className="font-mono text-sm font-semibold text-ink">{rupee(s.total)}</div>
                     </div>
@@ -585,7 +586,7 @@ export default function TdsYearEndPage() {
                         style={{ width: `${Math.max(3, pct)}%` }}
                       />
                     </div>
-                    <div className="text-3xs text-ink-3 mt-0.5">{pct.toFixed(1)}% of FY total</div>
+                    <div className="text-xs text-ink-3 mt-0.5">{pct.toFixed(1)}% of FY total</div>
                   </li>
                 );
               })}
@@ -598,7 +599,7 @@ export default function TdsYearEndPage() {
       <Card className="overflow-hidden">
         <div className="px-5 py-4 border-b border-hairline">
           <h2 className="font-serif text-lg text-ink">All TDS rows · {fy}</h2>
-          <p className="text-2xs text-ink-3">{rows.length} entries · ready for CA review</p>
+          <p className="text-xs text-ink-3">{rows.length} entries · ready for CA review</p>
         </div>
         {isLoading ? (
           <div className="p-5 space-y-2">
@@ -682,7 +683,7 @@ function KPI({
         {value}
       </div>
       {count !== undefined && (
-        <div className="text-3xs text-ink-3 mt-1">{count} {count === 1 ? "entry" : "entries"}</div>
+        <div className="text-xs text-ink-3 mt-1">{count} {count === 1 ? "entry" : "entries"}</div>
       )}
     </Card>
   );

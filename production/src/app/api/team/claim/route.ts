@@ -23,7 +23,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { INVITABLE_ROLES } from "@/lib/auth/roles";
+import { INVITABLE_ROLES, type InvitableRole } from "@/lib/auth/roles";
 
 export async function GET() {
   const supabase = createClient();
@@ -42,7 +42,7 @@ export async function GET() {
 
 const schema = z.object({
   email: z.string().email("Enter a valid email address").max(200),
-  role:  z.enum(INVITABLE_ROLES as unknown as [string, ...string[]]),
+  role:  z.enum(INVITABLE_ROLES as unknown as [InvitableRole, ...InvitableRole[]]),
 });
 
 export async function POST(request: NextRequest) {

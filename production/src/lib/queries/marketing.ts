@@ -25,6 +25,9 @@ import { createClient } from "@/lib/supabase/client";
 import {
   channelReport, type ChannelReport, type ChannelLeadInput, type ChannelSpendInput,
 } from "@/lib/marketing/channel-economics";
+import { isMarketingCategory } from "@/lib/marketing/ad-channels";
+import { channelFor, EMPTY_UTM } from "@/lib/marketing/utm";
+import type { Expense } from "@/lib/queries/expenses";
 
 export type RangeKey = "this_month" | "last_quarter" | "ytd" | "all";
 
@@ -91,6 +94,8 @@ export interface MarketingReport {
   monthly: MonthPoint[];
   /** Total revenue collected in the range (payments), not won-lead value. */
   collected: number;
+  /** Of `collected`, the part from project (custom software) receipts. */
+  projectCollected: number;
   /** Data gaps to render. Never swallowed. */
   gaps: string[];
 }
@@ -110,13 +115,19 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
       // have. Selected together so both generations of lead work.
       const leadsQ = await supabase
         .from("leads")
-        .select("source, stage, value, created_at")
+        .select("source, stage, value, created_at, utm_source, utm_medium, utm_campaign, referrer_url")
         .gte("created_at", range.start)
         .lt("created_at", range.end);
       if (leadsQ.error) throw leadsQ.error;
 
+      /* The comment above said utm_source was preferred; the code read `source` alone, so a
+         lead from a Facebook tracking link counted as "enquiry-form" (the form's own tag)
+         and never met the Facebook spend. channelFor applies the stated order: utm_source,
+         then the referrer host, then the form's source (Pardeep, 26 Sep 2026). */
       const leads: ChannelLeadInput[] = (leadsQ.data ?? []).map((l) => ({
-        source: l.source, stage: l.stage, value: l.value,
+        source: channelFor({ ...EMPTY_UTM, utm_source: l.utm_source, utm_medium: l.utm_medium,
+                             utm_campaign: l.utm_campaign, referrer_url: l.referrer_url }, l.source),
+        stage: l.stage, value: l.value,
       }));
 
       // ── Ad spend, per channel, from `expenses` ───────────────────────────
@@ -156,6 +167,25 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         }
       }
 
+      // ── Platform-reported spend beside the books (migration 20260927260000) ──
+      // The books stay the source above; this only NAMES a disagreement, so a month whose
+      // Google invoice is not booked yet does not silently read as "CAC improved".
+      {
+        const [{ data: accs }, { data: daily }] = await Promise.all([
+          supabase.from("ad_accounts").select("id, platform"),
+          supabase.from("ad_spend_daily").select("ad_account_id, spend").gte("day", range.start).lt("day", range.end),
+        ]);
+        const platformOf = new Map((accs ?? []).map((a) => [a.id, a.platform as string]));
+        const reported = new Map<string, number>();
+        for (const r of daily ?? []) { const p = platformOf.get(r.ad_account_id); if (p) reported.set(p, (reported.get(p) ?? 0) + Number(r.spend)); }
+        for (const [p, plat] of reported) {
+          const booked = spend.filter((x) => x.channel === p).reduce((a, x) => a + x.rupees, 0);
+          const label = p === "google-ads" ? "Google Ads" : "Meta Ads";
+          if (plat > 0 && (booked === 0 || Math.abs(booked - plat) / plat > 0.25)) {
+            gaps.push(`${label} ne is range mein ₹${Math.round(plat).toLocaleString("en-IN")} kharcha report kiya, books mein ₹${Math.round(booked).toLocaleString("en-IN")} tagged hai — CAC books se hai; farq Ad accounts (live) page par mahine-wise dekho.`);
+          }
+        }
+      }
       // ── Revenue actually collected, and the monthly series ───────────────
       const payQ = await supabase
         .from("payments")
@@ -165,7 +195,23 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         .lt("received_at", range.end);
       if (payQ.error) throw payQ.error;
 
-      const collected = (payQ.data ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
+      /* Project (custom software) receipts live in `project_payments`, not `payments` —
+         reading only the latter showed ₹0 collected while a ₹59L project was being paid
+         (Pardeep, 26 Sep 2026). TDS rows count: the customer paid that part to the
+         government on our behalf, and it is ours as a 26AS credit. */
+      const projQ = await supabase
+        .from("project_payments")
+        .select("amount, received_at, project_id")
+        .gte("received_at", range.start)
+        .lt("received_at", range.end);
+      if (projQ.error) throw projQ.error;
+
+      const receipts = [
+        ...(payQ.data ?? []).map((p) => ({ amount: p.amount ?? 0, received_at: p.received_at })),
+        ...(projQ.data ?? []).map((p) => ({ amount: p.amount ?? 0, received_at: p.received_at })),
+      ];
+      const collected = receipts.reduce((s, p) => s + p.amount, 0);
+      const projectCollected = (projQ.data ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
 
       const byMonth = new Map<string, MonthPoint>();
       const touch = (month: string): MonthPoint => {
@@ -173,9 +219,9 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         if (!p) { p = { month, spend: 0, revenue: 0 }; byMonth.set(month, p); }
         return p;
       };
-      for (const p of payQ.data ?? []) {
+      for (const p of receipts) {
         const mth = (p.received_at ?? "").slice(0, 7);
-        if (mth) touch(mth).revenue += p.amount ?? 0;
+        if (mth) touch(mth).revenue += p.amount;
       }
       if (!spendQ.error) {
         for (const r of (spendQ.data ?? []) as { expense_date: string | null; amount: number | null; category: string | null }[]) {
@@ -200,9 +246,22 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         .lt("created_at", range.end);
       if (quotesQ.error) throw quotesQ.error;
 
+      /* A project quotation lives on `project_sales`, not `quotes` — counting only the latter
+         showed a won ₹59L software deal as 0 quotes and 0 deals (Pardeep, 26 Sep 2026).
+         Anything past draft was sent to the customer, including one later cancelled. */
+      const projQuotesQ = await supabase
+        .from("project_sales")
+        .select("id, status, created_at")
+        .neq("status", "draft")
+        .gte("created_at", range.start)
+        .lt("created_at", range.end);
+      if (projQuotesQ.error) throw projQuotesQ.error;
+
       const leadCount = leads.length;
-      const quoteCount = (quotesQ.data ?? []).length;
-      const wonCount = (payQ.data ?? []).length;
+      const quoteCount = (quotesQ.data ?? []).length + (projQuotesQ.data ?? []).length;
+      /* A project paid in two instalments is one deal, so projects count once each. */
+      const paidProjects = new Set((projQ.data ?? []).map((p) => p.project_id).filter(Boolean));
+      const wonCount = (payQ.data ?? []).length + paidProjects.size;
 
       const l2q = leadCount > 0 ? quoteCount / leadCount : null;
       const q2w = quoteCount > 0 ? wonCount / quoteCount : null;
@@ -238,6 +297,7 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         funnel,
         monthly,
         collected,
+        projectCollected,
         gaps,
       };
     },
@@ -281,4 +341,33 @@ export function channelsToCsv(report: ChannelReport, range: DateRange): string {
   // separate the number from the reason it may be unusable.
   lines.push(`Blended ROAS,${report.blendedRoas === null ? "" : report.blendedRoas.toFixed(2)},${esc(report.blendedNote ?? "")}`);
   return lines.join("\n");
+}
+
+// ============================================================
+// Marketing & Advertising spend — /marketing/spend
+// ============================================================
+
+/** Every marketing-head expense in the range, newest first, for /marketing/spend. */
+export function useMarketingSpend(rangeKey: RangeKey = "ytd") {
+  const range = resolveRange(rangeKey);
+  return useQuery({
+    /* Under "expenses" so an expense added or edited anywhere refreshes this page too —
+       useCreateExpense / useUpdateExpense invalidate that key. */
+    queryKey: ["expenses", "marketing-spend", rangeKey],
+    queryFn: async (): Promise<{ range: DateRange; rows: Expense[] }> => {
+      const supabase = createClient();
+      /* Same test as the ROAS page (`isMarketingCategory`): market / advert / ads. Filtered
+         in the database so a year of rent and salaries is not shipped to the browser. */
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("*")
+        .or("category.ilike.*market*,category.ilike.*advert*,category.ilike.*ads*")
+        .gte("expense_date", range.start)
+        .lt("expense_date", range.end)
+        .order("expense_date", { ascending: false });
+      if (error) throw error;
+      return { range, rows: ((data ?? []) as Expense[]).filter((r) => isMarketingCategory(r.category)) };
+    },
+    staleTime: 30_000,
+  });
 }

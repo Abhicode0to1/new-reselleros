@@ -30,9 +30,10 @@ import {
   useBusinessLoans, useRecordBusinessLoan, useRecordLoanEmi, useDeleteBusinessLoan, useLoanPayments,
   type BusinessLoan,
 } from "@/lib/queries/business-loans";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 const selectCls = "w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber";
 
@@ -123,7 +124,7 @@ export default function BusinessLoansPage() {
                   <tr key={l.id} className="hover:bg-paper-2/40">
                     <td className="px-4 py-3">
                       <div className="font-medium text-ink">{l.lender}</div>
-                      {l.purpose && <div className="text-2xs text-ink-3">{l.purpose}</div>}
+                      {l.purpose && <div className="text-xs text-ink-3">{l.purpose}</div>}
                     </td>
                     <td className="px-4 py-3 text-ink-2">{formatDate(l.disbursed_on)}</td>
                     <td className="px-4 py-3 text-right font-mono text-ink-2">{rupee(l.principal)}</td>
@@ -157,11 +158,11 @@ export default function BusinessLoansPage() {
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="font-medium text-ink leading-tight">
                       {l.lender}
-                      {l.purpose && <div className="text-2xs text-ink-3 font-normal">{l.purpose}</div>}
+                      {l.purpose && <div className="text-xs text-ink-3 font-normal">{l.purpose}</div>}
                     </div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(l.outstanding)}</div>
                   </div>
-                  <div className="text-2xs text-ink-3 mb-2">
+                  <div className="text-xs text-ink-3 mb-2">
                     {formatDate(l.disbursed_on)} · {rupee(l.principal)} liya · {rupee(l.principalPaid)} chukaya · {l.emisPaid} EMI
                   </div>
                   <div className="flex items-center justify-between">
@@ -272,46 +273,46 @@ function AddLoanDialog({ onClose }: { onClose: () => void }) {
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Lender (bank / NBFC)</label>
-              <Input value={lender} onChange={(e) => setLender(e.target.value)} placeholder="e.g. HDFC Bank" autoFocus />
+              <label htmlFor="business-loans-lender-bank-nbfc" className="block text-xs font-medium text-ink-2 mb-1">Lender (bank / NBFC)</label>
+              <Input id="business-loans-lender-bank-nbfc" value={lender} onChange={(e) => setLender(e.target.value)} placeholder="e.g. HDFC Bank" autoFocus />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Loan amount (₹)</label>
-              <Input type="number" min={1} value={principal} onChange={(e) => setPrincipal(e.target.value)} placeholder="e.g. 1000000" />
+              <label htmlFor="business-loans-loan-amount" className="block text-xs font-medium text-ink-2 mb-1">Loan amount (₹)</label>
+              <Input id="business-loans-loan-amount" type="number" min={1} value={principal} onChange={(e) => setPrincipal(e.target.value)} placeholder="e.g. 1000000" />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Purpose (optional)</label>
-            <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Working capital" />
+            <label htmlFor="business-loans-purpose-optional" className="block text-xs font-medium text-ink-2 mb-1">Purpose (optional)</label>
+            <Input id="business-loans-purpose-optional" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Working capital" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Received into</label>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+              <label htmlFor="business-loans-received-into" className="block text-xs font-medium text-ink-2 mb-1">Received into</label>
+              <select id="business-loans-received-into" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
                 {accounts.length === 0 && <option value="">No accounts — add one in Banking</option>}
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Taken on</label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              <label htmlFor="business-loans-taken-on" className="block text-xs font-medium text-ink-2 mb-1">Taken on</label>
+              <Input id="business-loans-taken-on" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Interest %/yr</label>
-              <Input type="number" min={0} step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="10.5" />
+              <label htmlFor="business-loans-interest-yr" className="block text-xs font-medium text-ink-2 mb-1">Interest %/yr</label>
+              <Input id="business-loans-interest-yr" type="number" min={0} step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="10.5" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Tenure (mo)</label>
-              <Input type="number" min={1} value={tenure} onChange={(e) => setTenure(e.target.value)} placeholder="24" />
+              <label htmlFor="business-loans-tenure-mo" className="block text-xs font-medium text-ink-2 mb-1">Tenure (mo)</label>
+              <Input id="business-loans-tenure-mo" type="number" min={1} value={tenure} onChange={(e) => setTenure(e.target.value)} placeholder="24" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">EMI (₹)</label>
-              <Input type="number" min={0} value={emi} onChange={(e) => setEmi(e.target.value)} placeholder="e.g. 46000" />
+              <label htmlFor="business-loans-emi" className="block text-xs font-medium text-ink-2 mb-1">EMI (₹)</label>
+              <Input id="business-loans-emi" type="number" min={0} value={emi} onChange={(e) => setEmi(e.target.value)} placeholder="e.g. 46000" />
             </div>
           </div>
-          <p className="text-2xs text-ink-3">Interest %, tenure aur EMI optional hai — sirf reference ke liye. Zaroori hai: lender, amount, account.</p>
+          <p className="text-xs text-ink-3">Interest %, tenure aur EMI optional hai — sirf reference ke liye. Zaroori hai: lender, amount, account.</p>
         </div>
         <DialogFooter>
           <Button type="button" variant="default" onClick={onClose}>Cancel</Button>
@@ -366,12 +367,12 @@ function PayEmiDialog({ loan, onClose }: { loan: BusinessLoan; onClose: () => vo
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
-              <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+              <label htmlFor="business-loans-emi-amount" className="block text-xs font-medium text-ink-2 mb-1">EMI amount (₹)</label>
+              <Input id="business-loans-emi-amount" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Interest part (₹)</label>
-              <Input type="number" min={0} value={interest} onChange={(e) => setInterest(e.target.value)} />
+              <label htmlFor="business-loans-interest-part" className="block text-xs font-medium text-ink-2 mb-1">Interest part (₹)</label>
+              <Input id="business-loans-interest-part" type="number" min={0} value={interest} onChange={(e) => setInterest(e.target.value)} />
             </div>
           </div>
 
@@ -390,24 +391,24 @@ function PayEmiDialog({ loan, onClose }: { loan: BusinessLoan; onClose: () => vo
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
+            <label htmlFor="business-loans-paid-from" className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
+            <select id="business-loans-paid-from" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectCls}>
               {accounts.length === 0 && <option value="">No accounts — add one in Banking</option>}
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Date</label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              <label htmlFor="business-loans-date" className="block text-xs font-medium text-ink-2 mb-1">Date</label>
+              <Input id="business-loans-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
-              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Month 3" />
+              <label htmlFor="business-loans-note-optional" className="block text-xs font-medium text-ink-2 mb-1">Note (optional)</label>
+              <Input id="business-loans-note-optional" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Month 3" />
             </div>
           </div>
           {loan.interest_rate ? (
-            <p className="text-2xs text-ink-3">Interest apne-aap estimate kiya ({loan.interest_rate}%/yr par). Bank statement se sahi figure daal do.</p>
+            <p className="text-xs text-ink-3">Interest apne-aap estimate kiya ({loan.interest_rate}%/yr par). Bank statement se sahi figure daal do.</p>
           ) : null}
         </div>
         <DialogFooter>
@@ -448,13 +449,13 @@ function HistoryDialog({ loan, onClose }: { loan: BusinessLoan; onClose: () => v
               <div key={h.id} className="flex items-start justify-between gap-3 rounded-md border border-hairline px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-ink">{rupee(h.amount)}</div>
-                  <div className="text-2xs text-ink-3">
+                  <div className="text-xs text-ink-3">
                     {formatDate(h.paid_on)}
                     {h.bank_account_id ? ` · ${acctName.get(h.bank_account_id) ?? "account"}` : ""}
                     {h.notes ? ` · ${h.notes}` : ""}
                   </div>
                 </div>
-                <div className="shrink-0 text-right text-2xs">
+                <div className="shrink-0 text-right text-xs">
                   <div className="text-emerald">−{rupee(h.principal_part)} loan</div>
                   <div className="text-ink-3">{rupee(h.interest_part)} byaaj</div>
                 </div>

@@ -1,11 +1,23 @@
 # AGENTS.md — rules for any AI agent working in this repo
 
+> **Three people, three agents (27 Sep 2026).** At the start of EVERY session read
+> [`docs/TEAM-PROTOCOL.md`](docs/TEAM-PROTOCOL.md): it says how to read your tasks and other
+> people's changes from the shared board, how to stay in your area ([`OWNERS.json`](OWNERS.json)),
+> and what to write back before you stop. Five minutes of it saves a day of merge conflicts.
+
 Read this before writing code. It is the short list of things that, if you get them
 wrong, cost real money or break a live business.
 
 The long version is `production/CLAUDE.md` (25 sections). This file is the subset that
 must not be got wrong, plus the things that are true of this repo *today*. Where the two
 disagree, **this file wins** — CLAUDE.md has been wrong before, see §1.
+
+**Canonical (S25, 28 Sep 2026):** the two files stay separate on purpose — every
+teammate's session loads both. `AGENTS.md` is canonical for **rules** (what must not go
+wrong); `production/CLAUDE.md` is canonical for **conventions and patterns** (how code is
+written). Write a new rule here and link to it from CLAUDE.md rather than copying it.
+Decisions and their history go in [`docs/adr/`](docs/adr/), which also holds the comment
+convention.
 
 Two agents work here: **Claude Code** and **Antigravity**. Both read this file. Keeping
 one rulebook is the point of it existing.
@@ -53,8 +65,12 @@ still takes is flagged "raise the bill in ResellerOS", never billed silently. DM
 renewal is a double-collection with no detector. Do not re-enable it or build a second
 invoice series in DMS without being asked. **Hosting prices are ResellerOS's too**
 (`LANDING_PLANS` in `site/lib/data/hosting-landing.ts`); DMS's `hostingplans` prices are
-disregarded and must not be read as a price source; DMS charges them plus 18% GST
-(`lib/pricing/hosting-price.ts` in DMS). Full record: `Todos.md` §0A.
+disregarded and must not be read as a price source. **DMS keeps no copy of them** (owner, 28 Sep
+2026: "Read prices live from ResellerOS"): ResellerOS publishes `GET /api/public/hosting-prices`,
+computed by the same `hostingRate` its checkout charges with (`lib/checkout/hosting-prices.ts`), and
+DMS reads it (`lib/reselleros/hosting-prices.ts`, `hooks/useHostingPrices.ts`) with no fallback figure:
+if ResellerOS cannot be read, DMS prices nothing and says so. Do not put a price back in DMS's
+`config/hosting-plans.ts`; a DMS test fails if one appears. Full record: `Todos.md` §0A.
 
 **The site cart charges only what the server can price** (24 Sep 2026). Every site
 `cart.add` must carry a `sku`, and a domain line must also carry the exact `domain` —
@@ -131,6 +147,25 @@ which becomes a lead here; staff quote it and change the plan once it is paid. G
 `api/payments/create-order` and `verify` are deleted. A DMS scan test fails if anything outside a named
 allow-list can create a Razorpay order again: refunds, webhooks for old orders, and the gated Tokens
 charger remain.
+
+**A trial started inside the DMS panel starts HERE** (owner, 26 Sep 2026: "Move it to ResellerOS").
+DMS calls `POST /api/dms/start-trial`, which runs the same `startHostingTrial` as the site cart, so
+there is one trial path for both apps and ResellerOS can remind, quote the conversion and bill it.
+The panel's "can I have a trial?" pre-check asks `POST /api/dms/trial-eligibility`, which runs the
+same `checkTrialEligibility` that `startHostingTrial` decides with; an unreadable history is never
+"eligible".
+
+**A first purchase happens in ResellerOS; a renewal happens inside the DMS panel** (owner, 28 Sep
+2026: "Do these in ResellerOS if user buys for first time. But if existing user renew either hosting
+or domain, then that part should happen inside the DMS customer portal itself"). The renewal quote and
+the bill stay ResellerOS's; DMS's Renew dialog asks `POST /api/dms/renewal-order` (panel key, the
+customer's email matched exactly, renewal quotes only) for the Razorpay order and pays it in the
+panel. `/api/v1` quotes carry `renews` (vendor + domain), so a service's Renew offers only the bill
+that renews THAT service. Multi-year domains and several hosting plans in one order are for the
+ResellerOS cart; they are not built yet (the parts that are Abhishek's and Pardeep's are written up
+in `Todos.md`), and until they are, **checkout refuses a second hosting plan or a hosting quantity
+above 1** (`lib/checkout/hosting-limit.ts`) — before that, such an order was charged in full and only
+the first account was set up. Do not lift that stop-gap before one hosting request per plan exists.
 
 Open items for the integration are tracked in `Todos.md`, not here.
 
@@ -266,6 +301,11 @@ This was a live bug: "arrived today" showed nothing and "overdue" silently swall
 leads due today. Use `localDateISO()` from `lib/leads/outcomes.ts`, which formats from
 local date parts.
 
+**Since S21 (28 Sep 2026): use `@/lib/dates/ist`** — `istToday()`, `toIstDate(d)`, `fyBounds()`,
+`monthBounds()`, `addDaysISO()`, `formatIstDate()`. `localDateISO()` is only right in a browser
+set to IST; on Cloud Run (UTC) it is the same bug. In Pardeep's areas ESLint now fails a raw
+`toISOString().slice(0, 10)`.
+
 ---
 
 ## 7. Errors and blocks must say what to do next (CLAUDE.md §24)
@@ -303,10 +343,13 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **7,041 tests
-passing across 398 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 26 Sep 2026 after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work). Earlier markers:
-6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **8,049 tests
+passing across 480 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
+with 0 errors** — measured 29 Sep 2026 after the fourth `pardeep-sir` merge (`ddde2754`).
+Earlier markers: 7,972/477 the same day after the Tailwind dev-server fix; 7,933/472 on 28 Sep
+after the third `pardeep-sir` merge (`9054977f`, which brought Next 15.5 / React 19: run
+`npm ci` after pulling it);
+7,085/404 the same day after the quote-notes fix, 7,083/403 on 26 Sep after the second `pardeep-sir` merge, 7,054/400 the same day after `/api/dms/trial-eligibility`, 7,047/399 the same day after `/api/dms/start-trial`, 7,041/398 the same day after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work), 6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 
@@ -321,10 +364,15 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,497 passing across 444 files, zero failures**
-on 25 Sep 2026, after DMS stopped taking payments on its own keys (DMS `84b5ae33`). The count
-FELL, on purpose: tests were deleted along with the payment code they covered (guest checkout,
-autopay, create-order, verify). Earlier:
+`C:/xampp/htdocs/Domain-Management-Project`, **6,444 passing across 442 files, zero failures**
+on 28 Sep 2026, after four never-rendered components were deleted (DMS `c75dba79`); 6,470 / 446 just
+before, after hosting prices moved to a live read from ResellerOS (DMS `46092c10`), and 6,450 / 444 the
+same day after in-panel renewal payment. The count FELL on purpose: 26 tests went with the deleted
+components. Earlier: 6,422 / 442 on 26 Sep 2026, after round 5 (DMS `c1e52acd`: the trial pre-check asks ResellerOS, admin package
+edits create no Razorpay plans). Same day, 6,422 / 441 after round 4 (DMS `9bc63716`: dead payment code deleted, old renewal dunning
+switched off, reminders point to the ResellerOS quote, the panel trial starts in ResellerOS). The
+count FELL, on purpose: tests were deleted along with the code they covered. Earlier:
+6,497 / 444 on 25 Sep after DMS stopped taking payments on its own keys (DMS `84b5ae33`),
 6,783 / 453 the same day after billing moved to ResellerOS (DMS `abf8cb57`), about 180 deleted with the invoice and renewal code,
 6,886 / 453 the same day after trial mode for hosting.provision (DMS `05a2dce2`),
 6,860 / 451 the same day after hosting.renew (DMS `e80c7851`),
@@ -337,7 +385,11 @@ autopay, create-order, verify). Earlier:
 code) and the tokens recurring flow was gated off (DMS `8bf941e`). An earlier reading the same
 day, 6,594 passing with 23 failing in `recurring-charge-service.test.ts`, caught that gate
 mid-change, before those tests were opted in; it was not a real regression. Integration suite
-238 passing. Before that: **6,845 tests across 452 files**,
+(`npm run test:int`, in-memory Mongo, no external services): **194 passed / 1 skipped across 15
+files, zero failures**, measured 26 Sep 2026 after DMS `e4792ce1`. The skipped file makes a real
+Razorpay charge and is opt-in. (This line said 238 before; `npm run test:integration` is a
+different, older runner that needs a dev server on :3000 and live ResellerClub, and is not the
+suite.) Before that: **6,845 tests across 452 files**,
 typecheck clean (measured 23 Sep 2026 after the public-page link fixes; 6,773/448 earlier the
 same day after Phase 8 and the transfer clean-up, then 6,748/447 and 6,724/447, and 6,451/432
 on 21 Sep).
@@ -361,11 +413,18 @@ before calling anything done.
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how
   4 unit tests sat broken for months.
-- The **63** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
-  means running them by hand, or it is not verified. (This line said 54 on 23 Sep, 28 before
-  that, and L7 said 38; counted 26 Sep 2026.) **Measured 26 Sep 2026 against the LOCAL
-  Supabase, after applying `20260925140000`..`20260926120000` from the `pardeep-sir` merge:
-  62 pass / 1 not-applicable** (`sandbox_tenant_isolation`, below). Four files still MENTION
+- The **95** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
+  means running them by hand, or it is not verified. (This line said 65 on 26 Sep, 63 earlier that day, 54 on 23 Sep,
+  28 before that, and L7 said 38.) **Measured 28 Sep 2026 against the LOCAL Supabase, after
+  applying the 42 migrations `20260926130000`..`20260928200000` from the third `pardeep-sir`
+  merge: 92 pass / 2 fail / 1 not-applicable** (`sandbox_tenant_isolation`, below). The two red:
+  `anon_default_privileges` (FAIL 3: `can_see_record` is still anon-executable, and since
+  `20260928100000_rls_initplan_wrap` inlined its body no policy uses it, so it is no longer
+  exempt) and `portal_set_auto_renew` (a portal login is not a `public.users` row, so the
+  subscriptions audit trigger's `activity_log.user_id` FK refuses it; it fails the same with the
+  pre-merge `log_row_change`, so the merge did not cause it, and the portal has had no caller
+  since 19 Sep). Both are left red on purpose (L8). The 26 Sep count was 64 pass /
+  1 not-applicable of 65. Four files still MENTION
   `TESTRESULT` in comments describing their old style; they are rollback tests now, so a
   runner that keys on the word misreads them.
 
@@ -1387,6 +1446,13 @@ adding an LLM, a wait, a cost and a failure mode.
 
 ## L31. Registering ONE more table in the generated Database type can collapse all of it
 *23 Aug 2026, adding `document_series` for the invoice-issue dialog.*
+
+> **S21 update (28 Sep 2026):** the collapse was a property of the HAND-WRITTEN type. The
+> Database type is now generated (`database.generated.ts`, all 152 tables incl.
+> `document_series`, with real `Relationships`) plus a thin overlay, and `tsc` is clean with
+> no depth errors. New tables need no untyped client — regenerate with
+> `node scripts/check-db-types.mjs --write`. The existing untyped handles (lib/ai/*,
+> api/invoices/series, …) still work; converting them is follow-up, owner by owner.
 
 `document_series` was missing from `src/lib/supabase/database.types.ts`, so reading
 `last_number` did not typecheck. The obvious fix — declare the Row type and add one line

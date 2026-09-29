@@ -274,6 +274,33 @@ export function useMarkVerified26AS() {
   });
 }
 
+/**
+ * 26AS / AIS import ke baad — user ne match screen par jo rows confirm ki, unhe ek call me
+ * "verified on 26AS" (tds_mark_26as_verified RPC, migration 20260928120000). RPC sirf
+ * pending_cert / cert_received badalta hai; laute count se pata chalta hai kitni sach me badli.
+ */
+export function useApply26asMatches() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, seenOn }: { ids: string[]; seenOn: string }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("tds_mark_26as_verified", { p_ids: ids, p_seen_on: seenOn });
+      if (error) throw error;
+      return { asked: ids.length, updated: (data as number | null) ?? 0 };
+    },
+    onSuccess: ({ asked, updated }) => {
+      qc.invalidateQueries({ queryKey: ["tds_receivable"] });
+      if (updated === asked) toast.success(`${updated} TDS entr${updated === 1 ? "y" : "ies"} verified on 26AS`);
+      else toast.warning(`${updated} of ${asked} verified`, {
+        description: "Baaki rows ka status is beech badal gaya (claimed / written off) — list reload karke dekhein.",
+      });
+    },
+    onError: (err) => toast.error("26AS verification save nahi hua", {
+      description: `${(err as Error).message} — kuch nahi badla; dobara try karein.`,
+    }),
+  });
+}
+
 /** Mark as claimed in ITR (filed). */
 export function useMarkClaimed() {
   const qc = useQueryClient();

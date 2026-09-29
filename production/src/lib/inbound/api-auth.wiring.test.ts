@@ -34,7 +34,29 @@ const OTHER_DOORS = /^(cron|public|webhooks|v1|portal|auth)$/;
 const USES_ADMIN = /createAdminClient\s*\(/;
 
 /** Kya route ne poochha "tum kaun ho"? */
-const CHECKS_USER = /auth\.getUser\s*\(/;
+const CHECKS_USER_DIRECT = /auth\.getUser\s*\(/;
+
+/* S21: `withRoute()` (lib/api/with-route.ts) getUser khud karta hai. Chhoot sirf tab jab
+   file ka HAR exported handler `= withRoute(` se bana ho — ek bhi plain
+   `export async function POST` bacha to wahi purana getUser() niyam lagta hai. */
+const HANDLER_EXPORT = /export\s+(?:async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\b|const\s+(GET|POST|PUT|PATCH|DELETE)\s*=\s*(\S+?)\()/g;
+function allHandlersWrapped(src: string): boolean {
+  const found = [...src.matchAll(HANDLER_EXPORT)];
+  return found.length > 0 && found.every((m) => m[3] === "withRoute");
+}
+const CHECKS_USER = { test: (src: string) => CHECKS_USER_DIRECT.test(src) || allHandlersWrapped(src) };
+
+describe("withRoute() sach me login maangta hai (upar ki chhoot isi par tiki hai)", () => {
+  const wrapper = readFileSync(join(process.cwd(), "src", "lib", "api", "with-route.ts"), "utf8");
+  it("getUser() karta hai aur user na ho to 401", () => {
+    expect(CHECKS_USER_DIRECT.test(wrapper)).toBe(true);
+    expect(/if \(!auth\?\.user\) return fail\(401/.test(wrapper)).toBe(true);
+  });
+  it("ek plain handler bacha ho to chhoot nahi milti", () => {
+    expect(allHandlersWrapped("export const GET = withRoute({}, h);\nexport async function POST() {}")).toBe(false);
+    expect(allHandlersWrapped("export const GET = withRoute({}, h);\nexport const POST = withRoute({}, h);")).toBe(true);
+  });
+});
 
 /* ── EK CHHOOT, NAAM SE, WAJAH KE SAATH ──────────────────────────────────────
    `attendance/punch` ek MACHINE ka darwaza hai — office ka biometric bridge ise call
@@ -48,10 +70,10 @@ const CHECKS_USER = /auth\.getUser\s*\(/;
 /* `dms/upgrade-request` bhi machine ka darwaza hai (25 Sep 2026): DMS ka server ise
    call karta hai, koi login nahi. Chaabi: `DMS_PANEL_API_KEY`, `checkPanelKey()` se —
    neeche ka test pakka karta hai ki wo jaanch sach me route me hai. */
-const MACHINE_DOORS = new Set(["attendance/punch/route.ts", "dms/upgrade-request/route.ts", "dms/start-trial/route.ts"]);
+const MACHINE_DOORS = new Set(["attendance/punch/route.ts", "dms/upgrade-request/route.ts", "dms/start-trial/route.ts", "dms/trial-eligibility/route.ts", "dms/renewal-order/route.ts"]);
 
 describe("machine darwaze apni chaabi sach me jaanchte hain", () => {
-  it.each(["upgrade-request", "start-trial"])("dms/%s calls checkPanelKey before anything else", (name) => {
+  it.each(["upgrade-request", "start-trial", "trial-eligibility", "renewal-order"])("dms/%s calls checkPanelKey before anything else", (name) => {
     const src = readFileSync(join(API_DIR, "dms", name, "route.ts"), "utf8");
     const post = src.slice(src.indexOf("export async function POST"));
     expect(post.indexOf("checkPanelKey(")).toBeGreaterThan(-1);

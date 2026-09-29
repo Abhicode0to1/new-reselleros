@@ -241,10 +241,22 @@ one pass on your machine, where Excel Technologies and its ERP project exist.
   3. **Portfolio strip (~line 429):** add "Project value" (active projects' contract total) next to
      Monthly / Yearly revenue, which are recurring-only and should stay so.
   4. Optional: a "Projects" column or badge with the count / contract value.
+  5. **"Received (this FY)" column** (added 2026-09-26): the list has Monthly / To collect / Unused credits but
+     nothing for money actually received, so a customer who has paid ₹11,80,000 reads as ₹0 everywhere. Sum per
+     customer, dated in the current FY: `payments` (status `received`) + `project_payments` (incl. method
+     `tds` — TDS the customer paid on our behalf settles the invoice; show it in the tooltip as "of which
+     TDS ₹…"). Excel Technologies should read **₹11,80,000** (₹10,80,000 bank + ₹1,00,000 TDS). Sortable, like
+     the other money columns.
+  6. **Portfolio strip — say what each tile counts** (added 2026-09-26). "Monthly revenue" / "Yearly revenue" are
+     subscription MRR / ARR only, but read as total income — a customer who paid ₹11.8L shows ₹0 in all four
+     tiles. (a) Rename them **"Recurring monthly (subscriptions)"** and **"Recurring yearly (subscriptions)"**;
+     (b) add a **"Received (this FY)"** tile — same sum as the column in point 5, TDS included (Excel
+     Technologies: ₹11.8L); (c) the "Project value" tile from point 3 sits beside them.
   `useCustomerProjects` / `useProjectReceivablesByCustomer` in `lib/queries/projects.ts` already
   return what is needed (the page already uses the latter for "To collect").
-- **Done when:** Excel Technologies shows as a project client with its project value, and appears
-  under a "With projects" filter.
+- **Done when:** Excel Technologies shows as a project client with its project value, appears
+  under a "With projects" filter, and its row shows ₹11,80,000 received this FY; the strip's tiles say
+  "Recurring … (subscriptions)" and a "Received (this FY)" tile shows ₹11.8L.
 
 - **Done by Abhishek (2026-09-26):**
   - New `lib/customers/portfolio-status.ts` holds the rule, and the row pill, the phone card
@@ -406,6 +418,291 @@ one pass on your machine, where Excel Technologies and its ERP project exist.
     nobody has hit yet. If you want it, say so and I will build it your way; I would rather
     the CRM side keep sole ownership of that column.
 
+### R-009 · Invoice list: show credit / debit notes, the invoice date, and no stray "0"
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-26
+- **Why accounting needs it:** on 26 Sep an invoice of ₹23,60,000 carried a ₹17,70,000 credit note (net
+  ₹5,90,000). The list showed only "₹23,60,000 · paid", which read as ₹23.6L received — the owner called it
+  "bada confusing". The note was visible only inside the invoice. Two display bugs sat next to it.
+- **What to change** — `production/src/app/(app)/invoices/page.tsx`:
+  1. **Notes on the row.** When an invoice has credit / debit notes, show them under the amount, e.g.
+     `CN −₹17,70,000 · net ₹5,90,000` (debit: `DN +₹50,000`). The detail view already loads them
+     (`Credit & debit notes (n)`, ~line 1600) — the list needs the same totals per invoice.
+  2. **Mobile / narrow card date (~line 855):** it prints `inv.created_at`; it should print
+     `inv.invoice_date` like the desktop row (~line 954). An invoice dated 7 Aug showed "26 Sept 2026"
+     because it was created on 26 Sep.
+  3. **Stray "0" (~line 848):** `{inv.net_payable && inv.net_payable !== inv.amount && (…)}` renders a
+     literal `0` when `net_payable` is 0 (React prints the falsy number). Use
+     `inv.net_payable != null && inv.net_payable !== inv.amount` and show "Net: ₹0 · settled" or nothing.
+- **Done when:** an invoice with a note shows the note and the net on its row; every row shows the
+  invoice date; no bare "0" appears under a settled invoice's amount.
+
+### R-010 · Project invoices print "No line items" — no description of the service
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-26
+- **Why accounting needs it:** GST Rule 46 requires a tax invoice to carry the description of the service
+  (with SAC). Every project milestone invoice shows **"No line items recorded on the parent quote."** in the
+  invoice dialog and the PDF — e.g. `INV-FBB9-2026-27-0003`, ₹5,00,000 + CGST ₹45,000 + SGST ₹45,000, with
+  no line saying what it is for. The amounts are right; the invoice is not complete.
+- **Cause:** the dialog / PDF take lines only from the parent quote —
+  `production/src/app/(app)/invoices/page.tsx` ~line 1208 `const lineItems = quote?.line_items ?? []` — and a
+  project invoice has no quote. `raise_project_milestone_invoice` also never writes `invoices.line_items`
+  (NULL on all three local project invoices).
+- **What to change:**
+  1. `raise_project_milestone_invoice`: write one line into `invoices.line_items` —
+     `{ name: "<project title> — <milestone label>", description: <project description>, sac: <project sac_code, 998314>,
+     qty: 1, rate: <taxable>, amount: <taxable> }` (same shape as `QuoteLineItem`).
+  2. Invoice dialog (`components/features/quotes/tax-invoice-dialog.tsx`) and PDF (`lib/pdf/InvoicePDF.tsx`): when
+     there is no quote, use `invoice.line_items`; show the SAC in the HSN/SAC column.
+  3. Backfill existing project invoices from their milestone + project. The freeze trigger
+     `tg_invoices_freeze_issued` already allows it — it blocks `line_items` only when the old value is
+     **not null** — so filling an empty one is permitted and changes no amount.
+- **Done when:** a project milestone invoice shows "Complete Billing System — Doosri kist (advance) · SAC 998314 ·
+  ₹5,00,000" in the dialog and the PDF, for new and existing invoices.
+
+### R-011 · Project "Profit & Loss" card: an expandable breakdown, and "to date" that means to date
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-26
+- **Why accounting needs it:** on `/projects/[id]` the card shows five totals — Contract ₹50,00,000 · Costs ₹5,00,000
+  · Labour ₹20,74,840 · Expected profit ₹24,25,160 · 49% — and "Booked to date: ₹10,00,000 invoiced −
+  ₹25,74,840 costs = −157%". Nothing says which entries make up a number, and two readings are misleading:
+  - **Labour counts the whole allocation, future months included.** Four people at 100% for 20 Apr – 26 Dec 2026
+    = ₹20,74,840; "Booked to date" subtracts all of it on 26 Sep, although only ~₹14.5L of that period has passed —
+    hence −157%.
+  - The ₹5,00,000 "cost" was a commission to an employee (now moved to Payroll) — nobody could tell from the card.
+- **What to change** — the project detail page (P&L card):
+  1. A **"Details"** toggle on the card that expands:
+     - **Revenue:** contract (ex-GST) · invoiced · received (bank + TDS) · still to invoice.
+     - **External costs** grouped by category, each row → vendor / payee, date, amount (link to the expense).
+     - **Labour** one row per person: % · dates · monthly salary · **to date** · **planned (full stint)**.
+     - **Commission** (referral commissions on this project's payments) as its own line.
+     - **Margin:** to date and expected, side by side.
+  2. **"Booked to date"** must use labour **up to today** (overlap of each allocation with start…today), not the full
+     stint. The P&L already does this per period — `projectCostForPeriod` in `lib/accounting/project-cost.ts`
+     (Pardeep's) can be reused for "start → today" as-is.
+  3. When a person is allocated 100% on more than one active project at once, flag it (a salary cannot be 200%
+     spent).
+- **Done when:** the card expands to show which entries make each number; "Booked to date" on 26 Sep counts
+  labour only to 26 Sep.
+
+### R-012 · Renewal quotes: monthly subscriptions renewed for a year, and cost guessed at 83% of price
+
+> Numbered R-012 on 26 Sep 2026: it was first written here as R-009, but Pardeep's branch already uses
+> R-009 to R-011 for his own requests (credit notes on the invoice list, project invoice line items,
+> the project P&L card).
+- **For:** Abhishek
+- **From:** Pawan (checkout and renewals, `pawan-api-system`). Pardeep asked for it to be passed on.
+- **Status:** Open
+- **Raised:** 2026-09-25 (written up here 2026-09-26)
+- **Where:** `production/src/lib/renewals/create-renewal-quote.ts`. That one file only; it is in your
+  Billing folder, so nobody else edits it. Nothing else in the Billing folders should change unless
+  Pardeep agrees.
+- **Read first:** `AGENTS.md` at the repo root, especially:
+  - §1: money is stored in whole rupees, not paise;
+  - §2: never substitute a plausible-looking value, say it is unknown;
+  - §9: "done" means the full gate is green;
+  - L24 and L36: verify money changes in a rolled-back transaction, and run the WHOLE suite before
+    believing a money diagnosis.
+
+**How a renewal quote reaches a subscription.** `createOrGetRenewalQuote()` builds the renewal quote.
+Its three callers:
+- the renewals cron, `app/api/cron/renewals/route.ts` (around line 280);
+- `app/api/renewals/send-now/route.ts:155`;
+- `app/api/subscriptions/[id]/generate-renewal-quote/route.ts:93`.
+
+When the quote is paid, the Postgres function `record_payment` rolls the subscription forward using the
+quote's `extension_months` in three places:
+
+```sql
+-- the line after the subscription row is selected into v_renewal_sub
+v_extension_months := v_quote.extension_months;      -- only falls back to sub.term_months when NULL
+
+v_new_mrr := greatest(0, round(coalesce(v_quote.subtotal, v_expected)::numeric
+                               / greatest(v_extension_months, 1)))::int;
+update public.subscriptions
+   set renewal_state = case when v_extension_months >= coalesce(v_renewal_sub.term_months, 12)
+                            then 'renewed' else renewal_state end,
+       renewal_date  = (v_renewal_sub.renewal_date + (v_extension_months || ' months')::interval)::date,
+       mrr           = case when v_new_mrr > 0 then v_new_mrr else mrr end, ...
+```
+
+Live body: `select pg_get_functiondef(p.oid) from pg_proc p where p.proname = 'record_payment';`
+
+**Bug 1: every renewal quote says it extends 12 months, monthly subscriptions included.**
+Around line 221:
+
+```ts
+extension_months: 12,    // standard 1-year renewal; extensions use 24/36 via createExtensionQuote
+```
+
+The same file already prices the renewal for the subscription's own term. It calls
+`renewalTerm({ termMonths })` and writes `commitment: term.commitment` ("monthly" for a 1-month
+subscription). Only `extension_months` still says 12. When a MONTHLY subscription's renewal is paid:
+- the renewal date moves 12 months instead of 1: the customer gets a year for one month's money;
+- `mrr` becomes one month's subtotal ÷ 12, so MRR drops about twelvefold after the first renewal.
+
+Measured on a local database inside a rolled-back transaction. Standard hosting, monthly, ₹250/month,
+`term_months = 1`, renewal date 2026-10-25. Renewal quote as this helper writes it: subtotal 250,
+`extension_months` 12, line commitment "monthly", amount ₹295. Then `record_payment`:
+
+| field | before | after one ₹295 renewal | should be |
+|---|---|---|---|
+| `renewal_date` | 2026-10-25 | 2027-10-25 | 2026-11-25 |
+| `mrr` | 250 | 21 | 250 |
+| `term_months` | 1 | 1 | 1 |
+
+`record_payment`'s own result also reported `"extension_months": 12`.
+
+**Fix:** set `extension_months` from the term actually priced, e.g. `extension_months: term.termMonths`.
+`renewalTerm()` already returns `termMonths` (`lib/renewals/renewal-term.ts`): 1 for monthly, 12 for
+annual, anything in 1–60 passes through. The `existingQuoteId` path must not change a quote that already
+exists. Leave `create-extension-quote.ts` alone: it deliberately uses 24/36 for multi-year extensions.
+
+**Bug 2: cost is guessed as 83% of the price.** Around lines 185 and 217:
+
+```ts
+const perSeatCost  = Math.round((annualAmount * 0.83) / Math.max(1, input.seats));
+...
+total_cost: Math.round(annualAmount * 0.83),
+```
+
+A hardcoded 17% margin standing in for the real vendor cost. AGENTS.md §2 lists this exact pattern as a
+known bug. On Google Workspace Business Starter the real cost is ₹110 per seat per month; the guess said
+about ₹224, double. So the margin shown on every renewal quote is made up.
+
+**Fix:** take the cost from the catalogue. The helper already reads the catalogue item (by `itemId`,
+falling back to plan name) for `msrp`; read its wholesale cost column too (check `items` for the name,
+e.g. `wholesale`):
+- per seat: wholesale × the months in the term (the same months used for the price);
+- `total_cost`: that per-seat cost × seats.
+
+If the catalogue has no cost, do not guess. `quotes.total_cost` is nullable in the database, but the
+generated TypeScript type says `number` and the quote screens read it as a number. Either:
+- make those readers handle an unknown cost and show "cost unknown", or
+- store 0 and show "cost unknown" wherever 0 means not known.
+
+Pick one, and do not let 0 read as a 100% margin.
+
+**Do NOT change:**
+- `record_payment` or anything under `supabase/migrations`, unless you find it is wrong. Its use of
+  `extension_months` is correct once the quote carries the right value.
+- Domain renewals, `lib/domains/renewal.ts` (`createDomainRenewalQuote`): builds its own quotes at
+  ResellerClub's live price, and the cron uses it instead of this helper for `vendor = 'domain'`.
+  Not affected.
+- The hosting renewal worker, `app/api/cron/renew-hosting/route.ts`: it reads the term from the quote
+  line's `commitment`, not `extension_months`, so it is correct either way.
+
+**Tests: prove it, don't just assert it.**
+1. **Unit tests for the helper** (existing ones sit near `lib/renewals`, e.g. `renewal-term.test.ts`):
+   - a monthly subscription's quote gets `extension_months: 1`; an annual one's gets 12;
+   - an existing quote is returned unchanged;
+   - the cost is the catalogue's wholesale × months × seats;
+   - no catalogue cost is not a guess.
+
+   Red-check: put 12 and 0.83 back and confirm the new tests fail.
+2. **A SQL regression test** in `production/supabase/tests/`, rollback style (read two existing files
+   for the convention). Build your own fixture tenant, customer and monthly subscription; never use
+   live ids (AGENTS.md L11). Pay a renewal quote shaped like the fixed helper's output, and assert
+   `renewal_date` moved exactly 1 month and `mrr` did not change. Then flip an assertion and see it go
+   red (L23).
+3. **The full gate** in `production/`: `npm run typecheck && npm run test && npm run lint`. Baseline on
+   26 Sep 2026: 7,047 tests passing across 399 files. Run all 63 SQL tests too, not only yours; AGENTS.md
+   §9 explains how to run them without mis-reading the report-style ones.
+
+**Before shipping: check real data for damage.** Ask Pardeep before changing any data. Find renewals
+already paid with the bug. In production, run:
+
+```sql
+select q.id as quote_id, q.tenant_id, q.extension_months, s.id as subscription_id,
+       s.term_months, s.renewal_date, s.mrr, q.subtotal
+  from quotes q
+  join payments p on p.quote_id = q.id and p.status = 'received'
+  join subscriptions s on s.tenant_id = q.tenant_id
+ where q.is_renewal
+   and q.extension_months = 12
+   and exists (select 1 from jsonb_array_elements(q.line_items) li where li->>'commitment' = 'monthly')
+   and s.term_months = 1
+   and s.plan = (q.line_items->0->>'name');
+```
+
+Any rows are monthly subscriptions pushed a year ahead with a shrunken MRR. List them for Pardeep with
+the correct renewal date and MRR. Don't fix them yourself.
+
+- **Report back:** what changed, with `file:line`; the tests added and the red-check results; the gate
+  numbers; and what the production query returned.
+- **Done when:** a paid renewal of a monthly subscription moves `renewal_date` by exactly one month and
+  leaves `mrr` unchanged (SQL test green), and no renewal quote carries a cost the catalogue didn't give.
+
+### R-013 · Security migration `20260927100000` rewrites 12 of your RPCs — review it, apply on production
+- **For:** Abhishek
+- **Status:** Sent (on the board, 2026-09-27)
+- **Raised:** 2026-09-27
+- **Why it matters:** the 27 Sep security audit found three holes that exposed any tenant's data: (1) a signed-in
+  account with no `users` row could `POST /rest/v1/users` and make itself owner of any tenant; (2) 17 SECURITY
+  DEFINER RPCs guarded with `if v_tenant is not null and …`, so a null tenant skipped the check — yours include
+  `refund_payment`, `reopen_quote`, `delete_payment`, `delete_subscription`, `delete_*_invoice`, `record_project_payment`,
+  `raise_project_milestone_invoice`, `update_project_*`; (3) 62 definer functions executable by `anon`.
+- **What to change:** read `supabase/migrations/20260927100000_definer_rpc_hardening.sql` (commit `631ec3f2`); tell
+  Pardeep if any function genuinely needs `anon`; apply on production together with the pending migrations, in file order.
+- **Done when:** the migration is on production, `supabase/tests/definer_rpc_hardening.test.sql` is green there, and the
+  signup → welcome → join-approval flow has been run once by hand.
+
+### R-014 · Issued GST invoices can be hard-deleted — receipts included, number never comes back
+- **For:** Abhishek
+- **Status:** Sent (on the board, 2026-09-27)
+- **Raised:** 2026-09-27
+- **Why it matters:** `delete_project_invoice` and `delete_subscription_invoice` run `DELETE FROM invoices` without
+  checking status; `tg_invoices_freeze_issued` is BEFORE UPDATE only. `delete_project_invoice` also deletes
+  `project_payments` (real bank receipts). `document_series` never decrements, so the series keeps a permanent gap.
+- **What to change:** freeze trigger `BEFORE UPDATE OR DELETE` refusing `status <> 'draft'`; draft-only guard in both
+  RPCs (issued → credit note via `issue_credit_note`); never delete `project_payments` — set `invoice_id = null`.
+- **Done when:** deleting an issued or paid invoice is refused by the DB (SQL test red-checked), draft delete works,
+  and no path deletes a `project_payments` row.
+
+### R-015 · Invoice number uses today's FY and is 21 characters; partial payments never reach Aging
+- **For:** Abhishek
+- **Status:** Sent (on the board, 2026-09-27)
+- **Raised:** 2026-09-27
+- **Why it matters:** `next_document_number` takes `indian_fiscal_year(current_date)` with no invoice-date parameter, so
+  a 28 March invoice issued in April gets the new FY's series. Rule 46(b) caps the number at 16 characters;
+  `INV-3BBD-2026-27-0002` is 21. `record_payment` never writes `invoices.paid_amount`, so Aging and the Balance Sheet
+  count the full `net_payable` after a ₹40k part-payment on a ₹1L invoice.
+- **What to change:** `next_document_number(p_doc_type, p_tenant_id, p_on date default current_date)`; a ≤16-char
+  format for new numbers only; `record_payment` adds to `paid_amount`, sets `paid_date = received_at`, status `partial`.
+- **Done when:** a 25 March invoice issued in April gets the 2025-26 series and ≤16 chars; ₹40,000 recorded on a
+  ₹1,00,000 invoice leaves `paid_amount = 40000` and Aging shows ₹60,000.
+
+### R-016 · Customer-portal auto-renew toggle fails on the DB — `activity_log` FK
+- **For:** Abhishek
+- **Status:** Sent (on the board, 2026-09-27)
+- **Raised:** 2026-09-27
+- **Why it matters:** `supabase/tests/portal_set_auto_renew.test.sql` is red: `set_subscription_auto_renew` violates
+  `activity_log_user_id_fkey` because portal users live in `customer_users`, not `public.users`. Every portal RPC that
+  logs activity will hit the same wall.
+- **What to change:** in the activity trigger, when `auth.uid()` is not in `users`, write `user_id = null` and put the
+  customer's name/email in the label (or drop the FK and add `actor_kind`).
+- **Done when:** `portal_set_auto_renew.test.sql` is green and a portal toggle shows "Customer <name>" in the activity feed.
+
+### R-017 · Google Cloud billing is on a FREE TRIAL — 5 days left; only you can upgrade it
+- **For:** Abhishek
+- **Status:** Sent (on the board and by WhatsApp, 2026-09-27) — **URGENT**
+- **Raised:** 2026-09-27
+- **Why it matters:** Cloud Console for project `resellsubsos-prod` shows "Upgrade your account to avoid a break in
+  service — ₹28,320.75 credit and 5 days left in your trial". When the trial ends, Cloud Run (the app), every Cloud
+  Scheduler cron and backups stop. The billing account (`My Billing Account`, `016FCA-400F3C-38036D`, org anutech.in)
+  has **abhishek@anutech.in as its only Billing Account Administrator**; pardeep@anutech.in is a Billing Account User,
+  so the Upgrade button and AI Studio billing both answer "You don't have permission to upgrade this account".
+- **What to change:** (1) console.cloud.google.com → banner **Upgrade** → "Upgrade to a full account" — the remaining
+  credit still applies, billing only starts once it is used up; (2) Billing → Account management → info panel → give
+  pardeep@anutech.in the **Billing Account Administrator** role so this never depends on one person again.
+- **Done when:** the trial banner is gone, Billing → Overview shows the account upgraded, and pardeep@anutech.in holds
+  Billing Account Administrator.
+
+> Live status for R-013 to R-017 is on the board (https://claude.ai/artifact/2E442MT5zCLxm2oE1Lipos), not here —
+> this file is the written record; the board is where the status changes.
 <!-- Template — copy for each new request:
 
 ### R-001 · <short title>

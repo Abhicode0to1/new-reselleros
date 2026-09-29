@@ -26,10 +26,7 @@ const ALLOWED = new Set([
   "src/lib/queries/require-tenant.test.ts",  // asserts no failure path ever returns it
   "src/lib/queries/no-seed-tenant.test.ts",  // this file
   "src/lib/queries/customers.ts",            // names it in the R-001 comment, does not use it
-  /* OUT OF SEGMENT, not out of danger. `useCreateLead` has the identical fallback at
-     leads.ts:246. Leads belong to Pardeep's CRM work, so it is not ours to change —
-     raised back to him rather than edited. Remove this line when he lands the fix. */
-  "src/lib/queries/leads.ts",
+  /* leads.ts left this list on 26 Sep 2026: `useCreateLead` now uses requireTenantId. */
 ]);
 
 function walk(dir: string, out: string[] = []): string[] {

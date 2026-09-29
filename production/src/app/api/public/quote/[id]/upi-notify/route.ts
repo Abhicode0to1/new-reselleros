@@ -22,7 +22,8 @@ import { quoteTokenMatches } from "@/lib/quotes/accept-token";
 import { sendEmail } from "@/lib/email/send";
 import { rupee } from "@/lib/utils";
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const admin = createAdminClient();
 
   const { data: quote } = await admin

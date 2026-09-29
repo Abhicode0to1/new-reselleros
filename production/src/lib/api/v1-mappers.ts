@@ -110,7 +110,18 @@ function quoteStatus(q: QuoteRow): string {
   return "pending";
 }
 
-export function mapQuote(q: QuoteRow, appUrl: string, pdfUrl: string | null = null) {
+/** A service a quote renews: the subscription whose `renewal_quote_id` is that quote. */
+export interface V1QuoteRenews {
+  vendor: string;
+  domain: string | null;
+}
+
+/**
+ * `renews` (28 Sep 2026) is included only when the caller looked it up: an empty list then
+ * means "this quote renews no subscription" (a new order), which is different from "not
+ * looked up". DMS's Renew dialog reads it to offer only the bill for the service being renewed.
+ */
+export function mapQuote(q: QuoteRow, appUrl: string, pdfUrl: string | null = null, renews?: V1QuoteRenews[]) {
   return {
     id:          q.id,
     amount:      q.amount,
@@ -118,6 +129,7 @@ export function mapQuote(q: QuoteRow, appUrl: string, pdfUrl: string | null = nu
     status:      quoteStatus(q),
     pdf_url:     pdfUrl ?? q.pdf_url,
     payment_url: quoteAcceptUrl(appUrl, q.id, q.public_token),
+    ...(renews ? { renews } : {}),
   };
 }
 

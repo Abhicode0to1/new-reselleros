@@ -27,6 +27,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { rupee, formatDate, toTitleCase } from "@/lib/utils";
 import { useEmployees, useSalaryPayments, useEmployeeSalaryHistory, type SalaryPayment } from "@/lib/queries/payroll";
 import { calculateCtcBreakdown } from "@/lib/payroll/ctc";
+import { form16Working, fyStartOfPeriod, fyLabelOf, taxYearFor, type Form16Working } from "@/lib/payroll/income-tax";
 
 /** Previous month (YYYY-MM) — the register shows the month that was just paid. */
 function prevPeriod(): string {
@@ -183,12 +184,18 @@ function MonthRegister() {
     const supabase = createClient();
     const { data: pays } = await supabase
       .from("salary_payments")
-      .select("employee_id, period, pay_date, gross, tds")
+      .select("employee_id, period, pay_date, gross, lop_amount, incentive, tds")
       .in("period", periods);
     if (!pays || pays.length === 0) { toast.error(`No salary runs in ${label}.`); return; }
     const empIds = Array.from(new Set(pays.map((p) => p.employee_id)));
     const { data: emps } = await supabase.from("employees").select("id, name, pan").in("id", empIds);
     const emap = new Map((emps ?? []).map((e) => [e.id, e]));
+    /* Challan per month — the TDS (or mixed) statutory payment booked for that period
+       (migration 20260927130000). 24Q Annexure I wants the challan the deduction went in. */
+    const { data: challans } = await supabase.from("statutory_dues_payments")
+      .select("period, kind, challan_no, paid_on").in("period", periods).in("kind", ["tds", "mixed"]);
+    const challanOf = new Map<string, { no: string | null; on: string }>();
+    for (const c of challans ?? []) if (c.period && !challanOf.has(c.period)) challanOf.set(c.period, { no: c.challan_no ?? null, on: c.paid_on });
     let missingPan = 0;
     const outRows = pays
       .slice()
@@ -198,16 +205,20 @@ function MonthRegister() {
       .map((p) => {
         const e = emap.get(p.employee_id);
         if (!e?.pan) missingPan++;
-        return [toTitleCase(e?.name ?? "Employee"), e?.pan ?? "", "192", monthLabel(p.period), p.pay_date ?? "", p.gross ?? 0, p.tds ?? 0];
+        const ch = challanOf.get(p.period);
+        const earned = Math.max(0, (p.gross ?? 0) - (p.lop_amount ?? 0)) + (p.incentive ?? 0);
+        return [toTitleCase(e?.name ?? "Employee"), e?.pan ?? "", "192", monthLabel(p.period), p.pay_date ?? "", earned, p.tds ?? 0, ch?.no ?? "", ch?.on ?? ""];
       });
     downloadCsv(
       `24Q-working-${label.replace(/\s+/g, "-")}.csv`,
-      ["Employee", "PAN", "Section", "Month", "Pay date", "Amount paid (Gross)", "TDS deducted"],
+      ["Employee", "PAN", "Section", "Month", "Pay date", "Amount paid (earned)", "TDS deducted", "Challan no.", "Deposited on"],
       outRows,
     );
+    const monthsNoChallan = periods.filter((m) => pays.some((p) => p.period === m && (p.tds ?? 0) > 0) && !challanOf.has(m));
     const totalTds = pays.reduce((s, p) => s + (p.tds ?? 0), 0);
     let msg = `24Q working for ${label} — ${outRows.length} rows, TDS ${rupee(totalTds)}. Import into your TDS software / RPU (the app can't make the FVU).`;
     if (missingPan) msg += ` ⚠ ${missingPan} row(s) missing PAN — add it on the employee.`;
+    if (monthsNoChallan.length) msg += ` ⚠ Challan nahi mila: ${monthsNoChallan.map(monthLabel).join(", ")} — Payroll → Record statutory payment mein mahina + challan no. bharo.`;
     toast.success(msg);
   };
 
@@ -271,7 +282,7 @@ function MonthRegister() {
                     <tr key={e.id} className="hover:bg-paper-2/40 transition-colors">
                       <td className="px-3 py-2.5">
                         <div className="font-bold text-ink">{toTitleCase(e.name)}</div>
-                        <div className="text-3xs text-ink-3">{e.designation || "Staff"}</div>
+                        <div className="text-xs text-ink-3">{e.designation || "Staff"}</div>
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono font-bold text-ink">{rupee(ctc.annualCtc)}</td>
                       <td className="px-3 py-2.5 text-right font-mono font-semibold text-ink-2">{rupee(ctc.monthlyCtc)}</td>
@@ -294,8 +305,8 @@ function MonthRegister() {
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
-              <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
+              <label htmlFor="salary-register-month" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">Month</label>
+              <input id="salary-register-month" type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
                 className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper" />
             </div>
             {rows.length > 0 && (
@@ -335,7 +346,7 @@ function MonthRegister() {
                   >
                     <td className="px-3 py-2.5">
                       <div className="font-medium text-ink">{toTitleCase(e?.name ?? "Employee")}</div>
-                      {e?.designation && <div className="text-2xs text-ink-3 mt-0.5">{e.designation}</div>}
+                      {e?.designation && <div className="text-xs text-ink-3 mt-0.5">{e.designation}</div>}
                     </td>
                     {COLS.map((c) => <td key={c.key} className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-2">{num(p[c.key] as number)}</td>)}
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums font-semibold text-ink">{rupee(p.net)}</td>
@@ -348,7 +359,7 @@ function MonthRegister() {
           </table>
         </Card>
       )}
-      <p className="mt-3 text-2xs text-ink-3">
+      <p className="mt-3 text-xs text-ink-3">
         Net pay = Gross − LOP − TDS − PF − ESI − other. These are the real amounts paid — the same figures your CA files.
       </p>
         </>
@@ -364,6 +375,37 @@ function EmployeeRegister({ employeeId }: { employeeId: string }) {
   const histQ = useEmployeeSalaryHistory(employeeId);
   const emp = (empQ.data ?? []).find((e) => e.id === employeeId);
   const rows = (histQ.data ?? []).slice().sort((a, b) => a.period.localeCompare(b.period));
+
+  /* Form 16 Part B working for one FY — the latest FY with a payslip by default. */
+  const fyOptions = React.useMemo(() => Array.from(new Set(rows.map((p) => fyStartOfPeriod(p.period)))).sort((a, b) => b - a), [rows]);
+  const [fyPick, setFyPick] = React.useState<number | null>(null);
+  const fyStart = fyPick ?? fyOptions[0] ?? fyStartOfPeriod(prevPeriod());
+  const f16: Form16Working | null = rows.length ? form16Working(rows, fyStart) : null;
+  const exportForm16 = () => {
+    if (!f16) return;
+    const t = f16.tax;
+    downloadCsv(
+      `Form16-working-${toTitleCase(emp?.name ?? "employee").replace(/\s+/g, "-")}-FY${f16.fyLabel}.csv`,
+      ["Line", "Amount (INR)"],
+      [
+        ["Employee", toTitleCase(emp?.name ?? "")], ["PAN", emp?.pan ?? ""], ["Financial year", f16.fyLabel], ["Regime", "New (s.115BAC)"], ["", ""],
+        ...f16.rows.map((r): [string, number] => [`${monthLabel(r.period)} — salary paid (gross − LOP + incentive)`, r.earned]),
+        ["1. Gross salary (as paid)", t.grossSalary],
+        ["2. Standard deduction u/s 16(ia)", t.standardDeduction],
+        ["3. Income chargeable under Salaries", t.taxableIncome],
+        ["4. Tax on total income", t.taxOnSlabs],
+        ["5. Rebate u/s 87A", t.rebate87A],
+        ["6. Tax after rebate", t.taxAfterRebate],
+        ["7. Health & education cess 4%", t.cess],
+        ["8. Total tax payable", t.totalTax],
+        ["9. TDS deducted (s.192)", f16.tdsDeducted],
+        [f16.balance > 0 ? "10. Short deducted — deduct before March" : "10. Excess deducted (refund via ITR)", Math.abs(f16.balance)],
+        ["", ""],
+        ["Employee PF (info — no deduction in new regime)", f16.employeePf],
+      ],
+    );
+    toast.success(`Form 16 working FY ${f16.fyLabel}: gross ${rupee(t.grossSalary)}, tax ${rupee(t.totalTax)}, TDS ${rupee(f16.tdsDeducted)}${f16.balance > 0 ? `, ${rupee(f16.balance)} kam kata` : f16.balance < 0 ? `, ${rupee(-f16.balance)} zyada kata` : ", barabar"}.`);
+  };
 
   const exportCsv = () => {
     downloadCsv(
@@ -383,15 +425,50 @@ function EmployeeRegister({ employeeId }: { employeeId: string }) {
         {rows.length > 0 && (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" icon="download" onClick={exportCsv}>Export CSV</Button>
+            <Button variant="outline" size="sm" icon="download" onClick={exportForm16} title="Form 16 Part B / 24Q Annexure II working (new regime)">Form 16 working</Button>
             <Button variant="ghost" size="sm" icon="file" onClick={() => window.print()}>Print</Button>
           </div>
         )}
       </div>
 
+      {f16 && (
+        <Card className="mb-4 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Income tax (s.192) — FY {f16.fyLabel} · new regime</div>
+            {fyOptions.length > 1 && (
+              <select aria-label="Financial year" value={fyStart} onChange={(e) => setFyPick(Number(e.target.value))} className="rounded-md border border-hairline bg-paper px-2 py-1 text-xs">
+                {fyOptions.map((y) => <option key={y} value={y}>FY {fyLabelOf(y)}</option>)}
+              </select>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
+            <div><div className="text-xs text-ink-3">Salary paid ({f16.monthsPaid} mo)</div><div className="font-mono text-ink">{rupee(f16.tax.grossSalary)}</div></div>
+            {/* New regime: ₹12L rebate (s.87A) + ₹75k standard deduction = nothing to pay up to
+                ₹12.75L of salary. Showing "taxable ₹37,445" for a ₹1.1L salary reads like a tax
+                bill — so the tile shows the tax-free limit and what, if anything, is above it. */}
+            <div>
+              <div className="text-xs text-ink-3">Tax-free tak (₹{taxYearFor(f16.fyStart).rebateLimit.toLocaleString("en-IN")} s.87A + ₹{taxYearFor(f16.fyStart).standardDeduction.toLocaleString("en-IN")} std. ded.)</div>
+              <div className="font-mono text-ink">{rupee(taxYearFor(f16.fyStart).rebateLimit + taxYearFor(f16.fyStart).standardDeduction)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-ink-3">Limit se upar</div>
+              <div className={`font-mono ${f16.tax.taxableIncome > taxYearFor(f16.fyStart).rebateLimit ? "text-rose" : "text-emerald"}`}>{rupee(Math.max(0, f16.tax.taxableIncome - taxYearFor(f16.fyStart).rebateLimit))}</div>
+            </div>
+            <div><div className="text-xs text-ink-3">Tax for the year (incl. cess)</div><div className="font-mono text-ink">{rupee(f16.tax.totalTax)}</div></div>
+            <div><div className="text-xs text-ink-3">TDS deducted</div><div className="font-mono text-ink">{rupee(f16.tdsDeducted)}</div></div>
+            <div>
+              <div className="text-xs text-ink-3">{f16.balance > 0 ? "Short — deduct by March" : f16.balance < 0 ? "Excess (refund via ITR)" : "Balance"}</div>
+              <div className={`font-mono ${f16.balance > 0 ? "text-rose" : f16.balance < 0 ? "text-amber-ink" : "text-emerald"}`}>{rupee(Math.abs(f16.balance))}</div>
+            </div>
+          </div>
+          {f16.tax.rebate87A > 0 && f16.tax.totalTax === 0 && <p className="text-xs text-ink-3 mt-2">Taxable income ₹12 lakh tak — s.87A rebate se tax shunya; agar saal mein incentive se upar gaya to TDS lagega.</p>}
+        </Card>
+      )}
+
       <Card className="mb-4 p-4">
         <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Salary register</div>
         <div className="font-serif text-2xl text-ink leading-tight mt-1">{toTitleCase(emp?.name ?? "Employee")}</div>
-        <div className="text-2xs text-ink-3 mt-0.5">
+        <div className="text-xs text-ink-3 mt-0.5">
           {[emp?.designation?.trim() || null, emp?.joining_date ? `Joined ${formatDate(emp.joining_date)}` : null].filter(Boolean).join(" · ")}
         </div>
       </Card>

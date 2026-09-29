@@ -21,9 +21,10 @@ import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { rupee, formatDate } from "@/lib/utils";
+import { istToday } from "@/lib/dates/ist";
 
 function todayISO() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return istToday();
 }
 
 const DEFAULT_TERMS =
@@ -86,12 +87,12 @@ export function OfferLetterDialog({
         <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Editable fields */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 border-b border-hairline bg-paper-2/30">
-            <FormField label="Designation"><Input value={designation} onChange={(e) => setDesignation(e.target.value)} /></FormField>
-            <FormField label="Monthly gross (₹)"><Input type="number" min={0} value={salary} onChange={(e) => setSalary(e.target.value)} /></FormField>
-            <FormField label="Joining date"><Input type="date" value={joining} onChange={(e) => setJoining(e.target.value)} /></FormField>
-            <FormField label="Letter date"><Input type="date" value={letterDate} onChange={(e) => setLetterDate(e.target.value)} /></FormField>
+            <FormField htmlFor="offer-letter-designation" label="Designation"><Input id="offer-letter-designation" value={designation} onChange={(e) => setDesignation(e.target.value)} /></FormField>
+            <FormField htmlFor="offer-letter-monthly-gross" label="Monthly gross (₹)"><Input id="offer-letter-monthly-gross" type="number" min={0} value={salary} onChange={(e) => setSalary(e.target.value)} /></FormField>
+            <FormField htmlFor="offer-letter-joining-date" label="Joining date"><Input id="offer-letter-joining-date" type="date" value={joining} onChange={(e) => setJoining(e.target.value)} /></FormField>
+            <FormField htmlFor="offer-letter-letter-date" label="Letter date"><Input id="offer-letter-letter-date" type="date" value={letterDate} onChange={(e) => setLetterDate(e.target.value)} /></FormField>
             <div className="sm:col-span-2">
-              <FormField label="Terms &amp; conditions"><Textarea rows={4} value={terms} onChange={(e) => setTerms(e.target.value)} /></FormField>
+              <FormField htmlFor="offer-letter-terms-conditions" label="Terms &amp; conditions"><Textarea id="offer-letter-terms-conditions" rows={4} value={terms} onChange={(e) => setTerms(e.target.value)} /></FormField>
             </div>
           </div>
 
@@ -157,7 +158,7 @@ export function OfferLetterDialog({
                 </div>
               </div>
             </div>
-            <p className="text-center text-2xs text-ink-3 mt-3 flex items-center justify-center gap-1">
+            <p className="text-center text-xs text-ink-3 mt-3 flex items-center justify-center gap-1">
               <Icon name="info" size={11} /> Fields upar edit karo — preview turant badalta hai. Print / Save PDF se de do.
             </p>
           </div>

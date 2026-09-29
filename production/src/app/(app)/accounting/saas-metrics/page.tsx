@@ -45,6 +45,7 @@ import { downloadCSV } from "@/lib/csv";
 import { printReport, reportFilename } from "@/lib/reports/print";
 import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { toIstDate } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Data hook
@@ -167,7 +168,7 @@ function Step({
         {amount === null ? "—" : `${sign ?? ""}${rupee(Math.abs(amount))}`}
       </div>
       {note && (
-        <div className="text-3xs text-ink-3 mt-0.5 leading-snug">{note}</div>
+        <div className="text-xs text-ink-3 mt-0.5 leading-snug">{note}</div>
       )}
     </div>
   );
@@ -217,12 +218,12 @@ function WaterfallCard({ w }: { w: MrrWaterfall }) {
       {w.notes.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {w.notes.map((n, i) => (
-            <li key={i} className="flex gap-2 text-2xs text-ink-3 leading-relaxed">
+            <li key={i} className="flex gap-2 text-xs text-ink-3 leading-relaxed">
               <Icon name="info" className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>{n}</span>
             </li>
           ))}
-          <li className="flex gap-2 text-2xs text-ink-3 leading-relaxed">
+          <li className="flex gap-2 text-xs text-ink-3 leading-relaxed">
             <Icon name="info" className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>
               Churn timing uses <span className="font-mono">updated_at</span> as a proxy —
@@ -258,7 +259,7 @@ function useSaasMetrics() {
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
-      const thirtyDaysAgoDate = thirtyDaysAgo.toISOString().slice(0, 10);
+      const thirtyDaysAgoDate = toIstDate(thirtyDaysAgo);
 
       const newSubs30d   = all.filter((s) => s.start_date >= thirtyDaysAgoDate);
       const churnedSubs30d = all.filter((s) =>
@@ -539,7 +540,7 @@ export default function SaasMetricsPage() {
                   Estimated LTV
                 </div>
                 <div className="font-serif text-2xl text-ink mt-1">{rupee(data.ltvEstimate)}</div>
-                <div className="text-2xs text-ink-3 mt-1 leading-relaxed">
+                <div className="text-xs text-ink-3 mt-1 leading-relaxed">
                   ARPC ÷ monthly churn ({data.monthlyChurnRate.toFixed(1)}%/mo)
                 </div>
               </div>
@@ -693,7 +694,7 @@ function KPI({
       <div className={`font-serif ${big ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl"} text-ink leading-tight`}>
         {value}
       </div>
-      {hint && <div className="text-3xs text-ink-3 mt-1">{hint}</div>}
+      {hint && <div className="text-xs text-ink-3 mt-1">{hint}</div>}
     </Card>
   );
 }
@@ -715,7 +716,7 @@ function Movement({
       <div className={`font-serif ${emphasis ? "text-2xl" : "text-xl"} ${colorClass} leading-tight`}>
         {sign}{rupee(Math.abs(amount))}
       </div>
-      <div className="text-2xs text-ink-3 mt-1">
+      <div className="text-xs text-ink-3 mt-1">
         {count} {count === 1 ? "customer" : "customers"}
       </div>
     </div>
@@ -740,7 +741,7 @@ function BreakdownCard({
               <div className="flex items-baseline justify-between mb-1.5">
                 <div className="text-sm text-ink">
                   {r.label}
-                  <span className="text-ink-3 text-2xs ml-1.5">· {r.count}</span>
+                  <span className="text-ink-3 text-xs ml-1.5">· {r.count}</span>
                 </div>
                 <div className="text-sm font-mono font-semibold text-ink">{rupee(r.mrr)}</div>
               </div>
@@ -750,7 +751,7 @@ function BreakdownCard({
                   style={{ width: `${Math.max(2, r.pct)}%` }}
                 />
               </div>
-              <div className="text-3xs text-ink-3 mt-0.5">{r.pct.toFixed(1)}% of MRR</div>
+              <div className="text-xs text-ink-3 mt-0.5">{r.pct.toFixed(1)}% of MRR</div>
             </li>
           ))}
         </ul>

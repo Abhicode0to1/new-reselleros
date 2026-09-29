@@ -34,6 +34,8 @@ import {
   type TdsStatus,
 } from "@/lib/queries/tds-receivable";
 import { TdsDetailDialog } from "@/components/features/accounting/tds-detail-dialog";
+import { Tds26asImport } from "@/components/features/accounting/tds-26as-import";
+import { istToday } from "@/lib/dates/ist";
 
 // ────────────────────────────────────────────────────────────────
 // Status color mapping
@@ -53,7 +55,7 @@ const STATUS_COLOR: Record<TdsStatus, "rose" | "emerald" | "amber" | "slate" | "
 // ────────────────────────────────────────────────────────────────
 
 export default function TdsReceivablePage() {
-  const currentFY = fiscalYearFromDate(new Date().toISOString().slice(0, 10));
+  const currentFY = fiscalYearFromDate(istToday());
   const [fy, setFy] = React.useState<string>(currentFY);
   const [activeTab, setActiveTab] = React.useState<TdsStatus | "all">("all");
   const [selected, setSelected]   = React.useState<TdsReceivable | null>(null);
@@ -89,10 +91,10 @@ export default function TdsReceivablePage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="text-xs text-ink-3 font-semibold uppercase tracking-wide">
+          <label htmlFor="tds-receivable-fiscal-year" className="text-xs text-ink-3 font-semibold uppercase tracking-wide">
             Fiscal year
           </label>
-          <select
+          <select id="tds-receivable-fiscal-year"
             value={fy}
             onChange={(e) => setFy(e.target.value)}
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper font-mono"
@@ -108,6 +110,7 @@ export default function TdsReceivablePage() {
             <Icon name="trending_up" size={12} />
             Year-end summary
           </Link>
+          <Tds26asImport />
         </div>
       </div>
 
@@ -271,13 +274,13 @@ export default function TdsReceivablePage() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0">
                         <div className="font-medium text-ink leading-tight">{r.customer_name}</div>
-                        <div className="text-2xs text-ink-3 mt-0.5">
+                        <div className="text-xs text-ink-3 mt-0.5">
                           {formatDate(r.payment_received_date)} · {r.section} @ {Number(r.rate_pct).toFixed(2)}%
                         </div>
                       </div>
                       <Badge color={STATUS_COLOR[r.status]}>{TDS_STATUS_LABEL[r.status]}</Badge>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-2xs">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <div className="text-ink-3 uppercase tracking-wider">Gross</div>
                         <div className="font-mono text-ink">{rupee(r.gross_amount)}</div>
@@ -288,7 +291,7 @@ export default function TdsReceivablePage() {
                       </div>
                     </div>
                     {r.customer_tan && (
-                      <div className="text-3xs text-ink-3 mt-2 font-mono">TAN: {r.customer_tan}</div>
+                      <div className="text-xs text-ink-3 mt-2 font-mono">TAN: {r.customer_tan}</div>
                     )}
                   </Card>
                 </button>
@@ -366,7 +369,7 @@ function KPI({
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>
-      {hint && <div className="text-3xs text-ink-3 mt-1">{hint}</div>}
+      {hint && <div className="text-xs text-ink-3 mt-1">{hint}</div>}
     </Card>
   );
 }
