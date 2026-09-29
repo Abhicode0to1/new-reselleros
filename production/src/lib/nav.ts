@@ -23,7 +23,7 @@
  *     when you are on it) — used where the parent's page belongs to someone else, so no
  *     page had to be edited;
  *   • a `directory` row, rendered by <NavDirectory> on the parent's landing page — the
- *     Reports directory (/reports, 9 reports) and the Marketing Hub (/marketing, 14
+ *     Reports directory (/reports, 9 reports) and the Marketing Hub (/marketing, 15
  *     tools in 5 groups). Both landing pages are Pardeep's.
  *
  * WHAT DID NOT CHANGE, AND IS TESTED (nav-s30.test.ts, against a snapshot of the old
@@ -312,7 +312,8 @@ export const APP_NAV: NavSection[] = [
       {
         /* Marketing answers "where do leads come from and what does each cost" — owner/
            manager only, it shows ad spend and CAC. Fifteen sidebar rows became one: the
-           other fourteen are the Hub's directory, in five groups (S30). */
+           other fourteen are the Hub's directory, in five groups (S30); S34 added a
+           fifteenth, the IndiaMART key screen (owner-only, like its API). */
         id: "marketing-hub",   href: "/marketing",         label: "Marketing Hub",  icon: "layout", roles: OM, hint: "Kaunse tools chahiye, kaun sambhalta hai, budget vs kharcha",
         directory: [
           { id: "marketing-campaigns", href: "/marketing/campaigns", label: "Campaign budgets", icon: "target", roles: OM, group: "Plan & spend", hint: "Har campaign ka budget, dates, target — kharcha aur leads ke saath" },
@@ -324,6 +325,7 @@ export const APP_NAV: NavSection[] = [
           { id: "ad-platforms",    href: "/marketing/ads",      label: "Ad accounts (live)", icon: "trending_up", roles: OM, group: "Ads & tracking", hint: "Google Ads + Facebook ka kharcha campaign-wise, roz Google/Meta se" },
           { id: "marketing-links", href: "/marketing/links",   label: "Tracking links", icon: "globe",  roles: OM, group: "Ads & tracking", hint: "Har ad / post ka link — lead ka source khud lagega" },
           { id: "lead-gen",        href: "/lead-gen",          label: "Lead sources",    icon: "target",  roles: OM, group: "Ads & tracking" },
+          { id: "indiamart-leads", href: "/marketing/indiamart", label: "IndiaMART leads", icon: "inbox", roles: ["owner"], group: "Ads & tracking", hint: "CRM key save karo — IndiaMART ki enquiries apne aap leads banengi" },
           { id: "google-business", href: "/marketing/google-business", label: "Google Business Profile", icon: "map_pin", roles: OM, group: "Reputation", hint: "Maps/Search par listing kitni dikhi, calls, reviews — Google se seedha" },
           { id: "google-reviews",  href: "/marketing/reviews",   label: "Google reviews",  icon: "award", roles: OM, group: "Reputation", hint: "Khush customers se Google review maango" },
           { id: "coupons",         href: "/coupons",           label: "Coupons",         icon: "ticket",  roles: OM, group: "Offers & new leads" },
