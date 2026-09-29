@@ -21,6 +21,11 @@ Collections:
 **Statuses:** `open` → `doing` → `review` → `done` (or `blocked`, `declined`). An agent may move
 a task to `doing` and to `review`. **Only a human moves it to `done`** (or `declined`), after
 checking the `doneWhen` line.
+*Exception (Pardeep, 29 Sep 2026):* a human may give their OWN Claude sessions standing
+permission to set `done` on that human's cards once every part of `doneWhen` is verified. Pardeep
+has. The session then writes `statusNote: "<date>: Claude ne Done kiya — <what was checked>"`.
+It never covers another owner's card, anything waiting on deploy / a prod migration / another
+person, or a fix on a page Hitesh reported (his retest still decides).
 
 Ownership of code is in [`OWNERS.json`](../OWNERS.json) (repo root). `node production/scripts/areas.mjs`
 tells you whose area a branch touched.
