@@ -207,3 +207,44 @@ export function leadNotes(c: { fit_reason: string | null; pitch: string | null; 
     c.source_url ? `Source: ${c.source_url}` : "",
   ].filter(Boolean).join("\n");
 }
+
+/**
+ * The first follow-up an approved candidate gets (29 Sep 2026): approving without a task
+ * meant the lead sat in the pipeline until someone remembered it. Call if there is a phone,
+ * else email. Due in business hours, IST, Mon–Sat 10:00–18:00:
+ *   before 10:00 on a working day → 11:00 that day
+ *   10:00–17:00                   → one hour from now
+ *   after 17:00, or Sunday         → 11:00 the next working day
+ */
+export function firstTouchTask(
+  c: { company: string; pitch: string | null; fit_reason: string | null; domain: string },
+  contact: { email: string | null; phone: string | null } | null,
+  now: Date = new Date(),
+): { kind: "call" | "email"; title: string; notes: string; dueAt: Date } {
+  const kind = contact?.phone ? "call" : "email";
+  const title = kind === "call" ? `Call karo: ${c.company}` : `Email bhejo: ${c.company}`;
+  const notes = [
+    contact?.phone ? `Phone: ${contact.phone}` : "",
+    contact?.email ? `Email: ${contact.email}` : "",
+    `Website: https://${c.domain}`,
+    c.fit_reason ? `Kyun: ${c.fit_reason}` : "",
+    c.pitch ? `Kya bolna hai: ${c.pitch}` : "",
+  ].filter(Boolean).join("\n");
+  return { kind, title, notes, dueAt: firstTouchDue(now) };
+}
+
+const IST_MS = 330 * 60_000;
+export function firstTouchDue(now: Date): Date {
+  const ist = new Date(now.getTime() + IST_MS);                   // wall clock in IST, read via UTC getters
+  const at = (dayOffset: number, h: number, m = 0) => {
+    const d = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() + dayOffset, h, m));
+    return new Date(d.getTime() - IST_MS);
+  };
+  const working = (off: number) => new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() + off)).getUTCDay() !== 0;
+  const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  if (working(0) && mins < 10 * 60) return at(0, 11);
+  if (working(0) && mins < 17 * 60) return new Date(now.getTime() + 60 * 60_000);
+  let off = 1;
+  while (!working(off)) off++;
+  return at(off, 11);
+}

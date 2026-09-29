@@ -10,7 +10,8 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { requireTenantId } from "@/lib/queries/require-tenant";
 import { toastError } from "@/lib/errors/toast-error";
-import { leadNotes, type MxProvider } from "@/lib/leads/lead-finder";
+import { leadNotes, firstTouchTask, type MxProvider } from "@/lib/leads/lead-finder";
+import { toIstDate } from "@/lib/dates/ist";
 import { readContact } from "@/lib/leads/lead-contacts";
 
 export const FINDER_KEY = ["lead-finder"] as const;
@@ -141,19 +142,31 @@ export function useApproveCandidate() {
       const tenantId = await requireTenantId(supabase);
       const { data: auth } = await supabase.auth.getUser();
       const contact = readContact(c.signals);
+      const task = firstTouchTask(c, contact);
       const leadId = "L-" + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1000).toString(36).toUpperCase();
       const { error } = await supabase.from("leads").insert({
         id: leadId, tenant_id: tenantId, company: c.company, domain: c.domain, stage: "new", source: "ai-finder",
         plan: c.product === "workspace" ? "Google Workspace" : null,
         contact_email: contact?.email ?? null, contact_phone: contact?.phone ?? null,
         notes: leadNotes(c), created_by: auth?.user?.id ?? null,
+        follow_up_date: toIstDate(task.dueAt),
       });
       if (error) throw error;
       const { error: e2 } = await supabase.from("lead_finder_candidates").update({ status: "converted", lead_id: leadId, decided_by: auth?.user?.id ?? null, decided_at: new Date().toISOString() }).eq("id", c.id);
       if (e2) throw e2;
-      return leadId;
+      // First follow-up, owned by whoever approved. A failure here must not undo the lead.
+      const { error: e3 } = await supabase.from("tasks").insert({
+        tenant_id: tenantId, lead_id: leadId, owner_id: auth?.user?.id ?? null,
+        title: task.title, notes: task.notes, kind: task.kind, due_at: task.dueAt.toISOString(), status: "pending",
+      });
+      return { leadId, task: e3 ? null : task };
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: FINDER_KEY }); qc.invalidateQueries({ queryKey: ["leads"] }); toast.success("Lead ban gaya — Sales & Pipeline mein"); },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: FINDER_KEY }); qc.invalidateQueries({ queryKey: ["leads"] }); qc.invalidateQueries({ queryKey: ["tasks"] });
+      if (!r.task) { toast.warning("Lead ban gaya, par follow-up task nahi bana — lead par khud reminder laga do"); return; }
+      const when = r.task.dueAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", hour: "numeric", minute: "2-digit" });
+      toast.success(`Lead ban gaya · ${r.task.kind === "call" ? "Call" : "Email"} task ${when} ka`);
+    },
     onError: (e) => toastError(e),
   });
 }
