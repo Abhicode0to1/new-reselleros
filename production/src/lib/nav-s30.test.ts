@@ -54,8 +54,13 @@ const BOOKS_ROLES = ["owner", "manager", "billing", "accountant"];
 /** S36: Help & Tutorial opened to every role (it was owner / manager / billing / partner).
  *  Named here, not snapshotted over — the snapshot stays the pre-S30 nav. */
 const ADDED_FOR_EVERY_ROLE = ["/help"];
+/** S34: the IndiaMART key screen, a Marketing Hub directory row for the OWNER only — its API
+ *  (/api/leads/indiamart) is owner-only, so a manager gets no row (middleware does not gate
+ *  managers, and the page tells one who can do it). */
+const ADDED_FOR_OWNER = ["/marketing/indiamart"];
 const addedFor = (role: string) => [
   ...(role === "owner" || role === "manager" ? ADDED_FOR_OWNER_MANAGER : []),
+  ...(role === "owner" ? ADDED_FOR_OWNER : []),
   ...(BOOKS_ROLES.includes(role) ? ADDED_FOR_BOOKS : []),
   ...ADDED_FOR_EVERY_ROLE,
 ];
@@ -197,7 +202,8 @@ describe("2. structure", () => {
   it("groups the Marketing Hub into five and the Reports directory by kind", () => {
     const hub = flat.find((e) => e.item.id === "marketing-hub")!.item;
     expect(groupDirectory(hub.directory!).map((g) => g.group)).toHaveLength(5);
-    expect(hub.directory).toHaveLength(14 + ADDED_S28.length);
+    expect(hub.directory).toHaveLength(14 + ADDED_S28.length + 1); // 14 at S30 + S28 reminders + the IndiaMART key screen (S34)
+
     const reports = flat.find((e) => e.item.id === "reports")!.item;
     expect(reports.directory!.map((d) => d.href)).toEqual(expect.arrayContaining([
       "/accounting/pnl", "/accounting/balance-sheet", "/accounting/cash-flow", "/accounting/gst",
