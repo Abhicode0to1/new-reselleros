@@ -25,6 +25,8 @@ import type { Database, QuoteLineItem } from "@/lib/supabase/database.types";
 import { grossAmount } from "@/lib/quotes/amounts";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { renewalTerm } from "@/lib/renewals/renewal-term";
+import { renewalCost } from "@/lib/renewals/renewal-cost";
+import { istToday, toIstDate } from "@/lib/dates/ist";
 
 // The actual typed Supabase client. createAdminClient() returns this shape,
 // so the strict rpc/from overloads stay intact when callers pass it in.
@@ -143,7 +145,7 @@ export async function createOrGetRenewalQuote(
     if (input.itemId) {
       const { data } = await supabase
         .from("items")
-        .select("msrp")
+        .select("msrp, wholesale")
         .eq("tenant_id", input.tenantId)
         .eq("id", input.itemId)
         .maybeSingle();
@@ -157,7 +159,7 @@ export async function createOrGetRenewalQuote(
     }
     const { data } = await supabase
       .from("items")
-      .select("msrp")
+      .select("msrp, wholesale")
       .eq("tenant_id", input.tenantId)
       .eq("name", input.plan)
       .maybeSingle();
@@ -182,7 +184,28 @@ export async function createOrGetRenewalQuote(
   const annualAmount = term.subtotal;                                  // ex-GST subtotal for the term
   const grossAnnual  = grossAmount(annualAmount, renewalTaxRate);      // GST-inclusive payable (or ex-GST for export)
   const perSeatRate  = term.perSeatRate;
-  const perSeatCost  = Math.round((annualAmount * 0.83) / Math.max(1, input.seats));
+
+  /* R-012 (Pawan, 26 Sep 2026). This was `annualAmount * 0.83` — a hardcoded 17% margin
+     standing in for the vendor's real price, so every renewal quote reported a 17%
+     margin because it was DEFINED to be 17%. On Business Starter the real wholesale is
+     ₹110/seat/month and the guess said about ₹224. Now it is read from the catalogue,
+     for the term the renewal actually covers, or admitted as unknown. */
+  const cost = renewalCost({
+    wholesalePerSeatMonth: (catalogItem as { wholesale?: number | null } | null)?.wholesale ?? null,
+    termMonths:            term.termMonths,
+    seats:                 input.seats,
+  });
+  if (!cost.known) {
+    /* Not fatal — a bespoke plan legitimately has no catalogue row, and the customer
+       still needs their renewal. It travels as 0, which `approval-economics` already
+       reads as `costUnknown` rather than as free, and it is said out loud here so the
+       cron log names the plan whose price is missing. */
+    console.warn(
+      `[renewals] subscription ${input.subscriptionId} (${input.plan}): cost not priced — ${cost.reason}. ` +
+        "The quote goes out with cost unknown; margin on it is not a number anybody should read.",
+    );
+  }
+  const perSeatCost = cost.perSeat;
 
   const lineItems: QuoteLineItem[] = [{
     id:         "renewal-1",
@@ -210,15 +233,27 @@ export async function createOrGetRenewalQuote(
     status:         "sent",
     payment_status: "awaiting",
     owner_id:       null,
-    created_date:   new Date().toISOString().slice(0, 10),
-    expires_date:   validUntil.toISOString().slice(0, 10),
+    /* R-012, third item. These were `new Date().toISOString().slice(0, 10)`, which is
+       UTC — so between midnight and 05:30 IST every renewal quote was stamped with
+       YESTERDAY's date, and its validity window with it (AGENTS.md §6). The renewals
+       cron runs at 09:00 IST so it never saw this, but "Generate renewal quote" from
+       the subscription page is pressed by a person, and reps here work early. */
+    created_date:   istToday(),
+    expires_date:   toIstDate(validUntil),
     line_items:     lineItems,
     subtotal:       annualAmount,
-    total_cost:     Math.round(annualAmount * 0.83),
+    total_cost:     cost.total,
     discount_pct:   0,
     tax_rate:       renewalTaxRate,   // 0 for an export (zero-rated) customer
     is_renewal:       true,  // ← Drives the "Renewal" badge in /quotes list + detail + PDF
-    extension_months: 12,    // standard 1-year renewal; extensions use 24/36 via createExtensionQuote
+    /* R-012, and this is the one that took money. It was a hardcoded 12 while the price
+       and the commitment beside it already came from the subscription's own term — so a
+       MONTHLY renewal was priced for one month and then extended the subscription by a
+       YEAR, because `record_payment` reads this field to roll the dates forward.
+       Measured by Pawan on a ₹250/month hosting subscription: paid ₹295, renewal date
+       went to 25 Oct 2027 instead of 25 Nov 2026 and the MRR fell 250 → 21.
+       `createExtensionQuote` keeps its own 24/36 and is deliberately untouched. */
+    extension_months: term.termMonths,
     notes:            input.notes
       ?? `Renewal quote for subscription ${input.subscriptionId}`,
   });
