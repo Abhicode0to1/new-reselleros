@@ -561,7 +561,7 @@ export default function SubscriptionsPage() {
        fifteen customers were emailed will not chase them. */
     if (stub && done > 0) {
       toast.warning("Email is in stub mode — nothing actually left the building", {
-        description: "The quotes were created and the sends were logged, but no mail was delivered. Set the Resend key under Admin & Control to send for real.",
+        description: "The quotes were created and the sends were logged, but no mail was delivered. Set the Resend key under Settings to send for real.",
       });
     }
   };

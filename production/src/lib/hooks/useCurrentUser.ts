@@ -38,6 +38,16 @@ export interface CurrentUserInfo {
   tenantLutValidUpto: string | null;
   tenantUpiVpa: string | null;
   tenantUpiPayeeName: string | null;
+  /**
+   * Remittance details printed on the invoice PDF (R-038, migration 20260929120000).
+   * Publication data, not credentials — they go on every invoice this company sends,
+   * which is why they sit on `tenants` and not in `tenant_secrets`.
+   */
+  tenantRemitBankName:      string | null;
+  tenantRemitAccountName:   string | null;
+  tenantRemitAccountNumber: string | null;
+  tenantRemitIfsc:          string | null;
+  tenantRemitBranch:        string | null;
   /** Days of buffer between renewal_date and auto-suspend (0–30). */
   tenantGracePeriodDays: number;
   /** When Setup Wizard's final step ran. NULL = wizard never completed. */
@@ -118,7 +128,7 @@ export function useIdentity(): { status: IdentityStatus; email: string | null } 
  * shape from the select STRING at the type level, so splitting it across
  * concatenated pieces widens it to `string` and the whole result collapses to
  * GenericStringError. Long line, correct types. */
-export const USER_WITH_TENANT_SELECT = "id, tenant_id, full_name, initials, color, role, can_view_deals, tenants!users_tenant_id_fkey(name, logo_url, gstin, email, phone, address, pin_code, contact_name, state, state_code, lut_number, lut_valid_upto, upi_vpa, upi_payee_name, grace_period_days, setup_completed_at, gstin_verified_at, gstin_verification)" as const;
+export const USER_WITH_TENANT_SELECT = "id, tenant_id, full_name, initials, color, role, can_view_deals, tenants!users_tenant_id_fkey(name, logo_url, gstin, email, phone, address, pin_code, contact_name, state, state_code, lut_number, lut_valid_upto, upi_vpa, upi_payee_name, remit_bank_name, remit_account_name, remit_account_number, remit_ifsc, remit_branch, grace_period_days, setup_completed_at, gstin_verified_at, gstin_verification)" as const;
 
 export function useCurrentUser() {
   return useQuery({
@@ -181,6 +191,11 @@ export function useCurrentUser() {
         tenantLutValidUpto: (tenant as { lut_valid_upto?: string | null } | null)?.lut_valid_upto ?? null,
         tenantUpiVpa:       (tenant as { upi_vpa?: string | null } | null)?.upi_vpa ?? null,
         tenantUpiPayeeName: (tenant as { upi_payee_name?: string | null } | null)?.upi_payee_name ?? null,
+        tenantRemitBankName:      tenant?.remit_bank_name      ?? null,
+        tenantRemitAccountName:   tenant?.remit_account_name   ?? null,
+        tenantRemitAccountNumber: tenant?.remit_account_number ?? null,
+        tenantRemitIfsc:          tenant?.remit_ifsc           ?? null,
+        tenantRemitBranch:        tenant?.remit_branch         ?? null,
         tenantGracePeriodDays: tenant?.grace_period_days ?? 0,
         tenantSetupCompletedAt: tenant?.setup_completed_at ?? null,
         tenantGstinVerifiedAt:  tenant?.gstin_verified_at  ?? null,

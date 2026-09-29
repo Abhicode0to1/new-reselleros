@@ -31,6 +31,7 @@ import { toast } from "sonner";
    calendar months, not 30-day arithmetic. */
 import { termEndInclusive, nextTermStart } from "@/lib/billing/schedule";
 import { monthsBetween } from "@/lib/accounting/saas-charts";
+import { istToday } from "@/lib/dates/ist";
 
 const VENDORS: Subscription["vendor"][] = ["google", "microsoft", "zoho", "other"];
 const STATUSES: Subscription["status"][] = ["active", "paused", "expired", "cancelled"];
@@ -115,7 +116,10 @@ export function EditSubscriptionDialog({
   const nceCheck = checkNceLock({
     vendor,
     startDate:    startDate || sub.start_date,
-    today:        new Date().toISOString().slice(0, 10),
+    /* R-025. UTC "today" is yesterday before 05:30 IST, and this feeds the Microsoft NCE
+       7-day cancellation window — so early in the morning the guard measured one day
+       fewer than had actually passed and let through a cancellation NCE would refuse. */
+    today:        istToday(),
     currentSeats: sub.seats,
     nextSeats,
     nextStatus:   status,
@@ -123,7 +127,7 @@ export function EditSubscriptionDialog({
   const nceHeadsUp = lockWarning({
     vendor,
     startDate:    startDate || sub.start_date,
-    today:        new Date().toISOString().slice(0, 10),
+    today:        istToday(),        // R-025 — same window, same trap.
     currentSeats: sub.seats,
     nextSeats:    sub.seats,
     nextStatus:   "active",

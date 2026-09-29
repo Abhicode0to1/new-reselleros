@@ -22,6 +22,7 @@ import { formatDate } from "@/lib/utils";
 import { pdfRupee } from "./pdf-money";
 import { pdfText } from "./pdf-text";
 import { isRenderableLogo } from "./logo";
+import type { PayMethods } from "./pay-methods";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
 import type {
@@ -86,6 +87,15 @@ export interface InvoicePDFProps {
   upiQrDataUrl?: string | null;
   /** Printed under the QR so a payer whose camera struggles can type it. */
   upiVpa?:       string | null;
+
+  /**
+   * R-038. What this tenant can actually be paid with, decided by `payMethods()` in
+   * the prop builder. `null` (or omitted) means the methods line and the bank block
+   * are both left off — which is the point: this footer used to promise "UPI / NEFT /
+   * Razorpay accepted" on every invoice regardless, offering a transfer with no
+   * account to send it to and naming a gateway that might not exist.
+   */
+  payMethods?:   PayMethods | null;
 }
 
 // ─── Styles (shared shape with QuotePDF) ──────────────────────────────────
@@ -353,6 +363,21 @@ const s = StyleSheet.create({
   },
   footerBold:   { fontFamily: PDF_FONT_BOLD, color: COLORS.ink2 },
 
+  // Bank remittance block (R-038). Boxed rather than another footer line, because a
+  // customer's accounts clerk copies these four values by hand off a printout and a
+  // run-on sentence is where a digit gets dropped.
+  bankBox: {
+    marginTop:       8,
+    padding:         7,
+    borderWidth:     1,
+    borderColor:     COLORS.hairline,
+    borderRadius:    3,
+  },
+  bankTitle: { fontSize: 9, fontFamily: PDF_FONT_BOLD, color: COLORS.ink2, marginBottom: 3 },
+  bankLine:  { fontSize: 9, color: COLORS.ink3, marginBottom: 2, lineHeight: 1.4 },
+  // Account number and IFSC in mono: 0/O and 1/l are the two pairs that get mistyped.
+  bankMono:  { fontFamily: PDF_FONT_BOLD, color: COLORS.ink },
+
   // Scan-to-pay block. ~28mm square at 72dpi — comfortably scannable from a
   // printed page, without dominating a document whose job is to be a tax record.
   upiRow: {
@@ -385,7 +410,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
     customerGstin, customerEmail, customerAddress, customerState, customerCountry,
     currency, exchangeRate, termsConditions,
     tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress, tenantState, tenantLogo,
-    upiQrDataUrl, upiVpa,
+    upiQrDataUrl, upiVpa, payMethods = null,
   } = props;
 
   const cgst = interState ? 0 : Math.round(tax / 2);
@@ -596,10 +621,52 @@ export function InvoicePDF(props: InvoicePDFProps) {
             998313 (Software licensing / SaaS) · <Text style={s.footerBold}>GSTR-1 month: </Text>
             {formatDate(invoice.invoice_date)}
           </Text>
-          <Text style={s.footerLine}>
-            <Text style={s.footerBold}>Payment terms: </Text>
-            {invoice.due_date ? `Due by ${formatDate(invoice.due_date)}. ` : ""}UPI / NEFT / Razorpay accepted.
-          </Text>
+          {/* R-038. The methods half of this line was the fixed string "UPI / NEFT /
+              Razorpay accepted", printed whatever the tenant had configured — it offered
+              a transfer with no account on the page to send it to, and named a gateway
+              that may not exist. It is derived now, and absent when nothing is set up.
+              The DUE DATE half is unconditional: that is a fact about this invoice, not
+              about the seller's payment plumbing, and it must not disappear with it. */}
+          {(invoice.due_date || payMethods?.line) && (
+            <Text style={s.footerLine}>
+              <Text style={s.footerBold}>Payment terms: </Text>
+              {invoice.due_date ? `Due by ${formatDate(invoice.due_date)}. ` : ""}
+              {payMethods?.line ?? ""}
+            </Text>
+          )}
+
+          {/* Bank block — drawn only with a full account number AND an IFSC, because
+              either alone is not something anybody can transfer to (see pay-methods.ts). */}
+          {payMethods?.bank && (
+            <View style={s.bankBox}>
+              <Text style={s.bankTitle}>Bank transfer (NEFT / RTGS / IMPS)</Text>
+              {payMethods.bank.accountName && (
+                <Text style={s.bankLine}>
+                  <Text style={s.footerBold}>Account name: </Text>
+                  {pdfText(payMethods.bank.accountName)}
+                </Text>
+              )}
+              {payMethods.bank.bankName && (
+                <Text style={s.bankLine}>
+                  <Text style={s.footerBold}>Bank: </Text>
+                  {pdfText(payMethods.bank.bankName)}
+                  {payMethods.bank.branch ? ` · ${pdfText(payMethods.bank.branch)}` : ""}
+                </Text>
+              )}
+              <Text style={s.bankLine}>
+                <Text style={s.footerBold}>A/c no: </Text>
+                <Text style={s.bankMono}>{payMethods.bank.accountNumber}</Text>
+                <Text style={s.footerBold}>   IFSC: </Text>
+                <Text style={s.bankMono}>{payMethods.bank.ifsc}</Text>
+              </Text>
+              {/* The reference is what makes the money reconcilable at our end. Without
+                  it a transfer lands as an unidentified credit and somebody chases it. */}
+              <Text style={s.bankLine}>
+                <Text style={s.footerBold}>Reference: </Text>
+                {invoice.id}
+              </Text>
+            </View>
+          )}
 
           {/* Scan-to-pay. Drawn only when the tenant has set a UPI ID — no
               placeholder box, because an un-scannable QR on a tax invoice is

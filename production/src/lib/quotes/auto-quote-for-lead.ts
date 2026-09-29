@@ -27,6 +27,7 @@ import { planQuoteFromEnquiry, type CatalogueItemPrice } from "./quote-from-enqu
 import { decideAutoSend } from "./auto-send-quote";
 import { sendAutoQuote } from "./send-auto-quote";
 import type { BillingCycle } from "@/lib/supabase/database.types";
+import { toIstDate } from "@/lib/dates/ist";
 
 /* Typed as the RETURN of createAdminClient — hand-rolling this shape is what produced the
    TS2589 "excessively deep" failure in lib/email/owner-alert.ts. */
@@ -323,8 +324,12 @@ export async function autoQuoteForLead(
          subtotal. */
       status:        "draft",
       owner_id:      null,
-      created_date:  today.toISOString().slice(0, 10),
-      expires_date:  expires.toISOString().slice(0, 10),
+      /* R-025. Both are INSTANTS (`new Date()`, and a copy moved forward by days), so a
+         UTC slice is yesterday before 05:30 IST — and this runs on the inbound-mail
+         webhook, which fires at whatever hour a customer writes. A quote emailed to a
+         customer dated yesterday, with a validity window one day short. */
+      created_date:  toIstDate(today),
+      expires_date:  toIstDate(expires),
       notes:         noteText,
     });
     if (!quoteErr) { draftQuoteId = quoteId as string; break; }

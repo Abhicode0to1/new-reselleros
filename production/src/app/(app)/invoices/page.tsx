@@ -1084,9 +1084,26 @@ function InvoiceRow({
                 <Icon name="receipt" size={15} /> Issue debit note
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem destructive className="gap-2.5 py-2 cursor-pointer" onClick={() => setDelOpen(true)}>
-                <Icon name="trash" size={15} /> Delete invoice
-              </DropdownMenuItem>
+              {/* R-014. Only a DRAFT can be deleted — the database refuses the rest, and
+                  offering a control whose every press is a refusal teaches people to
+                  distrust the menu. The credit-note item two rows up IS the route for an
+                  issued invoice, so the §24 next step is already on screen; this says so
+                  rather than disappearing silently. */}
+              {inv.status === "draft" ? (
+                <DropdownMenuItem destructive className="gap-2.5 py-2 cursor-pointer" onClick={() => setDelOpen(true)}>
+                  <Icon name="trash" size={15} /> Delete draft
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem disabled className="gap-2.5 py-2">
+                  <Icon name="trash" size={15} />
+                  <span>
+                    Delete invoice
+                    <span className="block text-[11px] text-ink-3 font-normal">
+                      Issued — use a credit note above
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -1506,13 +1523,19 @@ function DeleteInvoiceDialog({
   const { data: projPays } = useProjectPaymentsByInvoice(open && isProject ? invoiceId : null);
   const paysTotal = (projPays ?? []).reduce((s, p) => s + p.amount, 0);
 
+  /* R-014 rewrote this list, and the old version is worth remembering: it promised
+     "N payments (₹X) will be deleted" and "the matched bank statement line will be
+     un-reconciled". Both were true, and both were the defect — project_payments rows are
+     money that actually arrived, reconciled to a real bank line. The RPC now refuses
+     rather than doing either, so the copy has to say what really happens or it becomes a
+     different kind of lie. */
   const items: { what: string; why: string; extra?: React.ReactNode }[] = isProject
     ? [
         {
           what: (projPays?.length ?? 0) > 0
-            ? `${projPays!.length} payment${projPays!.length === 1 ? "" : "s"} (${rupee(paysTotal)}) recorded against this invoice will be deleted`
-            : "The payment(s) recorded against this invoice will be deleted",
-          why:  "This invoice IS the record of that payment. Remove the invoice and the payment has no valid document behind it — keeping it would leave an orphan entry and double-count your collections.",
+            ? `This will be REFUSED — ${projPays!.length} payment${projPays!.length === 1 ? "" : "s"} (${rupee(paysTotal)}) are recorded against this invoice`
+            : "Payments recorded against this invoice are never deleted",
+          why:  "Those are real receipts, reconciled to your bank statement. They outlive the invoice. Refund or remove the payments first (Projects → the project → Payments) if the invoice genuinely has to go.",
           extra: (projPays?.length ?? 0) > 0 ? (
             <ul className="mt-1.5 space-y-1">
               {projPays!.map((p) => (
@@ -1525,22 +1548,22 @@ function DeleteInvoiceDialog({
           ) : null,
         },
         {
-          what: "The matched bank statement line will be un-reconciled",
-          why:  "That bank credit was linked to this payment. Since the payment is going, the link must break — otherwise the bank line points to a payment that no longer exists.",
+          what: "Your bank reconciliation is left alone",
+          why:  "The bank credit stays matched to its payment. Nothing about the statement changes.",
         },
         {
           what: "The milestone re-opens as “unbilled”",
-          why:  "The milestone was marked invoiced/paid. Undoing the invoice returns it to unbilled so you can raise a correct invoice again.",
+          why:  "The milestone was marked invoiced. Removing the draft returns it to unbilled so you can raise a correct invoice.",
         },
       ]
     : [
         {
           what: "The quote re-opens for re-invoicing",
-          why:  "Deleting the GST invoice frees its source quote so a fresh, corrected invoice can be generated.",
+          why:  "Removing the draft frees its source quote so a fresh, corrected invoice can be generated.",
         },
         {
           what: "Received payments & the subscription are NOT touched",
-          why:  "That money and the active service are real. Only the GST document is removed — your payment and subscription history stay intact.",
+          why:  "That money and the active service are real. Only the draft document goes — your payment and subscription history stay intact.",
         },
       ];
 
@@ -1550,12 +1573,14 @@ function DeleteInvoiceDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="trash" size={18} className="text-rose" />
-            Delete {invoiceId}?
+            Delete draft {invoiceId}?
           </DialogTitle>
           <DialogDescription>
+            {/* R-014: only a draft reaches this dialog now, and "safely removes the GST
+                invoice" was never true of an issued one. */}
             {isProject
-              ? "Deleting this invoice also reverses everything tied to it, in order:"
-              : "This safely removes the GST invoice. Here’s exactly what happens:"}
+              ? "This invoice has not been issued. Here’s exactly what happens:"
+              : "This invoice has not been issued, so nothing has gone to the customer. Here’s exactly what happens:"}
           </DialogDescription>
         </DialogHeader>
 
@@ -1574,14 +1599,16 @@ function DeleteInvoiceDialog({
 
         <p className="text-[12px] text-rose mt-1">This cannot be undone.</p>
         <p className="text-[12px] text-ink-3 mt-1">
-          The invoice number is <b className="text-ink-2">retired, not reused</b> — GST rules forbid giving
-          two different sales the same invoice number, so the next invoice takes a fresh number.
+          If this draft already holds a number, that number is <b className="text-ink-2">retired, not reused</b> —
+          GST rules forbid giving two different sales the same invoice number, so the next invoice
+          takes a fresh one. An <b className="text-ink-2">issued</b> invoice cannot be deleted at all;
+          correct it with a credit note.
         </p>
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button type="button" variant="danger" icon="trash" loading={loading} onClick={onConfirm}>
-            Delete invoice
+            Delete draft
           </Button>
         </DialogFooter>
       </DialogContent>

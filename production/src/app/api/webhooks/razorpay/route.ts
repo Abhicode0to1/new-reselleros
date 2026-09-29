@@ -45,6 +45,7 @@ import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
+import { safeDbMessage, logDbError } from "@/lib/errors/db-error";
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
@@ -314,8 +315,15 @@ export async function POST(request: NextRequest) {
   });
 
   if (rpcErr) {
-    console.error("[webhooks/razorpay] record_payment RPC failed:", rpcErr);
-    return NextResponse.json({ error: "Payment processing failed", detail: rpcErr.message }, { status: 500 });
+    /* R-025. `detail` handed Postgres's own text back over a PUBLIC endpoint — this
+       route is called by Razorpay, so anybody who can reach the URL can read it, and a
+       42703/23505 there names our tables and constraints. The server log keeps the
+       whole thing; the response keeps our own guard wording and nothing else. */
+    logDbError("webhooks/razorpay:record_payment", rpcErr);
+    return NextResponse.json(
+      { error: safeDbMessage(rpcErr, "Payment processing failed") },
+      { status: 500 },
+    );
   }
 
   /* In-app khabar (audit B4) — record_payment COMMIT ke baad, best-effort. */
@@ -667,8 +675,12 @@ async function handleMandateEvent(
 
   const { error } = await admin.from("payment_mandates").update(patch).eq("id", mandate.id);
   if (error) {
-    console.error("[webhooks/razorpay] mandate update failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // R-025 — same public endpoint, same reasoning as record_payment above.
+    logDbError("webhooks/razorpay:mandate-update", error);
+    return NextResponse.json(
+      { error: safeDbMessage(error, "Mandate update failed") },
+      { status: 500 },
+    );
   }
 
   console.info(`[webhooks/razorpay] mandate ${mandate.id}: ${mandate.status} → ${next} (${event})`);

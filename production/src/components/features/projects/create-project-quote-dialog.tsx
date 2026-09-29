@@ -23,6 +23,7 @@ import { useItems } from "@/lib/queries/items";
 import { useCustomers, useCreateCustomer } from "@/lib/queries/customers";
 import { useCreateProjectQuote, useUpdateProjectQuote, useUpdateProjectFutureMilestones, useCreateProjectDirectInvoice, useProjectSale, type MilestoneInput, type ProjectQuoteLine, type ProjectSaleWithTotals } from "@/lib/queries/projects";
 import { rupee } from "@/lib/utils";
+import { istToday } from "@/lib/dates/ist";
 
 interface Props {
   open: boolean;
@@ -71,7 +72,9 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
   const [rows, setRows]                 = React.useState<MsRow[]>([{ label: "Advance", amount: "", due: "" }]);
   // A milestone due date is the invoice due date once that milestone is billed —
   // it must never fall before today (the invoice date), so the picker floors at today.
-  const todayISO = new Date().toISOString().slice(0, 10);
+  // R-025: a UTC floor is yesterday before 05:30 IST, which would let a milestone be
+  // dated before the invoice that bills it — the exact thing this floor prevents.
+  const todayISO = istToday();
 
   const prefilledFor = React.useRef<string | null>(null);
   React.useEffect(() => {

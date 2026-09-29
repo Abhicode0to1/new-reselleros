@@ -181,7 +181,33 @@ export function TaxInvoiceDialog({
    *  WhatsApp share flow (so the file is ready for the owner to attach). */
   async function downloadPdf(): Promise<void> {
     const { downloadInvoicePDF } = await import("@/lib/pdf");
+    const { payMethods } = await import("@/lib/pdf/pay-methods");
+    /* R-038. Whether Razorpay exists lives in tenant_secrets, which is owner-only under
+       RLS — so the browser asks the server for the yes/no rather than guessing. An
+       unreadable answer resolves to FALSE, because the defect being fixed is an invoice
+       naming a gateway the seller may not have (AGENTS.md §2: a failure must not become
+       a plausible value). Understating costs the customer one line of information;
+       overstating sends them to a payment route that does not open. */
+    let razorpayConfigured = false;
+    try {
+      const r = await fetch("/api/tenant/pay-methods", { cache: "no-store" });
+      if (r.ok) razorpayConfigured = Boolean((await r.json())?.razorpayConfigured);
+    } catch { /* stays false */ }
+
     await downloadInvoicePDF({
+      /* Same helper as the server builder, so the file this button produces and the one
+         the customer is emailed cannot disagree about how they may pay. */
+      payMethods: payMethods({
+        upiVpa: me?.tenantUpiVpa ?? null,
+        bank: {
+          bankName:      me?.tenantRemitBankName      ?? null,
+          accountName:   me?.tenantRemitAccountName   ?? me?.tenantName ?? null,
+          accountNumber: me?.tenantRemitAccountNumber ?? null,
+          ifsc:          me?.tenantRemitIfsc          ?? null,
+          branch:        me?.tenantRemitBranch        ?? null,
+        },
+        razorpayConfigured,
+      }),
       invoice, lineItems, subtotal, discountPct, discount,
       taxable: fTaxable, taxRate: fRate, tax: fTax, total: fTotal, interState: fInter,
       customerGstin, customerEmail, customerAddress, customerState, customerCountry,

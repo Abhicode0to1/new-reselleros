@@ -27,6 +27,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, QuoteLineItem } from "@/lib/supabase/database.types";
 import { prorate, rupeesToPaise, paiseToRupees } from "./proration";
 import { buildPlanIndex, matchPlan, type PlanIndex, type CatalogRow } from "./plan-match";
+import { istToday, utcDateISO } from "@/lib/dates/ist";
 
 type SupabaseAdmin = SupabaseClient<Database>;
 
@@ -291,8 +292,10 @@ export async function addSeats(input: AddSeatsInput): Promise<AddSeatsResult | A
     status:           "sent",
     payment_status:   "awaiting",
     owner_id:         null,
-    created_date:     new Date().toISOString().slice(0, 10),
-    expires_date:     validUntil.toISOString().slice(0, 10),
+    /* R-025 — same UTC trap as the renewal and extension quotes beside it. `validUntil`
+       is built from a YYYY-MM-DD at UTC midnight plus whole days, so no shift there. */
+    created_date:     istToday(),
+    expires_date:     utcDateISO(validUntil),
     line_items:       lineItems,
     subtotal:         subtotalExGst,
     total_cost:       wholesalePerSeat * input.additionalSeats,

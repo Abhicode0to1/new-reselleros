@@ -7,18 +7,33 @@ const S: SeriesState = {
 };
 
 describe("formatDocumentNumber", () => {
-  it("matches the shape of live rows", () => {
-    /* INV-TEST-2026-27-0008 is a real id. A number the operator sees here must be the
-       one that appears everywhere else. */
+  it("matches the shape the database allocates", () => {
+    /* R-015 (29 Sep 2026) shortened this from 21 characters to 16. It said
+       INV-TEST-2026-27-0008 until then, which is over the CGST Rule 46(b) limit.
+       The number the operator is shown must be the one the database will mint —
+       `document-number-format.test.ts` pins the two implementations together. */
     expect(formatDocumentNumber({ ...S, prefix: "INV", docCode: "TEST" }, 8))
-      .toBe("INV-TEST-2026-27-0008");
-    expect(formatDocumentNumber(S, 40)).toBe("RV-ADPL-2026-27-0040");
+      .toBe("INV-TEST-27-0008");
+    expect(formatDocumentNumber(S, 40)).toBe("RV-ADPL-27-0040");
+  });
+
+  it("stays inside the 16-character CGST Rule 46(b) limit", () => {
+    // The longest GST prefix (INV, RFV) with a full 4-character code and 4 digits.
+    expect(formatDocumentNumber({ ...S, prefix: "INV", docCode: "ADPL" }, 9999).length).toBe(16);
+    expect(formatDocumentNumber({ ...S, prefix: "RFV", docCode: "ADPL" }, 1).length).toBe(16);
+  });
+
+  it("caps an over-long doc code, as the SQL does", () => {
+    /* Nothing constrains tenants.doc_code. A 6-character one would push the number back
+       over 16 with no warning at all. */
+    expect(formatDocumentNumber({ ...S, prefix: "INV", docCode: "TOOLONG" }, 1))
+      .toBe("INV-TOOL-27-0001");
   });
 
   it("omits a missing doc code instead of printing 'null'", () => {
     /* Excel Technologies' tenant row has doc_code null. */
-    expect(formatDocumentNumber({ ...S, docCode: null }, 3)).toBe("RV-2026-27-0003");
-    expect(formatDocumentNumber({ ...S, docCode: "  " }, 3)).toBe("RV-2026-27-0003");
+    expect(formatDocumentNumber({ ...S, docCode: null }, 3)).toBe("RV-27-0003");
+    expect(formatDocumentNumber({ ...S, docCode: "  " }, 3)).toBe("RV-27-0003");
   });
 
   it("pads to four digits without truncating past them", () => {

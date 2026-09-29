@@ -43,6 +43,7 @@ import { Icon } from "@/components/ui/icon";
 import { createClient } from "@/lib/supabase/client";
 import { rupee } from "@/lib/utils";
 import { fiscalYearFromDate, TDS_SECTIONS } from "@/lib/queries/tds-receivable";
+import { istToday } from "@/lib/dates/ist";
 
 const schema = z.object({
   amount:       z.coerce.number().int().min(1, "Amount received required"),
@@ -206,7 +207,9 @@ export function RecordPaymentDialog({
     defaultValues: {
       amount:       remaining,
       method:       "upi",
-      receivedDate: new Date().toISOString().slice(0, 10),
+      // R-025: `toISOString()` is UTC, so between 00:00 and 05:30 IST this defaulted the
+      // payment to YESTERDAY — and reps here work early (AGENTS.md §6).
+      receivedDate: istToday(),
       domain:       defaultDomain ?? "",
       tdsDeducted:  false,
       tdsSection:   "194J",
@@ -251,7 +254,7 @@ export function RecordPaymentDialog({
       reset({
         amount:       remaining,
         method:       "upi",
-        receivedDate: new Date().toISOString().slice(0, 10),
+        receivedDate: istToday(),      // R-025 — same UTC trap as the defaults above.
         tdsDeducted:  false,
         tdsSection:   customerTdsDefaults.section,
         tdsRatePct:   customerTdsDefaults.ratePct,
@@ -322,7 +325,17 @@ export function RecordPaymentDialog({
             p_tds_rate_pct: tdsRatePct,
             p_customer_tan: data.customerTan?.trim() || null,
             p_invoice_id:   invoiceId ?? null,
-            p_fiscal_year:  fiscalYearFromDate(new Date().toISOString().slice(0, 10)),
+            /* R-025, and the expensive one. This read the WALL CLOCK in UTC, so a
+               payment recorded at 01:00 IST on 1 April was stamped with 31 March —
+               the previous financial year — and the TDS certificate for it then never
+               matches the customer's 26AS.
+
+               Two things were wrong and only one of them was the timezone: it also
+               ignored the date the operator actually chose. A payment received on
+               28 March and entered on 2 April belongs to FY 2025-26, whatever today
+               is. The FY follows the PAYMENT date; `istToday()` is only the fallback
+               for the impossible case of an empty field. */
+            p_fiscal_year:  fiscalYearFromDate(data.receivedDate || istToday()),
           })
         : await supabase.rpc("record_payment", {
             p_quote_id:  quoteId,
@@ -383,6 +396,25 @@ export function RecordPaymentDialog({
             .eq("id", r.payment_id);
           if (bankErr) console.error("[record-payment] date/bank tag failed (payment still recorded):", bankErr);
         }
+      }
+
+      /* R-015. `record_payment` stamps `invoices.paid_date` with the day it SETTLED,
+         because it has no received-date parameter to read — the date the operator
+         actually chose only arrives here, a moment later. When this payment is the one
+         that closed the invoice, move paid_date onto that date so the invoice agrees
+         with the receipt behind it.
+
+         Best-effort and last, like the writes above: the money is already recorded and
+         the invoice is already marked paid, so a failure here is a wrong DATE on a
+         correct invoice — worth logging loudly, not worth failing the payment over.
+         `paid_date` is deliberately mutable on an issued invoice (the freeze trigger
+         lists it as lifecycle rather than a Rule 46 particular), so this is allowed. */
+      if (r.invoice_paid && invoiceId && data.receivedDate) {
+        const { error: dateErr } = await supabase
+          .from("invoices")
+          .update({ paid_date: data.receivedDate })
+          .eq("id", invoiceId);
+        if (dateErr) console.error("[record-payment] invoice paid_date not moved to the receipt date:", dateErr);
       }
 
       // ── 2c. Attach the optional payment-receipt file (best-effort) ───────

@@ -28,6 +28,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, QuoteLineItem } from "@/lib/supabase/database.types";
 import { grossAmount } from "@/lib/quotes/amounts";
+import { istToday, utcDateISO } from "@/lib/dates/ist";
 
 type SupabaseAdmin = SupabaseClient<Database>;
 
@@ -125,8 +126,12 @@ export async function createExtensionQuote(
     status:           "sent",
     payment_status:   "awaiting",
     owner_id:         null,
-    created_date:     new Date().toISOString().slice(0, 10),
-    expires_date:     validUntil.toISOString().slice(0, 10),
+    /* R-025. UTC, so an extension quote raised before 05:30 IST was dated YESTERDAY and
+       its validity window ran a day short. `validUntil` is the renewal date (a
+       YYYY-MM-DD parsed as UTC midnight) plus whole days, so its UTC parts already ARE
+       the calendar date — `utcDateISO` says that out loud rather than shifting twice. */
+    created_date:     istToday(),
+    expires_date:     utcDateISO(validUntil),
     line_items:       lineItems,
     subtotal:         annualAmount,
     total_cost:       Math.round(annualAmount * 0.83),

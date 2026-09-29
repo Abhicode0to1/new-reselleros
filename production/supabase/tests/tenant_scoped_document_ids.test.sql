@@ -23,11 +23,18 @@ begin
 
   -- both fresh tenants are on sequence 0001, but ids differ (different codes)
   if a = b then raise exception 'FAIL: two tenants got identical quote id % (collision!)', a; end if;
-  if a !~ '^Q-ALFA-\d{4}-\d{2}-0001$' then raise exception 'FAIL: Alpha id wrong format: %', a; end if;
-  if b !~ '^Q-BETA-\d{4}-\d{2}-0001$' then raise exception 'FAIL: Beta id wrong format: %', b; end if;
+  /* R-015 (29 Sep 2026) shortened the shape from Q-ALFA-2026-27-0001 to Q-ALFA-27-0001:
+     CGST Rule 46(b) allows 16 characters and the old one was 21. The financial year is
+     its END year now. The tenant code is unchanged and is the point of this file —
+     invoices.id is a bare GLOBAL primary key, so it is the code that keeps two tenants'
+     first document of a year apart. */
+  if a !~ '^Q-ALFA-\d{2}-0001$' then raise exception 'FAIL: Alpha id wrong format: %', a; end if;
+  if b !~ '^Q-BETA-\d{2}-0001$' then raise exception 'FAIL: Beta id wrong format: %', b; end if;
   -- tenant with null doc_code still gets a non-null, unique fallback code
   if c is null or c = a or c = b then raise exception 'FAIL: no-code tenant id bad: %', c; end if;
-  if c !~ '^Q-[A-Z0-9]{1,8}-\d{4}-\d{2}-0001$' then raise exception 'FAIL: fallback id wrong format: %', c; end if;
+  if c !~ '^Q-[A-Z0-9]{1,4}-\d{2}-0001$' then raise exception 'FAIL: fallback id wrong format: %', c; end if;
+  -- The limit itself, so this file fails if the shape ever grows back.
+  if length(a) > 16 then raise exception 'FAIL: % is % characters (Rule 46(b) allows 16)', a, length(a); end if;
 
   -- invoice doc type also carries the code
   if public.next_document_number('invoice','cafe0000-0000-0000-0000-000000000a01') !~ '^INV-ALFA-' then

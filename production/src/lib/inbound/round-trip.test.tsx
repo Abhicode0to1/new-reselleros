@@ -52,6 +52,11 @@ const TENANT: TenantPdfInfo = {
   state: "Delhi",
   state_code: "07",
   logo_url: null,
+  /* R-038 — is quote PDF par bank block nahi chhapta, par TenantPdfInfo har caller se
+     yeh poochta hai (uska comment dekho). Nulls, taaki test ka matlab na badle. */
+  upi_vpa: null,
+  remit_bank_name: null, remit_account_name: null, remit_account_number: null,
+  remit_ifsc: null, remit_branch: null,
 };
 
 /** Wo mailbox jise app padhti hai — tenant ka apna Gmail, owner ka address NAHI. */

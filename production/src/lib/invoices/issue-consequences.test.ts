@@ -27,19 +27,20 @@ const QUOTE: QuoteToInvoice = {
 const text = (c: { consequences: { text: string }[] }) => c.consequences.map((x) => x.text).join(" | ");
 
 describe("formatDocumentNumber", () => {
-  it("matches the shape in live data", () => {
-    /* INV-TEST-2026-27-0008 is a real row. Getting this wrong would show the operator
-       a number that never appears anywhere else. */
-    expect(formatDocumentNumber(HEALTHY, 8)).toBe("INV-TEST-2026-27-0008");
-    expect(formatDocumentNumber(ANUTECH, 33)).toBe("INV-ADPL-2026-27-0033");
+  it("matches the shape the database allocates", () => {
+    /* R-015 (29 Sep 2026): 21 characters -> 16, because CGST Rule 46(b) allows 16 and
+       this app was issuing INV-TEST-2026-27-0008. The FY is its END year now. */
+    expect(formatDocumentNumber(HEALTHY, 8)).toBe("INV-TEST-27-0008");
+    expect(formatDocumentNumber(ANUTECH, 33)).toBe("INV-ADPL-27-0033");
+    expect(formatDocumentNumber(ANUTECH, 33).length).toBeLessThanOrEqual(16);
   });
 
   it("omits the doc code when the tenant has none", () => {
     /* Excel Technologies' row has doc_code null. A literal "INV-null-…" on a tax
        document would be worse than the missing segment. */
     const noCode: SeriesState = { ...HEALTHY, docCode: null };
-    expect(formatDocumentNumber(noCode, 3)).toBe("INV-2026-27-0003");
-    expect(formatDocumentNumber({ ...HEALTHY, docCode: "   " }, 3)).toBe("INV-2026-27-0003");
+    expect(formatDocumentNumber(noCode, 3)).toBe("INV-27-0003");
+    expect(formatDocumentNumber({ ...HEALTHY, docCode: "   " }, 3)).toBe("INV-27-0003");
   });
 
   it("pads to four digits and does not truncate beyond them", () => {
@@ -56,9 +57,9 @@ describe("formatDocumentNumber", () => {
 describe("issueConsequences", () => {
   it("names the exact number that will be taken", () => {
     const c = issueConsequences({ quote: QUOTE, series: ANUTECH });
-    expect(c.predictedNumber).toBe("INV-ADPL-2026-27-0033");
+    expect(c.predictedNumber).toBe("INV-ADPL-27-0033");
     expect(c.predictedIsCertain).toBe(true);
-    expect(text(c)).toContain("INV-ADPL-2026-27-0033");
+    expect(text(c)).toContain("INV-ADPL-27-0033");
   });
 
   it("says the number is used up either way", () => {
@@ -151,7 +152,7 @@ describe("bulkIssueConsequences", () => {
     /* The dangerous path: the old bulk button looped generateInvoice over every
        selected quote with no confirmation, so one click could burn a run. */
     const c = bulkIssueConsequences({ quotes: three, series: ANUTECH });
-    expect(c.predictedNumber).toBe("INV-ADPL-2026-27-0033 … INV-ADPL-2026-27-0035");
+    expect(c.predictedNumber).toBe("INV-ADPL-27-0033 … INV-ADPL-27-0035");
     expect(text(c)).toContain("Issues 3 invoices");
   });
 
@@ -169,7 +170,7 @@ describe("bulkIssueConsequences", () => {
 
   it("reads naturally for a single selection", () => {
     const c = bulkIssueConsequences({ quotes: [three[0]], series: ANUTECH });
-    expect(c.predictedNumber).toBe("INV-ADPL-2026-27-0033");
+    expect(c.predictedNumber).toBe("INV-ADPL-27-0033");
     expect(text(c)).toContain("Issues 1 invoice ");
     /* No partial-failure warning: there is no "partway" with one item. */
     expect(text(c)).not.toMatch(/one at a time/i);

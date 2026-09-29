@@ -27,6 +27,7 @@ import { grossAmount } from "@/lib/quotes/amounts";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { rcConfigured, rcTldPricing } from "@/lib/resellerclub";
 import { splitDomain } from "@/lib/domains/live-lookup";
+import { istToday, toIstDate, utcDateISO } from "@/lib/dates/ist";
 
 type SupabaseAdmin = SupabaseClient<Database>;
 
@@ -44,8 +45,9 @@ export function domainRenewalEnabled(env: Record<string, string | undefined> = p
 
 /** One engine command id per request per IST day, so a re-run the same day replays. */
 export function renewalCommandId(requestId: string, now: Date = new Date()): string {
-  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000); // AGENTS.md §6 — IST, not UTC
-  return `rsos-domrenew-${requestId}-${ist.toISOString().slice(0, 10)}`;
+  /* R-025: the shift was right and hand-rolled. One helper, so a future reader cannot
+     "tidy" the magic 5.5 away (AGENTS.md §6, lib/dates/ist.ts). */
+  return `rsos-domrenew-${requestId}-${toIstDate(now)}`;
 }
 
 /** A domain's current expiry as DMS holds it, in epoch SECONDS (the unit `domain.renew`'s `expiryBefore` takes). */
@@ -101,7 +103,10 @@ export function domainSubscriptionInsert(input: {
     seats: 1,
     mrr: input.row.mrr,
     start_date: input.today,
-    renewal_date: renewal.toISOString().slice(0, 10),
+    /* `renewal` is built from `${today}T00:00:00Z` and moved with setUTC*, so its UTC
+       parts ARE the intended calendar date — no shift wanted here. Named, so R-025's
+       scan and the next reader can both tell this apart from a naive instant. */
+    renewal_date: utcDateISO(renewal),
     status: "active",
     outstanding_amount: 0,
     domain: input.row.domain,
@@ -234,8 +239,12 @@ export async function createDomainRenewalQuote(input: DomainRenewalQuoteInput): 
     payment_status: "awaiting",
     owner_id: null,
     domain: input.domain,
-    created_date: new Date().toISOString().slice(0, 10),
-    expires_date: validUntil.toISOString().slice(0, 10),
+    /* R-025. This was UTC, so a renewal quote raised before 05:30 IST carried
+       YESTERDAY's date and a validity window one day short. `validUntil` is
+       renewalDate (a YYYY-MM-DD, parsed as UTC midnight) plus whole days, so its UTC
+       parts are already the calendar date wanted. */
+    created_date: istToday(),
+    expires_date: utcDateISO(validUntil),
     line_items: lineItems,
     subtotal,
     // 0, as the cart's own quotes store it: our cost is not known here. NOT null, because

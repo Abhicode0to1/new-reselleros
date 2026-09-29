@@ -8,6 +8,22 @@ const tenant: TenantPdfInfo = {
   /* The STORED url. build-props never fetches it — it is sync and pure — so the renderable
      logo arrives separately as `logoDataUri`. See the two tests at the bottom of this file. */
   logo_url: "https://cdn.example/logo.png",
+  /* R-038. A tenant with nothing filled in — so the invoice footer names no payment
+     method at all, which is what these tests assert below. */
+  upi_vpa: null,
+  remit_bank_name: null, remit_account_name: null, remit_account_number: null,
+  remit_ifsc: null, remit_branch: null,
+};
+
+/** The same tenant with real remittance details, for the R-038 assertions. */
+const tenantWithBank: TenantPdfInfo = {
+  ...tenant,
+  upi_vpa: "anutech@okhdfcbank",
+  remit_bank_name: "HDFC Bank",
+  remit_account_name: "ANUTECH DIGITAL PVT LTD",
+  remit_account_number: "50200012345678",
+  remit_ifsc: "HDFC0001234",
+  remit_branch: "Nehru Place",
 };
 
 describe("quoteAmounts", () => {
@@ -27,6 +43,36 @@ describe("quoteAmounts", () => {
 describe("buildInvoicePdfProps", () => {
   const invoice = { id: "INV-1", amount: 38232, customer_name: "Acme", tenant_id: "t1" } as Invoice;
   const quote = { subtotal: 32400, discount_pct: 0, tax_rate: 18, amount: 38232, line_items: [] } as unknown as Quote;
+
+  /* ── R-038: payment methods come from the tenant row, never from a constant ── */
+  it("names NO payment method when the tenant has configured none", () => {
+    const p = buildInvoicePdfProps({ invoice, quote, customer: null, tenant });
+    expect(p.payMethods?.line).toBeNull();
+    expect(p.payMethods?.bank).toBeNull();
+  });
+
+  it("prints the bank block and names UPI once the tenant fills them in", () => {
+    const p = buildInvoicePdfProps({ invoice, quote, customer: null, tenant: tenantWithBank });
+    expect(p.payMethods?.bank?.accountNumber).toBe("50200012345678");
+    expect(p.payMethods?.bank?.ifsc).toBe("HDFC0001234");
+    expect(p.payMethods?.line).toBe("UPI / NEFT / RTGS accepted.");
+  });
+
+  it("does not name Razorpay unless the caller says it is configured", () => {
+    // Default false: the defect was an invoice promising a gateway that may not exist.
+    expect(buildInvoicePdfProps({ invoice, quote, customer: null, tenant: tenantWithBank })
+      .payMethods?.line).not.toMatch(/razorpay/i);
+    expect(buildInvoicePdfProps({ invoice, quote, customer: null, tenant: tenantWithBank, razorpayConfigured: true })
+      .payMethods?.line).toMatch(/Razorpay/);
+  });
+
+  it("falls back to the company name as the beneficiary when none is set separately", () => {
+    const p = buildInvoicePdfProps({
+      invoice, quote, customer: null,
+      tenant: { ...tenantWithBank, remit_account_name: null },
+    });
+    expect(p.payMethods?.bank?.accountName).toBe("Anutech");
+  });
 
   it("uses quote.amount as total and derives the breakdown", () => {
     const p = buildInvoicePdfProps({ invoice, quote, customer: null, tenant });

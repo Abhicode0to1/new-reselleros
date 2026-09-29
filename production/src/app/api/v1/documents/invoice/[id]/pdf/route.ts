@@ -41,8 +41,19 @@ export async function GET(req: NextRequest, props0: { params: Promise<{ id: stri
     inv.customer_id
       ? admin.from("customers").select("*").eq("id", inv.customer_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from("tenants").select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name, logo_url").eq("id", inv.tenant_id).maybeSingle(),
+    admin.from("tenants").select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name, logo_url, remit_bank_name, remit_account_name, remit_account_number, remit_ifsc, remit_branch").eq("id", inv.tenant_id).maybeSingle(),
   ]);
+
+  /* R-038. Whether this seller can take a Razorpay payment at all. Read here rather
+     than in the pure prop builder, and the answer is FALSE when the row is unreadable:
+     the bug being fixed is an invoice promising a gateway that does not exist, so an
+     unknown must not resolve to "yes" (AGENTS.md §2). */
+  const { data: secrets } = await admin
+    .from("tenant_secrets")
+    .select("razorpay_key_id, razorpay_key_secret")
+    .eq("tenant_id", inv.tenant_id)
+    .maybeSingle();
+  const razorpayConfigured = Boolean(secrets?.razorpay_key_id && secrets?.razorpay_key_secret);
 
   /* Fetched here, not inside the renderer: logoDataUri carries a 4s deadline and swallows
      every failure, so a slow or missing logo costs the mark and never the document. */
@@ -50,10 +61,16 @@ export async function GET(req: NextRequest, props0: { params: Promise<{ id: stri
 
   const props = buildInvoicePdfProps({
     logoDataUri: logo,
+    razorpayConfigured,
     invoice:  inv,
     quote:    (quote as Quote) ?? null,
     customer: (customer as Customer) ?? null,
-    tenant:   (tenant as TenantPdfInfo) ?? { name: inv.customer_name, gstin: null, email: null, phone: null, address: null, state: null, state_code: null, logo_url: null },
+    tenant:   (tenant as TenantPdfInfo) ?? {
+      name: inv.customer_name, gstin: null, email: null, phone: null, address: null,
+      state: null, state_code: null, logo_url: null, upi_vpa: null,
+      remit_bank_name: null, remit_account_name: null, remit_account_number: null,
+      remit_ifsc: null, remit_branch: null,
+    },
   });
 
   // Scan-to-pay QR — see invoiceAmountDue(): advances AND receipts both reduce

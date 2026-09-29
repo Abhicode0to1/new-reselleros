@@ -15,6 +15,8 @@ import { isInterStateSupply, isExportSupply } from "../gst/place-of-supply";
 import type { Invoice, Quote, Customer } from "@/lib/supabase/database.types";
 import type { InvoicePDFProps } from "./InvoicePDF";
 import type { QuotePDFProps } from "./QuotePDF";
+import { quoteIsPaid } from "./quote-document-kind";
+import { payMethods } from "./pay-methods";
 
 /** Supplier fields needed on both PDFs (from the tenants row). */
 export interface TenantPdfInfo {
@@ -38,6 +40,22 @@ export interface TenantPdfInfo {
    * the result as `logoDataUri` below.
    */
   logo_url:    string | null;
+  /**
+   * Remittance details for the invoice footer (R-038, migration 20260929120000).
+   *
+   * REQUIRED for the same reason `logo_url` is: the fixed sentence "UPI / NEFT /
+   * Razorpay accepted" survived for months precisely because no caller was ever made
+   * to think about what this tenant can actually be paid with. Add them to your
+   * tenant select; pass nulls if the tenant has not filled them in and the footer
+   * says nothing rather than something untrue.
+   */
+  /** tenants.upi_vpa — set means UPI is a real route, so the footer may name it. */
+  upi_vpa:              string | null;
+  remit_bank_name:      string | null;
+  remit_account_name:   string | null;
+  remit_account_number: string | null;
+  remit_ifsc:           string | null;
+  remit_branch:         string | null;
 }
 
 interface Amounts {
@@ -77,6 +95,15 @@ export function buildInvoicePdfProps(args: {
   tenant:   TenantPdfInfo;
   /** The logo as a `data:` URI, from `await logoDataUri(tenant.logo_url)`. See below. */
   logoDataUri?: string | null;
+  /**
+   * R-038. Whether THIS tenant can take a Razorpay payment — `tenant_secrets`
+   * (razorpay_key_id + razorpay_key_secret) or the deployment's own keys.
+   *
+   * Resolved by the caller because it is a secrets read and this module is pure. It
+   * defaults to FALSE, not true: the whole defect was an invoice naming a gateway the
+   * seller may not have, so the safe default is to say nothing (AGENTS.md §2).
+   */
+  razorpayConfigured?: boolean;
 }): InvoicePDFProps {
   const { invoice, quote, customer, tenant } = args;
   // Quote-backed invoice → derive from the quote; quote-less (project-milestone)
@@ -134,6 +161,19 @@ export function buildInvoicePdfProps(args: {
     currency:      quote?.currency ?? null,
     exchangeRate:  quote?.exchange_rate ?? null,
     termsConditions: quote?.terms_conditions ?? null,
+    /* R-038. Derived once, here, so the footer sentence and the bank block cannot
+       disagree — and so "Razorpay" appears only when Razorpay actually exists. */
+    payMethods: payMethods({
+      upiVpa: tenant.upi_vpa ?? null,
+      bank: {
+        bankName:      tenant.remit_bank_name,
+        accountName:   tenant.remit_account_name ?? tenant.name,
+        accountNumber: tenant.remit_account_number,
+        ifsc:          tenant.remit_ifsc,
+        branch:        tenant.remit_branch,
+      },
+      razorpayConfigured: args.razorpayConfigured === true,
+    }),
   };
 }
 
@@ -193,5 +233,8 @@ export function buildQuotePdfProps(args: {
     notes:         quote.notes ?? undefined,
     termsConditions: quote.terms_conditions ?? null,
     isRenewal:     quote.is_renewal,
+    /* R-034: the money is in, so this sheet is a record of a paid order, not an offer.
+       Decided once, here, so the heading and the footer cannot disagree. */
+    isPaid:        quoteIsPaid(quote),
   };
 }

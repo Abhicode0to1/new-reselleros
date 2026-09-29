@@ -48,10 +48,25 @@ export interface SeriesState {
  * Excel Technologies' row is in exactly that state, and a literal "INV-null-…" on a tax
  * document is worse than a missing segment.
  */
+/**
+ * Predicts the next document number — and must produce the SAME string that
+ * `public.format_document_number` does, because it is shown to the operator as what they
+ * are about to spend. Two copies of one format is the drift this codebase keeps paying
+ * for; `document-number-format.test.ts` asserts they agree on a worked example.
+ *
+ * R-015 (29 Sep 2026) shortened it from 21 characters to 16. CGST Rule 46(b) allows 16
+ * and this app was issuing `INV-ADPL-2026-27-0002`. The financial year is now carried by
+ * its END year only — FY2627 → "27" — which is unambiguous and monotonic.
+ *
+ * The tenant code stays, deliberately: `invoices.id` is a bare global primary key, so
+ * without it the second tenant to issue its first invoice of a year collides with the
+ * first tenant's. Capped at 4, as the SQL caps it.
+ */
 export function formatDocumentNumber(s: SeriesState, n: number): string {
   const fy = /^FY(\d{2})(\d{2})$/.exec(s.fiscalYear);
-  const years = fy ? `20${fy[1]}-${fy[2]}` : s.fiscalYear;
-  return [s.prefix, s.docCode?.trim() || null, years, String(n).padStart(4, "0")]
+  const year = fy ? fy[2] : s.fiscalYear;
+  const code = s.docCode?.trim().slice(0, 4) || null;
+  return [s.prefix, code, year, String(n).padStart(4, "0")]
     .filter(Boolean)
     .join("-");
 }

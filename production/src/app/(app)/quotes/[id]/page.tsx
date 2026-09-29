@@ -63,6 +63,7 @@ import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { rupee, formatDate, daysBetween, toWhatsAppDigits } from "@/lib/utils";
 import { logoDataUri } from "@/lib/pdf/logo";
+import { quoteIsPaid } from "@/lib/pdf/quote-document-kind";
 import { cn } from "@/lib/utils";
 import type { Quote, QuoteLineItem, Payment } from "@/lib/supabase/database.types";
 
@@ -491,6 +492,9 @@ export default function QuoteDetailPage() {
       total,
       interState,
       notes:         quote.notes ?? "",
+      /* R-034. Same rule as the server builder — a paid quote downloads as a record of
+         the order, not as an offer with a validity window and Net-7 terms on it. */
+      isPaid:        quoteIsPaid(quote),
     });
   };
 

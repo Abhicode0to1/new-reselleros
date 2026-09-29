@@ -21,6 +21,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeDbMessage, logDbError } from "@/lib/errors/db-error";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -38,7 +39,14 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
   });
   if (error) {
     const code = error.code === "PGRST116" ? 404 : 400;
-    return NextResponse.json({ error: error.message }, { status: code });
+    /* R-025. `accept_quote`'s own guards are P0001 and their wording IS the next step
+       (§24) — those still reach the operator verbatim. A 23505/42703 from the engine
+       does not: it names our constraints and columns and helps nobody holding a mouse. */
+    logDbError("quotes/mark-accepted", error);
+    return NextResponse.json(
+      { error: safeDbMessage(error, "Could not mark this quote accepted. Reload the quote and try again.") },
+      { status: code },
+    );
   }
 
   type AcceptResult = {
