@@ -28,6 +28,8 @@
 import type { NotificationClass } from "@/lib/mastery/quiet-hours";
 import { resolveEmailProvider } from "./provider";
 import { sendViaGmail } from "./gmail-transport";
+import { sendViaSmtp, smtpConfigFromEnv } from "./smtp-transport";
+import { recipientAllowed } from "./recipient-allowlist";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export interface EmailAttachment {
@@ -139,7 +141,7 @@ export interface EmailSendResult {
    * moves that from "somebody must remember" to "it does not compile" — the same
    * reasoning that put the log write inside sendEmail() in the first place.
    */
-  provider:     "resend" | "gmail" | "stub";
+  provider:     "resend" | "gmail" | "smtp" | "stub";
 }
 
 /**
@@ -263,12 +265,28 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
   // From. Reply-To stays the tenant's address, so customer replies still route right.
   const fromOverride = process.env.RESEND_FROM_OVERRIDE?.trim();
 
+  /* ── This machine's recipient filter (29 Sep 2026) — before EVERY transport ──
+     A dev machine holds real customers, so EMAIL_RECIPIENT_ALLOWLIST (unset in
+     production = no filter) decides who may be mailed at all. It runs before Gmail,
+     SMTP and Resend alike: a filter on one transport is a filter the next tenant
+     setting walks round. "failed" with the reason, never "sent" — the row must not say
+     a customer was reached. */
+  const gate = recipientAllowed(msg.to, process.env.EMAIL_RECIPIENT_ALLOWLIST);
+  if (!gate.allowed) {
+    console.warn(`[email/send] ${gate.reason} (subject: "${msg.subject}")`);
+    return { status: "failed", providerId: null, errorMessage: gate.reason, provider: "stub" };
+  }
+
+  /* The platform sender: SMTP when SMTP_* is set, else Resend. SMTP first because the
+     owner chose it for every email (29 Sep 2026). */
+  const smtp = smtpConfigFromEnv(process.env);
+
   // ── Per-tenant routing (migration 0235) ───────────────────────────
   // Only when the caller supplied `route`. Without it nothing below runs and the
   // behaviour is byte-for-byte what it was, which is what keeps twenty-odd
   // existing call sites safe.
   if (msg.route?.tenantId) {
-    const decision = await routeForTenant(msg.route, Boolean(apiKey));
+    const decision = await routeForTenant(msg.route, Boolean(apiKey) || smtp !== null);
 
     if (decision.blocked) {
       // `decision.requested`, NOT `decision.provider`. Blocked means no transport
@@ -286,7 +304,7 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
     // A fallback is never silent: the tenant asked for Gmail and did not get it,
     // and the only way anyone finds out otherwise is by noticing the From address.
     if (decision.fellBack) {
-      console.warn(`[email/send] tenant ${msg.route.tenantId}: ${decision.reason} — sent via Resend instead.`);
+      console.warn(`[email/send] tenant ${msg.route.tenantId}: ${decision.reason} — sent via ${smtp ? "SMTP" : "Resend"} instead.`);
     }
     if (decision.caution) {
       console.warn(`[email/send] tenant ${msg.route.tenantId}: ${decision.caution}`);
@@ -316,7 +334,23 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
         provider: "gmail",
       };
     }
-    // Anything else falls through to the Resend path below.
+    // Anything else falls through to the platform sender below.
+  }
+
+  // ── SMTP (the platform sender when configured) ───────────────────
+  if (smtp) {
+    const r = await sendViaSmtp({
+      to: msg.to,
+      subject: msg.subject,
+      text: msg.text,
+      html: msg.html,
+      callerFrom: msg.from,
+      replyTo: msg.replyTo,
+      attachments: msg.attachments,
+    }, smtp);
+    return r.ok
+      ? { status: "sent", providerId: r.messageId, errorMessage: null, provider: "smtp" }
+      : { status: "failed", providerId: null, errorMessage: `SMTP: ${r.detail}`, provider: "smtp" };
   }
 
   // ── Stub mode ─────────────────────────────────────────────────────
@@ -396,9 +430,9 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
   }
 }
 
-/** True if Resend is configured and real sends will happen. */
+/** True if a platform sender (SMTP or Resend) is configured and real sends will happen. */
 export function isEmailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY?.trim());
+  return smtpConfigFromEnv(process.env) !== null || Boolean(process.env.RESEND_API_KEY?.trim());
 }
 
 /**
