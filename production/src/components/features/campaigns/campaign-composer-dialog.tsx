@@ -26,6 +26,11 @@ import type { CampaignTemplateRow } from "@/lib/supabase/database.types";
 import Link from "next/link";
 import { useSaveTemplate, unknownVariables } from "@/lib/queries/campaign-templates";
 import { addDaysISO, istToday } from "@/lib/dates/ist";
+import { LEAD_SOURCES } from "@/lib/leads/lead-sources";
+
+/* The sources worth mailing as a group — the full list has 24 and would bury these. */
+const CAMPAIGN_SOURCE_KEYS = ["ai-finder", "enquiry-form", "buy-workspace-v2", "whatsapp", "referral", "meta-ads", "google-ads", "indiamart", "justdial", "tele-calling", "email-inbound"];
+const CAMPAIGN_SOURCES = CAMPAIGN_SOURCE_KEYS.map((k) => LEAD_SOURCES.find((s) => s.value === k)).filter((s): s is (typeof LEAD_SOURCES)[number] => !!s);
 
 interface Props {
   open: boolean;
@@ -57,6 +62,8 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
   );
   const hasPreset = presetRecipients.length > 0;
   const [stages, setStages]   = React.useState<string[]>(["new", "contact"]);
+  /* Empty = every source. "Only AI Lead Finder leads" was impossible to pick before (29 Sep). */
+  const [sources, setSources] = React.useState<string[]>([]);
   const [search, setSearch]   = React.useState("");
   const [name, setName]       = React.useState("");
   const [subject, setSubject] = React.useState("");
@@ -117,7 +124,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
 
   // ── Live recipient count ───────────────────────────────────────
   const recipientsQuery = useQuery({
-    queryKey: ["campaigns", "recipient-count", stages, search],
+    queryKey: ["campaigns", "recipient-count", stages, sources, search],
     enabled:  open && !hasPreset && stages.length > 0,
     queryFn:  async () => {
       const supabase = createClient();
@@ -126,6 +133,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
         .select("id", { count: "exact", head: true })
         .not("contact_email", "is", null)
         .in("stage", stages as ("new"|"contact"|"demo"|"trial"|"quote"|"won"|"lost")[]);
+      if (sources.length) q = q.in("source", sources);
       if (search.trim()) {
         const s = search.trim();
         q = q.or(`company.ilike.%${s}%,contact_name.ilike.%${s}%`);
@@ -145,6 +153,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
       .replace(/\{\{name\}\}/g, "Ramesh")
       .replace(/\{\{company\}\}/g, "Acme Pvt Ltd")
       .replace(/\{\{sender\}\}/g, "Anutech Digital")
+      .replace(/\{\{pitch\}\}/g, "Aapki clinic abhi Gmail par hai — apne domain ka email (info@aapkiclinic.in) patients ka bharosa badhata hai.")
       .replace(/\{\{offer_code\}\}/g, offerEnabled ? (offerCode || "SAMPLE") : "SAMPLE")
       .replace(/\{\{discount\}\}/g, offerEnabled ? String(offerDiscount || "10") : "10")
       .replace(/\{\{expires\}\}/g, offerEnabled ? new Date(offerExpires).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "31 May 2026");
@@ -231,7 +240,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           subject:   subject.trim(),
           body:      fallbackText,
           body_html: bodyHtml.trim() || undefined,
-          audience:  hasPreset ? {} : { stages, search: search.trim() || undefined },
+          audience:  hasPreset ? {} : { stages, sources: sources.length ? sources : undefined, search: search.trim() || undefined },
           recipients: hasPreset ? presetRecipients : undefined,
           offer:     offerEnabled ? {
             code:         offerCode.trim(),
@@ -390,6 +399,24 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                 </button>
               ))}
             </div>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Source {sources.length === 0 && <span className="normal-case tracking-normal font-normal">— sab</span>}</p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {CAMPAIGN_SOURCES.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setSources((cur) => cur.includes(s.value) ? cur.filter((x) => x !== s.value) : [...cur, s.value])}
+                  className={cn(
+                    "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                    sources.includes(s.value)
+                      ? "border-amber bg-amber-soft text-amber-ink"
+                      : "border-hairline text-ink-3 hover:text-ink hover:bg-paper-2",
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
             <Input aria-label="Optional: filter by company or contact name"
               placeholder="Optional: filter by company or contact name…"
               value={search}
@@ -471,7 +498,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
           )}
 
           <p className="text-xs text-ink-3">
-            Variables: <code>{`{{name}}`}</code> · <code>{`{{company}}`}</code> · <code>{`{{sender}}`}</code>
+            Variables: <code>{`{{name}}`}</code> · <code>{`{{company}}`}</code> · <code>{`{{sender}}`}</code> · <code>{`{{pitch}}`}</code> <span title="AI Lead Finder ki us company ke liye likhi ek line. Doosri leads ke liye khaali rehti hai.">(sirf AI Lead Finder leads)</span>
             {offerEnabled && (
               <> · <code>{`{{offer_code}}`}</code> · <code>{`{{discount}}`}</code> · <code>{`{{expires}}`}</code></>
             )}

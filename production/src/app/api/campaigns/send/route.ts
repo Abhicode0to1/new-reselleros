@@ -26,6 +26,7 @@ import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { unsubscribeUrl, unsubscribeFooter, normaliseEmail } from "@/lib/marketing/unsubscribe-token";
+import { greetingName } from "@/lib/marketing/greeting-name";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -210,8 +211,21 @@ export async function POST(req: NextRequest) {
   let sent   = 0;
   let failed = 0;
 
+  /* {{pitch}} — the AI Lead Finder's one-line pitch for that company (29 Sep 2026). Only
+     leads that came from the finder have one; for the rest it is empty, so a template that
+     uses it should read fine without it. */
+  const pitchByLead = new Map<string, string>();
+  const usesPitch = [subject, bodyTemplate, htmlTemplate ?? ""].some((t) => t.includes("{{pitch}}"));
+  const leadIds = recipients.map((r) => r.lead_id).filter((x): x is string => !!x);
+  if (usesPitch && leadIds.length) {
+    const { data: cands } = await admin.from("lead_finder_candidates").select("lead_id, pitch").eq("tenant_id", me.tenant_id).in("lead_id", leadIds);
+    for (const c of cands ?? []) if (c.lead_id && c.pitch) pitchByLead.set(c.lead_id, c.pitch);
+  }
+
   for (const r of recipients) {
-    const firstName = (r.contact_name ?? "").split(" ")[0] || "there";
+    // "Dr. Kopal Singhal Jain" → "Dr. Kopal", "Mr Sanjeev Singh" → "Sanjeev", not "Dr." / "Mr".
+    const firstName = greetingName(r.contact_name);
+    const pitch = r.lead_id ? pitchByLead.get(r.lead_id) ?? "" : "";
     const vars = {
       name:       firstName,
       company:    r.company || "",
@@ -219,6 +233,7 @@ export async function POST(req: NextRequest) {
       discount:   offer ? String(offer.discount_pct) : "",
       expires:    offerExpiresFmt,
       sender:     senderName,
+      pitch,
     };
 
     /* Every campaign mail carries a way out (lib/marketing/unsubscribe-token.ts). */
@@ -226,7 +241,9 @@ export async function POST(req: NextRequest) {
     const footer = unsub ? unsubscribeFooter(unsub, senderName) : null;
     const renderedBody    = applyTemplate(bodyTemplate, vars) + (footer?.text ?? "");
     const renderedSubject = applyTemplate(subject,      vars);
-    const renderedHtml    = htmlTemplate ? applyTemplate(htmlTemplate, vars) + (footer?.html ?? "") : undefined;
+    // The pitch is model-written text: escape it before it goes into HTML.
+    const htmlVars        = { ...vars, pitch: pitch.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") };
+    const renderedHtml    = htmlTemplate ? applyTemplate(htmlTemplate, htmlVars) + (footer?.html ?? "") : undefined;
 
     let sendStatus: "sent" | "failed" | "stubbed" = "sent";
     let providerId: string | null = null;
