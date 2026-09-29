@@ -31,8 +31,14 @@ HOST="${HOST:-$(gcloud run services describe "$SERVICE_NAME" --project "$PROJECT
 
 echo "Project: $PROJECT · host: $HOST · path: $HEALTH_PATH · notify: $NOTIFY_EMAIL"
 
+# Git Bash on Windows rewrites "--path=/login" into "--path=C:/Program Files/Git/login"
+# before gcloud sees it (29 Sep 2026: both uptime checks in production were created that
+# way and watched a path that does not exist). Exclude just that flag from the rewrite;
+# MSYS_NO_PATHCONV=1 is not the fix — it breaks gcloud's own launcher. No-op elsewhere.
+export MSYS2_ARG_CONV_EXCL="--path="
+
 # ── Notification channel (email) ─────────────────────────────────────────────
-CHANNEL="$(gcloud alpha monitoring channels list --project "$PROJECT" --filter="displayName='ResellerOS ops email' AND type='email'" --format='value(name)' | head -1 || true)"
+CHANNEL="$(gcloud alpha monitoring channels list --project "$PROJECT" --filter="displayName=\"ResellerOS ops email\" AND type=\"email\"" --format='value(name)' | head -1 || true)"
 if [[ -z "$CHANNEL" ]]; then
   CHANNEL="$(gcloud alpha monitoring channels create --project "$PROJECT" --display-name='ResellerOS ops email' --type=email --channel-labels="email_address=$NOTIFY_EMAIL" --format='value(name)')"
   echo "created channel $CHANNEL"
@@ -61,7 +67,7 @@ fi
 # ── 2 + 3. Alert policies ────────────────────────────────────────────────────
 mk_policy() {
   local name="$1" file="$2"
-  if gcloud alpha monitoring policies list --project "$PROJECT" --filter="displayName='$name'" --format='value(name)' | grep -q .; then
+  if gcloud alpha monitoring policies list --project "$PROJECT" --filter="displayName=\"$name\"" --format='value(name)' | grep -q .; then
     echo "policy exists: $name"
   else
     gcloud alpha monitoring policies create --project "$PROJECT" --policy-from-file="$file" >/dev/null
@@ -84,7 +90,7 @@ cat > "$TMP/uptime.json" <<EOF
       "trigger": {"count": 1}
     }
   }],
-  "documentation": {"content": "The app or its database is not answering /api/public/health/live. Check Cloud Run logs, then the data-plane VM (PostgREST/GoTrue) and Cloud SQL."}
+  "documentation": {"mimeType": "text/markdown", "content": "The app or its database is not answering /api/public/health/live. Check Cloud Run logs, then the data-plane VM (PostgREST/GoTrue) and Cloud SQL."}
 }
 EOF
 cat > "$TMP/cron.json" <<EOF
@@ -99,7 +105,7 @@ cat > "$TMP/cron.json" <<EOF
     }
   }],
   "alertStrategy": {"notificationRateLimit": {"period": "3600s"}, "autoClose": "86400s"},
-  "documentation": {"content": "A cron finished with failures. The line names the job and the first reasons; full detail in the route's JSON response in the request log."}
+  "documentation": {"mimeType": "text/markdown", "content": "A cron finished with failures. The line names the job and the first reasons; full detail in the route's JSON response in the request log."}
 }
 EOF
 cat > "$TMP/5xx.json" <<EOF
