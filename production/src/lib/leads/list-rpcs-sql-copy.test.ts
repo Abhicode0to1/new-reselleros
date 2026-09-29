@@ -45,11 +45,15 @@ describe("list_rpcs SQL test ↔ migration", () => {
     expect(s).not.toMatch(/security definer/i);
   });
 
-  it("list_leads selects exactly LEAD_LIST_COLUMNS — the client's row type is the server's row", () => {
+  it("S37's list_leads selected the leading columns of LEAD_LIST_COLUMNS", () => {
+    /* S40 (20260929130000_lead_counts.sql) replaced list_leads and appended columns; the
+       exact match against the LATEST body is in lead-counts-sql-copy.test.ts. This keeps
+       S37's list honest: every column it served is still served, in the same order. */
     const s = sql();
     const sel = s.slice(s.indexOf("with page as (\n    select l.id"), s.indexOf("from public.leads l"));
     const cols = [...sel.matchAll(/\bl\.([a-z_]+)/g)].map((m) => m[1]);
-    expect(cols).toEqual([...LEAD_LIST_COLUMNS]);
+    expect(cols.length).toBeGreaterThan(20);
+    expect(cols).toEqual([...LEAD_LIST_COLUMNS].slice(0, cols.length));
     /* The heavy free text stays out. */
     for (const heavy of ["notes", "requirement", "lost_note", "junk_note", "landing_page_url", "referrer_url"]) {
       expect(cols).not.toContain(heavy);
