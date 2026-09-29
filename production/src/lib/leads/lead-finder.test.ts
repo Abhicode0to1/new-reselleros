@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  normaliseDomain, parseDiscovery, mxProvider, siteNote, baselineScore, mergeScores, discoveryPrompt, leadNotes, splitList, spreadByIndustryCity, type ScoreInput,
+  normaliseDomain, parseDiscovery, mxProvider, siteNote, baselineScore, mergeScores, discoveryPrompt, leadNotes, splitList, spreadByIndustryCity, cleanPitch, type ScoreInput,
 } from "./lead-finder";
 
 const site = (over: Partial<ReturnType<typeof siteNote>> = {}) => ({ https: true, status: 200, note: "Website theek hai", ...over });
@@ -88,4 +88,15 @@ describe("lead finder", () => {
   it("lead notes list the signals", () => {
     expect(leadNotes({ fit_reason: "r", pitch: "p", mx_provider: "zoho", site_note: "ok", source_url: "https://s", description: null })).toBe("AI Lead Finder\nWhy: r\nEmail: Zoho Mail\nWebsite: ok\nPitch: p\nSource: https://s");
   });
+});
+
+describe("cleanPitch", () => {
+  it.each([
+    ["Namaste! Shree Dental Clinic ke patient records ke liye Workspace lein.", "Shree Dental Clinic ke patient records ke liye Workspace lein."],
+    ["Sir, algindia.com ke liye Workspace sabse secure hai.", "Algindia.com ke liye Workspace sabse secure hai."],
+    ["Namaste ji, Hello! aapki clinic Gmail par hai.", "Aapki clinic Gmail par hai."],
+    ["Aapki site par SSL nahi hai.", "Aapki site par SSL nahi hai."],
+    ["Hindustan Times mein aapka naam aaya — Workspace se team fast hogi.", "Hindustan Times mein aapka naam aaya — Workspace se team fast hogi."],
+  ])("%s", (raw, want) => expect(cleanPitch(raw)).toBe(want));
+  it("empty stays empty", () => { expect(cleanPitch(null)).toBe(""); expect(cleanPitch("Namaste!")).toBe(""); });
 });

@@ -187,7 +187,8 @@ export function scoringPrompt(items: readonly ScoreInput[], baselines: readonly 
   const system =
     "You are a sales analyst for an Indian IT reseller. For each company you get public signals and a baseline score. " +
     "Return ONLY a JSON array, same order, of {domain, score (0-100), product (one of the allowed keys), fit_reason (Hinglish, ≤160 chars, concrete), pitch (Hinglish, ≤220 chars, one line the salesperson can say on WhatsApp)}. " +
-    "Keep the score within ±20 of the baseline unless a signal clearly contradicts it. Never promise prices or discounts.";
+    "Keep the score within ±20 of the baseline unless a signal clearly contradicts it. Never promise prices or discounts. " +
+    "The pitch is pasted after our own greeting, so it must NOT start with a greeting or address (no Namaste, Hello, Hi, Sir, Dear) — start with the point.";
   const user = JSON.stringify(items.map((i, k) => ({
     domain: i.domain, company: i.company, city: i.city, description: i.description,
     email_provider: MX_LABEL[i.mx], website: i.site.note, allowed_products: i.products, baseline: baselines[k],
@@ -206,9 +207,21 @@ export function mergeScores(items: readonly ScoreInput[], baselines: readonly Sc
     const bounded = Math.max(b.score - 20, Math.min(b.score + 20, score));
     const product = typeof a.product === "string" && i.products.includes(a.product) ? a.product : b.product;
     const fit_reason = typeof a.fit_reason === "string" && a.fit_reason.trim() ? a.fit_reason.trim().slice(0, 200) : b.fit_reason;
-    const pitch = typeof a.pitch === "string" && a.pitch.trim() && !/₹|\brs\.?\s?\d|discount|% off/i.test(a.pitch) ? a.pitch.trim().slice(0, 260) : b.pitch;
+    const pitch = typeof a.pitch === "string" && cleanPitch(a.pitch) && !/₹|\brs\.?\s?\d|discount|% off/i.test(a.pitch) ? cleanPitch(a.pitch).slice(0, 260) : b.pitch;
     return { score: bounded, product, fit_reason, pitch };
   });
+}
+
+/**
+ * The pitch is pasted after a greeting ("Namaste {{name}} ji, {{pitch}}"), so one that opens
+ * with its own "Namaste!" or "Sir," greeted twice (29 Sep preview). Strip a leading greeting
+ * or address, however many, and capitalise what is left.
+ */
+export function cleanPitch(p: string | null | undefined): string {
+  let s = (p ?? "").trim();
+  const lead = /^(namaste|namaskar|hello|hi|hey|dear|greetings|good (morning|afternoon|evening)|sir|ma'?am|sir\/ma'?am)\b[\s!,.:\-–—]*(ji\b[\s!,.:\-–—]*)?/i;
+  for (let i = 0; i < 3 && lead.test(s); i++) s = s.replace(lead, "").trim();
+  return s ? s[0].toUpperCase() + s.slice(1) : "";
 }
 
 /** Lead note written on approval — everything the salesperson needs on the card. */
@@ -246,7 +259,7 @@ export function firstTouchTask(
     contact?.email ? `Email: ${contact.email}` : "",
     `Website: https://${c.domain}`,
     c.fit_reason ? `Kyun: ${c.fit_reason}` : "",
-    c.pitch ? `Kya bolna hai: ${c.pitch}` : "",
+    cleanPitch(c.pitch) ? `Kya bolna hai: ${cleanPitch(c.pitch)}` : "",
   ].filter(Boolean).join("\n");
   return { kind, title, notes, dueAt: firstTouchDue(now) };
 }

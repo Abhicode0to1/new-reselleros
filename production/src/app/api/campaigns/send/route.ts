@@ -26,7 +26,8 @@ import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { unsubscribeUrl, unsubscribeFooter, normaliseEmail } from "@/lib/marketing/unsubscribe-token";
-import { greetingName } from "@/lib/marketing/greeting-name";
+import { fillName, greetingName, NO_NAME } from "@/lib/marketing/greeting-name";
+import { cleanPitch } from "@/lib/leads/lead-finder";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -223,9 +224,9 @@ export async function POST(req: NextRequest) {
   }
 
   for (const r of recipients) {
-    // "Dr. Kopal Singhal Jain" → "Dr. Kopal", "Mr Sanjeev Singh" → "Sanjeev", not "Dr." / "Mr".
-    const firstName = greetingName(r.contact_name);
-    const pitch = r.lead_id ? pitchByLead.get(r.lead_id) ?? "" : "";
+    // {{name}} is filled first (fillName): "Dr. Kopal", or "Sir/Ma'am" without the "ji" after it.
+    const firstName = greetingName(r.contact_name) ?? NO_NAME;
+    const pitch = cleanPitch(r.lead_id ? pitchByLead.get(r.lead_id) ?? "" : "");
     const vars = {
       name:       firstName,
       company:    r.company || "",
@@ -239,11 +240,11 @@ export async function POST(req: NextRequest) {
     /* Every campaign mail carries a way out (lib/marketing/unsubscribe-token.ts). */
     const unsub  = unsubscribeUrl(appUrl, me.tenant_id, r.contact_email, campaignId);
     const footer = unsub ? unsubscribeFooter(unsub, senderName) : null;
-    const renderedBody    = applyTemplate(bodyTemplate, vars) + (footer?.text ?? "");
-    const renderedSubject = applyTemplate(subject,      vars);
+    const renderedBody    = applyTemplate(fillName(bodyTemplate, r.contact_name), vars) + (footer?.text ?? "");
+    const renderedSubject = applyTemplate(fillName(subject, r.contact_name),      vars);
     // The pitch is model-written text: escape it before it goes into HTML.
     const htmlVars        = { ...vars, pitch: pitch.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") };
-    const renderedHtml    = htmlTemplate ? applyTemplate(htmlTemplate, htmlVars) + (footer?.html ?? "") : undefined;
+    const renderedHtml    = htmlTemplate ? applyTemplate(fillName(htmlTemplate, r.contact_name), htmlVars) + (footer?.html ?? "") : undefined;
 
     let sendStatus: "sent" | "failed" | "stubbed" = "sent";
     let providerId: string | null = null;
