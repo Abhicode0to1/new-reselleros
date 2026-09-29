@@ -243,3 +243,34 @@ export function parsePersonSearch(text: string | null | undefined, company: stri
 /** Receptionist line for a call when we do not know whom to ask for. */
 export const ASK_FOR_OWNER =
   "Naam nahi pata — receptionist se poochho: \"Namaste, main Anutech se bol raha hoon. Aapke office ke email aur website ke baare mein owner ya director se 2 minute baat karni thi — unka naam bata denge?\" Naam mile to lead mein daal do.";
+
+/* ── Team pages (29 Sep 2026) ─────────────────────────────────────────────────
+ * Most names turned out to be on the firm's own team page, under a different path on every
+ * site (/team, /meet-the-team/, /our-people, /partners, /leadership). So read the home
+ * page's own links instead of guessing: same-site links whose URL or text says team,
+ * people, partners, leadership, founder, management, directors, attorneys or "about". */
+
+// "management" alone matched service pages (hospitality-booking-management); only as a team page.
+const TEAM_WORD = /(team|people|partners?|leadership|founders?|management[- ]team|our[- ]management|board[- ]of[- ]directors|directors|attorneys|lawyers|advocates|professionals|our-firm|who-we-are|about)/i;
+const STRONG_TEAM = /(team|people|partners|leadership|founders?|management[- ]team|our[- ]management|board[- ]of[- ]directors|directors|attorneys|lawyers|professionals)/i;
+
+/** Same-site links that probably list the firm's people, strongest first (max 4). */
+export function teamLinks(html: string, pageUrl: string): string[] {
+  let base: URL;
+  try { base = new URL(pageUrl); } catch { return []; }
+  const host = base.hostname.replace(/^www\./, "");
+  const seen = new Map<string, number>();
+  for (const m of html.matchAll(/<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]{0,200}?)<\/a>/gi)) {
+    let u: URL;
+    try { u = new URL(m[1], base); } catch { continue; }
+    if (!/^https?:$/.test(u.protocol) || u.hostname.replace(/^www\./, "") !== host) continue;
+    if (/\.(pdf|jpe?g|png|docx?)$/i.test(u.pathname) || u.pathname === "/" ) continue;
+    const text = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const hay = `${u.pathname} ${text}`;
+    if (!TEAM_WORD.test(hay)) continue;
+    const url = `${u.origin}${u.pathname}`.replace(/\/$/, "");
+    const rank = STRONG_TEAM.test(hay) ? 0 : 1;               // "about" is a weaker bet than "our team"
+    if (!seen.has(url) || rank < seen.get(url)!) seen.set(url, rank);
+  }
+  return [...seen.entries()].sort((a, b) => a[1] - b[1]).map(([u]) => u).slice(0, 4);
+}

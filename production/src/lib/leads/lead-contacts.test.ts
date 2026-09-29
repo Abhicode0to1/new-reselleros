@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanEmail, cleanPhone, contactBonus, extractContacts, nameFromEmail, parsePersonSearch, personIsGrounded, pickEmail, pickPhone, reachable, readContact, roleSnippets, type ContactResult } from "./lead-contacts";
+import { cleanEmail, cleanPhone, contactBonus, extractContacts, nameFromEmail, parsePersonSearch, personIsGrounded, pickEmail, pickPhone, reachable, readContact, roleSnippets, teamLinks, type ContactResult } from "./lead-contacts";
 
 describe("cleanPhone — Indian numbers only", () => {
   it.each([
@@ -100,4 +100,25 @@ describe("parsePersonSearch", () => {
     expect(parsePersonSearch('{"name":"Sarthak Advocates","source_url":"https://news.in/a"}', "Sarthak Advocates & Solicitors")).toBeNull();
   });
   it("reads JSON inside prose or a fence", () => expect(parsePersonSearch("Here:\n```json\n" + ok + "\n```", "Y")?.role).toBe("Director"));
+});
+
+describe("teamLinks", () => {
+  const html = `
+    <a href="/">Home</a><a href="/about-us/">About Us</a>
+    <a href="https://www.firm.in/meet-the-team/">Meet the Team</a>
+    <a href="/practice-areas">Practice</a><a href="/our-people">Our People</a>
+    <a href="https://facebook.com/firm">FB</a><a href="/brochure.pdf">Team brochure</a>
+    <a href="/contact#map">Contact</a>`;
+  const got = teamLinks(html, "https://firm.in/");
+  it("finds same-site people pages, strongest first", () => {
+    expect(got.slice(0, 2)).toEqual(expect.arrayContaining(["https://www.firm.in/meet-the-team", "https://firm.in/our-people"]));
+    expect(got).toContain("https://firm.in/about-us");
+    expect(got.indexOf("https://firm.in/about-us")).toBeGreaterThan(1);
+  });
+  it("does not take a service page named ...-management for a team page", () =>
+    expect(teamLinks('<a href="/hospitality-booking-management">Booking Management</a><a href="/management-team">Management Team</a>', "https://x.in/"))
+      .toEqual(["https://x.in/management-team"]));
+  it("skips other sites, PDFs, home and unrelated pages", () => {
+    expect(got.join()).not.toMatch(/facebook|pdf|practice|contact/);
+  });
 });

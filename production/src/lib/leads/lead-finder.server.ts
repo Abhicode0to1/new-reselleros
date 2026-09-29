@@ -15,7 +15,7 @@ import {
 } from "@/lib/leads/lead-finder";
 import {
   CONTACT_PATHS, contactBonus, extractContacts, nameFromEmail, pageText, parsePersonSearch, personIsGrounded, personPrompt, personSearchPrompt, pickEmail, pickPhone,
-  reachable, readContact, roleSnippets, type ContactResult, type ContactPerson,
+  reachable, readContact, roleSnippets, teamLinks, type ContactResult, type ContactPerson,
 } from "@/lib/leads/lead-contacts";
 
 type Admin = SupabaseClient<Database>;
@@ -55,7 +55,7 @@ type Snip = { url: string; text: string };
 /** Contacts plus the role-word snippets the contact-person step reads (not stored). */
 export type SiteScan = ContactResult & { snippets: Snip[] };
 
-/** Read the company's own site — home, then contact/about pages — for published contacts. At most 5 fetches. */
+/** Read the company's own site — home, up to 3 contact pages, up to 2 team pages — for published contacts and names. At most 6 fetches. */
 export async function findContacts(domain: string, website?: string | null): Promise<SiteScan> {
   const emails: string[] = [], phones: string[] = [];
   const snippets: Snip[] = [];
@@ -86,14 +86,15 @@ export async function findContacts(domain: string, website?: string | null): Pro
     const page = await fetchHtml(url);
     if (page) take(page, url);
   }
-  // No name-bearing text yet: one more page where firms list their people.
-  if (!snippets.length) {
-    for (const path of ["/about-us", "/about", "/team", "/our-team"]) {
-      const url = base + path;
-      if (fetched.has(url)) continue;
-      const page = await fetchHtml(url);
-      if (page) { take(page, url); break; }
-    }
+  // Where the firm lists its people: up to 2 team/people/partners pages the home page links
+  // to; only if it links none, the usual paths. Names were mostly found there (29 Sep).
+  const linked = teamLinks(html, home).filter((u) => !fetched.has(u));
+  const guesses = ["/team", "/our-team", "/about-us", "/about"].map((p) => base + p).filter((u) => !fetched.has(u));
+  let teamPages = 0;
+  for (const url of linked.length ? linked : guesses) {
+    if (teamPages >= 2) break;
+    const page = await fetchHtml(url);
+    if (page) { take(page, url); teamPages++; }
   }
   return { email: pickEmail(emails, domain), phone: pickPhone(phones), emails: emails.slice(0, 5), phones: phones.slice(0, 5), source_url: source, checked_at: new Date().toISOString(), snippets };
 }
