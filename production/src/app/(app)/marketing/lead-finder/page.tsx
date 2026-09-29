@@ -210,6 +210,11 @@ function CandidateRow({ c, onApprove, onReject, onUndo, onFindContact, busy, fin
             <span className={cn(c.site_https === false ? "text-emerald" : "text-ink-3")}>🌐 {c.site_note ?? "—"}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+            {contact?.person && (
+              <span className="text-ink font-medium" title={contact.person.from === "email" ? "Naam email address se andaza hai — call par confirm karo" : "Company ki website par likha hai"}>
+                👤 {contact.person.name}{contact.person.role ? ` · ${contact.person.role}` : ""}{contact.person.from === "email" ? " (email se)" : ""}
+              </span>
+            )}
             {contact?.email && <a href={`mailto:${contact.email}`} className="text-ink underline">✉ {contact.email}</a>}
             {contact?.phone && <a href={`tel:${contact.phone}`} className="text-ink underline tabular-nums">☎ {contact.phone}</a>}
             {contact && !contact.email && !contact.phone && <span className="text-amber-ink">{(c.signals as { auto_rejected?: string } | null)?.auto_rejected ? "Apne aap hataya — website par email/phone nahi mila" : "Website par email/phone nahi mila"}</span>}

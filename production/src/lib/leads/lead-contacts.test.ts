@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanEmail, cleanPhone, contactBonus, extractContacts, pickEmail, pickPhone, reachable, readContact, type ContactResult } from "./lead-contacts";
+import { cleanEmail, cleanPhone, contactBonus, extractContacts, nameFromEmail, personIsGrounded, pickEmail, pickPhone, reachable, readContact, roleSnippets, type ContactResult } from "./lead-contacts";
 
 describe("cleanPhone — Indian numbers only", () => {
   it.each([
@@ -64,5 +64,26 @@ describe("reachable / contactBonus", () => {
     expect(contactBonus(c(null, "01123456789"))).toBe(6);
     expect(contactBonus(c("a@b.in", null))).toBe(4);
     expect(contactBonus(c(null, null))).toBe(0);
+  });
+});
+
+describe("contact person", () => {
+  it("nameFromEmail: first.last only", () => {
+    expect(nameFromEmail("rahul.choudhary@crcllp.in")).toBe("Rahul Choudhary");
+    expect(nameFromEmail("info@crcllp.in")).toBeNull();
+    expect(nameFromEmail("rahul@crcllp.in")).toBeNull();
+    expect(nameFromEmail(null)).toBeNull();
+  });
+  it("roleSnippets keeps text around role words only", () => {
+    const s = roleSnippets("Welcome to our firm. We serve clients. CA Rahul Choudhary, Managing Partner, founded the firm in 2004. Contact us.");
+    expect(s.length).toBeGreaterThan(0);
+    expect(s[0]).toContain("Rahul Choudhary");
+  });
+  it("personIsGrounded rejects invented or partial names", () => {
+    const snips = ["CA Rahul Choudhary, Managing Partner, founded the firm"];
+    expect(personIsGrounded("Rahul Choudhary", snips)).toBe(true);
+    expect(personIsGrounded("CA Rahul Choudhary", snips)).toBe(true);
+    expect(personIsGrounded("Amit Sharma", snips)).toBe(false);
+    expect(personIsGrounded("Rahul", snips)).toBe(false);
   });
 });

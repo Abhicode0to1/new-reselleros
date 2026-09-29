@@ -147,7 +147,7 @@ export function useApproveCandidate() {
       const { error } = await supabase.from("leads").insert({
         id: leadId, tenant_id: tenantId, company: c.company, domain: c.domain, stage: "new", source: "ai-finder",
         plan: c.product === "workspace" ? "Google Workspace" : null,
-        contact_email: contact?.email ?? null, contact_phone: contact?.phone ?? null,
+        contact_email: contact?.email ?? null, contact_phone: contact?.phone ?? null, contact_name: contact?.person?.name ?? null,
         notes: leadNotes(c), created_by: auth?.user?.id ?? null,
         follow_up_date: toIstDate(task.dueAt),
       });

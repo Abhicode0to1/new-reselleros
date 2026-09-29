@@ -24,3 +24,13 @@ describe("firstTouchTask", () => {
   });
   it("email only → email task", () => expect(firstTouchTask(c, { phone: null, email: "a@taksh.in" }).kind).toBe("email"));
 });
+
+describe("firstTouchTask — contact person", () => {
+  const c = { company: "CRC LLP", pitch: null, fit_reason: null, domain: "crcllp.in" };
+  it("names the person to ask for", () =>
+    expect(firstTouchTask(c, { phone: "+919812109103", email: null, person: { name: "Rahul Choudhary", role: "Managing Partner", from: "page" } }).notes)
+      .toContain("Kisse baat karni hai: Rahul Choudhary (Managing Partner)"));
+  it("flags a name guessed from the email", () =>
+    expect(firstTouchTask(c, { phone: null, email: "rahul.choudhary@crcllp.in", person: { name: "Rahul Choudhary", role: null, from: "email" } }).notes)
+      .toContain("naam email se andaza hai"));
+});

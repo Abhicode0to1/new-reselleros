@@ -27,6 +27,9 @@ export type ContactResult = {
   /** page the best email/phone came from */
   source_url: string | null;
   checked_at: string;
+  /** who to ask for — see "Contact person" below; absent on rows checked before 29 Sep */
+  person?: ContactPerson | null;
+  person_checked?: boolean;
 };
 
 /** Pages worth reading, in order. The home page is read first by the caller. */
@@ -48,6 +51,9 @@ function stripTags(html: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/\s+/g, " ");
 }
+
+/** Visible page text, tags and scripts removed — what a person reading the page sees. */
+export function pageText(html: string): string { return unObfuscate(stripTags(html)); }
 
 /** "info [at] firm [dot] com" → "info@firm.com" — the common way sites hide an address. */
 function unObfuscate(text: string): string {
@@ -137,4 +143,56 @@ export function contactBonus(c: ContactResult | null): number {
   if (c.phone?.startsWith("+91")) return 10;
   if (c.phone) return 6;
   return c.email ? 4 : 0;
+}
+
+/* ── Contact person (29 Sep 2026) ───────────────────────────────────────────
+ * Who to ask for on the call. Taken ONLY from text on the company's own pages, near a
+ * role word; an AI picks the name, and a name that is not literally in that text is thrown
+ * away, so the model cannot invent a person. Failing that, a first.last@ address gives a
+ * name, marked as a guess from the email. */
+
+export type ContactPerson = { name: string; role: string | null; from: "page" | "email"; source_url: string | null };
+
+export const ROLE_RE = /\b(founder|co-?founder|director|managing director|md|ceo|chief executive|partner|managing partner|proprietor|owner|principal|chairman|president|head|manager|ca\b|advocate|chartered accountant)\b/i;
+
+/** Short windows of page text around role words — all the model gets to see. */
+export function roleSnippets(text: string, max = 6): string[] {
+  const out: string[] = [];
+  const re = new RegExp(ROLE_RE.source, "gi");
+  for (const m of text.matchAll(re)) {
+    const i = m.index ?? 0;
+    const s = text.slice(Math.max(0, i - 120), i + 120).replace(/\s+/g, " ").trim();
+    if (!out.some((o) => o.includes(s.slice(20, 80)))) out.push(s);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+const GENERIC_LOCAL = /^(info|contact|sales|enquiry|enquiries|inquiry|hello|office|mail|support|admin|accounts|hr|careers|jobs|team|ip|legal|help|service|customercare|care|business|marketing)$/i;
+
+/** rahul.choudhary@firm.in → "Rahul Choudhary". Role inboxes and single tokens give nothing. */
+export function nameFromEmail(email: string | null): string | null {
+  const local = email?.split("@")[0] ?? "";
+  if (!local || GENERIC_LOCAL.test(local)) return null;
+  const parts = local.split(/[._-]+/).filter((p) => /^[a-z]{2,}$/i.test(p));
+  if (parts.length < 2 || parts.length > 3) return null;
+  return parts.map((p) => p[0].toUpperCase() + p.slice(1).toLowerCase()).join(" ");
+}
+
+/** The model's answer counts only if the name is written in the snippets we sent. */
+export function personIsGrounded(name: string, snippets: string[]): boolean {
+  const n = name.trim().replace(/\s+/g, " ").toLowerCase().replace(/^(mr|mrs|ms|dr|ca|adv)\.?\s+/, "");
+  if (n.split(" ").length < 2 || n.length < 5) return false;          // "Rahul" alone is not enough to ask for
+  return snippets.some((s) => s.toLowerCase().replace(/\s+/g, " ").includes(n));
+}
+
+export function personPrompt(items: { i: number; company: string; snippets: string[] }[]): { system: string; user: string } {
+  return {
+    system:
+      "From text copied from each company's own website, name the most senior decision-maker a salesperson should ask for " +
+      "(founder, director, managing partner, proprietor, CEO, partner). Copy the name EXACTLY as written in the text; never invent, " +
+      "translate or complete a name. If no person's name is in the text, return null for that company. " +
+      'Answer ONLY a JSON array: [{"i": number, "name": string|null, "role": string|null}].',
+    user: items.map((x) => `#${x.i} ${x.company}\n${x.snippets.map((s) => `- ${s}`).join("\n")}`).join("\n\n"),
+  };
 }
