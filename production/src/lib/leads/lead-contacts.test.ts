@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanEmail, cleanPhone, contactBonus, extractContacts, nameFromEmail, personIsGrounded, pickEmail, pickPhone, reachable, readContact, roleSnippets, type ContactResult } from "./lead-contacts";
+import { cleanEmail, cleanPhone, contactBonus, extractContacts, nameFromEmail, parsePersonSearch, personIsGrounded, pickEmail, pickPhone, reachable, readContact, roleSnippets, type ContactResult } from "./lead-contacts";
 
 describe("cleanPhone — Indian numbers only", () => {
   it.each([
@@ -86,4 +86,18 @@ describe("contact person", () => {
     expect(personIsGrounded("Amit Sharma", snips)).toBe(false);
     expect(personIsGrounded("Rahul", snips)).toBe(false);
   });
+});
+
+describe("parsePersonSearch", () => {
+  const ok = '{"name": "Mr. Arvind Kumar Jain", "role": "Director", "source_url": "https://www.zaubacorp.com/company/X"}';
+  it("keeps a named person with an allowed source", () => expect(parsePersonSearch(ok, "Empyreal Realty")?.name).toBe("Mr. Arvind Kumar Jain"));
+  it("refuses LinkedIn and social sources", () =>
+    expect(parsePersonSearch('{"name":"Arvind Jain","role":"CEO","source_url":"https://in.linkedin.com/in/arvind"}', "X")).toBeNull());
+  it("refuses no source, null, one word, or the firm's own name", () => {
+    expect(parsePersonSearch('{"name":"Arvind Jain","role":"CEO","source_url":null}', "X")).toBeNull();
+    expect(parsePersonSearch('{"name":null}', "X")).toBeNull();
+    expect(parsePersonSearch('{"name":"Arvind","source_url":"https://news.in/a"}', "X")).toBeNull();
+    expect(parsePersonSearch('{"name":"Sarthak Advocates","source_url":"https://news.in/a"}', "Sarthak Advocates & Solicitors")).toBeNull();
+  });
+  it("reads JSON inside prose or a fence", () => expect(parsePersonSearch("Here:\n```json\n" + ok + "\n```", "Y")?.role).toBe("Director"));
 });

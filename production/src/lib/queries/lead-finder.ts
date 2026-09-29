@@ -133,6 +133,25 @@ export function useFindContacts() {
   });
 }
 
+/** Contact person from public records (MCA, ICAI, news) for cards whose own site names nobody — 10 per click. */
+export function useSearchPeople() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { ids?: string[] } = {}) => {
+      const res = await fetch("/api/leads/finder/contacts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...input, mode: "people" }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error ?? "Naam search failed");
+      return body as { searched: number; found: number };
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: FINDER_KEY }); qc.invalidateQueries({ queryKey: ["leads"] }); qc.invalidateQueries({ queryKey: ["tasks"] });
+      if (r.searched === 0) toast.success("Jin companies ka naam nahi tha, sab search ho chuki hain");
+      else toast.success(`${r.searched} companies search ki — ${r.found} ka naam public record mein mila`);
+    },
+    onError: (e) => toastError(e),
+  });
+}
+
 /** Approve → a lead in Sales & Pipeline (source ai-finder), candidate marked converted. */
 export function useApproveCandidate() {
   const qc = useQueryClient();

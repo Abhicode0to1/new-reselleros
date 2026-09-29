@@ -4,6 +4,8 @@
  * pin down without a network lives here.
  */
 
+import { ASK_FOR_OWNER } from "./lead-contacts";
+
 export interface FinderProfile {
   name: string;
   cities: string;
@@ -218,14 +220,14 @@ export function leadNotes(c: { fit_reason: string | null; pitch: string | null; 
  */
 export function firstTouchTask(
   c: { company: string; pitch: string | null; fit_reason: string | null; domain: string },
-  contact: { email: string | null; phone: string | null; person?: { name: string; role: string | null; from: "page" | "email" } | null } | null,
+  contact: { email: string | null; phone: string | null; person?: { name: string; role: string | null; from: "page" | "email" | "search" } | null } | null,
   now: Date = new Date(),
 ): { kind: "call" | "email"; title: string; notes: string; dueAt: Date } {
   const kind = contact?.phone ? "call" : "email";
   const title = kind === "call" ? `Call karo: ${c.company}` : `Email bhejo: ${c.company}`;
   const who = contact?.person;
   const notes = [
-    who ? `Kisse baat karni hai: ${who.name}${who.role ? ` (${who.role})` : ""}${who.from === "email" ? " — naam email se andaza hai" : ""}` : "",
+    who ? `Kisse baat karni hai: ${who.name}${who.role ? ` (${who.role})` : ""}${who.from === "email" ? " — naam email se andaza hai" : who.from === "search" ? " — public record se, call par confirm karo" : ""}` : kind === "call" ? ASK_FOR_OWNER : "",
     contact?.phone ? `Phone: ${contact.phone}` : "",
     contact?.email ? `Email: ${contact.email}` : "",
     `Website: https://${c.domain}`,

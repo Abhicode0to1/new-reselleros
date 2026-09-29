@@ -34,3 +34,13 @@ describe("firstTouchTask — contact person", () => {
     expect(firstTouchTask(c, { phone: null, email: "rahul.choudhary@crcllp.in", person: { name: "Rahul Choudhary", role: null, from: "email" } }).notes)
       .toContain("naam email se andaza hai"));
 });
+
+describe("firstTouchTask — no name known", () => {
+  const c = { company: "PSL", pitch: null, fit_reason: null, domain: "psl.in" };
+  it("a call without a name carries the receptionist line", () =>
+    expect(firstTouchTask(c, { phone: "01149991250", email: null, person: null }).notes).toContain("receptionist se poochho"));
+  it("an email task does not", () =>
+    expect(firstTouchTask(c, { phone: null, email: "a@psl.in", person: null }).notes).not.toContain("receptionist"));
+  it("a searched name is marked for confirmation", () =>
+    expect(firstTouchTask(c, { phone: "01149991250", email: null, person: { name: "Sameer Jain", role: "Founder", from: "search" } }).notes).toContain("call par confirm karo"));
+});

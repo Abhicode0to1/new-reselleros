@@ -25,7 +25,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { PRODUCT_LABEL, MX_LABEL } from "@/lib/leads/lead-finder";
 import { readContact } from "@/lib/leads/lead-contacts";
 import {
-  useFinderProfiles, useSaveFinderProfile, useDeleteFinderProfile, useFinderCandidates, useFinderRuns, useRunFinder, useApproveCandidate, useRejectCandidate, useFindContacts,
+  useFinderProfiles, useSaveFinderProfile, useDeleteFinderProfile, useFinderCandidates, useFinderRuns, useRunFinder, useApproveCandidate, useRejectCandidate, useFindContacts, useSearchPeople,
   type FinderProfileRow, type FinderProfileInput, type FinderCandidate,
 } from "@/lib/queries/lead-finder";
 
@@ -41,6 +41,7 @@ export default function LeadFinderPage() {
   const approve = useApproveCandidate();
   const reject = useRejectCandidate();
   const findContacts = useFindContacts();
+  const searchPeople = useSearchPeople();
   const [tab, setTab] = React.useState<Tab>("new");
   const [editing, setEditing] = React.useState<FinderProfileInput | null>(null);
   const [q, setQ] = React.useState("");
@@ -97,6 +98,8 @@ export default function LeadFinderPage() {
             </select>
             <Button size="sm" variant="outline" icon="search" onClick={() => findContacts.mutate({})} loading={findContacts.isPending}
               title="Jin companies ka contact abhi check nahi hua, unki apni website se email/phone padho (25 ek baar mein)">Contact dhoondho</Button>
+            <Button size="sm" variant="outline" icon="search" onClick={() => searchPeople.mutate({})} loading={searchPeople.isPending}
+              title="Jinki website par kisi ka naam nahi mila, unke owner/director ka naam public record (MCA, ICAI, news) se dhoondho — 10 ek baar mein, har company par ek Google search lagta hai">Naam dhoondho</Button>
           </div>
         </div>
         <div className="px-4">
@@ -109,7 +112,8 @@ export default function LeadFinderPage() {
             {list.map((c) => (
               <CandidateRow key={c.id} c={c}
                 onApprove={() => approve.mutate(c)} onReject={() => reject.mutate({ id: c.id })} onUndo={() => reject.mutate({ id: c.id, undo: true })}
-                onFindContact={() => findContacts.mutate({ ids: [c.id], force: true })} finding={findContacts.isPending}
+                onFindContact={() => findContacts.mutate({ ids: [c.id], force: true })} finding={findContacts.isPending || searchPeople.isPending}
+                onFindPerson={() => searchPeople.mutate({ ids: [c.id] })}
                 busy={approve.isPending || reject.isPending} />
             ))}
           </ul>
@@ -189,7 +193,7 @@ function ProfileForm({ value, onClose }: { value: FinderProfileInput; onClose: (
   );
 }
 
-function CandidateRow({ c, onApprove, onReject, onUndo, onFindContact, busy, finding }: { c: FinderCandidate; onApprove: () => void; onReject: () => void; onUndo: () => void; onFindContact: () => void; busy: boolean; finding: boolean }) {
+function CandidateRow({ c, onApprove, onReject, onUndo, onFindContact, onFindPerson, busy, finding }: { c: FinderCandidate; onApprove: () => void; onReject: () => void; onUndo: () => void; onFindContact: () => void; onFindPerson: () => void; busy: boolean; finding: boolean }) {
   const [open, setOpen] = React.useState(false);
   const contact = readContact(c.signals);
   const score = c.score ?? 0;
@@ -211,9 +215,15 @@ function CandidateRow({ c, onApprove, onReject, onUndo, onFindContact, busy, fin
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
             {contact?.person && (
-              <span className="text-ink font-medium" title={contact.person.from === "email" ? "Naam email address se andaza hai — call par confirm karo" : "Company ki website par likha hai"}>
-                👤 {contact.person.name}{contact.person.role ? ` · ${contact.person.role}` : ""}{contact.person.from === "email" ? " (email se)" : ""}
+              <span className="text-ink font-medium" title={contact.person.from === "email" ? "Naam email address se andaza hai — call par confirm karo" : contact.person.from === "search" ? "Public record (MCA / ICAI / news) se — purana ho sakta hai, call par confirm karo" : "Company ki website par likha hai"}>
+                👤 {contact.person.name}{contact.person.role ? ` · ${contact.person.role}` : ""}{contact.person.from === "email" ? " (email se)" : contact.person.from === "search" ? " (search se)" : ""}
               </span>
+            )}
+            {contact?.person?.from === "search" && contact.person.source_url && <a href={contact.person.source_url} target="_blank" rel="noreferrer" className="text-ink-3 underline">naam kahan se</a>}
+            {contact && (contact.email || contact.phone) && !contact.person && (
+              <button type="button" className="text-amber-ink underline disabled:opacity-50" onClick={onFindPerson} disabled={finding}>
+                {contact.person_searched ? "Naam nahi mila — dobara search" : "Naam dhoondho"}
+              </button>
             )}
             {contact?.email && <a href={`mailto:${contact.email}`} className="text-ink underline">✉ {contact.email}</a>}
             {contact?.phone && <a href={`tel:${contact.phone}`} className="text-ink underline tabular-nums">☎ {contact.phone}</a>}

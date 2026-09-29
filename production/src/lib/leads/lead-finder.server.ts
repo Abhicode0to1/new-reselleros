@@ -14,7 +14,7 @@ import {
   type FinderProfile, type DiscoveredCompany, type ScoreInput, type SiteAudit, type MxProvider,
 } from "@/lib/leads/lead-finder";
 import {
-  CONTACT_PATHS, contactBonus, extractContacts, nameFromEmail, pageText, personIsGrounded, personPrompt, pickEmail, pickPhone,
+  CONTACT_PATHS, contactBonus, extractContacts, nameFromEmail, pageText, parsePersonSearch, personIsGrounded, personPrompt, personSearchPrompt, pickEmail, pickPhone,
   reachable, readContact, roleSnippets, type ContactResult, type ContactPerson,
 } from "@/lib/leads/lead-contacts";
 
@@ -167,25 +167,63 @@ export async function enrichCandidateContacts(admin: Admin, tenantId: string, op
     if (!ok && c.status === "new") { status = "rejected"; signals.auto_rejected = "no-contact"; }
     if (ok && c.status === "rejected" && prev.auto_rejected) { status = "new"; delete signals.auto_rejected; }
     await admin.from("lead_finder_candidates").update({ signals: signals as never, status }).eq("id", c.id).eq("tenant_id", tenantId);
-    if (c.lead_id && (contact.email || contact.phone || contact.person)) {
-      const { data: lead } = await admin.from("leads").select("contact_email, contact_phone, contact_name").eq("id", c.lead_id).eq("tenant_id", tenantId).maybeSingle();
-      const patch: { contact_email?: string; contact_phone?: string; contact_name?: string } = {};
-      if (lead && !lead.contact_email && contact.email) patch.contact_email = contact.email;
-      if (lead && !lead.contact_phone && contact.phone) patch.contact_phone = contact.phone;
-      if (lead && !lead.contact_name && contact.person) patch.contact_name = contact.person.name;
-      if (Object.keys(patch).length) await admin.from("leads").update(patch).eq("id", c.lead_id).eq("tenant_id", tenantId);
-      // The approve-time call/email task was written before we knew who to ask for.
-      if (contact.person) {
-        const { data: open } = await admin.from("tasks").select("id, notes").eq("tenant_id", tenantId).eq("lead_id", c.lead_id).eq("status", "pending");
-        for (const t of open ?? []) {
-          if ((t.notes ?? "").includes("Kisse baat karni hai")) continue;
-          const who = `Kisse baat karni hai: ${contact.person.name}${contact.person.role ? ` (${contact.person.role})` : ""}${contact.person.from === "email" ? " — naam email se andaza hai" : ""}`;
-          await admin.from("tasks").update({ notes: t.notes ? `${who}\n${t.notes}` : who }).eq("id", t.id).eq("tenant_id", tenantId);
-        }
-      }
-    }
+    if (c.lead_id) await fillLead(admin, tenantId, c.lead_id, contact);
   }
   return { checked: todo.length, found, removed };
+}
+
+/** Put what we learned onto an already-approved lead: empty contact fields, and the name on its open tasks. */
+async function fillLead(admin: Admin, tenantId: string, leadId: string, contact: ContactResult): Promise<void> {
+  if (!contact.email && !contact.phone && !contact.person) return;
+  const { data: lead } = await admin.from("leads").select("contact_email, contact_phone, contact_name").eq("id", leadId).eq("tenant_id", tenantId).maybeSingle();
+  if (!lead) return;
+  const patch: { contact_email?: string; contact_phone?: string; contact_name?: string } = {};
+  if (!lead.contact_email && contact.email) patch.contact_email = contact.email;
+  if (!lead.contact_phone && contact.phone) patch.contact_phone = contact.phone;
+  if (!lead.contact_name && contact.person) patch.contact_name = contact.person.name;
+  if (Object.keys(patch).length) await admin.from("leads").update(patch).eq("id", leadId).eq("tenant_id", tenantId);
+  // The approve-time call/email task was written before we knew who to ask for.
+  if (!contact.person) return;
+  const { data: open } = await admin.from("tasks").select("id, notes").eq("tenant_id", tenantId).eq("lead_id", leadId).eq("status", "pending");
+  for (const t of open ?? []) {
+    if ((t.notes ?? "").includes("Kisse baat karni hai")) continue;
+    const p = contact.person;
+    const who = `Kisse baat karni hai: ${p.name}${p.role ? ` (${p.role})` : ""}${p.from === "email" ? " — naam email se andaza hai" : p.from === "search" ? ` — public record se, call par confirm karo (${p.source_url ?? ""})` : ""}`;
+    const rest = (t.notes ?? "").split("\n").filter((l) => !l.startsWith("Naam nahi pata")).join("\n");
+    await admin.from("tasks").update({ notes: rest ? `${who}\n${rest}` : who }).eq("id", t.id).eq("tenant_id", tenantId);
+  }
+}
+
+/**
+ * Contact person from public records for reachable companies whose own site names nobody.
+ * One grounded search per company (it costs), so each company is searched once — pass ids
+ * to search specific cards again. At most `limit` per call.
+ */
+export async function searchPeople(admin: Admin, tenantId: string, opts: { ids?: string[]; limit?: number } = {}): Promise<{ searched: number; found: number }> {
+  const ai = await resolveGeminiConfig(admin, tenantId);
+  if (!ai.apiKey) throw new Error("Naam search ke liye Gemini key chahiye — Settings → Integrations → AI.");
+  let q = admin.from("lead_finder_candidates").select("id, company, domain, city, signals, lead_id, status").eq("tenant_id", tenantId).neq("status", "rejected");
+  if (opts.ids?.length) q = q.in("id", opts.ids);
+  const { data } = await q.order("score", { ascending: false }).limit(200);
+  const todo = (data ?? []).filter((c) => {
+    const k = readContact(c.signals);
+    return k && reachable(k) && !k.person && (opts.ids?.length || !k.person_searched);
+  }).slice(0, opts.limit ?? 10);
+
+  let found = 0;
+  for (let i = 0; i < todo.length; i += 3) {
+    await Promise.all(todo.slice(i, i + 3).map(async (c) => {
+      const pp = personSearchPrompt({ company: c.company, domain: c.domain, city: c.city });
+      const text = await geminiGroundedText({ apiKey: ai.apiKey!, model: ai.model, system: pp.system, user: pp.user, temperature: 0, timeoutMs: 45_000, label: "leads/finder-person-search" }).catch(() => null);
+      const hit = parsePersonSearch(text, c.company);
+      const contact: ContactResult = { ...readContact(c.signals)!, person_searched: true, ...(hit ? { person: { name: hit.name, role: hit.role, from: "search" as const, source_url: hit.source_url } } : {}) };
+      if (hit) found++;
+      const signals = { ...((c.signals as Record<string, unknown>) ?? {}), contact };
+      await admin.from("lead_finder_candidates").update({ signals: signals as never }).eq("id", c.id).eq("tenant_id", tenantId);
+      if (hit && c.lead_id) await fillLead(admin, tenantId, c.lead_id, contact);
+    }));
+  }
+  return { searched: todo.length, found };
 }
 
 async function auditSite(domain: string): Promise<SiteAudit> {

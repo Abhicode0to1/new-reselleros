@@ -30,6 +30,8 @@ export type ContactResult = {
   /** who to ask for — see "Contact person" below; absent on rows checked before 29 Sep */
   person?: ContactPerson | null;
   person_checked?: boolean;
+  /** public-record search already tried (it costs a search call; do not repeat) */
+  person_searched?: boolean;
 };
 
 /** Pages worth reading, in order. The home page is read first by the caller. */
@@ -151,7 +153,7 @@ export function contactBonus(c: ContactResult | null): number {
  * away, so the model cannot invent a person. Failing that, a first.last@ address gives a
  * name, marked as a guess from the email. */
 
-export type ContactPerson = { name: string; role: string | null; from: "page" | "email"; source_url: string | null };
+export type ContactPerson = { name: string; role: string | null; from: "page" | "email" | "search"; source_url: string | null };
 
 export const ROLE_RE = /\b(founder|co-?founder|director|managing director|md|ceo|chief executive|partner|managing partner|proprietor|owner|principal|chairman|president|head|manager|ca\b|advocate|chartered accountant)\b/i;
 
@@ -196,3 +198,48 @@ export function personPrompt(items: { i: number; company: string; snippets: stri
     user: items.map((x) => `#${x.i} ${x.company}\n${x.snippets.map((s) => `- ${s}`).join("\n")}`).join("\n\n"),
   };
 }
+
+/* ── Contact person from public records (29 Sep 2026) ─────────────────────────
+ * For companies whose own site names nobody: one grounded search per company, limited to
+ * public business records — the MCA register (directors / designated partners), ICAI and
+ * bar directories, news and press. LinkedIn and personal profiles are refused: reading
+ * LinkedIn by program breaks its terms. Only a name and a role are kept, never a personal
+ * phone or email, and the card says "search se — call par confirm karo". */
+
+export function personSearchPrompt(c: { company: string; domain: string; city: string | null }): { system: string; user: string } {
+  return {
+    system:
+      "You find the owner or most senior decision-maker of an Indian business from PUBLIC BUSINESS RECORDS, using web search. " +
+      "Allowed sources: the company's own website, the MCA company register and sites that republish it (directors / designated partners), " +
+      "ICAI or Bar Council directories, news articles and press releases. Never use LinkedIn, Facebook, Instagram or any personal profile. " +
+      "Return a name only if a source you found states it for THIS company (match the domain or the exact company name and city). " +
+      "Never guess. Do not return phone numbers or emails. " +
+      'Answer ONLY one JSON object: {"name": string|null, "role": string|null, "source_url": string|null}.',
+    user: `Company: ${c.company}\nWebsite: https://${c.domain}\nCity: ${c.city ?? "India"}\nWho is the founder / director / managing partner / proprietor?`,
+  };
+}
+
+const BANNED_SOURCE = /(^|\.)(linkedin\.com|facebook\.com|instagram\.com|twitter\.com|x\.com|truecaller\.com)$/i;
+
+/** Keep a search answer only if it looks like a real person's name with a usable, allowed source. */
+export function parsePersonSearch(text: string | null | undefined, company: string): { name: string; role: string | null; source_url: string } | null {
+  if (!text) return null;
+  const m = text.replace(/```(?:json)?/g, "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  let o: { name?: unknown; role?: unknown; source_url?: unknown };
+  try { o = JSON.parse(m[0]); } catch { return null; }
+  const name = typeof o.name === "string" ? o.name.trim().replace(/\s+/g, " ") : "";
+  const src = typeof o.source_url === "string" ? o.source_url.trim() : "";
+  if (!name || !/^https?:\/\//i.test(src)) return null;
+  let host = "";
+  try { host = new URL(src).hostname.replace(/^www\./, ""); } catch { return null; }
+  if (BANNED_SOURCE.test(host)) return null;
+  const bare = name.replace(/^(mr|mrs|ms|dr|ca|adv|shri|smt)\.?\s+/i, "");
+  if (!/^[A-Za-z][A-Za-z.' -]{3,60}$/.test(bare) || bare.split(" ").length < 2) return null;   // a person, not "N/A" or a firm
+  if (company.toLowerCase().includes(bare.toLowerCase())) return null;                         // the firm's own name echoed back
+  return { name: name.slice(0, 80), role: typeof o.role === "string" && o.role.trim() ? o.role.trim().slice(0, 60) : null, source_url: src.slice(0, 500) };
+}
+
+/** Receptionist line for a call when we do not know whom to ask for. */
+export const ASK_FOR_OWNER =
+  "Naam nahi pata — receptionist se poochho: \"Namaste, main Anutech se bol raha hoon. Aapke office ke email aur website ke baare mein owner ya director se 2 minute baat karni thi — unka naam bata denge?\" Naam mile to lead mein daal do.";
