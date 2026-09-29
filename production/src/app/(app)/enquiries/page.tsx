@@ -183,7 +183,7 @@ export default function EnquiriesPage() {
       <Button size="sm" variant="ghost" loading={isFetchingNextPage} onClick={() => void fetchNextPage()}>
         Load older mail
       </Button>
-      <p className="mt-1 text-2xs text-ink-3">
+      <p className="mt-1 text-xs text-ink-3">
         Counts and search cover the mail loaded so far — older mail may be in this folder too.
       </p>
     </div>
