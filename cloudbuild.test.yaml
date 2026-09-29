@@ -114,8 +114,23 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  # The Next.js build is memory-hungry. 32 cores were tried on the production build and
-  # made no difference — do not raise this looking for speed.
-  machineType: E2_HIGHCPU_8
+  # ─── E2_HIGHCPU_8 WAS NOT ENOUGH. MEMORY, NOT CORES. ────────────────────────
+  # The first run (build ce797692, 29 Sep 2026) died silently inside `next build`, during
+  # "Linting and checking validity of types", after 26 minutes — INTERNAL_ERROR with an
+  # EMPTY failureInfo and no error line in the log. A process killed by the kernel writes
+  # nothing, which is exactly that shape. The same commit builds in 2.6 minutes on a
+  # laptop, so it is not the code.
+  #
+  # The arithmetic: E2_HIGHCPU_8 is 8 vCPU / 8 GB, and production/Dockerfile sets
+  # NODE_OPTIONS=--max-old-space-size=6144 — six of those eight GB reserved for one heap
+  # before webpack's workers ask for theirs.
+  #
+  # The production file warns that 32 cores were tried and gave no SPEED benefit. That is
+  # true, and it is a different axis: this is raised for the 32 GB that comes with the
+  # size, not for the cores. Anyone here chasing build TIME should believe that warning.
+  machineType: E2_HIGHCPU_32
 
-timeout: 1800s
+# 1800s was nearly the second cause. The failed run used 28m35s of a 30m budget, so even
+# a healthy build had about ninety seconds of margin — and a build that times out deploys
+# nothing while looking like a code failure.
+timeout: 3600s
