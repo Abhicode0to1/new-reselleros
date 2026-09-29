@@ -168,6 +168,9 @@ export function useApproveCandidate() {
         plan: c.product === "workspace" ? "Google Workspace" : null,
         contact_email: contact?.email ?? null, contact_phone: contact?.phone ?? null, contact_name: contact?.person?.name ?? null,
         notes: leadNotes(c), created_by: auth?.user?.id ?? null,
+        // Whoever approves owns it — the follow-up task is theirs too. Unowned, every
+        // approved lead sat in everyone's "My assigned" as "unassigned" (29 Sep).
+        owner_id: auth?.user?.id ?? null,
         follow_up_date: toIstDate(task.dueAt),
       });
       if (error) throw error;
