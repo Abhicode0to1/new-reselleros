@@ -14,7 +14,7 @@ Collections:
 
 | collection | one doc = | key fields |
 |---|---|---|
-| `tasks` | one piece of work, id `R-nnn` (someone asked another area) or `Snn` (roadmap) | `kind` request/roadmap · `owner` pardeep/abhishek/pawan/hitesh/sab · `from` · `priority` p0–p3 · `bucket` · `title` · `why` · `fix` · `where` · `doneWhen` · `status` · `commits[]` · `dependsOn[]` · `outcome` · `updatedAt` |
+| `tasks` | one piece of work, id `R-nnn` (someone asked another area) or `Snn` (roadmap) | `kind` request/roadmap · `owner` pardeep/abhishek/pawan/hitesh/sab · `from` · `priority` p0–p3 · `bucket` · `title` · `why` · `fix` · `where` · `doneWhen` · `status` · `commits[]` · `dependsOn[]` · `outcome` · `statusNote` · `nextStep` · `waitingOn` · `updatedAt` |
 | `changes` | one thing others must know (a migration, a changed RPC signature, a new env var, a data note) | `at` · `owner` (who changed it) · `title` · `body_html` · `affects[]` (owners) · `migrations[]` · `commit` · `acked{}` |
 | `messages` | a chat message | `ch` general/requests/roadmap/deploy/accounting/billing/customer/qa · `text` · `by` · `at` |
 
@@ -71,6 +71,10 @@ or, if they asked "what next", propose the top unblocked task.
 4. Board, in one `ArtifactData batch`:
    - the task → `status: "review"`, `commits: [sha…]`, `outcome` (what you did, what you did NOT
      do and why — the same honesty as the existing R-001…R-008 outcomes);
+   - `nextStep`: one plain line, what happens next ("Deploy ke baad renewals cron 540s se kam")
+     and `waitingOn`: who holds it now — a person key, `"deploy"`, or a task id (`"R-029"`).
+     The board shows both on every card as **Agla kadam / Kiske paas** and sorts My work by them
+     (karna hai / check karke Done / intezaar). Left out, the board guesses from status and note.
    - one `changes` doc if anything others must know;
    - one `messages` line in your area channel: `S13 → review (abc1234): RLS wrap on 212 policies`.
 
