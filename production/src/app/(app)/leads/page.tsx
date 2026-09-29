@@ -98,10 +98,11 @@ function LeadsPageInner() {
   const [campaignOpen,    setCampaignOpen]    = React.useState(false);
   const [googleImportOpen, setGoogleImportOpen] = React.useState(false);
   const [csvImportOpen,    setCsvImportOpen]    = React.useState(false);
-  // Filter state — multi-select stages + priorities. Empty array = no filter
-  // (show all). Owner filter intentionally deferred — UI is already busy.
+  // Filter state — multi-select stages + priorities + owner ("Kiska"). Empty array = no
+  // filter (show all). Owner joined 29 Sep 2026, once leads had different owners.
   const [stageFilter,    setStageFilter]    = React.useState<Lead["stage"][]>([]);
   const [priorityFilter, setPriorityFilter] = React.useState<Array<"low"|"medium"|"high">>([]);
+  const [ownerFilter,    setOwnerFilter]    = React.useState<string[]>([]);
   // Due-bucket filter driven by the insight band's KPI pills.
   //   today    → follow_up_date === today
   //   overdue  → follow_up_date < today
@@ -332,11 +333,11 @@ function LeadsPageInner() {
   // lib/leads/list-selectors.ts#searchLeads, characterised in its tests.
   const searched = React.useMemo(
     () => searchLeads(workspaceLeads, {
-      search, stageFilter, priorityFilter, smartView, currentUser, dupFlagged: dup.flagged, now: new Date(),
+      search, stageFilter, priorityFilter, ownerFilter, smartView, currentUser, dupFlagged: dup.flagged, now: new Date(),
     }),
-    [workspaceLeads, search, stageFilter, priorityFilter, smartView, currentUser, dup],
+    [workspaceLeads, search, stageFilter, priorityFilter, ownerFilter, smartView, currentUser, dup],
   );
-  const activeFilterCount = stageFilter.length + priorityFilter.length;
+  const activeFilterCount = stageFilter.length + priorityFilter.length + ownerFilter.length;
 
   /* ── The folder chips are the filter ──────────────────────────────────────
      "Inbox" and "Qualified Deals" used to switch between the two halves of the old
@@ -532,6 +533,8 @@ function LeadsPageInner() {
           setStageFilter={setStageFilter}
           priorityFilter={priorityFilter}
           setPriorityFilter={setPriorityFilter}
+          ownerFilter={ownerFilter}
+          setOwnerFilter={setOwnerFilter}
           isSales={isSales}
           kpiOpen={kpiOpen}
           setKpiOpen={setKpiOpen}

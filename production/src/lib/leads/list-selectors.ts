@@ -70,7 +70,16 @@ export interface SearchInput {
   /** Ids the duplicate index flagged — the Duplicates view filters on it. */
   dupFlagged: ReadonlySet<string>;
   now: Date;
+  /**
+   * "Kiska" — owner ids to keep, any-of; UNASSIGNED keeps leads with no owner. Empty or
+   * absent = no constraint. (29 Sep 2026: Team view listed everyone's leads with no way to
+   * pick one person's.)
+   */
+  ownerFilter?: readonly string[];
 }
+
+/** The ownerFilter value that means "no owner". */
+export const UNASSIGNED = "__unassigned";
 
 /**
  * Search + filter + smart view — applied BEFORE the folder cut so each view respects them.
@@ -105,6 +114,11 @@ export function searchLeads(workspaceLeads: readonly Lead[], input: SearchInput)
   // 3. Priority filter (any-of). Empty array = no constraint.
   if (priorityFilter.length > 0) {
     list = list.filter((l) => priorityFilter.includes(l.priority as PriorityFilter));
+  }
+  // 3b. Owner ("Kiska", any-of). Empty = no constraint.
+  const owners = input.ownerFilter ?? [];
+  if (owners.length > 0) {
+    list = list.filter((l) => (l.owner_id ? owners.includes(l.owner_id) : owners.includes(UNASSIGNED)));
   }
   // 4. Single unified view filter. Sits on top of search + stage + priority.
   if (smartView !== "all" && smartView !== "everything") {

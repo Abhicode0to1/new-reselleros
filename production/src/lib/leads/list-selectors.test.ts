@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import type { Lead } from "@/lib/supabase/database.types";
 import {
   boardCut, daysSince, inWorkspace, isOpenLead, junkCounts, listCut, nextSort, openTaskIndex,
-  pipelineTotals, searchLeads, sortLeads, type SearchInput,
+  pipelineTotals, searchLeads, sortLeads, UNASSIGNED, type SearchInput,
 } from "./list-selectors";
 
 let seq = 0;
@@ -126,6 +126,16 @@ describe("searchLeads — the page's old `searched` memo", () => {
     expect(ids(searchLeads([a, b, c], { ...base, stageFilter: ["new", "quote"] }))).toEqual([a.id, c.id]);
     expect(ids(searchLeads([a, b, c], { ...base, priorityFilter: ["low"] }))).toEqual([b.id]);
     expect(ids(searchLeads([a, b, c], { ...base, stageFilter: ["new"], priorityFilter: ["low"] }))).toEqual([]);
+  });
+
+  it("owner filter (Kiska) is any-of, with UNASSIGNED for no owner; empty means no constraint", () => {
+    const me = mk({ owner_id: "u-me" });
+    const demo = mk({ owner_id: "u-demo" });
+    const none = mk({ owner_id: null });
+    expect(ids(searchLeads([me, demo, none], { ...base, ownerFilter: ["u-demo"] }))).toEqual([demo.id]);
+    expect(ids(searchLeads([me, demo, none], { ...base, ownerFilter: [UNASSIGNED] }))).toEqual([none.id]);
+    expect(ids(searchLeads([me, demo, none], { ...base, ownerFilter: ["u-me", UNASSIGNED] }))).toEqual([me.id, none.id]);
+    expect(searchLeads([me, demo, none], { ...base, ownerFilter: [] })).toHaveLength(3);
   });
 
   it("mine: owner is the signed-in user; with no user, NOTHING matches", () => {

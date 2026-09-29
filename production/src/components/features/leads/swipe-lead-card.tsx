@@ -96,9 +96,15 @@ interface SwipeLeadCardProps {
   quoteRef?: { id: string; status: string | null };
   /** Earliest open follow-up task on this lead, if any (shows a chip). */
   task?: { due: string; overdue: boolean; count: number };
+  /**
+   * Whose lead, when it is NOT the viewer's — the caller passes nothing for your own leads.
+   * On a phone-width list there is no Owner column, so in Team view someone else's lead
+   * looked exactly like yours (29 Sep 2026).
+   */
+  ownerName?: string | null;
 }
 
-export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutcome, task, quoteRef }: SwipeLeadCardProps) {
+export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutcome, task, quoteRef, ownerName }: SwipeLeadCardProps) {
   // Derived here rather than passed in, so the card is the single place that
   // decides how a lead looks on mobile — callers can't hand it a stale rule
   // that disagrees with the desktop table.
@@ -308,6 +314,12 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                     </span>
                   ))}
               </div>
+              {ownerName && (
+                <span className="mt-1 mr-1 inline-flex items-center gap-1 rounded-full bg-paper-2 px-1.5 py-0.5 text-3xs font-medium text-ink-2" title={`Owner: ${ownerName}`}>
+                  <Icon name="user" size={10} />
+                  {ownerName}
+                </span>
+              )}
               {task && (
                 <span className={cn(
                   "mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium",

@@ -17,6 +17,7 @@ import { useTasks } from "@/lib/queries/tasks";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { useLeadFirstReplies } from "@/lib/queries/lead-first-reply";
 import { useTeamMembers } from "@/lib/queries/team";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useCallLog } from "@/components/features/leads/call-log-dialog";
 import { buildPlanCostIndex } from "@/lib/leads/deal-margin";
 import { useItems } from "@/lib/queries/items";
@@ -160,6 +161,8 @@ export function LeadListView({
      Map isliye ki har row par `.find()` chalana 50 leads × 10 members = 500 chakkar hai
      har render me. */
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: me } = useCurrentUser();
+  const meId = me?.userId ?? null;
   const ownerById = React.useMemo(
     () => new Map(teamMembers.map((m) => [m.id, m])),
     [teamMembers],
@@ -266,6 +269,9 @@ export function LeadListView({
             lead={lead}
             quoteRef={leadQuotes?.[lead.id]}
             task={openTaskByLead.get(lead.id)}
+            ownerName={lead.owner_id && lead.owner_id !== meId
+              ? ownerById.get(lead.owner_id)?.full_name || ownerById.get(lead.owner_id)?.email || "Unknown user"
+              : null}
             onTap={onRowClick}
             onChangeStage={(s) => void changeStage(lead, s)}
             onSendQuote={onSendQuote}

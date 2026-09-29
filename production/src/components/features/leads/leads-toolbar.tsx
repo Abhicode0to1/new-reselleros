@@ -31,6 +31,8 @@ import type { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import type { SalesFolder } from "@/lib/leads/folders";
 import type { StageMeta } from "@/lib/leads/stage-meta";
 import { istToday } from "@/lib/dates/ist";
+import { UNASSIGNED } from "@/lib/leads/list-selectors";
+import { useTeamMembers } from "@/lib/queries/team";
 
 type TeamMember = NonNullable<ReturnType<typeof useTeamTree>["data"]>[number];
 type Priority = "low" | "medium" | "high";
@@ -62,6 +64,9 @@ export interface LeadsToolbarProps {
   setStageFilter: React.Dispatch<React.SetStateAction<Lead["stage"][]>>;
   priorityFilter: Priority[];
   setPriorityFilter: React.Dispatch<React.SetStateAction<Priority[]>>;
+  /** "Kiska" — owner ids, or UNASSIGNED; empty = everyone. */
+  ownerFilter: string[];
+  setOwnerFilter: React.Dispatch<React.SetStateAction<string[]>>;
   isSales: boolean;
   kpiOpen: boolean;
   setKpiOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -75,9 +80,12 @@ export function LeadsToolbar({
   leads, leadMeMember, leadTeam, leadTeamMode, setLeadTeamMode, search, setSearch, leadsForTab,
   everythingCount, currentUser, duplicateCountForTab, junkCount, junkSuspectCount, smartView,
   selectSmartView, folderRows, folder, selectFolder, effectiveView, setView, activeFilterCount,
-  filterStages, stageFilter, setStageFilter, priorityFilter, setPriorityFilter, isSales, kpiOpen,
+  filterStages, stageFilter, setStageFilter, priorityFilter, setPriorityFilter, ownerFilter, setOwnerFilter, isSales, kpiOpen,
   setKpiOpen, setCsvImportOpen, setCampaignOpen, setGoogleImportOpen, setShareOpen,
 }: LeadsToolbarProps) {
+  // Names for the "Kiska" filter — the reporting tree (leadTeam) carries ids and roles only.
+  const { data: members = [] } = useTeamMembers();
+  const meId = currentUser?.userId ?? leadMeMember?.id ?? null;
   return (
     <>
     {/* Whose leads. Renders nothing for a rep with no reports — both halves would show
@@ -203,11 +211,42 @@ export function LeadsToolbar({
                 {p}
               </DropdownMenuCheckboxItem>
             ))}
+            {/* Kiska — only when there is someone besides me to pick. Me first, then the
+                team by name, then leads nobody owns. Counts are over all loaded leads. */}
+            {members.length > 1 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">Kiska</DropdownMenuLabel>
+                {[
+                  ...(meId ? [{ id: meId, label: "Mera" }] : []),
+                  ...members
+                    .filter((m) => m.id !== meId)
+                    .map((m) => ({ id: m.id, label: m.full_name || m.email || "Unknown" }))
+                    .sort((a, b) => a.label.localeCompare(b.label)),
+                  { id: UNASSIGNED, label: "Unassigned" },
+                ].map((o) => {
+                  const n = (leads ?? []).filter((l) => (o.id === UNASSIGNED ? !l.owner_id : l.owner_id === o.id)).length;
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={o.id}
+                      checked={ownerFilter.includes(o.id)}
+                      onCheckedChange={(checked) => {
+                        setOwnerFilter((prev) => (checked ? [...prev, o.id] : prev.filter((x) => x !== o.id)));
+                      }}
+                      className="text-sm"
+                    >
+                      <span className="flex-1 truncate">{o.label}</span>
+                      <span className="ml-2 text-xs text-ink-3 tabular-nums">{n}</span>
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+              </>
+            )}
             {activeFilterCount > 0 && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onSelect={() => { setStageFilter([]); setPriorityFilter([]); }}
+                  onSelect={() => { setStageFilter([]); setPriorityFilter([]); setOwnerFilter([]); }}
                   className="text-sm text-rose"
                 >
                   Clear all filters
