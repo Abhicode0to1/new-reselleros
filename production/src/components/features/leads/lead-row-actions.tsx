@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
 import { STICK_R_ACTIONS } from "@/components/features/leads/lead-list-grid";
 
 const MarkJunkDialog = dynamic(() => import("@/components/features/leads/mark-junk-dialog").then((m) => m.MarkJunkDialog), { ssr: false });
@@ -48,11 +48,11 @@ export function openWhatsApp(rawNumber: string, text?: string) {
 export function RowActions({
   lead, isSelected, onSendQuote, onFollowUp, onWhatsApp,
 }: {
-  lead: Lead;
+  lead: LeadListRow;
   isSelected: boolean;
-  onSendQuote: (l: Lead) => void;
-  onFollowUp: (l: Lead) => void;
-  onWhatsApp?: (l: Lead) => void;
+  onSendQuote: (l: LeadListRow) => void;
+  onFollowUp: (l: LeadListRow) => void;
+  onWhatsApp?: (l: LeadListRow) => void;
 }) {
   const phoneDigits = (lead.contact_phone ?? "").replace(/\D/g, "");
   const waNumber = phoneDigits.startsWith("91")

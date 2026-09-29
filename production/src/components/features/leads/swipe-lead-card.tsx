@@ -56,6 +56,7 @@ import { heatScore, heatBadge } from "@/lib/leads/heat-score";
 import { decideSwipe, SWIPE_TRIGGER_PX } from "@/lib/leads/swipe-gesture";
 import { chipsForStage, type LeadOutcome } from "@/lib/leads/outcomes";
 import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
 import { istToday } from "@/lib/dates/ist";
 
 // LEAD_STAGES mirrors the array in leads/page.tsx — kept here as a small
@@ -76,18 +77,18 @@ const LEAD_STAGES: { id: Lead["stage"]; label: string; dot: string }[] = [
 // from where the action actually fires.
 
 interface SwipeLeadCardProps {
-  lead: Lead;
+  lead: LeadListRow;
   /** Tap (no drag) → open the lead drawer. */
-  onTap: (lead: Lead) => void;
+  onTap: (lead: LeadListRow) => void;
   /** Mutate the lead's stage when the user picks one from the chip menu. */
   onChangeStage: (stage: Lead["stage"]) => void;
   /** Direct "Send quote" — carries lead context into the quote builder. */
-  onSendQuote?: (lead: Lead) => void;
+  onSendQuote?: (lead: LeadListRow) => void;
   /**
    * Runs a call-outcome (lib/leads/outcomes.ts). Used by BOTH the left swipe and the
    * outcome chip row, so a gesture and a tap can never mean different things.
    */
-  onOutcome?: (outcome: LeadOutcome, lead: Lead) => void;
+  onOutcome?: (outcome: LeadOutcome, lead: LeadListRow) => void;
   /**
    * Is lead ki sabse nayi quote (id + status), useLeadQuotes ke map se. Optional —
    * jis caller ke paas map nahi, card waise hi chalta hai. Pardeep, 31 Aug 2026:
@@ -547,7 +548,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
 // ============================================================
 
 /** Pre-fill WhatsApp message with greeting + lead context. */
-function buildWaMessage(lead: Lead): string {
+function buildWaMessage(lead: LeadListRow): string {
   const greeting = lead.contact_name ? `Hi ${lead.contact_name},` : "Hello,";
   const ref = lead.plan
     ? `our conversation about ${lead.plan} for ${lead.company}`

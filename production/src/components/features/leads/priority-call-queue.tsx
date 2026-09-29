@@ -52,7 +52,7 @@ import { buildCallQueue, queueWhatsAppMessage, dialable, type QueueEntry } from 
 import { heatBadge } from "@/lib/leads/heat-score";
 import { OutcomeChips } from "./outcome-chips";
 import type { LeadOutcome } from "@/lib/leads/outcomes";
-import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
 
 /** Remembered per browser, not per user — it is a layout preference, not a setting. */
 const STORAGE_KEY = "ros_call_queue_open";
@@ -70,10 +70,10 @@ function QueueRow({
 }: {
   entry: QueueEntry;
   tenantName?: string | null;
-  onOutcome: (o: LeadOutcome, l: Lead) => void;
-  onOpen: (l: Lead) => void;
-  onLogCall: (l: Lead) => void;
-  onLogWhatsApp: (l: Lead) => void;
+  onOutcome: (o: LeadOutcome, l: LeadListRow) => void;
+  onOpen: (l: LeadListRow) => void;
+  onLogCall: (l: LeadListRow) => void;
+  onLogWhatsApp: (l: LeadListRow) => void;
 }) {
   const { lead, heat, daysOverdue } = entry;
   const badge = heatBadge(heat.band);
@@ -161,12 +161,13 @@ function QueueRow({
 export function PriorityCallQueue({
   leads, tenantName, onOutcome, onOpen, onLogCall, onLogWhatsApp, limit = 3,
 }: {
-  leads: readonly Lead[];
+  /** Due follow-ups (slim rows — queries/leads.ts#useDueLeads, S40); buildCallQueue re-checks them. */
+  leads: readonly LeadListRow[];
   tenantName?: string | null;
-  onOutcome: (o: LeadOutcome, l: Lead) => void;
-  onOpen: (l: Lead) => void;
-  onLogCall: (l: Lead) => void;
-  onLogWhatsApp: (l: Lead) => void;
+  onOutcome: (o: LeadOutcome, l: LeadListRow) => void;
+  onOpen: (l: LeadListRow) => void;
+  onLogCall: (l: LeadListRow) => void;
+  onLogWhatsApp: (l: LeadListRow) => void;
   limit?: number;
 }) {
   const queue = React.useMemo(() => buildCallQueue(leads, limit), [leads, limit]);

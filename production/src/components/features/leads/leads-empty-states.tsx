@@ -3,6 +3,10 @@
  * Error / loading / empty / nothing-matches states for Sales & Pipeline — moved verbatim out
  * of (app)/leads/page.tsx (S35, 28 Sep 2026). Two components because they sit at two places
  * in the page: the status block above the board/list, and the no-results hint below it.
+ *
+ * S40: counts in, not lead arrays — `totalLeads` (lead_counts().pool.total: does the
+ * workspace have ANY lead) and `shownCount` (how many the current view holds). The page no
+ * longer holds every lead to find out whether there are any.
  */
 import * as React from "react";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -17,10 +21,12 @@ export interface LeadsStatusStatesProps {
   error: Error | null;
   refetch: () => unknown;
   isLoading: boolean;
-  leads: Lead[] | undefined;
+  /** Every lead the caller can see; undefined until counted. */
+  totalLeads: number | undefined;
   isDealsPage: boolean;
   isSales: boolean;
-  filtered: Lead[];
+  /** Rows in the current view. */
+  shownCount: number;
   smartView: SmartView;
   setAddOpen: (open: boolean) => void;
   setCsvImportOpen: (open: boolean) => void;
@@ -28,7 +34,7 @@ export interface LeadsStatusStatesProps {
 }
 
 export function LeadsStatusStates({
-  error, refetch, isLoading, leads, isDealsPage, isSales, filtered, smartView, setAddOpen, setCsvImportOpen, setSmartView,
+  error, refetch, isLoading, totalLeads, isDealsPage, isSales, shownCount, smartView, setAddOpen, setCsvImportOpen, setSmartView,
 }: LeadsStatusStatesProps) {
   return (
     <>
@@ -63,7 +69,7 @@ export function LeadsStatusStates({
       {/* Empty — copy + CTAs swap based on which page we're on. Import CSV
           stays a secondary action for owner/manager only (sales role has it
           hidden from the toolbar above; keeping it consistent here). */}
-      {!isLoading && !error && leads && leads.length === 0 && (
+      {!isLoading && !error && totalLeads === 0 && (
         <EmptyState
           icon="target"
           title={isDealsPage ? "No deals yet" : "No leads yet"}
@@ -85,7 +91,7 @@ export function LeadsStatusStates({
           hides all of them. Purpose-specific message per view (research
           finding: generic "no results" loses users; targeted copy with a
           relevant action recovers them). */}
-      {!isLoading && !error && leads && leads.length > 0 && filtered.length === 0 && smartView !== "all" && smartView !== "everything" && (
+      {!isLoading && !error && (totalLeads ?? 0) > 0 && shownCount === 0 && smartView !== "all" && smartView !== "everything" && (
         <EmptyState
           icon={
             smartView === "today"   ? "clock" :
@@ -124,8 +130,8 @@ export function LeadsStatusStates({
 export interface LeadsNoResultsProps {
   isLoading: boolean;
   error: Error | null;
-  leads: Lead[] | undefined;
-  filtered: Lead[];
+  totalLeads: number | undefined;
+  shownCount: number;
   smartView: SmartView;
   search: string;
   setSearch: (v: string) => void;
@@ -134,7 +140,7 @@ export interface LeadsNoResultsProps {
 }
 
 export function LeadsNoResults({
-  isLoading, error, leads, filtered, smartView, search, setSearch, setStageFilter, setPriorityFilter,
+  isLoading, error, totalLeads, shownCount, smartView, search, setSearch, setStageFilter, setPriorityFilter,
 }: LeadsNoResultsProps) {
   return (
     <>
@@ -145,7 +151,7 @@ export function LeadsNoResults({
           into an inverted picture of where the pipeline actually sits.
           When the tenant has plenty of data but the current tab is empty, point the
           operator at the right place instead of a generic "no results". */}
-      {!isLoading && !error && leads && leads.length > 0 && filtered.length === 0 && smartView === "all" && (
+      {!isLoading && !error && (totalLeads ?? 0) > 0 && shownCount === 0 && smartView === "all" && (
         <div className="mt-6">
           {search.trim() ? (
             <EmptyState

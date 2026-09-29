@@ -9,18 +9,18 @@ import { rupee, initials, formatDate } from "@/lib/utils";
 import { getLeadWhatsAppUrl } from "@/lib/whatsapp";
 import { useWhatsAppSender } from "@/lib/hooks/useWhatsAppSender";
 import { intentMeta, staleWarning, isHighValueLead } from "@/lib/leads/heat";
-import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
 import { cn } from "@/lib/utils";
 
 interface LeadCardProps {
-  lead: Lead;
+  lead: LeadListRow;
   isDragging?: boolean;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
-  onClick?: (lead: Lead) => void;
-  onQuickQuote?: (lead: Lead) => void;
+  onClick?: (lead: LeadListRow) => void;
+  onQuickQuote?: (lead: LeadListRow) => void;
   dupCount?: number;
-  onOpenMerge?: (lead: Lead) => void;
+  onOpenMerge?: (lead: LeadListRow) => void;
 }
 
 

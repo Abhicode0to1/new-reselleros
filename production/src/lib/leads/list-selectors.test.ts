@@ -152,10 +152,19 @@ describe("searchLeads — the page's old `searched` memo", () => {
     expect(ids(searchLeads([w, wonW, plain], { ...base, smartView: "waiting" }))).toEqual([w.id]);
   });
 
-  it("today: created_at's date prefix equals the LOCAL date", () => {
+  it("today: created_at's LOCAL date equals the local date", () => {
     const t = mk({ created_at: "2026-09-28T10:00:00.000Z" });
     const y = mk({ created_at: "2026-09-27T10:00:00.000Z" });
     expect(ids(searchLeads([t, y], { ...base, smartView: "today" }))).toEqual([t.id]);
+  });
+
+  it("today: a lead that arrived just after local midnight is today (S40 — not its UTC date)", () => {
+    /* In IST, 01:30 on the 28th is 20:00Z on the 27th. The old rule compared created_at's UTC
+       date prefix, so this lead was "yesterday" until 05:30. Built from local time, so the
+       test means the same thing in any time zone the suite runs in. */
+    const early = mk({ created_at: new Date(2026, 8, 28, 1, 30).toISOString() });
+    const now = new Date(2026, 8, 28, 9, 0);
+    expect(ids(searchLeads([early], { ...base, now, smartView: "today" }))).toEqual([early.id]);
   });
 
   it("overdue: follow-up strictly before today, still open — due TODAY is not overdue", () => {

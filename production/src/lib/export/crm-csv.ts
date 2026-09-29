@@ -37,7 +37,11 @@ export const LEADS_CSV_HEADERS = [
   "Source", "Lost reason", "Created",
 ] as const;
 
-export function leadsCsvRows(rows: readonly Lead[]): Cell[][] {
+/* Only the columns it writes — so the leads page can export its slim rows (S40). */
+type CsvLead = Pick<Lead, "company" | "contact_name" | "contact_email" | "contact_phone" | "plan"
+  | "seats" | "value" | "stage" | "source" | "lost_reason" | "created_at">;
+
+export function leadsCsvRows(rows: readonly CsvLead[]): Cell[][] {
   return rows.map((l) => [
     s(l.company), s(l.contact_name), s(l.contact_email), s(l.contact_phone), s(l.plan),
     s(l.seats), s(l.value), s(l.stage), s(l.source), s(l.lost_reason), s(l.created_at),

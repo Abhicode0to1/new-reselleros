@@ -15,29 +15,23 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { LeadsSmartViews } from "./leads-smart-views";
-import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadCounts } from "@/lib/leads/list-page";
 
 afterEach(cleanup);
 
-/** Only the fields these counts read. */
-const lead = (over: Partial<Lead> = {}): Lead =>
-  ({
-    id: "lead-1",
-    company: "Bright Systems",
-    stage: "contact",
-    is_junk: false,
-    owner_id: "user-1",
-    created_at: "2026-08-01T00:00:00Z",
-    follow_up_date: null,
-    expected_close_date: null,
-    priority: null,
-    value: 0,
-    ...over,
-  }) as Lead;
+/* S40: the menu is handed lead_counts().views — server counts over the workspace's OPEN
+   leads — instead of a lead list it counted itself. WHICH leads each count takes (junk out,
+   won/lost out, only the agent's flag for Waiting, …) is now pinned where it is computed:
+   supabase/tests/lead_counts.test.sql, including "every count = the rows its view lists".
+   What stays here is what the menu does with a number: its words, and when a row shows. */
+const views = (over: Partial<LeadCounts["views"]> = {}): LeadCounts["views"] => ({
+  all: 1, mine: 0, waiting: 0, today: 0, overdue: 0, hot: 0, new: 0, stalled: 0, closing: 0, duplicates: 0,
+  ...over,
+});
 
 describe("the leads scope chip never claims to hold more than it does", () => {
   it('says "All open", not "All"', () => {
-    render(<LeadsSmartViews leads={[lead()]} active="all" onChange={() => {}} />);
+    render(<LeadsSmartViews counts={views()} active="all" onChange={() => {}} />);
     /* Exact text, because "All" is what it used to say and what a tidy-up would shorten it
        back to. The count lives in a separate element, so the label stands alone. */
     expect(screen.getByText("All open")).toBeTruthy();
@@ -49,7 +43,7 @@ describe("the leads scope chip never claims to hold more than it does", () => {
        the menu is opened here rather than the assertion being weakened to something the
        closed trigger happens to expose. Keyboard, because user-event is not a dependency
        of this project and Radix opens a menu on Enter. */
-    render(<LeadsSmartViews leads={[lead()]} active="all" onChange={() => {}} />);
+    render(<LeadsSmartViews counts={views()} active="all" onChange={() => {}} />);
     const trigger = screen.getByRole("button");
     fireEvent.keyDown(trigger, { key: "Enter" });
 
@@ -61,15 +55,10 @@ describe("the leads scope chip never claims to hold more than it does", () => {
     expect(hint.textContent).toMatch(/folder/i);
   });
 
-  it("counts what it says: open leads, minus junk", () => {
-    render(
-      <LeadsSmartViews
-        leads={[lead({ id: "a" }), lead({ id: "b" }), lead({ id: "c", is_junk: true })]}
-        active="all"
-        onChange={() => {}}
-      />,
-    );
-    // Two countable, one junk. Junk has its own view and is never folded into a total.
+  it("shows the server's open count on the trigger", () => {
+    /* Two open leads and one junk, as lead_counts() reports them: the menu shows the open
+       count, never a total that folds junk in (junk has its own view). */
+    render(<LeadsSmartViews counts={views({ all: 2 })} junkCount={1} active="all" onChange={() => {}} />);
     expect(screen.getByText("2")).toBeTruthy();
   });
 });
@@ -87,11 +76,9 @@ describe("the leads scope chip never claims to hold more than it does", () => {
    ───────────────────────────────────────────────────────────────────────────── */
 
 describe("the Waiting on you view", () => {
-  const open = (over: Partial<Lead> = {}) => lead({ stage: "contact", ...over });
-
   it("does not appear at all when nothing is waiting", () => {
     render(
-      <LeadsSmartViews leads={[open(), open({ id: "l2" })]} active="all" onChange={() => {}} />,
+      <LeadsSmartViews counts={views({ all: 2 })} active="all" onChange={() => {}} />,
     );
     fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
     /* PROVE THE MENU OPENED FIRST. Without this the assertion below passes when the
@@ -105,11 +92,7 @@ describe("the Waiting on you view", () => {
   it("appears with the count once the agent has stopped on something", () => {
     render(
       <LeadsSmartViews
-        leads={[
-          open({ id: "l1", requires_human_attention: true }),
-          open({ id: "l2", requires_human_attention: true }),
-          open({ id: "l3" }),
-        ]}
+        counts={views({ all: 3, waiting: 2 })}
         active="all"
         onChange={() => {}}
       />,
@@ -122,12 +105,13 @@ describe("the Waiting on you view", () => {
     expect(row?.textContent).toMatch(/2/);
   });
 
-  it("counts only OPEN leads — a won or lost handover is history", () => {
-    /* Leaving closed deals in the queue is how a queue stops being read. `leads` arrives
-       pre-filtered to open by the page, and this pins that the count agrees. */
+  it("shows the server's Waiting count — open leads only, a won or lost handover is history", () => {
+    /* Leaving closed deals in the queue is how a queue stops being read. The OPEN-only rule
+       is lead_counts()'s (lead_counts.test.sql: a lost lead with the flag is not counted);
+       this pins that the menu shows that number and not another. */
     render(
       <LeadsSmartViews
-        leads={[open({ id: "l1", requires_human_attention: true })]}
+        counts={views({ waiting: 1 })}
         active="all"
         onChange={() => {}}
       />,
@@ -150,7 +134,7 @@ describe("the Waiting on you view", () => {
        role silently went back to plain `menuitem`. */
     render(
       <LeadsSmartViews
-        leads={[open({ id: "l1", requires_human_attention: true })]}
+        counts={views({ waiting: 1 })}
         active="waiting"
         onChange={() => {}}
       />,
@@ -172,7 +156,7 @@ describe("the Waiting on you view", () => {
   it("says what the view holds, in words a rep can act on", () => {
     render(
       <LeadsSmartViews
-        leads={[open({ id: "l1", requires_human_attention: true })]}
+        counts={views({ waiting: 1 })}
         active="all"
         onChange={() => {}}
       />,
@@ -187,13 +171,13 @@ describe("the page opens on every lead — won and lost included", () => {
      Nothing was wrong with the data; the default view was "All open". The default is now
      "All leads", and its count is every non-junk lead, closed ones too. */
   it('the default view reads "All leads" with the full count', () => {
-    render(<LeadsSmartViews leads={[]} everythingCount={3} active="everything" onChange={() => {}} />);
+    render(<LeadsSmartViews counts={views({ all: 0 })} everythingCount={3} active="everything" onChange={() => {}} />);
     expect(screen.getByText("All leads")).toBeTruthy();
     expect(screen.getByText("3")).toBeTruthy();
   });
 
   it("All open is still offered, and choosing it counts as narrowing the list", () => {
-    render(<LeadsSmartViews leads={[lead()]} everythingCount={2} active="everything" onChange={() => {}} />);
+    render(<LeadsSmartViews counts={views()} everythingCount={2} active="everything" onChange={() => {}} />);
     fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
     expect(screen.getByText("All open")).toBeTruthy();
     expect(screen.getByText(/open, won aur lost/)).toBeTruthy();

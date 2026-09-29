@@ -12,6 +12,8 @@ import { ShareFormSheet, ENQUIRY_SHARE } from "@/components/features/leads/share
 import { WhatsAppActionDialog } from "@/components/shared/whatsapp-action-dialog";
 import { rupee } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
+import type { MergeLead } from "@/lib/queries/leads";
 
 /* Dialogs nobody sees on first paint are loaded when opened (27 Sep 2026): the Sales &
    Pipeline page carried ~4,000 lines of dialog code into every load. */
@@ -24,12 +26,12 @@ const GoogleContactsImportDialog = dynamic(() => import("@/components/features/c
 const StartTrialDialog = dynamic(() => import("@/components/features/leads/start-trial-dialog"), { ssr: false });
 
 export interface LeadsPageDialogsProps {
-  followUpLead: Lead | null;
-  setFollowUpLead: (l: Lead | null) => void;
-  waLead: Lead | null;
-  setWaLead: (l: Lead | null) => void;
-  mergeCluster: Lead[] | null;
-  setMergeCluster: (c: Lead[] | null) => void;
+  followUpLead: LeadListRow | null;
+  setFollowUpLead: (l: LeadListRow | null) => void;
+  waLead: LeadListRow | null;
+  setWaLead: (l: LeadListRow | null) => void;
+  mergeCluster: MergeLead[] | null;
+  setMergeCluster: (c: MergeLead[] | null) => void;
   projectQuoteLead: Lead | null;
   closeProjectQuote: () => void;
   addOpen: boolean;

@@ -50,7 +50,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { useCreateLead, useUpdateLead, useLeads } from "@/lib/queries/leads";
+import { useCreateLead, useUpdateLead, useLeadDuplicateCheck } from "@/lib/queries/leads";
 import { normPhone, normCompany } from "@/lib/leads/duplicates";
 import { PROJECT_PLAN_LABEL } from "@/lib/leads/enquiry";
 import { amountInIndianWords } from "@/lib/accounting/amount-words";
@@ -383,23 +383,30 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
   // already matches — so they open it instead of creating a second record.
   // Prevention beats cleanup. Skips the lead being edited. Non-blocking:
   // it's a heads-up with a link, never a hard stop.
-  const { data: allLeads } = useLeads();
+  /* S40: asked of the server (list_leads' dup_like — the same phone / company keys as
+     duplicates.ts), not looked up in every lead loaded with select("*"). That load ran as
+     soon as the leads page opened, because this form is always mounted. Only the typed
+     KEYS go to the server, a beat after the last keystroke, and only while the dialog is
+     open with something that can match. */
   const wCompany = watch("company");
   const wPhone   = watch("contact_phone");
-  const dupMatch = React.useMemo(() => {
-    if (!allLeads || allLeads.length === 0) return null;
-    const p = normPhone(wPhone);
-    const c = normCompany(wCompany);
-    if (!p && !c) return null;
-    return allLeads.find(
-      (l) =>
-        l.id !== editingLead?.id &&
-        /* For an existing customer, their closed (won / lost) leads are history, not a
-           duplicate — a new need from them is exactly what this lead is. */
-        !(forCustomer && (l.stage === "won" || l.stage === "lost")) &&
-        ((p && normPhone(l.contact_phone) === p) || (c && normCompany(l.company) === c)),
-    ) ?? null;
-  }, [allLeads, wPhone, wCompany, editingLead?.id, forCustomer]);
+  const [dupKeys, setDupKeys] = React.useState({ company: "", phone: "" });
+  React.useEffect(() => {
+    const t = setTimeout(() => setDupKeys({
+      company: normCompany(wCompany) ? (wCompany ?? "") : "",
+      phone:   normPhone(wPhone) ? (wPhone ?? "") : "",
+    }), 300);
+    return () => clearTimeout(t);
+  }, [wCompany, wPhone]);
+  const { data: dupCandidates } = useLeadDuplicateCheck(dupKeys.company, dupKeys.phone, editingLead?.id, open);
+  const dupMatch = React.useMemo(
+    () => (dupCandidates ?? []).find(
+      /* For an existing customer, their closed (won / lost) leads are history, not a
+         duplicate — a new need from them is exactly what this lead is. */
+      (l) => !(forCustomer && (l.stage === "won" || l.stage === "lost")),
+    ) ?? null,
+    [dupCandidates, forCustomer],
+  );
 
   /**
    * Open the native Contacts Picker (Android Chrome / Edge Mobile only).

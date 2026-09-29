@@ -20,11 +20,11 @@ import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { rupee, formatDate, cn } from "@/lib/utils";
 import { useMergeLeads } from "@/lib/queries/leads";
-import type { Lead } from "@/lib/supabase/database.types";
+import type { MergeLead } from "@/lib/queries/leads";
 
 /** How many useful fields a lead has filled — used to default-pick the richest
  *  record as the one to keep. */
-function completeness(l: Lead): number {
+function completeness(l: MergeLead): number {
   return [l.contact_name, l.contact_email, l.contact_phone, l.plan, l.seats, l.value, l.gstin, l.notes]
     .filter((v) => v != null && v !== "").length;
 }
@@ -32,7 +32,7 @@ function completeness(l: Lead): number {
 export function MergeLeadsDialog({
   cluster, onClose,
 }: {
-  cluster: Lead[];   // 2+ leads that duplicate one another
+  cluster: MergeLead[];   // 2+ leads that duplicate one another (only the columns shown — S40)
   onClose: () => void;
 }) {
   const merge = useMergeLeads();

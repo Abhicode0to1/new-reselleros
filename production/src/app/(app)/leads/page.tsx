@@ -24,9 +24,11 @@ import * as React from "react";
 import { useTeamTree } from "@/lib/queries/team-tree";
 import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { pipelineSplit } from "@/lib/leads/enquiry";
 import { toast } from "sonner";
-import { useLeads } from "@/lib/queries/leads";
+import {
+  fetchMergeCluster, useDueLeads, useLead, useLeadCounts, useLeadsBoard, useLeadsInfinite, useLostLeads,
+  type MergeLead,
+} from "@/lib/queries/leads";
 import { LossReasonsCard } from "@/components/features/leads/loss-reasons-card";
 import { useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
@@ -36,16 +38,17 @@ import { PriorityCallQueue } from "@/components/features/leads/priority-call-que
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { useCallLog } from "@/components/features/leads/call-log-dialog";
 import { localDateISO } from "@/lib/leads/outcomes";
-import { winRate } from "@/lib/leads/forecast";
 import { computeDuplicates } from "@/lib/leads/duplicates";
-import { SALES_FOLDERS, salesFolderCounts, type SalesFolder } from "@/lib/leads/folders";
+import { SALES_FOLDERS, type SalesFolder } from "@/lib/leads/folders";
 import { JunkAIReview } from "@/components/features/leads/junk-ai-review";
 import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListFilters, LeadListRow } from "@/lib/leads/list-page";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { filterStagesFor } from "@/lib/leads/stage-meta";
 import {
-  boardCut, inWorkspace, isOpenLead, junkCounts, listCut, pipelineTotals, searchLeads, type SortCol,
+  boardCut, inWorkspace, listCut, searchLeads, type SortCol,
 } from "@/lib/leads/list-selectors";
+import { toastError } from "@/lib/errors/toast-error";
 import { LeadListView } from "@/components/features/leads/lead-list-view";
 import { LeadDetailSheet } from "@/components/features/leads/lead-detail-sheet";
 import { LeadsToolbar } from "@/components/features/leads/leads-toolbar";
@@ -68,11 +71,11 @@ function LeadsPageInner() {
      and the drawer use, since the drawer is a separate component. */
   const projectQuoteId = searchParams.get("projectQuote");
 
-  const { data: leads, isLoading, error, refetch } = useLeads();
-  const projectQuoteLead = React.useMemo(
-    () => (projectQuoteId ? (leads ?? []).find((l) => l.id === projectQuoteId) ?? null : null),
-    [projectQuoteId, leads],
-  );
+  /* S40: nothing on this page loads every lead any more. The list pages through
+     list_leads(), every chip and count comes from lead_counts(), and the parts that are not
+     the list read small slim queries — see the "Data" block below. A lead the page needs in
+     FULL (the drawer, the project quotation) is read on its own, by id. */
+  const { data: projectQuoteLead = null } = useLead(projectQuoteId ?? undefined);
   // Every stage change on this page goes through changeStage — it owns the
   // "why was this lost?" prompt so the seven call sites don't each grow their
   // own version. See lib/leads/use-change-stage.ts.
@@ -109,8 +112,8 @@ function LeadsPageInner() {
   //   hot      → stage in [demo, trial, quote]
   //   all      → no constraint
   // Smart view = saved filter combo (HubSpot/Close/Attio pattern). Each
-  // chip in <LeadsSmartViews/> sets this. The `searched` memo below
-  // applies the view as an additional filter cut.
+  // chip in <LeadsSmartViews/> sets this. It travels to the server with the
+  // other filters (`listFilters` below) — list_leads() and lead_counts() apply it.
   /* Opens on every lead (won and lost included) — see the "All leads" view. */
   const [smartView, setSmartView] = React.useState<SmartView>("everything");
   // Collapsible "Lead intelligence" banner — remembers the choice so it doesn't
@@ -157,17 +160,17 @@ function LeadsPageInner() {
     router.replace(pathname as never);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
-  const [selected, setSelected] = React.useState<Lead | null>(null);
+  const [selected, setSelected] = React.useState<Pick<Lead, "id"> | null>(null);
 
   /* WHICH lead the drawer is on stays in `selected`; WHAT that lead currently says comes
      from the query. Two different questions, and conflating them is what let the drawer
      show "Stage: New" seconds after moving the same lead to Contacted on the board behind
-     it — see the comment at <LeadDetailSheet>. Resolved by id on every render, so any
-     invalidation of ["leads"] reaches the drawer the same way it reaches the list. */
-  const selectedLive = React.useMemo(
-    () => (selected ? (leads?.find((l) => l.id === selected.id) ?? selected) : null),
-    [selected, leads],
-  );
+     it — see the comment at <LeadDetailSheet>. Read by id (useLead, under ["leads", id]), so
+     any invalidation of ["leads"] reaches the drawer the same way it reaches the list.
+     S40: the list rows are slim now, and the drawer reads notes, trial and attribution
+     fields — so the drawer's lead is this one full row, not the list's copy. */
+  const { data: selectedFull } = useLead(selected?.id);
+  const selectedLive = selected && selectedFull?.id === selected.id ? selectedFull : null;
 
   /* Call-queue dependencies. runOutcome performs whatever lib/leads/outcomes.ts says a
      chip does — one entry point, so the chips on the queue, the row and the mobile card
@@ -184,10 +187,10 @@ function LeadsPageInner() {
 
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null);
   // Row "Follow-up" quick action → opens AddTaskDialog scoped to this lead.
-  const [followUpLead, setFollowUpLead] = React.useState<Lead | null>(null);
-  const [waLead, setWaLead] = React.useState<Lead | null>(null);
+  const [followUpLead, setFollowUpLead] = React.useState<LeadListRow | null>(null);
+  const [waLead, setWaLead] = React.useState<LeadListRow | null>(null);
   // Merge-duplicates dialog — holds the cluster (a lead + its matches) to fold.
-  const [mergeCluster, setMergeCluster] = React.useState<Lead[] | null>(null);
+  const [mergeCluster, setMergeCluster] = React.useState<MergeLead[] | null>(null);
 
   // Kanban is great for stage flow; list view is needed once you have 50+ leads
   // and want to scan by value/age/owner. Persisted in localStorage so the user's
@@ -213,13 +216,15 @@ function LeadsPageInner() {
   const [kpiOpen, setKpiOpen] = React.useState(false);
 
   // ── Deep-link: open the drawer for the lead in ?lead=<id> ──
-  // Runs once when leads load and the URL param is present.
+  // Runs once when that lead has been looked up and the URL param is present. S40: looked
+  // up by id — the lead may be on page 40 of the list, which the page has not loaded.
   const deepLinkHandledRef = React.useRef(false);
+  const deepLink = useLead(focusLeadId ?? undefined);
   React.useEffect(() => {
     if (deepLinkHandledRef.current) return;
-    if (!focusLeadId || !leads) return;
+    if (!focusLeadId || !deepLink.isFetched) return;
 
-    const match = leads.find((l) => l.id === focusLeadId);
+    const match = deepLink.data ?? null;
     if (!match) {
       deepLinkHandledRef.current = true;
       toast.error(`Lead ${focusLeadId} not found`);
@@ -239,11 +244,11 @@ function LeadsPageInner() {
     // path (not a hardcoded /leads) so a ?lead= deep-link opened on /deals
     // stays on /deals instead of bouncing the user to /leads.
     router.replace(pathname as never);
-  }, [focusLeadId, leads, router, pathname]);
+  }, [focusLeadId, deepLink.isFetched, deepLink.data, router, pathname]);
 
   // Quick "Send quote" from a list row — carries the lead's context into the
   // quote builder. Returning to /leads lands on the list (no auto-opened drawer).
-  const goSendQuote = React.useCallback((lead: Lead) => {
+  const goSendQuote = React.useCallback((lead: LeadListRow) => {
     /* A custom-software lead gets a PROJECT quotation, not a licence quote — and once it
        has one, "Send quote" opens that quotation instead of making a second. */
     if (lead.enquiry_type === "project") {
@@ -306,37 +311,113 @@ function LeadsPageInner() {
   );
   const [leadTeamMode, setLeadTeamMode] = React.useState<TeamViewMode>("team");
 
-  const workspaceLeads = React.useMemo(() => {
-    const rows = leads ?? [];
-    if (!leadMeMember) return rows;
-    const ids = idsForMode(leadMeMember, leadTeam, leadTeamMode);
-    if (ids === null) return rows;
-    return inWorkspace(rows, ids);
-  }, [leads, leadMeMember, leadTeam, leadTeamMode]);
-
-
-  // Duplicate index — computed over workspace leads (dups can span the workspace),
-  // surfaced as a per-row "Duplicate?" flag + a "Duplicates" smart view. Declared
-  // here (before `searched`) because the Duplicates view filters on dup.flagged.
-  // Non-destructive: it only flags; merging is an explicit action in the dialog.
-  const dup = React.useMemo(() => computeDuplicates(workspaceLeads), [workspaceLeads]);
-
-  // Junk (spam/fake) — a stored flag. junkCount drives the Junk chip; suspects
-  // are non-junk leads the heuristic flags for review (surfaced in the Junk view).
-  const { junk: junkCount, everything: everythingCount, suspects: junkSuspectCount } = React.useMemo(
-    () => junkCounts(workspaceLeads),
-    [workspaceLeads],
+  /* The team toggle's cut, as owner ids: listed owners OR unowned (lib/team/visibility.ts,
+     list-selectors.ts#inWorkspace). null = no narrowing. Sent to the server as owner_ids. */
+  const teamIds = React.useMemo(
+    () => (leadMeMember ? idsForMode(leadMeMember, leadTeam, leadTeamMode) : null),
+    [leadMeMember, leadTeam, leadTeamMode],
   );
 
-  // Search + filter both apply BEFORE the folder cut so each view respects them. The rules
-  // (junk cut, text search, stage/priority any-of, the smart view) are
-  // lib/leads/list-selectors.ts#searchLeads, characterised in its tests.
-  const searched = React.useMemo(
-    () => searchLeads(workspaceLeads, {
+  // Force list view on mobile (Kanban with 6 vertical stage columns is
+  // unusable on phones — each empty stage takes a screen-full).
+  // Deals tab respects the user's saved preference, EXCEPT on mobile.
+  const { isMobile, width: measuredWidth } = useBreakpoint();
+  /* Board is now available on /leads too. It used to be forced to list because raw
+     leads only ever sat in `new` / `contact`, so four of the six Kanban columns were
+     always empty. Now that every open stage is on this page the board is the whole
+     pipeline again — and drag-drop between stages is how a rep advances a deal, which
+     is exactly what the folder model cannot do and must not replace. */
+  const effectiveView = isMobile ? "list" : view;
+  const isList = effectiveView === "list";
+  /* useBreakpoint reports desktop until it has measured the window (width 0), so on a phone
+     the first render briefly means "board". Neither the list nor the board is fetched until
+     the view is known — otherwise every phone visit also pulled the board's rows. */
+  const viewKnown = measuredWidth > 0;
+
+  /* The search box goes to the server a beat after the last keystroke, not on every one —
+     a count and a page per keypress would be two round trips per letter. */
+  const [debouncedSearch, setDebouncedSearch] = React.useState(search);
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  /* ── ONE SET OF FILTERS, TWO READERS ───────────────────────────────────────
+     S40. The list pages through list_leads() and every number on the page — the View menu,
+     the folder rows, Junk / Duplicates, the Kiska counts, the team note, the KPI tiles, the
+     hot-lead card — comes from lead_counts(), both called with THESE filters. Before this
+     the page loaded every lead with select("*") and counted in the browser; at 20,000 leads
+     that was megabytes per visit, and PostgREST's 1000-row cap meant the chips were
+     silently counting only the newest 1000. supabase/tests/lead_counts.test.sql proves, for
+     every view × folder, that the count equals the rows the list pages out. */
+  const listFilters = React.useMemo<LeadListFilters>(() => ({
+    owner_ids: teamIds ? [...teamIds] : undefined,
+    search: debouncedSearch,
+    stages: stageFilter,
+    priorities: priorityFilter,
+    owners: ownerFilter,
+    smart_view: smartView,
+    folder,
+    /* The default "wait" order (lib/leads/waiting.ts) is worked out by the server, so the
+       lead that has waited longest is on page 1 even if it arrived months ago. */
+    sort: sortBy === "wait" ? "wait" : "created",
+  }), [teamIds, debouncedSearch, stageFilter, priorityFilter, ownerFilter, smartView, folder, sortBy]);
+
+  const countsQ = useLeadCounts(listFilters);
+  const counts  = countsQ.data;
+  const pagesQ  = useLeadsInfinite(listFilters, 50, { enabled: viewKnown && isList });
+  /* The Kanban board still reads its rows in one go and cuts them in the browser — a
+     column needs every open deal in its stage. It reads slim columns now, not select("*"),
+     and only while the board is on screen. Its chips are server counts like the list's. */
+  const boardQ  = useLeadsBoard(viewKnown && !isList);
+  /* The call queue and the loss card read their own small slices. */
+  const dueQ    = useDueLeads(teamIds, search.trim() === "");
+  const lostQ   = useLostLeads(teamIds, isDealsPage);
+
+  const isLoading = countsQ.isLoading || !viewKnown || (isList ? pagesQ.isLoading : boardQ.isLoading);
+  const error = countsQ.error ?? (isList ? pagesQ.error : boardQ.error) ?? null;
+  const refetch = React.useCallback(() => {
+    void countsQ.refetch();
+    void (isList ? pagesQ.refetch() : boardQ.refetch());
+  }, [countsQ, pagesQ, boardQ, isList]);
+  /** Does this workspace have ANY lead — what `leads.length > 0` used to answer. */
+  const totalLeads = counts?.pool.total;
+
+  /* The list's rows. A "mark junk" is patched into the cache before the server answers
+     (queries/leads.ts#patchCachedLeads); dropping junk here makes that tap vanish the row at
+     once, as it did when the page filtered its in-memory list. */
+  const listRows = React.useMemo<LeadListRow[]>(() => {
+    const rows = pagesQ.data ?? [];
+    return smartView === "junk" ? rows : rows.filter((l) => !l.is_junk);
+  }, [pagesQ.data, smartView]);
+  const dupIds = React.useMemo(
+    () => new Set(listRows.filter((l) => l.is_duplicate).map((l) => l.id)),
+    [listRows],
+  );
+
+  /* ── The board's cut (Kanban only) — the old in-browser selectors, over slim rows ── */
+  const folderToday = React.useMemo(() => localDateISO(new Date()), []);
+  const boardLeads = React.useMemo<LeadListRow[]>(() => {
+    if (isList) return [];
+    const rows = boardQ.data ?? [];
+    const workspace = teamIds === null ? rows : inWorkspace(rows, teamIds);
+    const dup = computeDuplicates(workspace);
+    const searched = searchLeads(workspace, {
       search, stageFilter, priorityFilter, ownerFilter, smartView, currentUser, dupFlagged: dup.flagged, now: new Date(),
-    }),
-    [workspaceLeads, search, stageFilter, priorityFilter, ownerFilter, smartView, currentUser, dup],
-  );
+    });
+    /* ── THE BOARD MUST CONTAIN ITS OWN LAST COLUMN ───────────────────────────
+       The list cut is open-only when no folder is picked, and the board's stages end at
+       `won` — so the Won column read 0 cards three inches below a chip saying 🏆 Won 2.
+       Won is also the board's DROP TARGET. So the board's base is every non-junk, non-lost
+       lead; picking a folder hands control back to the list cut (list-selectors#boardCut). */
+    return boardCut(searched, listCut(searched, folder, smartView, folderToday), folder, smartView);
+  }, [isList, boardQ.data, teamIds, search, stageFilter, priorityFilter, ownerFilter, smartView, currentUser, folder, folderToday]);
+
+  /** The rows the current view is showing — what `filtered` was. */
+  const shownRows = isList ? listRows : boardLeads;
+  /** How many rows the view holds in total (the list only loads a page of them). */
+  const shownCount = isList ? (counts?.list.matching ?? listRows.length) : boardLeads.length;
+
   const activeFilterCount = stageFilter.length + priorityFilter.length + ownerFilter.length;
 
   /* ── The folder chips are the filter ──────────────────────────────────────
@@ -346,18 +427,10 @@ function LeadsPageInner() {
      A control that looks like a filter and filters nothing is worse than no control:
      the rep believes the list in front of them has been narrowed.
 
-     The chip counts and the list BOTH call inSalesFolder() from lib/leads/folders.ts
-     (21 tests), so a chip can never advertise a number the list contradicts. */
-  const folderToday = React.useMemo(() => localDateISO(new Date()), []);
-  /* Counted over `searched`, NOT over `openLeads`. Won and Lost are folders too, and a
-     base that had already dropped closed leads would have reported both as 0 forever —
-     a chip that can only ever say zero is a chip nobody clicks twice.
-     The working folders are unaffected: inSalesFolder() applies its own isClosed() cut. */
-  const folderCounts = React.useMemo(
-    () => salesFolderCounts(searched, folderToday),
-    [searched, folderToday],
-  );
-
+     The folder counts are lead_counts().folders — counted over the SEARCHED set (every
+     filter + the view), not over open leads: Won and Lost are folders too, and a base that
+     had already dropped closed leads would report both as 0 forever. The list's folder cut
+     is the same rule on the server (inSalesFolder), pinned by lead_counts.test.sql. */
   /* ─── THE SIX FOLDERS THE VIEW MENU DID NOT ALREADY HAVE ────────────────
      The chip strip is gone; these move into <LeadsSmartViews/> so there is ONE place
      a list gets narrowed. All open and Junk are deliberately absent — the menu already
@@ -365,32 +438,12 @@ function LeadsPageInner() {
      removing it. */
   const folderRows = React.useMemo(
     () =>
-      SALES_FOLDERS.map((f) => ({
-        id: f.id as string,
-        label: f.label,
-        count: folderCounts[f.id],
-        /* Only when it IS empty — see the note above the memo. */
-        hint: folderCounts[f.id] === 0 ? f.hint : "",
-      })),
-    [folderCounts],
-  );
-  const filtered = listCut(searched, folder, smartView, folderToday);
-
-  /* ── THE BOARD MUST CONTAIN ITS OWN LAST COLUMN ─────────────────────────────
-     `filtered` is open-only when no folder is picked, and the board's stages end at
-     `won` — so the Won column read 0 cards and "No deals in won" three inches below a
-     chip saying 🏆 Won 2. Two numbers about the same two deals, disagreeing on screen.
-
-     Worse than the wrong count: Won is the board's DROP TARGET. Dragging a deal into an
-     empty column that never shows a result reads as "the drag did not work", and the rep
-     stops using the one gesture the board exists for.
-
-     So the board's base is every non-junk, non-lost lead. Lost is deliberately absent —
-     it is not a column here, and losing a deal goes through the reason prompt, not a
-     drag. Picking a folder hands control back to `filtered`, unchanged. */
-  const boardLeads = React.useMemo(
-    () => boardCut(searched, filtered, folder, smartView),
-    [folder, smartView, searched, filtered],
+      SALES_FOLDERS.map((f) => {
+        const count = counts?.folders[f.id] ?? 0;
+        /* Only when it IS empty — see the note above. */
+        return { id: f.id as string, label: f.label, count, hint: count === 0 ? f.hint : "" };
+      }),
+    [counts],
   );
 
   /* ── ONE SELECTION AT A TIME ────────────────────────────────────────────────
@@ -415,68 +468,29 @@ function LeadsPageInner() {
     setFolder("all");
   }, []);
 
-  // Tab-scoped UNFILTERED subset for the insight band, Smart Views chips,
-  // Today strip, and right rail. Derived from `workspaceLeads` so counts stay
-  // accurate per active workspace while the user is searching / filtering.
-  const leadsForTab = React.useMemo(
-    () => workspaceLeads.filter(isOpenLead),
-    [workspaceLeads],
-  );
-
-  // Per-tab duplicate count + merge opener (the `dup` index itself is computed
-  // higher up, before `searched`, since the Duplicates smart view filters on it).
-  const duplicateCountForTab = React.useMemo(
-    () => leadsForTab.filter((l) => dup.flagged.has(l.id)).length,
-    [leadsForTab, dup],
-  );
-  /** Open the merge dialog for a lead: cluster = the lead + everything it dups. */
-  const openMergeFor = React.useCallback((lead: Lead) => {
-    const matches = dup.matchesOf.get(lead.id) ?? [];
-    if (matches.length === 0) return;
-    setMergeCluster([lead, ...matches.map((m) => m.lead)]);
-  }, [dup]);
-
-  // Force list view on mobile (Kanban with 6 vertical stage columns is
-  // unusable on phones — each empty stage takes a screen-full).
-  // Leads tab always renders as a list (raw leads only live in 'new' /
-  // 'contacted', so 4 of 6 Kanban columns would always be empty).
-  // Deals tab respects the user's saved preference, EXCEPT on mobile.
-  const { isMobile } = useBreakpoint();
-  /* Board is now available on /leads too. It used to be forced to list because raw
-     leads only ever sat in `new` / `contact`, so four of the six Kanban columns were
-     always empty. Now that every open stage is on this page the board is the whole
-     pipeline again — and drag-drop between stages is how a rep advances a deal, which
-     is exactly what the folder model cannot do and must not replace. */
-  const effectiveView = isMobile ? "list" : view;
+  /** Open the merge dialog for a lead: cluster = the lead + everything it duplicates, read
+   *  from the server when Merge is pressed (list_leads dup_of — the row's flag's own rule). */
+  const openMergeFor = React.useCallback(async (lead: LeadListRow) => {
+    try {
+      const cluster = await fetchMergeCluster(lead.id, teamIds);
+      if (cluster.length > 1) setMergeCluster(cluster);
+      else toast.info(`${lead.company} has no duplicate left to merge`);
+    } catch (err) {
+      toastError(err, { fallback: "Could not look up the duplicates" });
+    }
+  }, [teamIds]);
 
   /* ── EVERY NON-JUNK LEAD IS A DEAL ─────────────────────────────────────────
-     This set used to start at `isPastInbox` — stage past new/contact — a leftover from
-     when /deals was its own page. The stated reason was that value is only entered once
-     a lead is past first contact. The data says otherwise: six of this tenant's seven
-     `new` leads carry one, ₹16,320 through ₹1,65,600.
-
-     So the band read "Open Pipeline ₹0 · Active Deals: 0" three inches from
-     "Open leads: 8" — ₹5,59,584 of live pipeline reported as nothing, beside the count
-     that disproved it. A zero is not read as a missing number; it is read as a fact,
-     and this one said "you have no pipeline" to a rep who had eight deals.
-
-     Junk is the only exclusion now. A stage is no longer a reason to be left out of the
-     totals, for the same reason it is no longer a reason to be on a different page.
-
-     Derived from `workspaceLeads`, never from `searched`, so the totals answer "how much
-     is there" rather than "how much survives what I typed". */
-  const { dealUniverse, openDeals, totalValue } = React.useMemo(
-    () => pipelineTotals(workspaceLeads),
-    [workspaceLeads],
-  );
-  const pipelineByType = React.useMemo(() => pipelineSplit(openDeals), [openDeals]);
-  /* Kept when the metrics band went: the breakdown tiles read wonCount, decidedCount
-     and conversion out of this. Only `lost` was band-only. */
-  const rate = React.useMemo(() => winRate(dealUniverse), [dealUniverse]);
-  /* Win rate over DECIDED deals only — won ÷ (won + lost). It used to divide by every
-     deal including the open ones, which counts "not finished yet" as "not won"; the rule
-     and the reasoning now live in lib/leads/forecast.ts with its tests. */
-  const { won: wonCount, decided: decidedCount, pct: conversion } = rate;
+     The KPI tiles ("Show the numbers") are lead_counts().kpi — over every non-junk lead in
+     the workspace, whatever its stage, never over the searched set, so the totals answer
+     "how much is there" rather than "how much survives what I typed". (The band once read
+     "Open Pipeline ₹0" beside "Open leads: 8" because it started at stage > contact; a stage
+     is no longer a reason to be left out of the totals.)
+     Win rate over DECIDED deals only — won ÷ (won + lost); see lib/leads/forecast.ts. */
+  const kpi = counts?.kpi;
+  const wonCount = kpi?.won ?? 0;
+  const decidedCount = (kpi?.won ?? 0) + (kpi?.lost ?? 0);
+  const conversion = decidedCount > 0 ? Math.round((wonCount * 100) / decidedCount) : null;
 
   return (
     <div className="h-[calc(100vh-3.5rem-4rem)] md:h-[calc(100vh-3.5rem)] max-w-[1800px] mx-auto p-3 sm:p-4 flex flex-col overflow-hidden min-w-0">
@@ -486,12 +500,16 @@ function LeadsPageInner() {
 
 
       {/* Expanded Intelligence Drawer */}
-      {kpiOpen && !isLoading && leads && leads.length > 0 && (
+      {kpiOpen && !isLoading && counts && (totalLeads ?? 0) > 0 && (
         <LeadsKpiDrawer
-          leads={leads}
-          totalValue={totalValue}
-          pipelineByType={pipelineByType}
-          openDeals={openDeals}
+          totalValue={counts.kpi.open_value}
+          pipelineByType={{
+            subscription: counts.kpi.open_value - counts.kpi.open_value_project,
+            project: counts.kpi.open_value_project,
+          }}
+          openCount={counts.kpi.open_count}
+          highPriority={counts.pool.high_priority}
+          totalInquiries={counts.pool.total}
           wonCount={wonCount}
           decidedCount={decidedCount}
           conversion={conversion}
@@ -505,21 +523,21 @@ function LeadsPageInner() {
           dropdown now, so the row no longer needs a scrolling middle section —
           and the width it was hogging goes to the search box, which was the
           other cramped control on this row. */}
-      {!isLoading && leads && (
+      {!isLoading && counts && (
         <LeadsToolbar
-          leads={leads}
+          pool={counts.pool}
           leadMeMember={leadMeMember}
           leadTeam={leadTeam}
           leadTeamMode={leadTeamMode}
           setLeadTeamMode={setLeadTeamMode}
           search={search}
           setSearch={setSearch}
-          leadsForTab={leadsForTab}
-          everythingCount={everythingCount}
+          viewCounts={counts.views}
+          everythingCount={counts.workspace.everything}
           currentUser={currentUser}
-          duplicateCountForTab={duplicateCountForTab}
-          junkCount={junkCount}
-          junkSuspectCount={junkSuspectCount}
+          duplicateCountForTab={counts.views.duplicates}
+          junkCount={counts.workspace.junk}
+          junkSuspectCount={counts.workspace.suspects}
           smartView={smartView}
           selectSmartView={selectSmartView}
           folderRows={folderRows}
@@ -561,8 +579,9 @@ function LeadsPageInner() {
       {/* AI junk review — only in the Junk view. Lets the operator ask AI to
           decide across the spam pile (verdict + reason + confidence), then
           confirm with one tap. Reversible, human-in-the-loop. */}
-      {smartView === "junk" && filtered.length > 0 && (
-        <JunkAIReview leads={filtered} />
+      {/* The rows on screen — the list's loaded pages, or the board's cut. */}
+      {smartView === "junk" && shownRows.length > 0 && (
+        <JunkAIReview leads={shownRows} />
       )}
 
       {/* AI lead intelligence
@@ -572,8 +591,8 @@ function LeadsPageInner() {
           target the single TOP hot lead (highest value) — Call opens the
           phone dialer; Send nudge opens the mail client with a pre-written
           follow-up. Both gracefully degrade if the contact info is missing. */}
-      {!isLoading && leads && leads.length > 0 && !isSales && search.trim() === "" && (
-        <LeadsHotCard filtered={filtered} currentUser={currentUser} tipsOpen={tipsOpen} toggleTips={toggleTips} />
+      {!isLoading && counts && (totalLeads ?? 0) > 0 && !isSales && search.trim() === "" && (
+        <LeadsHotCard hotCount={counts.list.hot} topHot={counts.list.hot_top} currentUser={currentUser} tipsOpen={tipsOpen} toggleTips={toggleTips} />
       )}
 
 
@@ -592,10 +611,10 @@ function LeadsPageInner() {
           matters more than it sounds. */}
       {/* `mb-3`: band aur table ke beech saans. Bina iske dono chipke hue the aur band
           table ka hi ek header jaisa lagta tha — jabki wo alag cheez hai. */}
-      {!isLoading && leads && leads.length > 0 && search.trim() === "" && (
+      {!isLoading && (totalLeads ?? 0) > 0 && search.trim() === "" && (
         <div className="mb-3">
         <PriorityCallQueue
-          leads={workspaceLeads}
+          leads={dueQ.data ?? []}
           tenantName={currentUser?.tenantName}
           onOutcome={(o, l) => callLog.run(o, l)}
           onOpen={(l) => setSelected(l)}
@@ -609,10 +628,10 @@ function LeadsPageInner() {
         error={error}
         refetch={refetch}
         isLoading={isLoading}
-        leads={leads}
+        totalLeads={totalLeads}
         isDealsPage={isDealsPage}
         isSales={isSales}
-        filtered={filtered}
+        shownCount={shownCount}
         smartView={smartView}
         setAddOpen={setAddOpen}
         setCsvImportOpen={setCsvImportOpen}
@@ -622,9 +641,9 @@ function LeadsPageInner() {
       {/* Loss analytics — owner-level "why are we losing?", in money. Deals tab
           only: the raw-inquiry tab has no stage flow, so losses aren't its story.
           The card handles its own empty state and hides nothing. */}
-      {!isLoading && !error && isDealsPage && workspaceLeads.length > 0 && (
+      {!isLoading && !error && isDealsPage && (totalLeads ?? 0) > 0 && (
         <div className="mb-3">
-          <LossReasonsCard leads={workspaceLeads} />
+          <LossReasonsCard leads={lostQ.data ?? []} />
         </div>
       )}
 
@@ -633,7 +652,7 @@ function LeadsPageInner() {
           flex-1 + min-h-0 lets the grid stretch to fill remaining viewport
           height (page wrapper is min-h-[calc(100vh-3.5rem)] flex-col), so
           columns visually fill instead of bottom cream area showing. */}
-      {!isLoading && !error && leads && leads.length > 0 && effectiveView === "kanban" && (
+      {!isLoading && !error && (totalLeads ?? 0) > 0 && effectiveView === "kanban" && (
         <LeadsKanbanBoard
           boardLeads={boardLeads}
           changeStage={changeStage}
@@ -648,9 +667,19 @@ function LeadsPageInner() {
           internal "No leads match." row appears AND the smart empty state
           below also fires, creating a duplicate. Skipping the table here
           lets the smart empty state below own the empty-screen real estate. */}
-      {!isLoading && !error && leads && leads.length > 0 && effectiveView === "list" && filtered.length > 0 && (
+      {!isLoading && !error && (totalLeads ?? 0) > 0 && effectiveView === "list" && listRows.length > 0 && (
         <LeadListView
-          leads={filtered}
+          leads={listRows}
+          /* S40: the list is PAGED. The server already ordered it for "wait" and "created"
+             (newest first); any other column sorts the rows loaded so far, and the footer
+             says so. */
+          serverSorted={sortDir === "desc" && (sortBy === "wait" || sortBy === "created")}
+          paging={{
+            total: counts?.list.matching ?? listRows.length,
+            hasMore: Boolean(pagesQ.hasNextPage),
+            loadingMore: pagesQ.isFetchingNextPage,
+            onLoadMore: () => { void pagesQ.fetchNextPage(); },
+          }}
           sortBy={sortBy}
           sortDir={sortDir}
           onSort={(col) => {
@@ -666,15 +695,15 @@ function LeadsPageInner() {
           onFollowUp={setFollowUpLead}
           onWhatsApp={(l) => setWaLead(l)}
           onMerge={openMergeFor}
-          dupIds={dup.flagged}
+          dupIds={dupIds}
         />
       )}
 
       <LeadsNoResults
         isLoading={isLoading}
         error={error}
-        leads={leads}
-        filtered={filtered}
+        totalLeads={totalLeads}
+        shownCount={shownCount}
         smartView={smartView}
         search={search}
         setSearch={setSearch}
@@ -703,9 +732,10 @@ function LeadsPageInner() {
           staleness and nobody had noticed, because it sits next to a stage label it also
           failed to update. The nudge only made the disagreement loud enough to see.
 
-          Falls back to the snapshot when the id is missing from the list rather than
-          rendering nothing: a deleted row already closes the drawer through its own
-          handler, and a blank drawer mid-refetch would be a worse bug than a stale one. */}
+          S40: `selected` holds only the id now, and the lead is read by that id (useLead) —
+          the list's rows are slim and the drawer needs the full record. A background
+          refetch keeps the last data on screen, so the drawer does not blank mid-refetch;
+          on first open it appears once that one row has arrived. */}
       <LeadDetailSheet
         lead={selectedLive}
         onClose={() => setSelected(null)}
