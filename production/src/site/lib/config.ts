@@ -74,6 +74,17 @@ export const ENQUIRY_WORKSPACE_API = `${RESELLEROS_URL}/api/public/enquiry/works
 export const WHATSAPP_NUMBER = "919800000000";
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}`;
 
+/** The fake number above. While WHATSAPP_NUMBER still equals it, a page that must not
+    show a dead button to a paying customer (the /buy/workspace thanks page) hides its
+    WhatsApp and call links and offers COMPANY.supportEmail instead. */
+export const WHATSAPP_PLACEHOLDER = "919800000000";
+export const WHATSAPP_READY: boolean = WHATSAPP_NUMBER !== WHATSAPP_PLACEHOLDER;
+
+/** "919800000000" → "+91 98000 00000". */
+export function whatsappDisplay(e164: string = WHATSAPP_NUMBER): string {
+  return `+${e164.slice(0, 2)} ${e164.slice(2, 7)} ${e164.slice(7)}`;
+}
+
 export const COMPANY = {
   name: "Anutech Digital Pvt Ltd",
   short: "Anutech Digital",

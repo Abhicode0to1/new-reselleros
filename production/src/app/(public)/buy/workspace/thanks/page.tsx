@@ -4,7 +4,7 @@
  * Post-purchase confirmation page. The Buy-now dialog redirects here on
  * successful payment (live Razorpay capture OR simulation). The page reads
  * the quote by ID via the admin client and renders a clear "what happens
- * next" timeline + WhatsApp Pardeep CTA.
+ * next" timeline + a support strip (contact from src/site/lib/config).
  *
  * Security posture
  *   Quote IDs (Q-2025-26-NNNN) are sequential and guessable, so the number alone
@@ -23,7 +23,7 @@ import { fetchOrder } from "./fetch-order";
 
 export const metadata: Metadata = {
   title: "Order confirmed · ResellerOS",
-  description: "Your Google Workspace order is confirmed. Pardeep will WhatsApp you within 4 hours to verify your domain.",
+  description: "Your Google Workspace order is confirmed. Our team will WhatsApp you within 4 hours to verify your domain.",
 };
 
 // Don't cache — different visitor = different order
