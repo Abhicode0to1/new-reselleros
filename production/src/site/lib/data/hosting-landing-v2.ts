@@ -20,13 +20,16 @@
  *
  * Testimonials are kept as-is (Pardeep, 2 Sep) — they already run on the live
  * page; they'll be swapped for real, signed-off references later.
- * The WhatsApp number is still a PLACEHOLDER — swap WHATSAPP_URL when the real
- * number is known.
+ * The WhatsApp link is the site-wide one from site/lib/config (29 Sep 2026); set the
+ * real number there, once, for every page.
  */
 import { LANDING_PLANS } from "./hosting-landing";
+import { WHATSAPP_URL } from "@/site/lib/config";
 
-/** ⚠️ Placeholder — replace with Anutech's real WhatsApp number. */
-export const WHATSAPP_URL = "https://wa.me/919800000000";
+/* Re-exported so HostingLanding keeps its import. This file used to hold its own copy of
+   the placeholder, so setting the real number in config.ts would have left /hosting
+   pointing at the fake one. */
+export { WHATSAPP_URL };
 export const TRIAL_DAYS = 15;
 
 export interface HostingTier {
