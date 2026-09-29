@@ -100,7 +100,7 @@ export default function VaultPage() {
     <div className="p-4 md:p-6 lg:p-8 max-w-[1240px] mx-auto">
       <div className="mb-6 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Admin &amp; Control</p>
+          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Settings</p>
           <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Password Vault</h1>
           <p className="text-sm text-ink-3 mt-1 max-w-2xl">
             Admin console logins you hold on behalf of customers. Encrypted at rest;
