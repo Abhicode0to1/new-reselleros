@@ -10,7 +10,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { resolveGeminiConfig, geminiJson, geminiGroundedText } from "@/lib/ai/gemini";
 import { resolveDoh, DNS_TYPE } from "@/lib/dns/doh";
 import {
-  discoveryPrompt, parseDiscovery, mxProvider, siteNote, baselineScore, scoringPrompt, mergeScores,
+  discoveryPrompt, parseDiscovery, mxProvider, siteNote, baselineScore, scoringPrompt, mergeScores, spreadByIndustryCity,
   type FinderProfile, type DiscoveredCompany, type ScoreInput, type SiteAudit, type MxProvider,
 } from "@/lib/leads/lead-finder";
 import {
@@ -277,7 +277,8 @@ export async function runLeadFinder(admin: Admin, tenantId: string, profileId: s
     result.discovered = found.length;
     if (found.length === 0) { await finish(false, "Gemini ne koi company nahi di — profile ko aur specific karo (city + industry)."); return result; }
 
-    const fresh = found.filter((c) => !known.has(c.domain));
+    // Industry × city round-robin, so the day's limit is a mix even if the answer is lopsided.
+    const fresh = spreadByIndustryCity(found.filter((c) => !known.has(c.domain)));
     result.skippedDupe = found.length - fresh.length;
 
     // Signals, a few at a time (DNS + site + contact pages each). Keep going until the day's

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  normaliseDomain, parseDiscovery, mxProvider, siteNote, baselineScore, mergeScores, discoveryPrompt, leadNotes, type ScoreInput,
+  normaliseDomain, parseDiscovery, mxProvider, siteNote, baselineScore, mergeScores, discoveryPrompt, leadNotes, splitList, spreadByIndustryCity, type ScoreInput,
 } from "./lead-finder";
 
 const site = (over: Partial<ReturnType<typeof siteNote>> = {}) => ({ https: true, status: 200, note: "Website theek hai", ...over });
@@ -63,6 +63,26 @@ describe("lead finder", () => {
     const p = discoveryPrompt({ name: "x", cities: "Gurgaon", industries: "CA firms", company_size: "10-50", products: ["workspace"], must_have: "", exclude: "MNC", daily_limit: 10 }, ["known.com"], 10);
     expect(p.user).toContain("Gurgaon"); expect(p.user).toContain("CA firms"); expect(p.user).toContain("known.com"); expect(p.user).toContain("Exclude: MNC");
     expect(p.system).toMatch(/Do not use Google Maps/);
+  });
+
+  it("multi-city, multi-industry profile asks for a spread and names each value", () => {
+    const p = discoveryPrompt({ name: "x", cities: "Gurgaon, Noida", industries: "dental clinics, diagnostic labs, play schools", company_size: "5-100", products: ["workspace"], must_have: "", exclude: "", daily_limit: 10 }, [], 24);
+    expect(p.user).toContain("Cities (all of them): Gurgaon | Noida");
+    expect(p.user).toContain("Industries (all of them): dental clinics | diagnostic labs | play schools");
+    expect(p.user).toMatch(/cover EVERY city and EVERY industry/);
+    expect(p.system).toContain("industry");
+  });
+
+  it("splitList handles commas, slashes and 'and'", () => expect(splitList("Gurgaon, Noida / Delhi and Faridabad")).toEqual(["Gurgaon", "Noida", "Delhi", "Faridabad"]));
+
+  it("spreadByIndustryCity mixes a lopsided answer", () => {
+    const dental = Array.from({ length: 6 }, (_, i) => ({ id: "d" + i, industry: "dental clinics", city: i % 2 ? "Noida" : "Gurgaon" }));
+    const labs = [{ id: "l0", industry: "diagnostic labs", city: "Noida" }, { id: "l1", industry: "diagnostic labs", city: "Gurgaon" }];
+    const school = [{ id: "s0", industry: "play schools", city: "Gurgaon" }];
+    const first4 = spreadByIndustryCity([...dental, ...labs, ...school]).slice(0, 4).map((x) => x.industry);
+    expect(new Set(first4)).toEqual(new Set(["dental clinics", "diagnostic labs", "play schools"]));
+    const dentalOrder = spreadByIndustryCity(dental).slice(0, 2).map((x) => x.city);
+    expect(new Set(dentalOrder)).toEqual(new Set(["Gurgaon", "Noida"]));
   });
 
   it("lead notes list the signals", () => {
