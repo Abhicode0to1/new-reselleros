@@ -108,3 +108,6 @@ supabase/.branches/
 
 # One-off maintenance scripts (named after real people/incidents) — keep local, not in git
 production/scratch/
+
+# Pawan's personal task list — kept local only (29 Sep 2026)
+/Todos.md
