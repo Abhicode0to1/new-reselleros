@@ -27,6 +27,7 @@ import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { GST_STATE_BY_CODE } from "@/lib/utils";
 import type { SitePromoRow, SitePromoBannerStyle } from "@/lib/supabase/database.types";
+import { thanksUrl } from "./thanks/thanks-url";
 
 // ──────────────────────────────────────────────────────────────────────
 // Site promo — fetched from /api/public/site-promo/current. Updates as
@@ -2694,6 +2695,8 @@ interface CheckoutApiResponse {
   currency?:       string;
   razorpayKeyId?:  string;
   quoteId?:        string;
+  /** The quote's secret token. The thanks page shows the order only with it (S11). */
+  publicToken?:    string;
   leadId?:         string;
   customerName?:   string;
   tierName?:       string;
@@ -2893,8 +2896,7 @@ function BuyNowDialog({
     //    the customer, sent test emails. Redirect to the thanks page so the
     //    visitor gets the full confirmation experience.
     if (isSimulation || json.simulated) {
-      const qid = json.quoteId ?? "";
-      window.location.href = `/buy/workspace/thanks?order=${encodeURIComponent(qid)}&sim=1`;
+      window.location.href = thanksUrl(json.quoteId, json.publicToken, true);
       return;
     }
 
@@ -2935,8 +2937,7 @@ function BuyNowDialog({
         // Razorpay captured the payment client-side. The webhook will do the
         // real database work; we just take the visitor to the confirmation
         // page so they see a clear next-steps timeline + support link.
-        const qid = json.quoteId ?? "";
-        window.location.href = `/buy/workspace/thanks?order=${encodeURIComponent(qid)}`;
+        window.location.href = thanksUrl(json.quoteId, json.publicToken, false);
       },
       modal: {
         ondismiss: () => {

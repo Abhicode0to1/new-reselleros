@@ -1,0 +1,49 @@
+/**
+ * Reads the order the thanks page may show, or null. See page.tsx for the security posture:
+ * the quote's secret token (S11), ANUTECH's tenant, and a paid status must all hold.
+ */
+import { createAdminClient } from "@/lib/supabase/server";
+import { quoteTokenMatches } from "@/lib/quotes/accept-token";
+import type { ThanksOrder } from "./thanks-client";
+
+const BUY_PAGE_TENANT_ID =
+  process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
+
+/** Pull only the customer-safe slice of the quote row. Never expose cost,
+ *  margin, internal notes, or other tenant data. */
+export async function fetchOrder(quoteId: string, token: string | null | undefined): Promise<ThanksOrder | null> {
+  // Both shapes of quote number: today's Q-<tenant code>-2026-27-0042 (next_document_number with
+  // the tenant's doc_code) and the older Q-2026-27-0042. Until 29 Sep 2026 only the older one was
+  // accepted, so every customer since tenant codes arrived got the "no order found" page.
+  if (!/^Q-(?:[A-Z0-9]{2,8}-)?[0-9]{4}-[0-9]{2}-[0-9]{4}$/.test(quoteId)) return null;
+  // No token, no lookup: a guessed number never reaches the database.
+  if (!token) return null;
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("quotes")
+    .select("id, tenant_id, public_token, customer_name, plan, seats, amount, payment_status, payment_received_at, line_items, created_date")
+    .eq("id", quoteId)
+    .eq("tenant_id", BUY_PAGE_TENANT_ID)
+    .in("payment_status", ["received", "partial"])
+    .maybeSingle();
+  if (error || !data) return null;
+  if (!quoteTokenMatches(token, data.public_token)) return null;
+
+  // Extract tier name + domain from line_items / notes if present.
+  const firstLine = Array.isArray(data.line_items) && data.line_items.length > 0
+    ? (data.line_items[0] as { name?: string })
+    : null;
+  const tierName = firstLine?.name?.replace(/^Google Workspace\s*[·\-]?\s*/i, "").replace(/\s*\(annual\)\s*$/i, "")
+                ?? data.plan
+                ?? "Google Workspace";
+
+  return {
+    quoteId:        data.id,
+    customerName:   data.customer_name ?? "",
+    tierName,
+    seats:          data.seats ?? 0,
+    amount:         data.amount ?? 0,
+    paymentStatus:  data.payment_status ?? "awaiting",
+    paymentDate:    data.payment_received_at ?? data.created_date ?? null,
+  };
+}
