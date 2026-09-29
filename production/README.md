@@ -151,19 +151,13 @@ Hosting & domain management is **not** in this repo — it is DMS, a separate ap
 
 ## 🧹 Housekeeping notes
 
-**Dependencies that nothing imports (28 Sep 2026, S25).** Checked by grepping `src/`,
-`scripts/`, `e2e/`, `tests/` and the config files. Not removed yet: taking them out of
-`package.json` without regenerating `package-lock.json` breaks `npm ci` in CI and Cloud
-Build. To remove, on a machine with the real `node_modules`:
-
-```bash
-npm uninstall @radix-ui/react-progress @radix-ui/react-scroll-area @radix-ui/react-toggle \
-  @tanstack/react-query-devtools @testing-library/jest-dom @vitejs/plugin-react \
-  prettier-plugin-tailwindcss
-```
-
-then run the gate. (`prettier-plugin-tailwindcss` is unused only because there is no
-Prettier config loading it — add one instead if you want class sorting.)
+**Unused dependencies removed (29 Sep 2026, S25).** `@radix-ui/react-progress`,
+`@radix-ui/react-scroll-area`, `@radix-ui/react-toggle`, `@testing-library/jest-dom`,
+`@vitejs/plugin-react` and `prettier-plugin-tailwindcss` were imported nowhere (`src/`, `scripts/`,
+`e2e/`, `tests/`, configs) and are gone from `package.json` and `package-lock.json`.
+`@tanstack/react-query-devtools` stays on purpose: dev-only, and `query-provider.tsx` keeps it
+so the query inspector can be re-added with one import. Want Tailwind class sorting? Add a
+Prettier config and `npm i -D prettier-plugin-tailwindcss`.
 
 ---
 
