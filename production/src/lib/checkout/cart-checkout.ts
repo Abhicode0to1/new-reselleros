@@ -52,8 +52,10 @@ import { COUPONS } from "@/site/lib/money";
 import { normalisePhone, splitName, type Registrant } from "@/lib/provisioning/domain-registration";
 import { isTrialPlan, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 import { startHostingTrial } from "@/lib/hosting/start-trial";
+import { hostingLimitProblem } from "./hosting-limit";
+import { hostingRate } from "./hosting-prices";
 
-const BUY_PAGE_TENANT_ID =
+export const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
 const ENV_RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID?.trim() || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || "";
 const ENV_RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET?.trim() || "";
@@ -145,10 +147,9 @@ function repriceLine(sku: string | undefined, cycle: string | undefined, qty: nu
   if (h) {
     const tier = h[1];
     const t = HOSTING_TIERS.find((x) => x.name.toLowerCase() === tier);
-    if (!t) return null;
-    // Whole rupees — the money spine stores integers (CLAUDE.md §13); a fractional
-    // tier total like ₹599.88 would break the integer lead/quote columns.
-    const rate = Math.round(yearly ? t.yearlyTotal : t.monthly);
+    // The one rate DMS also shows (lib/checkout/hosting-prices.ts, /api/public/hosting-prices).
+    const rate = t ? hostingRate(tier, yearly) : null;
+    if (!t || rate === null) return null;
     // No `domain` on this line, on purpose: provisioning reads any line's `domain` as a
     // domain to REGISTER (lib/provisioning/products.ts). The subscription takes the
     // hosting domain from the quote instead.
@@ -311,6 +312,10 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       if (!started.ok) return NextResponse.json({ error: started.error }, { status: 500 });
       return NextResponse.json({ success: true, trial: true, leadId: started.leadId, trialEnds: started.trialEnds });
     }
+
+    // One hosting account per order until several can be provisioned (lib/checkout/hosting-limit.ts).
+    const tooMuchHosting = hostingLimitProblem(lines);
+    if (tooMuchHosting) return NextResponse.json({ error: tooMuchHosting, next: "/cart" }, { status: 400 });
 
     // ── Re-price every line server-side; collect anything we can't charge ──
     const items: QuoteLine[] = [];
@@ -529,7 +534,11 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       domain: cleanDomain || null,
       created_date: today.toISOString().slice(0, 10),
       expires_date: expires.toISOString().slice(0, 10),
-      notes: panel ? `Bought in the DMS panel (DMS account ${panel.dmsUserId}). Razorpay order pending.` : `Direct buy from cart. Razorpay order pending.`,
+      // `notes` is printed on the customer's PDF (lib/pdf/build-props.ts), and it is written
+      // once, here, before payment. Until 28 Sep 2026 it said "Razorpay order pending" — false
+      // on every paid order's bill — and printed the internal DMS account id. Only a sentence
+      // that stays true after payment goes here; the internal detail is on the lead's notes.
+      notes: panel ? `Ordered from your hosting control panel.` : `Ordered online.`,
     });
     if (qErr) {
       console.error("[checkout/cart] quote insert failed:", qErr);

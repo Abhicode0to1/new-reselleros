@@ -87,6 +87,9 @@ describe("the order", () => {
     expect(row("leads")).toMatchObject({ source: "dms-panel" });
     expect(String(row("leads")?.notes)).toContain("DMS account 665f0c0ffee");
     expect(rzp.create.mock.calls[0][0].notes).toMatchObject({ channel: "dms-panel", dmsUserId: "665f0c0ffee" });
+    // The quote's notes are printed on the customer's bill: true after payment, nothing internal.
+    expect(row("quotes")?.notes).toBe("Ordered from your hosting control panel.");
+    expect(String(row("quotes")?.notes)).not.toMatch(/pending|665f0c0ffee/);
   });
   it("no dmsUserId → 400, nothing created", async () => {
     const { dmsUserId: _drop, ...rest } = order;

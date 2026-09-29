@@ -20,9 +20,57 @@ conflict; each superseded entry is marked in place.
 Everything below needs an owner decision or an owner action. Nothing here is being worked on.
 
 **Decisions**
-- [ ] **Not now (owner, 26 Sep 2026).** Multi-year domain registration and a cart with two hosting plans can no longer be bought
-      inside DMS. `/api/dms/panel-order` takes one year per domain and one hosting `domain`, and
-      the DMS cart refuses both by name. Allowing them means widening that contract. Want them?
+- [x] **DECIDED 28 Sep 2026 (owner):** *"Do these in ResellerOS if user buys for first time. But if existing
+      user renew either hosting or domain, then that part should happen inside the DMS customer portal
+      itself."* Multi-year domains and several hosting plans are for a FIRST purchase in the ResellerOS cart;
+      renewals are paid inside the DMS panel; an existing DMS customer buying something new with those is sent
+      to the ResellerOS cart. Owner also chose: build Pawan's parts, hand the rest to Abhishek / Pardeep; stop
+      charging for a second hosting plan now. Status below (§ "Multi-year and several hosting plans").
+
+### Multi-year and several hosting plans — first purchase in ResellerOS (28 Sep 2026)
+
+**Built (Pawan):**
+- [x] **Stop-gap (ResellerOS `d977e138`):** checkout refuses a second hosting plan or a hosting quantity > 1,
+      before anything is saved or charged (`lib/checkout/hosting-limit.ts`); the cart shows no quantity stepper
+      on a hosting line. Until then such an order was charged in full and only the first account was set up.
+- [x] **Renewal paid inside the DMS panel** (ResellerOS `1fc34a3e`, DMS `bf7a3a7d`): `POST /api/dms/renewal-order`
+      (panel key, exact email, renewal quotes only) → the Renew dialog pays in the panel's Razorpay frame. The
+      pay route's guards moved to `lib/checkout/quote-order.ts`, pinned by tests first. **Browser-verified
+      locally 28 Sep:** a real cron-made hosting renewal bill `Q-2222-2026-27-0021` paid in the panel → "Payment
+      received" → webhook settled it as a renewal (`hosting-renewal` queued, held for test mode; no new sale, no
+      new subscription; subscription renewed to 2027-10-13).
+- [x] **A service's Renew offers only its own bill** (ResellerOS `9951f454`, DMS `a62e0ce1`): `/api/v1` quotes carry
+      `renews` (vendor + domain); found in the browser, where the domain's Renew offered the hosting renewal.
+- [x] **DMS `domain.register` takes 1-10 years** (DMS `5f4e3943`), costed at ResellerClub's price for that tenure ×
+      years; a tenure RC does not quote is held. Nothing sends years > 1 yet.
+
+**Still Pawan's, after the colleagues' parts land:** the site cart's years picker and a `years` field on a
+domain line (`lib/checkout/cart-checkout.ts` `priceDomainLines`, `src/site/**`); one hosting domain PER hosting
+line at checkout; lifting the stop-gap; DMS's cart refusals linking to the ResellerOS cart (held until that cart
+can actually take them, or the customer goes from one refusal to another).
+
+**For Abhishek (his area per OWNERS.json) — pass on:**
+- [ ] **Multi-year price:** `lib/domains/live-lookup.ts` reads only the 1-year price (`years: 1` at :68). It needs a
+      price for N years (ResellerClub quotes a per-year price for each tenure; total = that × N). **Done when:** a
+      lookup for 3 years of a `.in` returns the 3-year tenure's per-year price × 3, and a tenure RC does not quote is
+      "unknown", never the 1-year figure.
+- [ ] **Years on the queued registration:** `provisioning_requests` has no years/term column
+      (`lib/provisioning/provisioning.server.ts:189-213`); a migration (shared) plus `queueProvisioning` writing the
+      paid line's years. **Done when:** a paid 3-year domain line queues a row that says 3.
+- [ ] **Several hosting plans:** the webhook's `provisioningProducts` (`lib/provisioning/products.ts:41-65`) makes one
+      hosting request per order, and `hostingLineFor` (`lib/provisioning/domain-registration.ts:98-104`) returns the
+      first `hostingPlan` line. Needed: one hosting request per hosting line, each with its own domain and plan.
+      **Done when:** an order with Starter on a.in and Plus on b.in queues two hosting requests (a.in/Starter,
+      b.in/Plus) and the index `provisioning_requests_one_per_product` allows both.
+- [ ] **Cover per product:** `amount_paid` on every row is the whole payment (webhook ~:421), so a domain's spend
+      check is against the whole cart. With several products that overstates each one's cover. **Done when:** each
+      queued row's cover is its own line's taxable value (a bundled ₹0 domain keeps drawing on its hosting line).
+
+**For Pardeep (his area: `app/api/cron/`) — pass on:**
+- [ ] **`/api/cron/register-domains`** sends `years: 1` (`route.ts:175-187`). **Done when:** it sends the queued row's
+      years, and DMS's `domain.register` (already 1-10) registers that term.
+- [ ] **`/api/cron/provision-hosting`** reads one hosting line per order (`hostingLineFor`). **Done when:** it provisions
+      each queued hosting request with its own plan and domain.
 - [x] **Admin package edits create no Razorpay plans** (owner, 26 Sep 2026; DMS `c1e52acd`).
       `RazorpayService.createPlan` deleted; the DMS guard now refuses `plans.create` outside the one-off
       operator script `scripts/razorpay-regenerate-plans-live.js`.
@@ -84,15 +132,33 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       records the confirmation and holds (`HOSTING_TRIAL_LIVE` off). Upgrade request from inside DMS →
       lead `L-MUIB5W2J`, a repeat returns the same lead. No email provider locally, so every send is
       logged `failed` ("No email provider is configured") — nothing reached a real inbox.
+- [x] **Rerun after the Next 15 / React 19 merge, LOCAL, 28 Sep 2026** (ResellerOS `9054977f`): panel
+      purchase → `/api/dms/panel-order` 200, `order_ThMHrdiN1YY47f` / `Q-2222-2026-27-0020`, ₹708 →
+      Razorpay test netbanking paid → panel shows "Payment received" → signed webhook 200 → quote
+      accepted/received, notes "Ordered from your hosting control panel.", lead `L-MUKVBRL6` won, one
+      ₹708 payment, the SAME customer reused (two Starter subscriptions now), provisioning queued and held
+      → DMS Invoices lists both paid orders, PDF 200 `application/pdf`, ₹600 + ₹54 + ₹54. The panel page
+      logged 21 console errors. The one 5xx is `GET /api/user/hosting/stats` → 503 `DA_SERVER_DOWN`: local
+      DMS has no DirectAdmin login in `.env.docker` (only `DIRECTADMIN_URL`), so that is this environment,
+      not a fault, and the Hosting page says "Server is currently unreachable. Please try again later." with
+      a Try Again button. The rest is Razorpay/Stripe iframe noise ("Refused to get unsafe header"). Trial not rerun: this test customer
+      has already had one, so it is correctly refused.
 - [ ] **Found by the end-to-end run:**
-      - **The bill PDF link on the DMS Invoices page is built from the address DMS used to call
-        ResellerOS** (`/api/v1` makes `pdf_url` from the request host). Locally that is
+      - [x] **FIXED 28 Sep 2026 (DMS `caa634ae`):** bill links on the server address now move to
+        `NEXT_PUBLIC_RESELLEROS_URL`; browser-checked, the Invoices page's PDF link opens (200,
+        `application/pdf`, ₹708 quote). Original finding: **the bill PDF link on the DMS Invoices page
+        is built from the address DMS used to call ResellerOS** (`/api/v1` makes `pdf_url` from the
+        request host). Locally that is
         `http://host.docker.internal:4320/...`, which the customer's browser cannot open (the same PDF
         answers 200 on `localhost`). It works in production only if `RESELLEROS_SERVER_URL` is also the
         public address. Fix: DMS should rewrite links to ResellerOS's PUBLIC origin
         (`NEXT_PUBLIC_RESELLEROS_URL`), or ResellerOS should build them from its own public URL.
-      - The panel's "Payment received" message was not observed: the script's last screenshot was taken
-        while Razorpay was still showing its own "redirecting in 2 seconds". Unit-tested only.
+      - [x] **Observed 28 Sep 2026 (rerun below):** the panel's "Payment received" message, naming the bill
+        (`Q-2222-2026-27-0020`) and saying it is on the Invoices page. On 26 Sep the script's last
+        screenshot was taken while Razorpay was still showing its own "redirecting in 2 seconds".
+      - The paid order's PDF still reads as a QUOTATION ("Valid until", "Payment terms: Net 7 days")
+        although it is paid. `lib/pdf/QuotePDF.tsx` / `build-props.ts` are Abhishek's; not raised on the
+        board (owner, 28 Sep: leave the board tasks).
       - Renew and upgrade BUTTONS were not clicked: they need a DMS hosting account, and none exists while
         provisioning is off. The upgrade ENDPOINT was exercised from inside DMS.
       - Local owner alerts go to `pardeep@anutech.in` (the local tenant's owner). Harmless while no email
@@ -462,23 +528,22 @@ registration queue picks up renewals.
     details.
   - DMS `84b5ae33`: a scan test fails if anything outside a named allow-list can create a Razorpay
     order, subscription or capture.
-- [ ] **Left open by rounds 2-3 (needs an owner go-ahead):**
+- [x] **Left open by rounds 2-3 — all closed by rounds 4-10** (checked in the DMS code, 28 Sep 2026):
   - Multi-year domain registration and a cart with two hosting plans can no longer be bought in DMS,
     because `panel-order` takes one year and one `domain`. Widen the contract if they are wanted.
-  - DMS `app/api/admin/hosting/packages/route.ts:303,312` still creates Razorpay PLANS when an admin
-    edits package prices. That is not a payment, but it writes to DMS's Razorpay account.
-  - Dead in DMS, kept for now: `app/api/domains/renew` (nothing can reach it), `createCompletedOrder`,
-    and `lib/razorpay.ts` `createCustomer` / `createRecurringTokenOrder` (used only by the gated Tokens
-    live harness).
-  - An in-panel TRIAL has no ResellerOS renewal quote, so its convert button says to contact support.
-  - `process-service-expiry` reminders quote `service.price`, a DMS figure (around L243).
-    `renewal-payment-dunning` still chases old DMS renewal orders.
+  - [x] DMS `app/api/admin/hosting/packages/route.ts` no longer creates Razorpay plans (DMS `c1e52acd`).
+  - [x] Deleted (round 4, DMS `9bc63716`): `app/api/domains/renew`, `createCompletedOrder`, and
+    `lib/razorpay.ts` `createCustomer` / `createRecurringTokenOrder`.
+  - [x] An in-panel trial now starts in ResellerOS (`/api/dms/start-trial`, owner 26 Sep: "Move it to
+    ResellerOS"), so the conversion is quoted and billed here.
+  - [x] `process-service-expiry` reminders point to the ResellerOS quote (DMS `812462ec`); the old DMS
+    renewal dunning is switched off (round 4).
   - [x] ResellerOS `/api/v1` lookup fixed (26 Sep 2026): the email is matched literally
     (`lib/api/v1-email-match.ts`; the pattern is escaped, then the email must be equal ignoring case),
     and a database error answers 500 `server_error`, not 404, on customers, quotes, invoices, payments
     and subscriptions.
-  - DMS integration e2e `purchase-to-invoice` / `verify-path-purchase` have been red since
-    `06a9546b` (a ₹999 Starter price gives 409). They are not in the gate.
+  - [x] DMS integration e2e `purchase-to-invoice` / `verify-path-purchase` no longer exist (deleted with
+    the DMS payment code); `npm run test:int` is 194 passed / 1 skipped (DMS `e4792ce1`).
 
 ### Decision 27 — "Start free trial" goes straight to the cart (24 Sep 2026)
 
@@ -700,9 +765,17 @@ with Razorpay before the first live mandate.
       yearly and ₹118 · ₹295 · ₹441 monthly; cart Subtotal ₹600 · GST ₹108 · Total ₹708; the
       running server refuses ₹599.88 with `409 PRICE_CHANGED`. A successful payment was NOT
       run, because that creates a Razorpay order.
-- [ ] **DMS still holds a COPY of ResellerOS's hosting prices** (`config/hosting-plans.ts`,
-      pinned equal to `LANDING_PLANS` by a DMS test). Reading them over the engine API would
-      remove the copy.
+- [x] **DONE 28 Sep 2026 (owner: "Read prices live from ResellerOS"; ResellerOS `3c6b01f6`, DMS
+      `46092c10`).** ResellerOS publishes `GET /api/public/hosting-prices`, computed by the same
+      `hostingRate` its checkout charges with; DMS's `config/hosting-plans.ts` carries no price and
+      every DMS price (Buy cards, trial line, checkout after-trial figure, cart upsell, upgrade
+      estimate, admin seeding) reads the live table, with no fallback — without it nothing is priced.
+      The provisioner's price → package guess was removed with it. **Browser-verified locally:** the
+      Buy dialog shows ₹600 + GST = ₹708 yearly and ₹100 + GST = ₹118 monthly for Starter, from one
+      200 on `/api/v1/public/hosting-prices`. **"Prices unavailable" browser-verified 28 Sep** with ResellerOS
+      stopped: DMS's price read answers 503, the dialog says prices could not be loaded, all three cards read
+      "Price not available right now" with no ₹ figure, and Buy and the trial are disabled; prices return as
+      soon as ResellerOS answers (a failure is not cached).
 - [ ] **Existing DMS Razorpay hosting plans and subscriptions** (`hostingplans.razorpayPlans`)
       still carry the old amounts. DMS no longer creates new ones, and there are no live
       customers (decision 6), but any test subscription left in the Razorpay dashboard should
@@ -1246,7 +1319,10 @@ new design's guards assume they are fixed.
       route is exactly the L3 shape (a second run is not idempotent) and it needs its own
       thinking.
 
-- [ ] **Domain renewal has no checkout, so the Renew button cannot work** —
+- [x] **CLOSED 28 Sep 2026 — superseded.** The DMS route below was deleted (round 4), a domain renewal is
+      priced by ResellerOS at ResellerClub's live price (`lib/domains/renewal.ts`) and, since today, paid
+      inside the DMS panel (`/api/dms/renewal-order`). Original entry, kept for history:
+      **Domain renewal has no checkout, so the Renew button cannot work** —
       `app/api/domains/renew/route.ts`, `components/DomainRenewalModal.tsx` **[verified]**
       Consequence of the fix above, and the reason it is safe: the route now demands a
       verified payment, and **nothing in the app can produce one for a domain renewal.**
@@ -1809,7 +1885,9 @@ Consequences accepted with the decision:
       requests.** The earlier "0 console errors" was measured on `/login` alone and was never a
       statement about the app — `/cart` was logging three the whole time.
 
-- [ ] **`/hosting` and `/` are set to DRAFT in DMS — worth your decision, not a bug.**
+- [x] **CLOSED 28 Sep 2026 — superseded.** DMS's `/` and `/hosting` no longer exist (owner, 24 Sep 2026:
+      DMS has no public pages); measured locally, both answer 307 to ResellerOS, so the draft setting
+      below no longer decides anything. Original entry: **`/hosting` and `/` are set to DRAFT in DMS.**
       Found while checking where to point "Pricing". `settings.page_visibility` reads
       `{ hosting: 'draft', home: 'draft' }`, updated **2026-07-21** — two months before any of
       the federation work, so it is your content decision and nothing here changed it. The
@@ -1867,15 +1945,40 @@ Consequences accepted with the decision:
       Best done one page at a time, when that page is being edited anyway. The one thing the
       redundancy actually cost has now been paid: see the dead-logout entry above.
 
-- [ ] **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
+- [x] **DONE 28 Sep 2026 — the DMS palette conversion.** Served legacy classes by `scripts/palette-audit.mjs`:
+      **2,620 → 114** (in 28 files). Three passes, each browser-checked before/after on the pages it touched:
+      the customer panel (DMS `8590e845`), customer-facing pages and shared components (`f88dbc89`, fix
+      `bbc7cdaf`), and admin (`0ba504b1`) — 23 admin pages, 13 customer pages, 8 panel pages, no page errors.
+      One mapping throughout (status hues → emerald/rose/amber/indigo; greys → ink/paper/hairline; white →
+      paper; solid blue → primary). **The 114 left are deliberate:** colour maps that name more categories
+      than the tokens have hues (DNS record types, ticket categories, renewal method), purple kept where it
+      is one side of a choice against indigo (Tokens vs Subscription, New Generic vs Generic), and gradient
+      stops on solid buttons, which have no token. Two regressions were caught by the screenshots and fixed:
+      a mid-grey button fill mapped to a light token (white text lost contrast), and the script rewrote two
+      comments that record OLD class names (restored in `fc1d13ac`; the script now leaves such comments alone).
+      Not seen on screen: coloured states that need data this local account lacks (DNS records, orders).
+      **Tickets seen 28 Sep:** two local test tickets (domain, technical) — list and detail readable, the
+      category hues distinct as intended, no page errors; the tickets were deleted afterwards. Original entry follows.
+- **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
+      · [x] **Customer panel (`app/dashboard`) converted 28 Sep 2026 (DMS `8590e845`).** 156 lines in 12
+        files, by one mapping: green → emerald, red → rose, amber/yellow/orange → amber, blue/indigo/
+        violet/purple → indigo; light backgrounds → `-soft`, text 600+ → `-ink`, light borders → `/30`,
+        a hover on a light tint → `/15` so it still shows. **Left alone on purpose:** the DNS record-type
+        map (7 types) and the support ticket-category maps (5), which need more hues than the tokens
+        have — 30 classes, the only ones left in the folder by a direct scan. `palette-audit.mjs` reports
+        91 for its `app/dashboard` area and 2,328 served overall (was 383 and 2,620); the 91-vs-30 gap
+        is the audit's wider definition and was not investigated. **Browser-checked** before/after on 8
+        pages with a local test domain (dashboard, domains, hosting, settings changed; nothing broken);
+        pages whose coloured states need data this local account does not have (DNS records, orders,
+        tickets) were not seen changed. Remaining: `app/admin` and shared `components/`.
       The panel-scoped figures stand (`app/admin` 563, `app/dashboard` 200), but two things
       found while starting the work change how to approach it:
-      · **114 legacy classes are in components nothing renders.** `DomainBookingProgress` (36),
-        `AdminStatsCard` (33), `AdminQuickActions` (29) and `NameServerManagement` (16) are
-        imported only by `components/index.ts` — **a barrel that nothing imports**. Git says
-        they were never wired rather than deliberately unmounted, so they are dead by neglect.
-        Left in place: deleting unused components is the owner's call, not a side effect of a
-        palette pass. But do not count them as work.
+      · [x] **DELETED 28 Sep 2026 (owner: "Delete 4 dead DMS components"; DMS `c75dba79`).** The 114
+        legacy classes were in `DomainBookingProgress` (36), `AdminStatsCard` (33), `AdminQuickActions`
+        (29) and `NameServerManagement` (16). `git log -S"<Name"` found no render of any of them, ever.
+        This entry's "a barrel that nothing imports" was not quite right: `components/index.ts` has one
+        importer, `components/examples/DomainRequirementsExample.tsx`, which is itself unused; and two
+        of the four were not in the barrel at all, only in their own tests. Deleted with 26 tests.
       · **The obvious proxy for "is this rendered" is wrong in BOTH directions.** "Does any file
         under `app/` mention it" marked `FooterClassic`, `CustomToast` and `LoadingComponents`
         dead when they are reached through `Footer.tsx`, `lib/toast.tsx` and `UserLayout.tsx`.

@@ -1,4 +1,8 @@
 import type { Config } from "tailwindcss";
+// An import, not require(): on Node 24 Tailwind first loads this .ts file as an ES module,
+// where require() does not exist, and the ReferenceError took the whole dev server down
+// (29 Sep 2026). An import works on every Node and in the build.
+import animate from "tailwindcss-animate";
 
 const config: Config = {
   darkMode: ["class"],
@@ -171,7 +175,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [animate],
 };
 
 export default config;

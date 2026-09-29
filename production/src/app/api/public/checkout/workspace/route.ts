@@ -421,7 +421,9 @@ export async function POST(request: NextRequest) {
     const quoteNotes = [
       isSimulation
         ? `[SIMULATION] Test buy from /buy/workspace.`
-        : `Direct buy from /buy/workspace. Razorpay order pending.`,
+        // Printed on the customer's PDF and written before payment, so it must stay true after
+        // it (28 Sep 2026: it said "Razorpay order pending" on every paid order's bill).
+        : `Ordered online.`,
       sitePromoId
         ? `Online sale "${sitePromoHeadline}" auto-applied · −₹${sitePromoDiscount.toLocaleString("en-IN")} pre-GST`
         : null,

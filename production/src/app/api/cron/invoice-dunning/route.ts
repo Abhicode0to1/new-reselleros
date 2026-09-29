@@ -26,6 +26,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { decideDunning, dunningMessage, dunningRank, type DunningStep } from "@/lib/invoices/dunning";
+import { upiPayLink } from "@/lib/invoices/pay-link";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { dunningLogStatus, reachedNobody } from "@/lib/invoices/dunning-log-status";
 import { primaryContactEmail } from "@/lib/contacts/primary";
@@ -107,7 +108,10 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
      invoice would turn a 200-invoice pass into 400 round trips. */
   const tenantIds = [...new Set((invoices ?? []).map((i) => i.tenant_id))];
   const { data: tenants } = await supabase
-    .from("tenants").select("id, name, email, auto_suspend_on_overdue").in("id", tenantIds);
+    /* R-018: the UPI details come along so the reminder can carry a way to pay. They
+       were already on the tenant for the invoice QR — the dunning cron simply never
+       read them, and sent "pay using the link below" with no link, every run. */
+    .from("tenants").select("id, name, email, auto_suspend_on_overdue, upi_vpa, upi_payee_name").in("id", tenantIds);
   const tenantById = new Map((tenants ?? []).map((t) => [t.id, t]));
 
   const { data: logs } = await supabase
@@ -195,7 +199,23 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
         amountDue: rupee(amountDue),
         dueDate: formatDate(inv.due_date!),
         sellerName: tenant?.name ?? "your reseller",
-        payLink: null,
+        /* R-018 (Pardeep, 27 Sep 2026). This was a hardcoded `null` on every run while
+           three of the message branches promised "the link below". A tenant with a UPI
+           VPA on file now gets a real `upi://pay` link with the amount filled in; one
+           without gets no link AND no sentence claiming there is one — `dunningMessage`
+           takes both from the same place now, so they cannot disagree.
+
+           Not a Razorpay link, deliberately: this cron runs daily against the same
+           invoice, so minting one per run would leave an invoice holding a fistful of
+           live links and `createAndSendPaymentLink` would also send its own email on
+           top of this one. Doing that properly needs somewhere to store the link per
+           invoice, which is a schema change and is on the board, not smuggled in here. */
+        payLink: upiPayLink({
+          upiVpa:     tenant?.upi_vpa ?? null,
+          payeeName:  tenant?.upi_payee_name ?? tenant?.name ?? null,
+          amountDue,
+          invoiceId:  inv.id,
+        }),
         /* The REAL days remaining, from the decision — not the nominal 3. A pre-due
            nudge that fired late on day -1 must say "tomorrow"; "in 3 days" would be a
            false statement about money. Negative daysOverdue is the pre-due case. */

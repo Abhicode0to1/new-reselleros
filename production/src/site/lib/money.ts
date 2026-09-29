@@ -81,13 +81,15 @@ export function cartTotals(lines: readonly CartLine[], couponCode: string): Cart
 /** "Recurring monthly" | "Renews yearly" | "One time" — the cart row's cycle label. */
 /**
  * A line that is always exactly one: a free hosting trial (one per customer — a
- * "5 ×" trial is meaningless) and a domain (one name is one registration; the
- * checkout already refuses a quantity above one). No stepper is shown for these,
- * adding one again never bumps it, and a stored quantity is put back to 1.
+ * "5 ×" trial is meaningless), a domain (one name is one registration; the
+ * checkout already refuses a quantity above one) and a hosting plan (one plan is
+ * one account on one domain; checkout sets up one hosting account per order, see
+ * lib/checkout/hosting-limit.ts). No stepper is shown for these, adding one again
+ * never bumps it, and a stored quantity is put back to 1.
  */
 export function isSingleUnit(line: Pick<CartLine, "sku">): boolean {
   const sku = (line.sku ?? "").toLowerCase();
-  return sku.startsWith("hosting-trial:") || sku.startsWith("domain:");
+  return sku.startsWith("hosting-trial:") || sku.startsWith("domain:") || sku.startsWith("hosting:");
 }
 
 export function isTrialLine(line: Pick<CartLine, "sku">): boolean {

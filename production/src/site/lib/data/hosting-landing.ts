@@ -15,12 +15,12 @@
  *     off"). Replace them with real reviews, or drop the sections, before this
  *     page is promoted as the public face.
  *
- * PRICES: these mirror the engine's commercial tiers (config/hosting-plans.ts
- * there), which is what the shop actually charges today. `price` is the rate
- * when billed YEARLY; billed monthly is 2× (exactly how the engine prices it).
- * Once the DMS is deployed, `Sync hosting` on /items brings the same tiers into
- * the catalogue, and this table becomes the display fallback rather than the
- * source.
+ * PRICES: this table IS the hosting price (owner, 24 Sep 2026: hosting prices are
+ * ResellerOS's). `price` is the per-month rate when billed YEARLY; billed monthly is
+ * 2×. Checkout charges from it (lib/checkout/hosting-prices.ts), and the DMS panel
+ * reads the same figures live from /api/public/hosting-prices (28 Sep 2026) — DMS
+ * keeps no copy, so a change here reaches it within a minute. DMS's own Mongo
+ * `hostingplans` prices are disregarded.
  */
 
 export interface LandingPlan {
