@@ -57,6 +57,7 @@
  * only on the day itself, and the message is generated from the ACTUAL days remaining
  * rather than from the step's nominal day — so even a late-fired nudge tells the truth.
  */
+import { payInstruction } from "./pay-link";
 
 export type DunningStep =
   /** Nothing to do — paid, void, or too far from the due date to speak. */
@@ -268,7 +269,17 @@ export function dunningMessage(args: {
   daysUntilDue?: number | null;
 }): { subject: string; text: string } | null {
   const { step, invoiceId, customerName, amountDue, dueDate, sellerName, payLink } = args;
-  const pay = payLink ? `\n\nPay here: ${payLink}` : "";
+  /* R-018 (Pardeep, 27 Sep 2026). `pay` used to be the empty string when there was no
+     link — while three of the branches below still said "here's the link again" and
+     "pay using the link below" regardless. The cron passed `payLink: null` on EVERY
+     run, so every overdue customer read an email pointing at a link that was never in
+     it. Nothing errored; the email sent perfectly, and collection slowed down.
+
+     Both halves now come from one place: `payInstruction` writes the sentence, and
+     `hasLink` decides the wording around it. The promise and the link cannot disagree
+     again because neither is written by hand. */
+  const pay = payInstruction(payLink);
+  const hasLink = Boolean(payLink);
   const first = customerName.split(" ")[0] || "there";
 
   switch (step) {
@@ -296,18 +307,20 @@ export function dunningMessage(args: {
       };
     case "retry":
       return {
-        subject: `Invoice ${invoiceId} — payment link, in case the first one didn't go through`,
-        text: `Hi ${first},\n\nInvoice ${invoiceId} for ${amountDue} is still showing as unpaid. Sometimes a payment fails without telling anyone, so here's the link again.${pay}\n\nIf you've already paid, reply and we'll trace it.\n\n— ${sellerName}`,
+        subject: hasLink
+          ? `Invoice ${invoiceId} — payment link, in case the first one didn't go through`
+          : `Invoice ${invoiceId} — still showing as unpaid`,
+        text: `Hi ${first},\n\nInvoice ${invoiceId} for ${amountDue} is still showing as unpaid. Sometimes a payment fails without telling anyone${hasLink ? ", so here's the link again" : ""}.${pay}\n\nIf you've already paid, reply and we'll trace it.\n\n— ${sellerName}`,
       };
     case "grace_warning":
       return {
         subject: `Invoice ${invoiceId} — ${amountDue} still outstanding`,
-        text: `Hi ${first},\n\nInvoice ${invoiceId} for ${amountDue} has been outstanding since ${dueDate}.\n\nWe'd rather sort this out than let it affect your service, so please either pay using the link below or tell us what's holding it up — a PO, an approval, a query on the invoice — and we'll work with it.${pay}\n\n— ${sellerName}`,
+        text: `Hi ${first},\n\nInvoice ${invoiceId} for ${amountDue} has been outstanding since ${dueDate}.\n\nWe'd rather sort this out than let it affect your service, so please ${hasLink ? "either pay using the link below or " : ""}tell us what's holding it up — a PO, an approval, a query on the invoice — and we'll work with it.${pay}\n\n— ${sellerName}`,
       };
     case "final":
       return {
         subject: `Invoice ${invoiceId} — we need to hear from you`,
-        text: `Hi ${first},\n\nInvoice ${invoiceId} for ${amountDue} has now been outstanding for two weeks.\n\nWe need to agree how this will be settled. Please pay using the link below, or call us today so we can find a way forward.${pay}\n\n— ${sellerName}`,
+        text: `Hi ${first},\n\nInvoice ${invoiceId} for ${amountDue} has now been outstanding for two weeks.\n\nWe need to agree how this will be settled. Please ${hasLink ? "pay using the link below, or " : ""}call us today so we can find a way forward.${pay}\n\n— ${sellerName}`,
       };
     default:
       return null;
