@@ -8,7 +8,7 @@
 
 1. `AGENTS.md` §5 kehta hai migration `scripts/apply-migration.mjs` se lagao. Wo script
    `~/.claude.json` ke Supabase MCP ka token/project-ref leta hai = **hosted Supabase (staging)**, prod nahi.
-   Aur usko `begin; … commit;` blocks chahiye — in 40 files me ek bhi nahi. **Prod ke liye use mat karo.**
+   Aur usko `begin; … commit;` blocks chahiye — in 41 files me ek bhi nahi. **Prod ke liye use mat karo.**
 2. `npm run migrations:verify` (drift-check) `supabase db query --linked` chalata hai. ADR 0001 kehta hai
    ye ab prod ka check **nahi** hai. Iska result prod ka sach mat maano.
 3. Prod par migration ka jo tareeka repo me abhi likha hai (`docs/BACKUP.md`, `docs/SECURITY-RUNBOOK.md`):
@@ -74,7 +74,7 @@ select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
 Phir haath se ek baar: signup → /welcome → join-approval flow (R-013 "done when").
 Migration fail ho to baaki mat lagao — Abhishek ko bulao.
 
-## Step 2 — S5: baaki 39 files, file-order me
+## Step 2 — S5: baaki 40 files, file-order me
 
 Har file ke liye Step 1 wala hi tareeka (`SET ROLE` → `\i` → `RESET ROLE`), ek-ek karke, order mat todo.
 Aakhir me ek baar `notify pgrst, 'reload schema';`. Error aaye → ruko, aage mat badho (forward-fix, `ROLLBACK.md`).
@@ -120,6 +120,7 @@ Aakhir me ek baar `notify pgrst, 'reload schema';`. Error aaye → ruko, aage ma
 | 20260928200000_list_rpcs | list_leads, list_whatsapp_threads | app se pehle |
 | 20260929100000_revoke_anon_can_see_record | can_see_record anon se hata | **100000 (S13) ke baad hi** |
 | 20260929130000_lead_counts (S40) | lead_counts() + list_leads naye filter; 3 helper fn; 2 index | **app se pehle** (leads page inhe bulata hai); 2 plain CREATE INDEX on leads — chhoti table, theek |
+| 20260929185929_day_book_salary_journal | report_day_book: salary kharcha = Journal voucher | sirf function badla, data nahi; kabhi bhi |
 
 Order ka niyam: pehle saari migrations, phir app (expand → deploy, `ROLLBACK.md`). Beech ka waqt chhota rakho.
 
