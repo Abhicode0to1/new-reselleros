@@ -17,7 +17,7 @@ Production moved off hosted Supabase to **Cloud SQL `resellersos-db`** (Postgres
 | Long retention for GST / income-tax (8 years) | ❌ | `daily/` is deleted after 400 days; nothing longer |
 | Outside this project and billing account | ❌ | Bucket and DB share one project + one billing account: a lapsed bill (R-017) or a lost owner account takes both |
 | Uploaded files (storage) | ❓ not verified | — |
-| Restore rehearsal | ❌ never done on Cloud SQL | do it on staging (docs/STAGING.md) |
+| Restore rehearsal | ✅ 29 Sep 2026 — offsite `daily/2026-09-29.json` (Cloud SQL era), ANUTECH tenant: 55 tables / 2,637 rows typed-loaded into a local DB at current migrations, counts matched, ROLLBACK; canary (one count off by one) went red | repeat each quarter; a full restore into staging still to do |
 
 **Monthly copy (code, not yet deployed):** from the next deploy, the backup cron also writes `monthly/YYYY-MM.json` on the 1st (IST). For it to outlive 400 days, the bucket's delete rule must skip `monthly/` — run once (replaces the lifecycle; keeps the noncurrent-version rule):
 
@@ -32,7 +32,20 @@ EOF
 gcloud storage buckets update gs://resellsubsos-prod-offsite-backups --lifecycle-file=/tmp/lc.json
 ```
 
-(3000 days ≈ 8.2 years.) Still open and needs a person: a copy in a **different** project/billing account, a retention lock, and one real restore.
+(3000 days ≈ 8.2 years.) Lifecycle applied 29 Sep 2026 (read back from the bucket). Still open: the copy in a **different project** — project `anutech-backup-vault` created 29 Sep; billing link, bucket and the daily transfer are the commands below (a person runs them); a retention lock (decision); a full restore into staging.
+
+**Second copy (anutech-backup-vault):** a daily Storage Transfer job copies `gs://resellsubsos-prod-offsite-backups` → `gs://anutech-backup-vault-copies` (asia-south1, a different region from the source asia-south2), same lifecycle. The vault project holds nothing else, so deleting or breaking `resellsubsos-prod` does not take the copies with it. Same billing account for now — a separate billing account would also survive a billing lapse (Abhishek, R-017).
+
+```bash
+gcloud billing projects link anutech-backup-vault --billing-account=016FCA-400F3C-38036D
+gcloud storage buckets create gs://anutech-backup-vault-copies --project=anutech-backup-vault --location=asia-south1 --uniform-bucket-level-access --public-access-prevention
+gcloud storage buckets update gs://anutech-backup-vault-copies --versioning --lifecycle-file=lc.json
+gcloud services enable storagetransfer.googleapis.com --project=anutech-backup-vault
+gcloud transfer authorize --add-missing --project=anutech-backup-vault
+gcloud transfer jobs create gs://resellsubsos-prod-offsite-backups gs://anutech-backup-vault-copies --project=anutech-backup-vault --name=daily-offsite-copy --schedule-repeats-every=1d
+```
+
+(`lc.json` = the lifecycle file above. On Windows run these from cmd/PowerShell, not Git Bash — Git Bash rewrites `gs://` and `/` paths.)
 
 ## Per-tenant backup (S15, 28 Sep 2026 — code + migration, not yet deployed/applied)
 
