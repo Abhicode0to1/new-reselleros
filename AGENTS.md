@@ -356,10 +356,11 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **8,193 tests
-passing across 499 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
-with 0 errors** — measured 30 Sep 2026 after `9ad95378` (trials send the owner no email). Earlier
-markers: 8,111/486 on 29 Sep after merging `abhishek-pre-merge` (`3bebf671`: R-012 renewal quote,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **8,410 tests
+passing across 517 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
+with 0 errors** — measured 30 Sep 2026 on `website-pawan` after merging `manager-pardeep` (C-053).
+Earlier markers: 8,242/504 the same day before that merge; 8,193/499 after `9ad95378` (trials send the
+owner no email); 8,111/486 on 29 Sep after merging `abhishek-pre-merge` (`3bebf671`: R-012 renewal quote,
 R-018 dunning pay link); 8,049/480 the same day after the fourth
 `pardeep-sir` merge (`ddde2754`); 7,972/477 the same day after the Tailwind dev-server fix; 7,933/472 on 28 Sep
 after the third `pardeep-sir` merge (`9054977f`, which brought Next 15.5 / React 19: run
@@ -488,7 +489,7 @@ working in. What is true today:
 | | |
 |---|---|
 | Folder | `C:/xampp/htdocs/anutechbilling-new` |
-| Branch | `pawan-api-system` |
+| Branch | `website-pawan` (renamed from `pawan-api-system` on 30 Sep 2026, C-053; the other branches are `manager-pardeep`, `billing-abhishek`, `accounts-hitesh`) |
 | Dev server | port 4320 (`npm run dev -- -p 4320`) — DMS holds 4310 |
 | Commit author | `Excel Technologies <pawan@exceltechnologies.in>` |
 
