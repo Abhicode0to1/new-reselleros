@@ -43,6 +43,9 @@ import { MoneyHealthCard } from "@/components/features/dashboard/money-health-ca
 import { AiPerformanceCard } from "@/components/features/dashboard/ai-performance-card";
 import { PriorityActionHub } from "@/components/features/dashboard/priority-action-hub";
 import { DealsStrip } from "@/components/features/deals/deals-strip";
+import { useDealRows } from "@/lib/queries/deals";
+import { summarizeDealStrip } from "@/lib/deals/pipeline-summary";
+import { canSeeDeals } from "@/lib/deals/access";
 import { PendingJoinRequestsCard } from "@/components/features/team/pending-join-requests-card";
 import { Badge } from "@/components/ui/badge";
 
@@ -152,7 +155,25 @@ export default function DashboardPage() {
   const closedThisMonth = acceptedQuotes.filter(
     (q) => q.updated_at && new Date(q.updated_at) >= monthStart,
   );
-  const closedThisMonthValue = closedThisMonth.reduce((s, q) => s + (q.amount ?? 0), 0);
+  const quotesClosedValue = closedThisMonth.reduce((s, q) => s + (q.amount ?? 0), 0);
+
+  /* 30 Sep 2026: the header said "₹0 closed this month · ₹11.8K in pipeline" while the Deals
+     strip right under it said "Won ₹50.1L · Pipeline ₹0" — two definitions on one screen.
+     Money numbers now come from the Deals definition (lib/deals/pipeline-summary.ts: won =
+     stage 'won' by its IST won date, pipeline = open demo/trial/quote deals) for everyone who
+     can see Deals; other roles keep the old quote/lead-based figures. */
+  const dealsAllowed = canSeeDeals(currentUser?.role);
+  const { data: dealRows } = useDealRows(dealsAllowed);
+  const dealStrip = dealsAllowed && dealRows ? summarizeDealStrip(dealRows) : null;
+  const closedThisMonthValue = dealStrip ? dealStrip.wonThisMonth.value : quotesClosedValue;
+  const closedThisMonthCount = dealStrip ? dealStrip.wonThisMonth.count : closedThisMonth.length;
+  const closedTrend = dealStrip
+    ? `${closedThisMonthCount} deal${closedThisMonthCount === 1 ? "" : "s"} won`
+    : `${closedThisMonthCount} quote${closedThisMonthCount === 1 ? "" : "s"} accepted`;
+  const moneyPipeline = dealStrip ? dealStrip.pipeline.value : totalPipeline;
+  const moneyPipelineTrend = dealStrip
+    ? `${dealStrip.pipeline.count} open deal${dealStrip.pipeline.count === 1 ? "" : "s"}`
+    : `${activeCount} active deals`;
 
   // "Chase the cash" — money owed to us. Real receivables = subscription dues +
   // project invoiced-but-unpaid (same basis as the Customers list / Aging), not
@@ -284,7 +305,7 @@ export default function DashboardPage() {
   }, [dashLeads, quotes]);
 
   const leaderboard = [
-    { rank: 1, name: `${currentUser?.fullName ?? "You"} (you)`, amount: closedThisMonthValue, deals: closedThisMonth.length, color: "amber" },
+    { rank: 1, name: `${currentUser?.fullName ?? "You"} (you)`, amount: closedThisMonthValue, deals: closedThisMonthCount, color: "amber" },
   ];
 
   // Real upcoming follow-ups — pulls from leads.follow_up_date in next 7 days
@@ -542,7 +563,7 @@ export default function DashboardPage() {
           <p className="text-sm text-ink-3 mt-1">
             <b className="text-emerald tabular-nums">{rupee(closedThisMonthValue, { compact: true })}</b> closed this month
             <span className="mx-1.5">·</span>
-            <b className="text-ink tabular-nums">{rupee(totalPipeline, { compact: true })}</b> in pipeline
+            <b className="text-ink tabular-nums">{rupee(moneyPipeline, { compact: true })}</b> in pipeline
             <span className="hidden sm:inline"> · {workspaceName}</span>
           </p>
         </div>
@@ -614,15 +635,15 @@ export default function DashboardPage() {
           label="Closed this month"
           value={rupee(closedThisMonthValue, { compact: true })}
           accent="emerald"
-          trend={`${closedThisMonth.length} quote${closedThisMonth.length === 1 ? "" : "s"} accepted`}
+          trend={closedTrend}
           trendKind="up"
           trendIcon="check"
           icon="check_circle"
         />
         <KPI
           label="Pipeline"
-          value={rupee(totalPipeline, { compact: true })}
-          trend={`${activeCount} active deals`}
+          value={rupee(moneyPipeline, { compact: true })}
+          trend={moneyPipelineTrend}
           trendKind="up"
           trendIcon="trending_up"
           icon="target"
