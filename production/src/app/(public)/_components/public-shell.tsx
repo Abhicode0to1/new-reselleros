@@ -79,7 +79,11 @@ export function PublicFooter() {
         </div>
         <nav className="flex gap-4">
           <Link href={"/privacy" as never} className="hover:text-ink">Privacy</Link>
-          <Link href={"/terms" as never}   className="hover:text-ink">Terms</Link>
+          {/* Two sets of terms (30 Sep 2026): /terms is this software's own; the terms and
+              refund policy a customer agrees to when BUYING from Anutech Digital are separate. */}
+          <Link href={"/terms" as never}   className="hover:text-ink">ResellerOS terms</Link>
+          <Link href={"/terms-and-conditions" as never} className="hover:text-ink">Terms and conditions</Link>
+          <Link href={"/refund" as never}  className="hover:text-ink">Refund policy</Link>
           <Link href={"/about" as never}   className="hover:text-ink">About</Link>
           <a href="mailto:hello@resellersos.in" className="hover:text-ink">Contact</a>
         </nav>
