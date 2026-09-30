@@ -8,6 +8,10 @@
 -- write, and recordEmail swallows that, leaving no trace of a message that went.
 --
 -- Widening only: every existing row still satisfies the new list.
+--
+-- Renamed from 20260929130000 on 30 Sep 2026: that timestamp is also Pardeep's
+-- lead_counts migration (S40), and a migration version must be unique. Nothing had
+-- run it outside the local database, where it is safe to run again.
 -- ============================================================================
 begin;
 
