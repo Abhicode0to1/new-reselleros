@@ -1,4 +1,4 @@
--- 20260929120000_tenant_remittance_bank.sql
+-- 20260930170000_tenant_remittance_bank.sql
 --
 -- R-038 / S27 (Pardeep, 29 Sep 2026) — the invoice PDF has no bank details.
 --

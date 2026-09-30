@@ -1,4 +1,4 @@
--- 20260930150000_seat_increase_claims  (R-060, half 2)
+-- 20260930177000_seat_increase_claims  (R-060, half 2)
 --
 -- WHAT WAS WRONG
 --   POST /api/subscriptions/{id}/add-seats had no idempotency of any kind. The route

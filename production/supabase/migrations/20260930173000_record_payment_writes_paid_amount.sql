@@ -1,4 +1,4 @@
--- 20260929150000_record_payment_writes_paid_amount.sql
+-- 20260930173000_record_payment_writes_paid_amount.sql
 --
 -- R-015 part 3 (Pardeep, 29 Sep 2026) — a PARTIAL payment was invisible.
 --
@@ -31,7 +31,7 @@
 -- The body below is the LIVE definition read with pg_get_functiondef (AGENTS.md L8/L9 —
 -- the migration history has drifted from it), with two substitutions: the invoice
 -- settlement block, and the receipt-voucher allocation, which now carries the IST date
--- like every other document (migration 20260929140000).
+-- like every other document (migration 20260930172000).
 
 begin;
 

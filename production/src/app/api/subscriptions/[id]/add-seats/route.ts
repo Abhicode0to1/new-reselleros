@@ -26,7 +26,7 @@
  * by definition, from something that was never taught the rule.
  *
  * The claim is inserted BEFORE the work and the unique index does the deciding; see
- * supabase/migrations/20260930150000_seat_increase_claims.sql for why this shape and
+ * supabase/migrations/20260930177000_seat_increase_claims.sql for why this shape and
  * not a lock, and for why a failed attempt releases its key.
  */
 

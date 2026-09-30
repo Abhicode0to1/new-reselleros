@@ -1,5 +1,5 @@
 -- Regression test: a document number is <= 16 characters and comes from the financial
--- year of the DOCUMENT, not of the server clock. Migration 20260929140000 (R-015).
+-- year of the DOCUMENT, not of the server clock. Migration 20260930172000 (R-015).
 -- Rolled back — safe on production.
 --
 -- Three claims, and the first is the live one:

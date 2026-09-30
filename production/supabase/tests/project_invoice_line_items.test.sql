@@ -1,5 +1,5 @@
 -- Regression test: a project-milestone tax invoice carries its particulars (R-010).
--- Migration 20260930160000. Rolled back — safe on production.
+-- Migration 20260930178000. Rolled back — safe on production.
 --
 --   PRESENT   one line item, named "<project> — <milestone>"
 --   EXACT     qty × rate = the invoice's own taxable_value

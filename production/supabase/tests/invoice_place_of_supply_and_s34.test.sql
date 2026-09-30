@@ -1,5 +1,5 @@
 -- Regression test: an invoice is not issued with an unknown place of supply, and a credit
--- note is refused past its CGST Section 34(2) deadline. Migration 20260930120000 (R-041).
+-- note is refused past its CGST Section 34(2) deadline. Migration 20260930174000 (R-041).
 -- Rolled back — safe on production.
 --
 -- Both halves, because a guard is only half-tested by what it blocks:

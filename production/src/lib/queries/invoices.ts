@@ -298,7 +298,7 @@ export function useCreateDirectInvoice() {
  *     'pending' as though the customer had never paid.
  *   - **Only a DRAFT is deletable now.** An issued invoice is corrected with a credit
  *     note (CGST Section 34). The RPC and a BEFORE DELETE trigger both refuse, and the
- *     refusal names that route (migration 20260929135000).
+ *     refusal names that route (migration 20260930171000).
  */
 export function useDeleteProjectInvoice() {
   const qc = useQueryClient();

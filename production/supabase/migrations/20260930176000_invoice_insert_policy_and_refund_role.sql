@@ -1,4 +1,4 @@
--- 20260930140000_invoice_insert_policy_and_refund_role.sql
+-- 20260930176000_invoice_insert_policy_and_refund_role.sql
 --
 -- R-042 (Pardeep, 30 Sep 2026). Two guards that asked only "which workspace?".
 --

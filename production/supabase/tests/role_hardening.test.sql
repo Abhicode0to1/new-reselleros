@@ -1,5 +1,5 @@
 -- Regression test: tenant isolation is not the whole rule — the ROLE decides too.
--- Migration 20260930130000 (S41 / WC-sec). Rolled back — safe on production.
+-- Migration 20260930175000 (S41 / WC-sec). Rolled back — safe on production.
 --
 -- Both directions, per table, because a guard is only half-tested by what it blocks:
 --

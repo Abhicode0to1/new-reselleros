@@ -1,5 +1,5 @@
 -- Regression test: the add-seats idempotency claim (R-060).
--- Migration 20260930150000_seat_increase_claims.sql. Rolled back — safe on production.
+-- Migration 20260930177000_seat_increase_claims.sql. Rolled back — safe on production.
 --
 --   BLOCKED  a second claim with the same (tenant, key)  ← this IS the idempotency
 --   ALLOWED  the same key in a DIFFERENT tenant

@@ -1,4 +1,4 @@
--- 20260930130000_role_hardening.sql
+-- 20260930175000_role_hardening.sql
 --
 -- S41 (WC-sec, Pardeep's audit 30 Sep 2026). Every guard below checked only the TENANT,
 -- so any member of a workspace — a sales rep, a support agent, a delivery user — could do

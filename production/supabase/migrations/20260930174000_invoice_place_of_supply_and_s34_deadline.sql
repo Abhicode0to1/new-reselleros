@@ -1,4 +1,4 @@
--- 20260930120000_invoice_place_of_supply_and_s34_deadline.sql
+-- 20260930174000_invoice_place_of_supply_and_s34_deadline.sql
 --
 -- R-041 (Pardeep, 30 Sep 2026). Two GST correctness holes in the issuing path.
 --

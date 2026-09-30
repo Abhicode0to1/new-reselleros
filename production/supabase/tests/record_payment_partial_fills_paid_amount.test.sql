@@ -1,5 +1,5 @@
 -- Regression test: a PARTIAL payment against an invoice fills invoices.paid_amount.
--- Migration 20260929150000 (R-015 part 3). Rolled back — safe on production.
+-- Migration 20260930173000 (R-015 part 3). Rolled back — safe on production.
 --
 -- The exact case from the card: a Rs 1,00,000 invoice, Rs 40,000 received.
 --

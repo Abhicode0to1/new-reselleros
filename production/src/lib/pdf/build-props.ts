@@ -41,7 +41,7 @@ export interface TenantPdfInfo {
    */
   logo_url:    string | null;
   /**
-   * Remittance details for the invoice footer (R-038, migration 20260929120000).
+   * Remittance details for the invoice footer (R-038, migration 20260930170000).
    *
    * REQUIRED for the same reason `logo_url` is: the fixed sentence "UPI / NEFT /
    * Razorpay accepted" survived for months precisely because no caller was ever made

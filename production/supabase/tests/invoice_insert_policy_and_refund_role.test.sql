@@ -1,5 +1,5 @@
 -- Regression test: an invoice can only be created by the numbering path, and a refund
--- needs a money role. Migration 20260930140000 (R-042). Rolled back — safe on production.
+-- needs a money role. Migration 20260930176000 (R-042). Rolled back — safe on production.
 --
 --   BLOCKED  a `sales` login INSERTing straight into public.invoices
 --   BLOCKED  an OWNER doing the same — the rule is about the path, not the person

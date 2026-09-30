@@ -32,7 +32,7 @@ export interface RemittanceBank {
 export interface PayMethodsInput {
   /** tenants.upi_vpa — set means a UPI QR is drawn and UPI is a real route. */
   upiVpa?:  string | null;
-  /** The four remittance columns from the tenants row (migration 20260929120000). */
+  /** The four remittance columns from the tenants row (migration 20260930170000). */
   bank?:    Partial<RemittanceBank> | null;
   /**
    * Resolved by the CALLER from tenant_secrets (razorpay_key_id + razorpay_key_secret)

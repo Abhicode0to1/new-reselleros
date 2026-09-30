@@ -15,7 +15,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { formatDocumentNumber, type SeriesState } from "@/lib/actions/consequence";
 
-const MIGRATION = "supabase/migrations/20260929140000_document_number_ist_fy_and_16_chars.sql";
+const MIGRATION = "supabase/migrations/20260930172000_document_number_ist_fy_and_16_chars.sql";
 const sql = readFileSync(MIGRATION, "utf8");
 
 const S = (over: Partial<SeriesState> = {}): SeriesState => ({

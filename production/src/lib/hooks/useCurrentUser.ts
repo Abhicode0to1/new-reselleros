@@ -39,7 +39,7 @@ export interface CurrentUserInfo {
   tenantUpiVpa: string | null;
   tenantUpiPayeeName: string | null;
   /**
-   * Remittance details printed on the invoice PDF (R-038, migration 20260929120000).
+   * Remittance details printed on the invoice PDF (R-038, migration 20260930170000).
    * Publication data, not credentials — they go on every invoice this company sends,
    * which is why they sit on `tenants` and not in `tenant_secrets`.
    */
