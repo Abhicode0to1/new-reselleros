@@ -108,3 +108,44 @@ export function useDealQuoteSources(quotes: readonly { id: string; invoice_id?: 
     },
   });
 }
+
+/**
+ * Project-quotation sources (1 Oct 2026, "project quote bhi dikhao"). A custom-software deal
+ * is quoted through Project Sales, not `quotes`, so none of the rows above reach it. The
+ * chain, all real columns:
+ *   leads.project_id → project_sales.id                      (create_project_quote_from_lead)
+ *   project_sales.id → project_milestones.project_id → .invoice_id → invoices.id
+ *   project_sales.id → project_payments.project_id           (record_project_payment writes
+ *                                                             ONLY here, never to `payments`)
+ * Read-only, under the caller's RLS; each source fails on its own like the ones above.
+ */
+export function useDealProjectSources(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["deal-history", "project", projectId ?? null],
+    enabled: projectId !== undefined,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const failed: string[] = [];
+      if (!projectId) {
+        return { projects: [], projectMilestones: [], projectInvoices: [], projectPayments: [], failed };
+      }
+      const supabase = createClient();
+      const [projects, projectMilestones, projectPayments] = await Promise.all([
+        safe("Project quotation", failed, () => supabase.from("project_sales")
+          .select("id, title, status, total_amount, created_at, accepted_at, updated_at").eq("id", projectId)),
+        safe("Project milestones", failed, () => supabase.from("project_milestones")
+          .select("id, project_id, seq, label, total_amount, invoice_id").eq("project_id", projectId)),
+        safe("Project payments", failed, () => supabase.from("project_payments")
+          .select("id, project_id, milestone_id, amount, method, received_at, created_at").eq("project_id", projectId)),
+      ]);
+      const invoiceIds = idsKey((projectMilestones ?? []).map((m) => m.invoice_id).filter((x): x is string => !!x));
+      const projectInvoices = projectMilestones === undefined
+        ? undefined
+        : invoiceIds.length === 0
+          ? []
+          : await safe("Project invoices", failed, () => supabase.from("invoices")
+              .select("id, amount, net_payable, paid_amount, status, invoice_date, created_at, quote_id").in("id", invoiceIds));
+      return { projects, projectMilestones, projectInvoices, projectPayments, failed };
+    },
+  });
+}

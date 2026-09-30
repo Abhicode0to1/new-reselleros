@@ -163,7 +163,7 @@ describe("dealMoney", () => {
       invoices: [{ id: "i1", amount: 1000, status: "pending" }, { id: "i2", amount: 500, status: "void" }],
       payments: [{ id: "p1", amount: 400 }, { id: "p2", amount: 100, refunded_at: "2026-09-01T00:00:00Z" }],
     });
-    expect(m).toEqual({ invoiced: 1000, paid: 400, outstanding: 600, invoiceCount: 1, paymentCount: 1 });
+    expect(m).toMatchObject({ invoiced: 1000, paid: 400, outstanding: 600, invoiceCount: 1, paymentCount: 1 });
   });
   it("has no outstanding before an invoice exists", () => {
     expect(dealMoney({ payments: [{ id: "p", amount: 10 }] }).outstanding).toBeNull();

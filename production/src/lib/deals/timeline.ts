@@ -26,6 +26,7 @@
  */
 import { IST_OFFSET_MS } from "@/lib/dates/ist";
 import { STAGE_LABEL } from "@/lib/leads/stage-meta";
+import { invoiceAmountDue } from "@/lib/payments/amount-due";
 import type { Lead } from "@/lib/supabase/database.types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -80,6 +81,13 @@ export interface DealHistorySources {
   subscriptions?: ReadonlyArray<{ id: Id; plan?: string | null; seats?: number | null; status?: string | null; start_date?: string | null; created_at?: Ts; mrr?: number | null }>;
   whatsapp?: ReadonlyArray<{ id: Id; direction?: string | null; text_body?: string | null; type?: string | null; template_name?: string | null; status?: string | null; created_at?: Ts }>;
   aiCalls?: ReadonlyArray<{ id: Id; status?: string | null; summary?: string | null; duration_sec?: number | null; created_at?: Ts }>;
+  /** Project quotation(s) linked on leads.project_id (project_sales), and what hangs off them. */
+  projects?: ReadonlyArray<{ id: Id; title?: string | null; status?: string | null; total_amount?: number | null; created_at?: Ts; accepted_at?: Ts; updated_at?: Ts }>;
+  projectMilestones?: ReadonlyArray<{ id: Id; project_id: Id; label?: string | null; total_amount?: number | null; invoice_id?: string | null }>;
+  /** invoices rows reached through project_milestones.invoice_id. */
+  projectInvoices?: ReadonlyArray<{ id: Id; amount?: number | null; net_payable?: number | null; paid_amount?: number | null; status?: string | null; invoice_date?: string | null; created_at?: Ts }>;
+  /** project_payments rows (bank receipts, and the TDS the customer withheld as method 'tds'). */
+  projectPayments?: ReadonlyArray<{ id: Id; project_id: Id; milestone_id?: string | null; amount?: number | null; method?: string | null; received_at?: string | null; created_at?: Ts }>;
   /** activity_log rows for this lead (entity 'leads') and its quotes (entity 'quotes'). */
   auditLog?: ReadonlyArray<{ id: number | string; entity: string; entity_id?: string | null; action: string; changes?: unknown; created_at?: Ts; user_id?: string | null }>;
 }
@@ -107,6 +115,19 @@ function iso(...candidates: Ts[]): string | null {
     if (!Number.isNaN(t)) return new Date(t).toISOString();
   }
   return null;
+}
+
+/**
+ * A business DATE (invoice_date, received_at) carrying the clock time of the row's insert
+ * when both fall on the same IST day — else the date alone, at IST midnight. An invoice
+ * dated 7 Aug but keyed in on 26 Sep belongs on 7 Aug.
+ */
+function datedAt(date: string | null | undefined, createdAt: Ts): string | null {
+  const day = iso(date);
+  const made = iso(createdAt);
+  if (!day) return made;
+  if (made && date && new Date(Date.parse(made) + IST_OFFSET_MS).toISOString().slice(0, 10) === date.slice(0, 10)) return made;
+  return day;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -327,7 +348,9 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
   }
 
   // Money after the quote.
+  const projectInvoiceIds = new Set((src.projectInvoices ?? []).map((i) => i.id));
   for (const inv of src.invoices ?? []) {
+    if (projectInvoiceIds.has(inv.id)) continue;                // shown once, as a project invoice
     push(iso(inv.created_at, inv.invoice_date), {
       id: `invoice:${inv.id}`, group: "money", icon: "receipt", tone: inv.status === "void" ? "rose" : "indigo",
       title: inv.status === "void" ? "Invoice (void)" : "Invoice bana",
@@ -354,6 +377,56 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
       title: "Subscription bani",
       detail: [s.plan, s.seats ? `${s.seats} seats` : null, s.status].filter(Boolean).join(" · ") || null,
       amount: s.mrr ?? null, href: "/subscriptions",
+    });
+  }
+
+  // Project quotations (Project Sales): quoted, accepted / declined, invoiced, paid.
+  const projectHref = (id: string) => `/projects/${id}`;
+  const projectTitle = new Map((src.projects ?? []).map((p) => [p.id, p.title || "Project"]));
+  for (const p of src.projects ?? []) {
+    const name = p.title || "Project";
+    /* create_project_quote writes the row straight as 'quoted' — a project quotation has no
+       separate send step or send log, so the moment it was made is the moment it was out. */
+    push(iso(p.created_at), {
+      id: `project:${p.id}`, group: "money", icon: "file", tone: "amber",
+      title: "Project quote banaya", detail: name, amount: p.total_amount ?? null, href: projectHref(p.id),
+    });
+    const st = (p.status ?? "").toLowerCase();
+    if (st === "cancelled") {
+      push(iso(p.updated_at), {
+        id: `project-status:${p.id}`, group: "money", icon: "x_circle", tone: "rose",
+        title: "Project quote declined", detail: `${name} · time = project ka last update`, href: projectHref(p.id),
+      });
+    } else if (p.accepted_at || st === "active" || st === "completed") {
+      /* accepted_at is stamped by accept_project_quote; older rows lack it — placed at the
+         last update then, and said so (lib/projects/quotation-view.ts treats them as accepted). */
+      push(iso(p.accepted_at, p.updated_at), {
+        id: `project-accept:${p.id}`, group: "money", icon: "check_circle", tone: "emerald",
+        title: "Project quote accepted", detail: p.accepted_at ? name : `${name} · time = project ka last update`,
+        amount: p.total_amount ?? null, href: projectHref(p.id),
+      });
+    }
+  }
+  const milestoneOf = new Map((src.projectMilestones ?? []).map((m) => [m.id, m]));
+  const milestoneByInvoice = new Map<string, NonNullable<DealHistorySources["projectMilestones"]>[number]>();
+  for (const m of src.projectMilestones ?? []) if (m.invoice_id) milestoneByInvoice.set(m.invoice_id, m);
+  for (const inv of dedupeById(src.projectInvoices ?? [])) {
+    const ms = milestoneByInvoice.get(inv.id);
+    push(datedAt(inv.invoice_date, inv.created_at), {
+      id: `project-invoice:${inv.id}`, group: "money", icon: "receipt", tone: inv.status === "void" ? "rose" : "indigo",
+      title: inv.status === "void" ? "Project invoice (void)" : "Project invoice bana",
+      detail: [inv.id, ms?.label, inv.status && inv.status !== "void" ? inv.status : null].filter(Boolean).join(" · "),
+      amount: inv.amount ?? null, href: `/invoices?open=${encodeURIComponent(inv.id)}`,
+    });
+  }
+  for (const p of dedupeById(src.projectPayments ?? [])) {
+    const tds = p.method === "tds";
+    const ms = p.milestone_id ? milestoneOf.get(p.milestone_id) : undefined;
+    push(datedAt(p.received_at, p.created_at), {
+      id: `project-payment:${p.id}`, group: "money", icon: "rupee", tone: "emerald",
+      title: tds ? "TDS kata (customer ne) — project" : "Project payment mila",
+      detail: [projectTitle.get(p.project_id), ms?.label, tds ? null : p.method].filter(Boolean).join(" · ") || null,
+      amount: p.amount ?? null, href: projectHref(p.project_id),
     });
   }
 
@@ -391,25 +464,69 @@ export function filterDealHistory(events: readonly DealEvent[], filter: DealFilt
 export interface DealMoney {
   invoiced: number;
   paid: number;
-  /** invoiced − paid, never below 0. Null when nothing is invoiced yet. */
+  /** Still owed on the invoices. Null when nothing is invoiced yet. */
   outstanding: number | null;
   invoiceCount: number;
   paymentCount: number;
+  /** Project side only (0 when the deal has no project quotation). */
+  project: {
+    invoiced: number;
+    paid: number;
+    /** Part of `paid` that is TDS the customer withheld (project_payments.method 'tds'). */
+    tds: number;
+    /** Project quotation value (GST-inclusive total), non-declined projects. */
+    value: number;
+    /** Milestones with no invoice raised yet — the project value still to be billed. */
+    notInvoiced: number;
+  };
 }
 
 /**
- * Invoiced / paid / outstanding for the deal. Void invoices and refunded payments do not
- * count. Paid is read from payments, not from invoices.paid_amount, so money received
- * against the quote before an invoice existed is still counted.
+ * Invoiced / paid / outstanding for the deal, across both kinds of quote.
+ *
+ * Subscription quotes (unchanged): paid is read from `payments` (quote_id), not from
+ * invoices.paid_amount, so money received before an invoice existed still counts; baaki =
+ * invoiced − paid.
+ *
+ * Project quotations: paid is `project_payments` (record_project_payment writes only there —
+ * never to `payments`, so the two sums never overlap), and baaki is each invoice's own
+ * balance from lib/payments/amount-due#invoiceAmountDue — the function the invoice PDF uses,
+ * which already folds in net_payable, paid_amount (kept by trg_project_payment_sync_invoice)
+ * and a paid/void status. A milestone paid before it was invoiced is therefore not "owed".
+ *
+ * No invoice is counted twice: one that is reachable both through a quote and through a
+ * project milestone counts once, on the project side. Void invoices and refunded payments
+ * do not count.
  */
-export function dealMoney(src: Pick<DealHistorySources, "invoices" | "payments">): DealMoney {
-  const invs = (src.invoices ?? []).filter((i) => i.status !== "void");
-  const pays = (src.payments ?? []).filter((p) => !p.refunded_at && p.status !== "refunded");
-  const invoiced = invs.reduce((s, i) => s + (i.amount ?? 0), 0);
-  const paid = pays.reduce((s, p) => s + (p.amount ?? 0), 0);
+export function dealMoney(src: Pick<DealHistorySources, "invoices" | "payments" | "projects" | "projectMilestones" | "projectInvoices" | "projectPayments">): DealMoney {
+  const pInvs = dedupeById(src.projectInvoices ?? []).filter((i) => i.status !== "void");
+  const pIds = new Set((src.projectInvoices ?? []).map((i) => i.id));
+  const qInvs = dedupeById(src.invoices ?? []).filter((i) => i.status !== "void" && !pIds.has(i.id));
+  const qPays = dedupeById(src.payments ?? []).filter((p) => !p.refunded_at && p.status !== "refunded");
+  const pPays = dedupeById(src.projectPayments ?? []);
+
+  const sum = <T>(rows: readonly T[], f: (r: T) => number | null | undefined) => rows.reduce((s, r) => s + (f(r) ?? 0), 0);
+  const qInvoiced = sum(qInvs, (i) => i.amount);
+  const qPaid = sum(qPays, (p) => p.amount);
+  const pInvoiced = sum(pInvs, (i) => i.amount);
+  const pPaid = sum(pPays, (p) => p.amount);
+  const pDue = sum(pInvs, (i) => invoiceAmountDue(i));
+
+  const liveProjects = new Set((src.projects ?? []).filter((p) => (p.status ?? "") !== "cancelled").map((p) => p.id));
+  const value = sum((src.projects ?? []).filter((p) => liveProjects.has(p.id)), (p) => p.total_amount);
+  const notInvoiced = sum((src.projectMilestones ?? []).filter((m) => !m.invoice_id && liveProjects.has(m.project_id)), (m) => m.total_amount);
+
+  const invoiceCount = qInvs.length + pInvs.length;
   return {
-    invoiced, paid,
-    outstanding: invs.length > 0 ? Math.max(0, invoiced - paid) : null,
-    invoiceCount: invs.length, paymentCount: pays.length,
+    invoiced: qInvoiced + pInvoiced,
+    paid: qPaid + pPaid,
+    outstanding: invoiceCount > 0 ? (qInvs.length > 0 ? Math.max(0, qInvoiced - qPaid) : 0) + pDue : null,
+    invoiceCount,
+    paymentCount: qPays.length + pPays.length,
+    project: { invoiced: pInvoiced, paid: pPaid, tds: sum(pPays.filter((p) => p.method === "tds"), (p) => p.amount), value, notInvoiced },
   };
+}
+
+function dedupeById<T extends { id: string }>(rows: readonly T[]): T[] {
+  return [...new Map(rows.map((r) => [r.id, r])).values()];
 }
