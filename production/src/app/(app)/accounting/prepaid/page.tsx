@@ -39,6 +39,7 @@ import { itcEligibility } from "@/lib/gst/itc";
 import { tdsDecision, panFromGstin } from "@/lib/accounting/tds-deductor";
 import { TDS_SECTION_RATES } from "@/lib/accounting/tds-rates";
 import { istToday } from "@/lib/dates/ist";
+import { splitTaxHeads } from "@/lib/gst/tax-split";
 
 const CATEGORIES = ["Marketing", "Advertising", "Software / SaaS", "Hosting", "Subscriptions", "Other"];
 const METHODS = ["bank_transfer", "upi", "card", "cheque", "cash"];
@@ -538,7 +539,7 @@ function BookInvoiceDialog({ advances, onClose }: { advances: PrepaidAdvance[]; 
     return (vendorMaster ?? []).find((v) => v.id === adv?.vendor_id) ?? (vendorMaster ?? []).find((v) => v.name.trim().toUpperCase() === key) ?? null;
   }, [vendor, advances, vendorMaster]);
   const interState = isInterStateSupply(null, me?.tenantStateCode ?? null, { customerGstin: vendorRow?.gstin ?? null, sellerGstin: me?.tenantGstin ?? null });
-  const heads = gstAmt > 0 ? (interState ? { igst: gstAmt, cgst: 0, sgst: 0 } : { igst: 0, cgst: Math.floor(gstAmt / 2), sgst: gstAmt - Math.floor(gstAmt / 2) }) : null;
+  const heads = gstAmt > 0 ? splitTaxHeads(gstAmt, interState) : null;
   const itc = itcEligibility({ gst_paid: gstAmt, bill_type: gstAmt > 0 ? "gst" : "none", category: advances.find((a) => a.vendor_name === vendor)?.category ?? "Advertising", vendorGstin: vendorRow?.gstin ?? null });
   const [tdsSection, setTdsSection] = React.useState<string>("194C");
   const [tdsEdited, setTdsEdited] = React.useState(false);

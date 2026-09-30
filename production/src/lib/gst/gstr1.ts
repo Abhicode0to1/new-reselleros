@@ -17,8 +17,22 @@
  *   · The Portal JSON carried a made-up GSTIN (`07AAAAA0000A1Z5`) and zero tax in every
  *     line. It is now the company's own GSTIN (the caller refuses to export without one)
  *     and the tax is split into IGST / CGST / SGST.
+ *
+ * ─── WC-gst (30 Sep 2026) ────────────────────────────────────────────────────
+ *   · CGST/SGST split came from Math.trunc here and Math.round on the invoice PDF, so an
+ *     odd tax put the odd rupee in a different head on the return than on the invoice.
+ *     Both now use lib/gst/tax-split.ts.
+ *   · Exports (customer country outside India, no GSTIN) fell into B2CS under whatever
+ *     state was on file — or were skipped. They are Table 6A (EXP, zero-rated), and
+ *     their notes are CDNUR with UR Type EXPWP / EXPWOP.
+ *   · Advances (receipt vouchers) had no table at all. Tax on an advance for a SERVICE
+ *     is due when the advance is received (s.13 CGST Act): Table 11A reports advances
+ *     received and not invoiced in the same period, 11B the ones adjusted this period
+ *     against an invoice after being reported earlier. See buildAdvances below.
  */
 import { SAAS_HSN, SAAS_HSN_LABEL } from "./hsn";
+import { splitTaxHeads } from "./tax-split";
+import { isExportSupply } from "./place-of-supply";
 import { GST_STATE_BY_CODE } from "@/lib/utils";
 
 /** Inter-state B2C invoice above this value gets its own B2CL line (₹1L since 1 Aug 2024). */
@@ -41,6 +55,9 @@ export interface Gstr1Doc {
   gst: number;                   // total tax (signed for notes)
   taxRate: number;
   interState: boolean;
+  /** Customer's country. Anything other than India (see isExportSupply) with no GSTIN is an
+   *  export → EXP / CDNUR-EXP. Missing/empty = domestic (never silently zero-rate). */
+  customerCountry?: string | null;
   /** Per-line HSN/SAC share of the taxable value. Missing → whole document under SAAS_HSN. */
   lines?: { hsn: string; description?: string; taxable: number }[];
 }
@@ -49,11 +66,21 @@ export interface Seller { stateCode: string | null; state: string | null; gstin?
 
 export interface TaxHeads { igst: number; cgst: number; sgst: number }
 
-/** Inter-state → all IGST; intra-state → CGST + SGST (remainder into SGST so they sum exactly). */
+/** Inter-state → all IGST; intra-state → CGST + SGST via the shared rule in tax-split.ts
+ *  (CGST = round(tax/2), SGST = tax − CGST — the same split the invoice PDF prints). */
 export function gstSplit(r: { gst: number; interState: boolean }): TaxHeads {
-  if (r.interState) return { igst: r.gst, cgst: 0, sgst: 0 };
-  const cgst = Math.trunc(r.gst / 2);
-  return { igst: 0, cgst, sgst: r.gst - cgst };
+  return splitTaxHeads(r.gst, r.interState);
+}
+
+/** A document to a customer outside India with no Indian GSTIN = export of services. */
+export function isExportDoc(d: Pick<Gstr1Doc, "customerGstin" | "customerCountry">): boolean {
+  return !d.customerGstin && isExportSupply(d.customerCountry);
+}
+
+/** Tax heads of a document as REPORTED: an export with payment is always IGST (IGST Act
+ *  s.16), whatever the row's inter_state flag says. */
+export function docHeads(d: Pick<Gstr1Doc, "gst" | "interState" | "customerGstin" | "customerCountry">): TaxHeads {
+  return gstSplit({ gst: d.gst, interState: d.interState || isExportDoc(d) });
 }
 
 /** Offline Tool date: DD-MMM-YYYY. */
@@ -95,7 +122,11 @@ export interface B2bRow { gstin: string; name: string; id: string; date: string;
 export interface B2clRow { id: string; date: string; value: number; pos: string; rate: number; taxable: number; heads: TaxHeads }
 export interface B2csRow { pos: string; interState: boolean; rate: number; taxable: number; heads: TaxHeads }
 export interface CdnrRow { gstin: string; name: string; id: string; date: string; noteType: "C" | "D"; value: number; pos: string; rate: number; taxable: number; heads: TaxHeads }
-export interface CdnurRow { id: string; date: string; noteType: "C" | "D"; value: number; pos: string; rate: number; taxable: number; heads: TaxHeads }
+/** UR Type: B2CL (large inter-state unregistered) or EXPWP / EXPWOP (export note, with / without IGST). */
+export type CdnurType = "B2CL" | "EXPWP" | "EXPWOP";
+export interface CdnurRow { urType: CdnurType; id: string; date: string; noteType: "C" | "D"; value: number; pos: string; rate: number; taxable: number; heads: TaxHeads }
+/** Table 6A. WPAY = IGST charged (refund route), WOPAY = under LUT, no tax. */
+export interface ExpRow { exportType: "WPAY" | "WOPAY"; id: string; date: string; value: number; rate: number; taxable: number; igst: number }
 export interface HsnRow { hsn: string; description: string; rate: number; value: number; taxable: number; heads: TaxHeads }
 
 export interface Gstr1Sections {
@@ -104,6 +135,7 @@ export interface Gstr1Sections {
   b2cs: B2csRow[];
   cdnr: CdnrRow[];
   cdnur: CdnurRow[];
+  exp: ExpRow[];
   hsn: HsnRow[];
   /** B2C documents with no resolvable place of supply — not in any table. */
   skipped: string[];
@@ -142,6 +174,7 @@ export function buildGstr1(docs: Gstr1Doc[], seller: Seller): Gstr1Sections {
   const b2cl: B2clRow[] = [];
   const cdnr: CdnrRow[] = [];
   const cdnur: CdnurRow[] = [];
+  const exp: ExpRow[] = [];
   const b2csMap = new Map<string, B2csRow>();
   const hsnMap = new Map<string, HsnRow>();
   const skipped: string[] = [];
@@ -149,7 +182,8 @@ export function buildGstr1(docs: Gstr1Doc[], seller: Seller): Gstr1Sections {
 
   for (const d of docs) {
     const pos = posFor(d, seller);
-    const heads = gstSplit(d);
+    const isExport = isExportDoc(d);
+    const heads = docHeads(d);
     const isNote = d.docType !== "invoice";
     const noteType: "C" | "D" = d.docType === "credit_note" ? "C" : "D";
 
@@ -162,7 +196,7 @@ export function buildGstr1(docs: Gstr1Doc[], seller: Seller): Gstr1Sections {
       const tax = lines.length === 1 ? d.gst : lineTax(ln.taxable);
       cur.taxable += ln.taxable;
       cur.value += ln.taxable + tax;
-      cur.heads = addHeads(cur.heads, gstSplit({ gst: tax, interState: d.interState }));
+      cur.heads = addHeads(cur.heads, gstSplit({ gst: tax, interState: d.interState || isExport }));
       if (!cur.description && ln.description) cur.description = ln.description;
       hsnMap.set(key, cur);
     }
@@ -173,11 +207,20 @@ export function buildGstr1(docs: Gstr1Doc[], seller: Seller): Gstr1Sections {
       else b2b.push({ gstin: d.customerGstin, name: d.customerName, id: d.id, date: d.date, value: d.amount, pos: p, rate: d.taxRate, taxable: d.taxableValue, heads });
       continue;
     }
+    if (isExport) {
+      /* Zero-rated export. WPAY when IGST was charged, WOPAY under LUT. The rate on a
+         WOPAY line is 0 — nothing was levied (CA to confirm against the current tool). */
+      const withPay = d.gst !== 0;
+      const rate = withPay ? d.taxRate : 0;
+      if (isNote) cdnur.push({ urType: withPay ? "EXPWP" : "EXPWOP", id: d.id, date: d.date, noteType, value: Math.abs(d.amount), pos: "", rate, taxable: Math.abs(d.taxableValue), heads: abs(heads) });
+      else exp.push({ exportType: withPay ? "WPAY" : "WOPAY", id: d.id, date: d.date, value: d.amount, rate, taxable: d.taxableValue, igst: heads.igst });
+      continue;
+    }
     if (!pos) { skipped.push(d.id); continue; }
     const p = posStr(pos);
     const large = d.interState && Math.abs(d.amount) > B2CL_THRESHOLD;
     if (large) {
-      if (isNote) cdnur.push({ id: d.id, date: d.date, noteType, value: Math.abs(d.amount), pos: p, rate: d.taxRate, taxable: Math.abs(d.taxableValue), heads: abs(heads) });
+      if (isNote) cdnur.push({ urType: "B2CL", id: d.id, date: d.date, noteType, value: Math.abs(d.amount), pos: p, rate: d.taxRate, taxable: Math.abs(d.taxableValue), heads: abs(heads) });
       else b2cl.push({ id: d.id, date: d.date, value: d.amount, pos: p, rate: d.taxRate, taxable: d.taxableValue, heads });
       continue;
     }
@@ -190,7 +233,7 @@ export function buildGstr1(docs: Gstr1Doc[], seller: Seller): Gstr1Sections {
     b2csMap.set(key, cur);
   }
 
-  return { b2b, b2cl, b2cs: [...b2csMap.values()], cdnr, cdnur, hsn: [...hsnMap.values()], skipped, notesNettedIntoB2cs };
+  return { b2b, b2cl, b2cs: [...b2csMap.values()], cdnr, cdnur, exp, hsn: [...hsnMap.values()], skipped, notesNettedIntoB2cs };
 }
 
 function abs(h: TaxHeads): TaxHeads { return { igst: Math.abs(h.igst), cgst: Math.abs(h.cgst), sgst: Math.abs(h.sgst) }; }
@@ -203,18 +246,25 @@ export const GSTR1_HEADERS = {
   b2cs:  ["Type", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"],
   cdnr:  ["GSTIN/UIN of Recipient", "Receiver Name", "Note Number", "Note Date", "Note Type", "Place Of Supply", "Reverse Charge", "Note Supply Type", "Note Value", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount"],
   cdnur: ["UR Type", "Note Number", "Note Date", "Note Type", "Place Of Supply", "Note Supply Type", "Note Value", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount"],
+  exp:   ["Export Type", "Invoice Number", "Invoice date", "Invoice Value", "Port Code", "Shipping Bill Number", "Shipping Bill Date", "Rate", "Taxable Value", "Cess Amount"],
+  at:    ["Place Of Supply", "Applicable % of Tax Rate", "Rate", "Gross Advance Received", "Cess Amount"],
+  atadj: ["Place Of Supply", "Applicable % of Tax Rate", "Rate", "Gross Advance Adjusted", "Cess Amount"],
   hsn:   ["HSN", "Description", "UQC", "Total Quantity", "Total Value", "Rate", "Taxable Value", "Integrated Tax Amount", "Central Tax Amount", "State/UT Tax Amount", "Cess Amount"],
 } as const;
 
 export type CsvRow = (string | number)[];
 
-export function gstr1Csv(s: Gstr1Sections): Record<keyof typeof GSTR1_HEADERS, CsvRow[]> {
+export function gstr1Csv(s: Gstr1Sections, adv?: AdvanceTables): Record<keyof typeof GSTR1_HEADERS, CsvRow[]> {
   return {
     b2b:   s.b2b.map((r) => [r.gstin, r.name, r.id, gstDate(r.date), r.value, r.pos, "N", "", "Regular B2B", "", r.rate, r.taxable, 0]),
     b2cl:  s.b2cl.map((r) => [r.id, gstDate(r.date), r.value, r.pos, "", r.rate, r.taxable, 0, ""]),
     b2cs:  s.b2cs.map((r) => ["OE", r.pos, "", r.rate, r.taxable, 0, ""]),
     cdnr:  s.cdnr.map((r) => [r.gstin, r.name, r.id, gstDate(r.date), r.noteType, r.pos, "N", "Regular B2B", r.value, "", r.rate, r.taxable, 0]),
-    cdnur: s.cdnur.map((r) => ["B2CL", r.id, gstDate(r.date), r.noteType, r.pos, "B2CL", r.value, "", r.rate, r.taxable, 0]),
+    cdnur: s.cdnur.map((r) => [r.urType, r.id, gstDate(r.date), r.noteType, r.pos, r.urType, r.value, "", r.rate, r.taxable, 0]),
+    /* Services: no port code / shipping bill — the columns stay, empty. */
+    exp:   s.exp.map((r) => [r.exportType, r.id, gstDate(r.date), r.value, "", "", "", r.rate, r.taxable, 0]),
+    at:    (adv?.at ?? []).map((r) => [r.pos, "", r.rate, r.advance, 0]),
+    atadj: (adv?.atadj ?? []).map((r) => [r.pos, "", r.rate, r.advance, 0]),
     hsn:   s.hsn.map((r) => [r.hsn, r.description, "OTH-OTHERS", 0, r.value, r.rate, r.taxable, r.heads.igst, r.heads.cgst, r.heads.sgst, 0]),
   };
 }
@@ -228,7 +278,7 @@ const posCode = (pos: string) => pos.slice(0, 2);
 
 /** Portal JSON. `gstin` must be the company's real GSTIN — the caller refuses without one.
  *  `fp` is the return period MMYYYY. */
-export function gstr1Json(s: Gstr1Sections, gstin: string, fp: string) {
+export function gstr1Json(s: Gstr1Sections, gstin: string, fp: string, adv?: AdvanceTables) {
   const byCtin = <T extends { gstin: string }>(rows: T[]) => {
     const m = new Map<string, T[]>();
     for (const r of rows) m.set(r.gstin, [...(m.get(r.gstin) ?? []), r]);
@@ -257,8 +307,17 @@ export function gstr1Json(s: Gstr1Sections, gstin: string, fp: string) {
       nt: rows.map((r) => ({ ntty: r.noteType, nt_num: r.id, nt_dt: jsonDate(r.date), pos: posCode(r.pos), rchrg: "N", inv_typ: "R", val: r.value, itms: [itm(1, r)] })),
     })),
     cdnur: s.cdnur.map((r) => ({
-      typ: "B2CL", ntty: r.noteType, nt_num: r.id, nt_dt: jsonDate(r.date), pos: posCode(r.pos), val: r.value, itms: [itm(1, r)],
+      typ: r.urType, ntty: r.noteType, nt_num: r.id, nt_dt: jsonDate(r.date),
+      ...(r.urType === "B2CL" ? { pos: posCode(r.pos) } : {}), val: r.value, itms: [itm(1, r)],
     })),
+    exp: (["WPAY", "WOPAY"] as const)
+      .map((t) => ({ exp_typ: t, inv: s.exp.filter((r) => r.exportType === t).map((r) => ({
+        inum: r.id, idt: jsonDate(r.date), val: r.value,
+        itms: [{ txval: r.taxable, rt: r.rate, iamt: r.igst, csamt: 0 }],
+      })) }))
+      .filter((g) => g.inv.length > 0),
+    at: advJson(adv?.at ?? []),
+    txpd: advJson(adv?.atadj ?? []),
     hsn: {
       data: s.hsn.map((r, i) => ({
         num: i + 1, hsn_sc: r.hsn, desc: r.description, uqc: "OTH", qty: 0,
@@ -266,4 +325,111 @@ export function gstr1Json(s: Gstr1Sections, gstin: string, fp: string) {
       })),
     },
   };
+}
+
+// ─── Advances: Table 11A (received) / 11B (adjusted) ────────────────────────
+/*
+ * Tax on an advance for a service is due on receipt (s.13(2) CGST Act; the goods-side
+ * relief, Notification 66/2017-CT, does not cover services). The app issues an RV
+ * (receipt voucher) for every quote payment; that payment is an advance until the quote's
+ * invoice is issued.
+ *
+ *   11A  advance RECEIVED in the period and not invoiced by the period's end.
+ *        (Received and invoiced in the same period: neither table; the invoice carries it.)
+ *   11B  advance received in an EARLIER period, adjusted against an invoice dated in this
+ *        one. It reduces the tax, because the invoice now carries the full tax again.
+ *
+ * Values are the advance EXCLUDING tax ("Gross Advance Received" in the Offline Tool is
+ * the taxable part; the tool computes tax on it). The receipt is GST-inclusive, so it is
+ * reverse-derived at the rate: taxable = round(gross x 100 / (100 + rate)), the same
+ * formula the receipt voucher itself prints.
+ *
+ * Exports: an advance for a zero-rated export under LUT carries no tax. Not reported,
+ * counted in `exportsSkipped` so the page can say so.
+ */
+export interface Advance {
+  paymentId: string;
+  voucherNo: string | null;
+  /** IST calendar date the money came in (YYYY-MM-DD). Convert received_at with toIstDate. */
+  receivedDate: string;
+  /** Date of the invoice that adjusted it, or null while it is still an open advance. */
+  adjustedOn: string | null;
+  /** GST-inclusive amount (₹). For 11B: the amount adjusted on the invoice. */
+  gross: number;
+  rate: number;
+  interState: boolean;
+  customerGstin: string | null;
+  customerStateCode: string | null;
+  customerState: string | null;
+  customerCountry?: string | null;
+}
+export interface AdvanceRow { pos: string; interState: boolean; rate: number; advance: number; heads: TaxHeads }
+export interface AdvanceTables {
+  at: AdvanceRow[];
+  atadj: AdvanceRow[];
+  /** Advances with no resolvable place of supply (payment ids): not in either table. */
+  skipped: string[];
+  /** Export advances (zero-rated under LUT): no tax, not reported. */
+  exportsSkipped: number;
+}
+
+/** Taxable value + tax of a GST-inclusive receipt. */
+export function advanceTax(gross: number, rate: number): { taxable: number; tax: number } {
+  const taxable = Math.round((gross * 100) / (100 + rate));
+  return { taxable, tax: gross - taxable };
+}
+
+export function buildAdvances(advances: Advance[], period: { from: string; to: string }, seller: Seller): AdvanceTables {
+  const atMap = new Map<string, AdvanceRow>();
+  const adjMap = new Map<string, AdvanceRow>();
+  const skipped: string[] = [];
+  let exportsSkipped = 0;
+  const inPeriod = (d: string) => d >= period.from && d <= period.to;
+
+  for (const a of advances) {
+    if (!(a.gross > 0)) continue;
+    const received = a.receivedDate.slice(0, 10);
+    const adjusted = a.adjustedOn ? a.adjustedOn.slice(0, 10) : null;
+    const is11A = inPeriod(received) && (adjusted == null || adjusted > period.to);
+    const is11B = adjusted != null && inPeriod(adjusted) && received < period.from;
+    if (!is11A && !is11B) continue;
+    if (isExportDoc({ customerGstin: a.customerGstin, customerCountry: a.customerCountry })) { exportsSkipped++; continue; }
+    const pos = posFor(a, seller);
+    if (!pos) { skipped.push(a.paymentId); continue; }
+    const { taxable, tax } = advanceTax(a.gross, a.rate);
+    const p = posStr(pos);
+    const target = is11A ? atMap : adjMap;
+    const key = `${p}|${a.rate}|${a.interState ? "I" : "L"}`;
+    const cur = target.get(key) ?? { pos: p, interState: a.interState, rate: a.rate, advance: 0, heads: { igst: 0, cgst: 0, sgst: 0 } };
+    cur.advance += taxable;
+    cur.heads = addHeads(cur.heads, gstSplit({ gst: tax, interState: a.interState }));
+    target.set(key, cur);
+  }
+  return { at: [...atMap.values()], atadj: [...adjMap.values()], skipped, exportsSkipped };
+}
+
+function advJson(rows: AdvanceRow[]) {
+  const m = new Map<string, AdvanceRow[]>();
+  for (const r of rows) {
+    const k = `${posCode(r.pos)}|${r.interState ? "INTER" : "INTRA"}`;
+    m.set(k, [...(m.get(k) ?? []), r]);
+  }
+  return [...m.entries()].map(([k, rs]) => {
+    const [pos, sply_ty] = k.split("|");
+    return {
+      pos, sply_ty,
+      itms: rs.map((r) => ({ rt: r.rate, ad_amt: r.advance, iamt: r.heads.igst, camt: r.heads.cgst, samt: r.heads.sgst, csamt: 0 })),
+    };
+  });
+}
+
+// ─── GSTR-3B classification of one document ────────────────────────────────
+
+/** How a document lands in 3B: zero-rated (3.1(b)) or not, and, for an inter-state supply
+ *  to an unregistered person, its place of supply for Table 3.2. */
+export function gstr3bClass(d: Gstr1Doc, seller: Seller): { zeroRated: boolean; unregInterPos: string | null } {
+  if (isExportDoc(d)) return { zeroRated: true, unregInterPos: null };
+  if (d.customerGstin || !d.interState) return { zeroRated: false, unregInterPos: null };
+  const pos = posFor(d, seller);
+  return { zeroRated: false, unregInterPos: pos ? posStr(pos) : null };
 }

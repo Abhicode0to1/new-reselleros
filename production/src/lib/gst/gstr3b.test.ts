@@ -44,3 +44,46 @@ describe("GSTR-3B worksheet", () => {
     expect(g2.pay).toEqual(H());
   });
 });
+
+describe("WC-gst: 3.1(b) zero-rated and 3.2 unregistered inter-state", () => {
+  const g = computeGstr3b({
+    output: [
+      { taxableValue: 500_000, heads: H(0, 45_000, 45_000) },
+      { taxableValue: 100_000, heads: H(18_000), unregInterPos: "27-Maharashtra" },
+      { taxableValue: 50_000, heads: H(9_000), unregInterPos: "27-Maharashtra" },
+      { taxableValue: -10_000, heads: H(-1_800), unregInterPos: "27-Maharashtra" },   // credit note
+      { taxableValue: 20_000, heads: H(3_600), unregInterPos: "09-Uttar Pradesh" },
+      { taxableValue: 200_000, heads: H(), zeroRated: true },                           // export under LUT
+      { taxableValue: 100_000, heads: H(18_000), zeroRated: true },                     // export with IGST
+    ],
+    itc: [], blocked17: [], notIn2b: 0, rcm: [],
+  });
+
+  it("exports leave 3.1(a) and go to 3.1(b)", () => {
+    expect(g.outTaxable).toBe(500_000 + 100_000 + 50_000 - 10_000 + 20_000);
+    expect(g.out.igst).toBe(18_000 + 9_000 - 1_800 + 3_600);
+    expect(g.zeroTaxable).toBe(300_000);
+    expect(g.zeroIgst).toBe(18_000);
+  });
+
+  it("IGST on exports with payment is still payable", () => {
+    expect(g.pay.igst).toBe(18_000 + 9_000 - 1_800 + 3_600 + 18_000);
+  });
+
+  it("3.2 is per place of supply, netted, sorted", () => {
+    expect(g.unregInter).toEqual([
+      { pos: "09-Uttar Pradesh", taxable: 20_000, igst: 3_600 },
+      { pos: "27-Maharashtra", taxable: 140_000, igst: 25_200 },
+    ]);
+    expect(gstr3bRows(g).map((r) => r[0])).toEqual(["3.1(a)", "3.1(b)", "3.2", "3.2", "4(A)(5)", "4(C)", "Net"]);
+  });
+
+  it("advances net into 3.1(a): 11A adds, 11B takes back", () => {
+    const a = computeGstr3b({
+      output: [{ taxableValue: 10_000, heads: H(0, 900, 900) }, { taxableValue: -5_000, heads: H(0, -450, -450) }],
+      itc: [], blocked17: [], notIn2b: 0, rcm: [],
+    });
+    expect(a.outTaxable).toBe(5_000);
+    expect(a.out).toEqual(H(0, 450, 450));
+  });
+});
