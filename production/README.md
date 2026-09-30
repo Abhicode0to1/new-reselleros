@@ -66,8 +66,8 @@ smaller numbers.
 
 ### How code reaches production
 
-- Each person works on their own branch (`OWNERS.json`: `pardeep-sir`, `abhishek-pre-merge`,
-  `pawan-api-system`) and pushes only to it. Cross-area needs go on the team board — see
+- Each person works on their own branch (`OWNERS.json`: `manager-pardeep`, `billing-abhishek`,
+  `website-pawan`) and pushes only to it. Cross-area needs go on the team board — see
   [`../docs/TEAM-PROTOCOL.md`](../docs/TEAM-PROTOCOL.md).
 - A push to the `deploy` branch triggers Cloud Build (`../cloudbuild.yaml`): **gate** (npm ci,
   tsc, vitest) → Docker build → Cloud Run `resellersos` in `asia-southeast1`. A red gate

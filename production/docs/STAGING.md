@@ -132,7 +132,7 @@ Production keys leave the laptops entirely. The one script that still needs prod
 
 ## How we use it (the daily loop)
 
-1. Work on your own branch as now (`pardeep-sir`, `abhishek-pre-merge`, `pawan-api-system`).
+1. Work on your own branch as now (`manager-pardeep`, `billing-abhishek`, `website-pawan`).
 2. Want the others to see it? `git push origin HEAD:staging` (force is fine). Six minutes later
    it is live at the staging URL; say so in the board's `#deploy` channel.
 3. Two people pushing the same day: the second one merges the first's branch into their push

@@ -34,7 +34,7 @@ tells you whose area a branch touched.
 
 Pardeep (manager) re-split the areas on 30 Sep 2026 (`OWNERS.json` is the truth):
 - **Pardeep** — manager; CRM/leads, deals, enquiries, referrals, partners, Marketing & Advertising, attendance/HR, reports, team docs, and the QA system (`production/e2e/`, `docs/qa/`).
-- **Hitesh** — Accounts: the app's Accounting module (books, GST, TDS, compliance, payroll, banking, expenses, purchases, vendor portal). Branch still `hitesh-qa`.
+- **Hitesh** — Accounts: the app's Accounting module (books, GST, TDS, compliance, payroll, banking, expenses, purchases, vendor portal). Branch `accounts-hitesh`.
 - **Abhishek** — Billing & Subscriptions + technical/infra: deploy, `cloudbuild.yaml`, CI (`.github/`), crons, backups, ops scripts.
 - **Pawan** — website and everything customer-facing (public/marketing pages, auth, checkout, customer portal, `/api/v1`).
 
@@ -51,7 +51,7 @@ online **test** environment — never production — and the daily live-error ro
 
 ## Session start (every time, before any code)
 
-1. Know who you work for: the branch → owner in `OWNERS.json` (`pardeep-sir` → pardeep, …).
+1. Know who you work for: the branch → owner in `OWNERS.json` (`manager-pardeep` → pardeep, …).
 2. `ArtifactData query tasks where owner in [me, "sab"] and status in [open, doing, review, blocked]`
    — list them to the human, P0 first, with any `review` ones they still need to check.
 3. `ArtifactData query changes` for docs whose `affects` contains me and `acked` lacks me —
@@ -112,8 +112,8 @@ Board: https://claude.ai/artifact/2E442MT5zCLxm2oE1Lipos (use the ArtifactData t
 2. tasks where from = <me> and status = review: these wait for MY check ("Done jab").
 3. changes whose affects contains <me> and acked has no <me>: one line each.
 4. messages from the last 24h in #general, #deploy and my area channel, and any @<Name>.
-5. git fetch; how many commits pardeep-sir has that my branch does not
-   (git log --oneline HEAD..origin/pardeep-sir | wc -l) — if > 0, say "merge karo".
+5. git fetch; how many commits manager-pardeep has that my branch does not
+   (git log --oneline HEAD..origin/manager-pardeep | wc -l) — if > 0, say "merge karo".
 Then suggest the one task I should pick first today. At most 15 lines.
 ```
 

@@ -4,7 +4,7 @@
   "areas": {
     "pardeep": {
       "name": "Pardeep",
-      "branch": "pardeep-sir",
+      "branch": "manager-pardeep",
       "covers": "Manager: CRM/leads, deals, enquiries, referrals, partners, Marketing & Advertising, attendance/HR, reports, team docs, QA system (e2e + AI QA routines)",
       "paths": [
         "production/src/app/(app)/reports/",
@@ -41,7 +41,7 @@
     },
     "abhishek": {
       "name": "Abhishek",
-      "branch": "abhishek-pre-merge",
+      "branch": "billing-abhishek",
       "covers": "Billing & Subscriptions (customers, quotes, subscriptions, renewals, invoices, payments, projects) + technical/infra: deploy, cloudbuild, CI (.github), crons, backups, ops scripts",
       "paths": [
         "production/src/app/(app)/customers/",
@@ -94,7 +94,7 @@
     },
     "pawan": {
       "name": "Pawan",
-      "branch": "pawan-api-system",
+      "branch": "website-pawan",
       "covers": "Customer-facing: purchase UI, checkout, customer panel / portal, public & marketing pages",
       "paths": [
         "production/src/app/(public)/",
@@ -110,7 +110,7 @@
     },
     "hitesh": {
       "name": "Hitesh",
-      "branch": "hitesh-qa",
+      "branch": "accounts-hitesh",
       "covers": "Accounts: app ka Accounting module — books, GST, TDS, compliance, payroll, banking, expenses, purchases, vendor portal",
       "paths": [
         "production/src/app/(app)/accounting/",

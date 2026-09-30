@@ -48,7 +48,7 @@
     where schemaname='public' and tableowner <> 'resellersos_migration';   -- 0 rows chahiye
    ```
    Rows aaye to S13 (`ALTER POLICY`) aur S2 (users trigger) fail ho sakte hain — Abhishek se baat karo.
-5. **Git-only check** (AI bhi chala sakta hai): `cd production && node scripts/migration-order-check.mjs --base origin/pardeep-sir`
+5. **Git-only check** (AI bhi chala sakta hai): `cd production && node scripts/migration-order-check.mjs --base origin/manager-pardeep`
 6. **Numbers note karo (S17):** Balance Sheet, P&L (is FY), ek customer ka Ledger — totals ka screenshot.
 7. **Kaun kab:** Pardeep apply + deploy. Abhishek on-call (R-013, money RPCs). Hitesh deploy ke baad QA.
    Shaant time chuno (crons: renewals 09:00, backup 00:00 IST — `scripts/setup-cloud-scheduler.sh`).

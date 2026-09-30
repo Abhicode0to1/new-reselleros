@@ -22,4 +22,4 @@ Apne computer par ek baar ye setup karo: Claude app (Code tab) mein apna repo kh
 
 Subah apni branch dekho: theek lage to khud merge karke push karo (`git merge --no-ff <owner-key>-auto-<id>`), phir worktree hatao. Claude app band ho to routine nahi chalti — agli baar khulne par chalegi.
 
-**Hitesh:** owner-key `hitesh`, branch `hitesh-qa`, area = Accounting module (OWNERS.json). **Abhishek:** owner-key `abhishek`, branch `abhishek-pre-merge` (billing + infra). **Pawan:** owner-key `pawan`, branch `pawan-api-system` (website). Password, GitHub secrets, deploy — hamesha insaan khud (AI ko kabhi password mat do).
+**Hitesh:** owner-key `hitesh`, branch `accounts-hitesh`, area = Accounting module (OWNERS.json). **Abhishek:** owner-key `abhishek`, branch `billing-abhishek` (billing + infra). **Pawan:** owner-key `pawan`, branch `website-pawan` (website). Password, GitHub secrets, deploy — hamesha insaan khud (AI ko kabhi password mat do).
