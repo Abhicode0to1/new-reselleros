@@ -28,6 +28,7 @@ import { isRenderableLogo } from "./logo";
 import type { Payment } from "@/lib/supabase/database.types";
 
 import { PDF_FONT, PDF_FONT_BOLD, registerPdfFonts } from "./fonts";
+import { splitIntraStateTax } from "@/lib/gst/tax-split";
 
 /* Styles ke BANNE se pehle. `StyleSheet.create` ab hi chal jata hai, aur `PDF_FONT`
    ek `let` hai — baad me register karne par style purani value pakde rehti. */
@@ -319,8 +320,9 @@ export function ReceiptVoucherPDF(props: ReceiptVoucherPDFProps) {
   // GST reverse-out from gross amount (Indian standard)
   const taxable  = Math.round((payment.amount * 100) / (100 + gstRate));
   const totalTax = payment.amount - taxable;
-  const cgst     = Math.round(totalTax / 2);
-  const sgst     = totalTax - cgst;
+  /* R-046: the same shared split the invoice and GSTR-1 use. A receipt voucher is a GST
+     document too (CGST 31(3)(d)), so its heads must be derived the same way. */
+  const { cgst, sgst } = splitIntraStateTax(totalTax);
   const igst     = totalTax;
 
   const placeOfSupply = interState

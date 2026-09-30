@@ -29,6 +29,7 @@ import { rupee, formatDate, toWhatsAppDigits } from "@/lib/utils";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
 import type { Invoice, Payment, QuoteLineItem } from "@/lib/supabase/database.types";
+import { splitTaxHeads } from "@/lib/gst/tax-split";
 
 /** Display-shape for advance rows in the dialog — works for both frozen + live data */
 interface DisplayAdvance {
@@ -137,9 +138,14 @@ export function TaxInvoiceDialog({
   const fRate    = invoice.tax_rate      ?? taxRate;
   const fTotal   = invoice.amount        ?? total;
 
-  const cgst = fInter ? 0 : Math.round(fTax / 2);
-  const sgst = fInter ? 0 : fTax - cgst;
-  const igst = fInter ? fTax : 0;
+  /* R-046: one definition of the CGST/SGST split, shared with the GSTR-1 return.
+     For a positive whole-rupee tax this is EXACTLY what `Math.round(tax / 2)` gave, so
+     nothing on an ordinary invoice moves — said plainly rather than sold as a fix. What it
+     removes is the divergence at the edges: a NEGATIVE tax (a credit note reverses an
+     invoice) rounds the wrong way in JS — Math.round(-90.5) is -90, so the odd rupee flips
+     heads and the note reverses CGST/SGST differently from the invoice it credits. Six
+     copies of this arithmetic existed; this is the one the statutory documents use. */
+  const { cgst, sgst, igst } = splitTaxHeads(fTax, fInter);
 
   // Export (international) supply → zero-rated under LUT; the invoice carries an
   // export declaration instead of a CGST/SGST/IGST split.

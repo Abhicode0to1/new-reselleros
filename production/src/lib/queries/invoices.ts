@@ -10,6 +10,7 @@ import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import { grossAmount, isQuoteAmountConsistent } from "@/lib/quotes/amounts";
 import type { Invoice } from "@/lib/supabase/database.types";
+import { fetchAllRows } from "@/lib/ops/fetch-all";
 
 // ============================================================
 // List
@@ -19,19 +20,25 @@ export function useInvoices(filter?: { status?: Invoice["status"] | "all" }) {
     queryKey: ["invoices", filter?.status ?? "all"],
     queryFn: async (): Promise<Invoice[]> => {
       const supabase = createClient();
-      let q = supabase
-        .from("invoices")
-        .select("*")
-        .order("invoice_date", { ascending: false });
-      if (filter?.status && filter.status !== "all") {
-        q = q.eq("status", filter.status);
-      }
-      const { data, error } = await q;
-      if (error) {
-        console.warn("Supabase invoices query error:", error.message);
-        return [];
-      }
-      return data ?? [];
+      /* R-046: PostgREST answers at most 1000 rows (supabase/config.toml max_rows) and says
+         NOTHING when it cut the answer short. At 1001 invoices this list silently lost the
+         rest — no error, no warning, just a page that looks complete and is not. That is
+         the worst shape a data bug takes (AGENTS.md §2).
+
+         fetchAllRows pages until a short page comes back. The order ENDS ON id because an
+         offset page over an order with ties can repeat or skip a row across a page
+         boundary — see the helper header; invoice_date alone is not a total order. */
+      return await fetchAllRows<Invoice>((from, to) => {
+        let q = supabase
+          .from("invoices")
+          .select("*")
+          .order("invoice_date", { ascending: false })
+          .order("id", { ascending: true });
+        if (filter?.status && filter.status !== "all") {
+          q = q.eq("status", filter.status);
+        }
+        return q.range(from, to);
+      });
     },
   });
 }

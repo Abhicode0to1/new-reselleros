@@ -22,6 +22,7 @@ import { formatDate } from "@/lib/utils";
 import { pdfRupee } from "./pdf-money";
 import { pdfText } from "./pdf-text";
 import { isRenderableLogo } from "./logo";
+import { splitTaxHeads } from "@/lib/gst/tax-split";
 import type { PayMethods } from "./pay-methods";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
@@ -413,9 +414,14 @@ export function InvoicePDF(props: InvoicePDFProps) {
     upiQrDataUrl, upiVpa, payMethods = null,
   } = props;
 
-  const cgst = interState ? 0 : Math.round(tax / 2);
-  const sgst = interState ? 0 : tax - cgst;
-  const igst = interState ? tax : 0;
+  /* R-046: one definition of the CGST/SGST split, shared with the GSTR-1 return.
+     For a positive whole-rupee tax this is EXACTLY what `Math.round(tax / 2)` gave, so
+     nothing on an ordinary invoice moves — said plainly rather than sold as a fix. What it
+     removes is the divergence at the edges: a NEGATIVE tax (a credit note reverses an
+     invoice) rounds the wrong way in JS — Math.round(-90.5) is -90, so the odd rupee flips
+     heads and the note reverses CGST/SGST differently from the invoice it credits. Six
+     copies of this arithmetic existed; this is the one the statutory documents use. */
+  const { cgst, sgst, igst } = splitTaxHeads(tax, interState);
   // Export supply (recipient outside India) → zero-rated under LUT, no GST.
   const isExport = isExportSupply(customerCountry);
   const isForeign = isForeignCurrency(currency);

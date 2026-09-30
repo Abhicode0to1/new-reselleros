@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { attachPrimaryContact } from "@/lib/contacts/attach";
 import { requireTenantId } from "@/lib/queries/require-tenant";
 import type { Customer, Database } from "@/lib/supabase/database.types";
+import { fetchAllRows } from "@/lib/ops/fetch-all";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
@@ -24,12 +25,21 @@ export function useCustomers() {
       // Removed 2026-08-13 — same dead hardcoded-tenant fallback as leads.ts.
       // RLS (verified on prod: enabled on `customers`, 5 policies) filters the
       // retry identically, so it could never return a row the first query didn't.
-      const { data, error } = await supabase
-        .from("customers")
-        .select("*")
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
+      /* R-046: PostgREST answers at most 1000 rows (supabase/config.toml max_rows) and says
+         NOTHING when it cut the answer short. At 1001 customers this list silently lost the
+         rest — no error, no warning, just a page that looks complete and is not. That is
+         the worst shape a data bug takes (AGENTS.md §2).
+
+         fetchAllRows pages until a short page comes back. The order ENDS ON id because an
+         offset page over an order with ties can repeat or skip a row across a page
+         boundary — see the helper header; name alone is not a total order. */
+      return await fetchAllRows<Customer>((from, to) =>
+        supabase
+          .from("customers")
+          .select("*")
+          .order("name", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to));
     },
   });
 }
