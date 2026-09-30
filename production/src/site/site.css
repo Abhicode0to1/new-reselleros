@@ -92,6 +92,11 @@
 }
 .anutech-site .btn-primary { background: var(--primary); color: #fff; }
 .anutech-site .btn-primary:hover { background: var(--primary-hover); }
+/* A disabled button must LOOK disabled (29 Sep 2026): without this rule a disabled
+   .btn-primary was indistinguishable from an enabled one, and "Start my free trial"
+   read as broken. Guarded by src/site/silent-disabled-buttons.test.ts. */
+.anutech-site .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.anutech-site .btn-primary:disabled:hover { background: var(--primary); }
 .anutech-site .btn-outline { background: #fff; color: var(--text); border-color: var(--border-strong); }
 .anutech-site .btn-outline:hover { border-color: var(--text); }
 .anutech-site .btn-os { background: var(--accent); color: #fff; }

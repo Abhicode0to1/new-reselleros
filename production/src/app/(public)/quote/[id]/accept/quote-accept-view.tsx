@@ -146,6 +146,9 @@ export function QuoteAcceptView({
   } | null>(null);
   const [pricing, setPricing] = React.useState(false);
   const [signerName, setSignerName] = React.useState("");
+  /* Set when Confirm is pressed with no name, so the press says why (29 Sep 2026: a
+     hover title was the only explanation, and a phone has no hover). */
+  const [nameNudge, setNameNudge] = React.useState(false);
   const [signerTitle, setSignerTitle] = React.useState("");
   const [signerEmail, setSignerEmail] = React.useState("");
   const [changeRequested, setChangeRequested] = React.useState(false);
@@ -1010,6 +1013,11 @@ export function QuoteAcceptView({
                   placeholder="Name of the person confirming"
                   className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink"
                 />
+                {nameNudge && !signerName.trim() && (
+                  <p role="alert" className="mt-1 text-xs text-rose-ink">
+                    Type your full name to confirm — it records who accepted this quote.
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -1059,9 +1067,14 @@ export function QuoteAcceptView({
                 variant="primary"
                 icon="check_circle"
                 loading={accepting}
-                disabled={!signerName.trim()}
-                title={!signerName.trim() ? "Type your name to confirm" : undefined}
-                onClick={handleAccept}
+                onClick={() => {
+                  if (!signerName.trim()) {
+                    setNameNudge(true);
+                    document.getElementById("signer-name")?.focus();
+                    return;
+                  }
+                  void handleAccept();
+                }}
                 className="sm:w-auto justify-center"
               >
                 {liveConfig?.changed && !liveConfig.selfAcceptable ? "Send to reseller" : "Confirm & accept"}

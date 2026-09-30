@@ -75,6 +75,8 @@ export default function CheckoutPage() {
   /* Set once the buyer presses Continue / Start trial with something missing, so the list
      of what is missing shows from then on and shrinks as they type. */
   const [showMissing, setShowMissing] = useState(false);
+  /* Set when Pay is pressed before the terms box is ticked, so the press says why. */
+  const [agreeNudge, setAgreeNudge] = useState(false);
   /* Set when the server's re-priced total differs from what this page showed. */
   const [priceCheck, setPriceCheck] = useState<{
     server: number; shown: number;
@@ -388,7 +390,13 @@ export default function CheckoutPage() {
               {error && (
                 <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
               )}
+              {agreeNudge && !agreed && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  Please tick the box above to accept the terms and the refund policy, then press Pay.
+                </div>
+              )}
 
+              {/* Not disabled until the box is ticked: a press says why (29 Sep 2026). */}
               <button
                 className="btn"
                 style={{
@@ -397,8 +405,8 @@ export default function CheckoutPage() {
                   color: "#fff",
                   cursor: agreed && !paying ? "pointer" : "not-allowed",
                 }}
-                disabled={!agreed || paying}
-                onClick={() => void placeOrder()}
+                disabled={paying}
+                onClick={() => { if (!agreed) { setAgreeNudge(true); return; } void placeOrder(); }}
               >
                 {paying ? "Starting secure payment…" : `Pay ${rupee(t.payable)}`}
               </button>
