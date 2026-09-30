@@ -13,8 +13,12 @@ begin;
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 insert into public.tenants (id, name, email, state_code, doc_code)
   values ('eeeeeeee-0000-0000-0000-0000000000a1','GI FULL','gi1@example.in','07','GIA1');
-insert into public.customers (id, tenant_id, name)
-  values ('cccccccc-0000-0000-0000-0000000000a1','eeeeeeee-0000-0000-0000-0000000000a1','Cust GI Full');
+/* R-041 (30 Sep 2026): state_code added. generate_invoice now REFUSES an invoice whose
+   place of supply is unknown, so a customer with no state is no longer a valid fixture for
+   a test about atomicity. The assertions below are untouched — only the setup is completed
+   to satisfy a rule that did not exist when this file was written. */
+insert into public.customers (id, tenant_id, name, state_code)
+  values ('cccccccc-0000-0000-0000-0000000000a1','eeeeeeee-0000-0000-0000-0000000000a1','Cust GI Full','07');
 insert into public.document_series (tenant_id, doc_type, fiscal_year, prefix, last_number)
   values ('eeeeeeee-0000-0000-0000-0000000000a1','purchase_order', public.indian_fiscal_year(current_date), 'PO', 990000),
          ('eeeeeeee-0000-0000-0000-0000000000a1','invoice',        public.indian_fiscal_year(current_date), 'INV', 0);
@@ -61,8 +65,8 @@ begin;
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 insert into public.tenants (id, name, email, state_code, doc_code)
   values ('eeeeeeee-0000-0000-0000-0000000000a2','GI PART','gi2@example.in','07','GIA2');
-insert into public.customers (id, tenant_id, name)
-  values ('cccccccc-0000-0000-0000-0000000000a2','eeeeeeee-0000-0000-0000-0000000000a2','Cust GI Part');
+insert into public.customers (id, tenant_id, name, state_code)
+  values ('cccccccc-0000-0000-0000-0000000000a2','eeeeeeee-0000-0000-0000-0000000000a2','Cust GI Part','07');
 insert into public.document_series (tenant_id, doc_type, fiscal_year, prefix, last_number)
   values ('eeeeeeee-0000-0000-0000-0000000000a2','purchase_order', public.indian_fiscal_year(current_date), 'PO', 990000),
          ('eeeeeeee-0000-0000-0000-0000000000a2','invoice',        public.indian_fiscal_year(current_date), 'INV', 0);
