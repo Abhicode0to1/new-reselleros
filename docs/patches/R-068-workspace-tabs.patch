@@ -1,0 +1,314 @@
+diff --git a/production/src/components/providers/workspace-tabs-provider.tsx b/production/src/components/providers/workspace-tabs-provider.tsx
+index e9fcd7cd..24b7a383 100644
+--- a/production/src/components/providers/workspace-tabs-provider.tsx
++++ b/production/src/components/providers/workspace-tabs-provider.tsx
+@@ -39,9 +39,10 @@ import {
+   type TabsState, type TabsAction, type WorkspaceTab,
+ } from "@/lib/workspace/tabs";
+ import {
+-  pushUrl, seekTo, resolvePopState, historyOpFor, emptyHistory,
++  seekTo, resolvePopState, historyOpFor,
+   type TabHistory,
+ } from "@/lib/workspace/history";
++import { recordAddress, urlForTabSwitch } from "@/lib/workspace/address-sync";
+ 
+ const STORAGE_KEY = "ros.workspace.tabs.v1";
+ 
+@@ -138,6 +139,10 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode
+     if (saved) {
+       setState(saved.tabs);
+       setHistories(saved.histories ?? {});
++      // The adopt and record effects below run in this same pass and read the refs; left
++      // stale they saw an empty workspace, and adopt overwrote the saved tabs.
++      stateRef.current = saved.tabs;
++      historiesRef.current = saved.histories ?? {};
+     }
+     hydrated.current = true;
+   }, []);
+@@ -175,16 +180,19 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode
+   }, [confirm]);
+ 
+   // ── Keep the URL in step with the active tab ────────────────────────────
+-  const lastAppliedUrl = React.useRef<string | null>(null);
++  // R-068: ONLY on a genuine switch of the active tab. This used to replace to the stored
++  // history cursor on hydration and on every tabs-array change, which navigated users off the
++  // page they had just opened (/leads → /renewals, repeatedly). See lib/workspace/address-sync.
++  const prevActiveId = React.useRef<string | null>(null);
+   React.useEffect(() => {
+-    if (!hydrated.current || !state.activeId) return;
+-    const tab = state.tabs.find((t) => t.id === state.activeId);
+-    if (!tab) return;
+-    const target = historiesRef.current[tab.id]
+-      ? (historiesRef.current[tab.id].stack[historiesRef.current[tab.id].cursor] ?? tab.url)
+-      : tab.url;
+-    if (target === lastAppliedUrl.current) return;
+-    lastAppliedUrl.current = target;
++    if (!hydrated.current) return;
++    const prev = prevActiveId.current;
++    prevActiveId.current = state.activeId;
++    const target = urlForTabSwitch(
++      prev, stateRef.current, historiesRef.current,
++      window.location.pathname + window.location.search,
++    );
++    if (!target) return;
+     // replace, not push: switching tabs must not add a history entry. That single
+     // choice is what makes Back mean "the previous page in this tab".
+     //
+@@ -221,7 +229,6 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode
+         const moved = seekTo(target, outcome.url);
+         return moved ? { ...h, [outcome.tabId]: moved } : h;
+       });
+-      lastAppliedUrl.current = outcome.url;
+       router.replace(outcome.url as never);
+     };
+ 
+@@ -273,14 +280,20 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode
+   }, [pathname, dispatch, fullPath]);
+ 
+   // ── Record navigation inside the active tab ─────────────────────────────
++  // R-068: keyed on the ADDRESS only. It was also keyed on state.activeId, so switching or
++  // closing a tab pushed the old tab's url into the new tab's history — the source of the
++  // alternating "/leads, /renewals, /leads…" stack. An address that is another open tab's
++  // own page activates that tab instead of being filed under the active one.
+   React.useEffect(() => {
+-    if (!hydrated.current || !state.activeId || !pathname) return;
+-    const id = state.activeId;
+-    setHistories((h) => {
+-      const next = pushUrl(h[id] ?? emptyHistory, fullPath());
+-      return next === h[id] ? h : { ...h, [id]: next };
+-    });
+-  }, [pathname, state.activeId, fullPath]);
++    if (!hydrated.current || !pathname) return;
++    const { activateId, histories: next } =
++      recordAddress(stateRef.current, historiesRef.current, fullPath());
++    if (next !== historiesRef.current) {
++      historiesRef.current = next;
++      setHistories(next);
++    }
++    if (activateId) dispatch({ type: "activate", id: activateId, at: Date.now() });
++  }, [pathname, fullPath, dispatch]);
+ 
+   // ── Warn before the browser window closes with unsaved work ─────────────
+   React.useEffect(() => {
+diff --git a/production/src/lib/workspace/address-sync.test.ts b/production/src/lib/workspace/address-sync.test.ts
+new file mode 100644
+index 00000000..e67a8495
+--- /dev/null
++++ b/production/src/lib/workspace/address-sync.test.ts
+@@ -0,0 +1,100 @@
++import { describe, it, expect } from "vitest";
++import { readFileSync } from "node:fs";
++import { join } from "node:path";
++import { recordAddress, urlForTabSwitch } from "./address-sync";
++import type { TabHistory } from "./history";
++import type { TabsState, WorkspaceTab } from "./tabs";
++
++/* R-068 — opening /leads directly, the app replaced it with /renewals by itself, repeatedly.
++   The sessionStorage that did it, copied from the live browser: */
++const tab = (id: string): WorkspaceTab => ({ id, url: id, title: id, isDraft: false, lastAccessedAt: 1 });
++const OBSERVED_STACK = ["/leads", "/renewals", "/leads", "/renewals", "/leads", "/renewals", "/leads"];
++const onlyLeads: TabsState = { tabs: [tab("/leads")], activeId: "/leads" };
++
++describe("R-068: the page the user opened is never replaced by a stored history entry", () => {
++  it("loading /leads with the observed alternating history does not navigate anywhere", () => {
++    const histories = { "/leads": { stack: OBSERVED_STACK, cursor: 6 } };
++    // Hydration: no previous active tab.
++    expect(urlForTabSwitch(null, onlyLeads, histories, "/leads")).toBeNull();
++    // A later tabs-array change (draft flag) with the same active tab.
++    expect(urlForTabSwitch("/leads", onlyLeads, histories, "/leads")).toBeNull();
++  });
++
++  it("…nor when the stored cursor points at /renewals", () => {
++    const histories = { "/leads": { stack: OBSERVED_STACK, cursor: 5 } };
++    expect(urlForTabSwitch(null, onlyLeads, histories, "/leads")).toBeNull();
++    expect(urlForTabSwitch("/leads", onlyLeads, histories, "/leads")).toBeNull();
++    // …and the history is brought into line with the address instead.
++    const { activateId, histories: next } = recordAddress(onlyLeads, histories, "/leads");
++    expect(activateId).toBeNull();
++    expect(next["/leads"].stack[next["/leads"].cursor]).toBe("/leads");
++    expect(urlForTabSwitch("/leads", onlyLeads, next, "/leads")).toBeNull();
++  });
++
++  it("a genuine tab switch still restores that tab's page", () => {
++    const state: TabsState = { tabs: [tab("/leads"), tab("/customers")], activeId: "/customers" };
++    const histories = { "/customers": { stack: ["/customers", "/customers/42"], cursor: 1 } };
++    expect(urlForTabSwitch("/leads", state, histories, "/leads")).toBe("/customers/42");
++    // …unless the address is already there (the switch was caused by the address).
++    expect(urlForTabSwitch("/leads", state, histories, "/customers/42")).toBeNull();
++  });
++});
++
++describe("R-068: an address is recorded in the tab that owns it", () => {
++  it("navigating to an open tab's page activates that tab instead of filing it under the active one", () => {
++    const state: TabsState = { tabs: [tab("/leads"), tab("/renewals")], activeId: "/leads" };
++    const histories: Record<string, TabHistory> = { "/leads": { stack: ["/leads"], cursor: 0 } };
++    const { activateId, histories: next } = recordAddress(state, histories, "/renewals");
++    expect(activateId).toBe("/renewals");
++    expect(next["/leads"]).toEqual({ stack: ["/leads"], cursor: 0 });
++    expect(next["/renewals"].stack).toEqual(["/renewals"]);
++  });
++
++  it("switching tabs back and forth does not grow an alternating stack", () => {
++    /* The old record effect also ran on an active-tab change and pushed the address still on
++       screen (the OLD tab's page) into the NEW tab's history. Replay the switch loop through
++       the provider's actual sequence: activate → replace to the tab's page → address changes. */
++    let state: TabsState = { tabs: [tab("/leads"), tab("/renewals")], activeId: "/leads" };
++    let histories: Record<string, TabHistory> = {};
++    let address = "/leads";
++    ({ histories } = recordAddress(state, histories, address));
++    for (let i = 0; i < 3; i++) {
++      for (const id of ["/renewals", "/leads"]) {
++        const prev = state.activeId;
++        state = { ...state, activeId: id };
++        const target = urlForTabSwitch(prev, state, histories, address);
++        if (target) address = target;
++        const r = recordAddress(state, histories, address);
++        histories = r.histories;
++        expect(r.activateId).toBeNull();
++      }
++    }
++    expect(histories["/leads"]).toEqual({ stack: ["/leads"], cursor: 0 });
++    expect(histories["/renewals"]).toEqual({ stack: ["/renewals"], cursor: 0 });
++  });
++
++  it("an ordinary link inside the tab is still in-tab history (Back works)", () => {
++    const { activateId, histories } = recordAddress(onlyLeads, {}, "/leads/L-1");
++    expect(activateId).toBeNull();
++    expect(histories["/leads"]).toEqual({ stack: ["/leads", "/leads/L-1"], cursor: 1 });
++  });
++});
++
++describe("R-068: the provider uses these decisions", () => {
++  const PROVIDER = readFileSync(
++    join(process.cwd(), "src", "components", "providers", "workspace-tabs-provider.tsx"),
++    "utf8",
++  ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
++
++  it("only replaces the URL through urlForTabSwitch", () => {
++    expect(PROVIDER).toMatch(/urlForTabSwitch\(/);
++    // The old unconditional read of the history cursor as a replace target is gone.
++    expect(PROVIDER).not.toMatch(/historiesRef\.current\[tab\.id\]\.stack\[/);
++  });
++
++  it("records only on an address change, never on an active-tab change", () => {
++    const m = PROVIDER.match(/recordAddress\([\s\S]*?\}, \[([^\]]*)\]\);/);
++    expect(m, "record effect uses recordAddress").not.toBeNull();
++    expect(m![1]).not.toMatch(/activeId/);
++  });
++});
+diff --git a/production/src/lib/workspace/address-sync.ts b/production/src/lib/workspace/address-sync.ts
+new file mode 100644
+index 00000000..782056d9
+--- /dev/null
++++ b/production/src/lib/workspace/address-sync.ts
+@@ -0,0 +1,93 @@
++/**
++ * The address bar is the truth. (R-068)
++ *
++ * Two pure decisions the tab provider used to make inline, both of which went wrong:
++ *
++ * 1. WHEN may the provider rewrite the URL? It called `router.replace(<active tab's history
++ *    cursor>)` on hydration and on ANY change to the tabs array (a draft flag flipping was
++ *    enough). If the stored cursor pointed somewhere other than the page the user had just
++ *    opened, the app navigated them away on its own. Seen live: `/leads` opened directly,
++ *    the app replaced it with `/renewals` a few seconds later (the dev compile time of
++ *    /renewals), over and over, until sessionStorage was cleared.
++ *    Now: only on a genuine switch of the active tab, and never to the address already shown.
++ *
++ * 2. WHERE does an address change get recorded? The record effect also ran when the active
++ *    tab CHANGED, so switching or closing a tab pushed the OLD tab's url into the NEW tab's
++ *    history — the replace then put the right page back, and the next switch did it again.
++ *    That is how `/leads`'s own stack became `/leads, /renewals, /leads, /renewals …`.
++ *    Now: recorded only when the address changes, into the tab that owns it.
++ */
++import { pushUrl, currentUrl, emptyHistory, type TabHistory } from "./history";
++import { tabIdFor, type TabsState } from "./tabs";
++
++export interface AddressRecord {
++  /** A different open tab owns the new address — activate it. Null: stay. */
++  activateId: string | null;
++  /** Same object when nothing changed, so callers can skip a state update. */
++  histories: Record<string, TabHistory>;
++}
++
++/**
++ * The address changed (a link, the address bar, a reload). Make the histories agree with it.
++ *
++ * - Already where the active tab's cursor is → nothing to do.
++ * - An open tab's own page (by id) → that tab owns it: record it there and activate it,
++ *   instead of filing it in whichever tab happened to be active.
++ * - Otherwise → an in-tab navigation of the active tab, exactly as before.
++ */
++export function recordAddress(
++  state: TabsState,
++  histories: Record<string, TabHistory>,
++  address: string,
++): AddressRecord {
++  const url = (address ?? "").trim();
++  const active = state.activeId;
++  if (!url || !active) return { activateId: null, histories };
++
++  const historyOf = (id: string): TabHistory => {
++    if (histories[id]) return histories[id];
++    // A tab that has never recorded anything is still showing its own page; seed with it so
++    // the first navigation away leaves something for Back to return to.
++    const tab = state.tabs.find((t) => t.id === id);
++    return tab ? { stack: [tab.url], cursor: 0 } : emptyHistory;
++  };
++
++  if (currentUrl(historyOf(active)) === url) {
++    return histories[active] ? { activateId: null, histories }
++      : { activateId: null, histories: { ...histories, [active]: historyOf(active) } };
++  }
++
++  const owner = state.tabs.find((t) => t.id === tabIdFor(url));
++  const target = owner ? owner.id : active;
++  const before = historyOf(target);
++  const after = pushUrl(before, url);
++  return {
++    activateId: target === active ? null : target,
++    histories: after === histories[target] ? histories : { ...histories, [target]: after },
++  };
++}
++
++/**
++ * The URL to `router.replace` to after `state.activeId` changed from `prevActiveId`, or null
++ * for "leave the address alone".
++ *
++ * Null when:
++ * - there was no previous active tab (hydration, or the first tab being adopted) — the page
++ *   in front of the user is the one they opened, whatever an old session stored;
++ * - the active tab did not change (the tabs array changed for another reason, e.g. a draft
++ *   flag) — nobody asked to go anywhere;
++ * - the target is already the address (the switch was itself caused by the address).
++ */
++export function urlForTabSwitch(
++  prevActiveId: string | null,
++  state: TabsState,
++  histories: Record<string, TabHistory>,
++  address: string,
++): string | null {
++  const id = state.activeId;
++  if (!id || !prevActiveId || prevActiveId === id) return null;
++  const tab = state.tabs.find((t) => t.id === id);
++  if (!tab) return null;
++  const target = (histories[id] && currentUrl(histories[id])) || tab.url;
++  return target === (address ?? "").trim() ? null : target;
++}
+diff --git a/production/src/lib/workspace/url-query-preserved.test.ts b/production/src/lib/workspace/url-query-preserved.test.ts
+index cd919c12..d0b5af54 100644
+--- a/production/src/lib/workspace/url-query-preserved.test.ts
++++ b/production/src/lib/workspace/url-query-preserved.test.ts
+@@ -67,8 +67,10 @@ describe("the provider records the query string, not just the path", () => {
+   it("records in-tab navigation WITH its query", () => {
+     /* And `pushUrl(..., pathname)` was the other half — this is the one the sync effect reads
+        back, so it is the one that actually did the deleting. */
+-    expect(PROVIDER).toMatch(/pushUrl\(h\[id\] \?\? emptyHistory, fullPath\(\)\)/);
+-    expect(PROVIDER).not.toMatch(/pushUrl\(h\[id\] \?\? emptyHistory, pathname\)/);
++    /* R-068 moved the recording into lib/workspace/address-sync.ts; the address handed to it
++       must still be the full one. */
++    expect(PROVIDER).toMatch(/recordAddress\(stateRef\.current, historiesRef\.current, fullPath\(\)\)/);
++    expect(PROVIDER).not.toMatch(/recordAddress\([^)]*, pathname\)/);
+   });
+ 
+   it("does not reach for useSearchParams, which would break the static marketing page", () => {

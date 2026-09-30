@@ -691,7 +691,15 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         </SheetHeader>
 
         <form
-          onSubmit={handleSubmit(onSubmit)}
+          onSubmit={(e) => {
+            /* R-069: only the Review step saves. Enter in a field, or any stray submit
+               before it, must not create the lead behind the operator's back. */
+            if (useSteps && step < STEP_LABELS.length) {
+              e.preventDefault();
+              return;
+            }
+            return handleSubmit(onSubmit)(e);
+          }}
           className="flex flex-col flex-1 min-h-0 min-w-0 w-full"
         >
           {/* ── Three steps, and the third one is the point ────────────────────
@@ -1243,7 +1251,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 ) : (
                   <>
                     <Review label="Plan"        value={plan} />
-                    <Review label="Seats"       value={watchedSeats == null ? "" : String(watchedSeats)} />
+                    <Review label="Seats"       value={watchedSeats == null || Number.isNaN(watchedSeats) ? "" : String(watchedSeats)} />
                     <Review label="Deal value"  value={valueText ? `₹${valueText}` : ""} />
                   </>
                 )}
@@ -1271,8 +1279,13 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               {useSteps && step > 1 ? "Back" : "Cancel"}
             </Button>
 
+            {/* R-069: distinct keys are load-bearing. Without them React reuses ONE <button>
+                and only flips its type; Next's setStep(3) commits in the microtask right
+                after the click listener, so the browser then "activates" a type="submit"
+                button and the lead was created on step 2 — Review never showed. */}
             {useSteps && step < STEP_LABELS.length ? (
               <Button
+                key="step-next"
                 type="button"
                 variant="primary"
                 onClick={async () => {
@@ -1288,11 +1301,12 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </Button>
             ) : (
               <Button
+                key="step-save"
                 type="submit"
                 variant="primary"
                 loading={isSubmitting || createLead.isPending || updateLead.isPending}
               >
-                {isEditing ? "Save changes" : "Add lead"}
+                {isEditing ? "Save changes" : "Save lead"}
               </Button>
             )}
           </SheetFooter>
