@@ -14,9 +14,9 @@ describe("what the checkout still needs", () => {
 
   it("names each missing field in words a buyer can act on", () => {
     const m = missingCheckoutDetails({ ...ok, name: "", phone: "98765", domain: "" });
-    expect(m).toEqual(["your name", "your mobile number (10 digits)", "the domain for your hosting"]);
+    expect(m).toEqual(["your name", "your mobile number (10 digits)", "the domain for your hosting (like yourcompany.in)"]);
     expect(missingDetailsMessage(m)).toBe(
-      "Please add your name, your mobile number (10 digits) and the domain for your hosting to continue.",
+      "Please add your name, your mobile number (10 digits) and the domain for your hosting (like yourcompany.in) to continue.",
     );
   });
 
@@ -33,6 +33,10 @@ describe("what the checkout still needs", () => {
       "the domain owner's postal address (address, city, state and a 6-digit PIN code)",
     ]);
     expect(missingCheckoutDetails({ ...ok, hasHosting: false, domain: "" })).toEqual([]);
+  });
+
+  it("a word that is not a domain is still missing a domain (30 Sep 2026)", () => {
+    expect(missingCheckoutDetails({ ...ok, domain: "mywebsite" })).toEqual(["a valid domain for your hosting (like yourcompany.in)"]);
   });
 
   it("one item reads as a sentence too", () => {

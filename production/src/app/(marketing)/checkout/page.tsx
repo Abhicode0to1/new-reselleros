@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, cycleLabel } from "@/site/lib/money";
 import { missingCheckoutDetails, missingDetailsMessage } from "@/site/lib/checkout-details";
+import { BUY_A_DOMAIN_HREF } from "@/lib/checkout/hosting-domain";
 
 const METHODS = [
   { label: "UPI", note: "GPay, PhonePe, Paytm — instant" },
@@ -135,7 +136,7 @@ export default function CheckoutPage() {
      The buttons are never silently disabled for missing details any more — pressing one
      says what is still needed (lib/checkout-details). */
   const missing = missingCheckoutDetails({
-    name, email, phone, domain, hasHosting, hasDomain,
+    name, email, phone, domain, hasHosting: hasHosting || hasTrial, hasDomain,
     address: { line1: addrLine1, city: addrCity, state: addrState, pin: addrPin },
   });
   const missingMsg = missingDetailsMessage(missing);
@@ -293,8 +294,23 @@ export default function CheckoutPage() {
               <Field label="YOUR NAME" value={name} onChange={setName} />
               <Field label="EMAIL — THE GST INVOICE GOES HERE" value={email} onChange={setEmail} type="email" />
               <Field label="MOBILE" value={phone} onChange={setPhone} type="tel" />
-              {hasHosting && (
-                <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
+              {(hasHosting || hasTrial) && (
+                <>
+                  <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
+                  {/* Required for hosting and the trial alike (owner, 30 Sep 2026), so a buyer
+                      without one is shown where to get one rather than left stuck. */}
+                  {!cartDomain && (
+                    <p className="meta" style={{ margin: "-6px 0 14px" }}>
+                      Don&apos;t have a domain yet?{" "}
+                      <a href={BUY_A_DOMAIN_HREF} style={{ color: "var(--primary)", fontWeight: 600 }}>
+                        {hasTrial ? "Register one first" : "Find and add one to this order"}
+                      </a>
+                      {hasTrial
+                        ? " — then come back and start your free trial."
+                        : " — the domain is free with yearly hosting."}
+                    </p>
+                  )}
+                </>
               )}
               {hasDomain && (
                 <>
@@ -313,9 +329,7 @@ export default function CheckoutPage() {
               </div>
               <Field label="COMPANY / BUSINESS NAME — YOUR NAME IS USED IF BLANK" value={company} onChange={setCompany} />
               <Field label="GSTIN — FOR INPUT CREDIT" value={gstin} onChange={setGstin} mono />
-              {hasTrial && !hasHosting && (
-                <Field label="YOUR WEBSITE DOMAIN — LEAVE BLANK IF YOU DON'T HAVE ONE YET" value={domain} onChange={setDomain} mono />
-              )}
+
               {trialMixed && (
                 <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
                   The free trial checks out on its own. Remove the other items to start the trial now, or

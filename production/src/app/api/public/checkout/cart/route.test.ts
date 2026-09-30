@@ -304,10 +304,26 @@ describe("a free Starter trial in the cart (24 Sep 2026: no form in between)", (
     expect(startHostingTrial).not.toHaveBeenCalled();
   });
 
-  it("a trial needs no domain — the owner helps a customer who has none", async () => {
+  /* Changed on purpose (owner, 30 Sep 2026): a trial is a hosting account and needs its
+     domain. Until then this test asserted "a trial needs no domain". */
+  it("a trial without a domain is refused, pointing at where to register one", async () => {
     const res = await POST(req({ lines: [trial] }));
-    expect(res.status).toBe(200);
-    expect(startHostingTrial.mock.calls[0][1].domain).toBeUndefined();
+    expect(res.status).toBe(400);
+    const j = await res.json();
+    expect(j).toMatchObject({ needDomain: true, next: "/domains" });
+    expect(j.error).toMatch(/Register one first/);
+    expect(startHostingTrial).not.toHaveBeenCalled();
+  });
+
+  it("a trial with a word that is not a domain is refused too", async () => {
+    const res = await POST(req({ lines: [trial], domain: "mywebsite" }));
+    expect(res.status).toBe(400);
+    expect(startHostingTrial).not.toHaveBeenCalled();
+  });
+
+  it("a pasted site address is cleaned to the bare domain", async () => {
+    await POST(req({ lines: [trial], domain: "https://www.Acme.in/" }));
+    expect(startHostingTrial.mock.calls[0][1].domain).toBe("acme.in");
   });
 });
 
@@ -339,8 +355,22 @@ describe("the company name is optional (29 Sep 2026)", () => {
   });
 
   it("the trial gets the buyer's name when the company is blank", async () => {
-    const res = await POST(req({ companyName: "  ", lines: [{ sku: "hosting-trial:starter", label: "Starter trial", qty: 1, cycle: "yearly" }] }));
+    const res = await POST(req({ companyName: "  ", domain: "acme.in", lines: [{ sku: "hosting-trial:starter", label: "Starter trial", qty: 1, cycle: "yearly" }] }));
     expect(res.status).toBe(200);
     expect(startHostingTrial.mock.calls[0][1]).toMatchObject({ companyName: "Test Buyer" });
+  });
+});
+
+describe("paid hosting needs a real domain (30 Sep 2026)", () => {
+  const hosting = { sku: "hosting:starter", label: "Starter hosting", qty: 1, cycle: "yearly" };
+  it("\"mywebsite\" is not a domain — refused, nothing charged, with where to get one", async () => {
+    const res = await POST(req({ lines: [hosting], domain: "mywebsite" }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ needDomain: true, next: "/domains" });
+    expect(quote()).toBeUndefined();
+  });
+  it("no domain typed and none in the cart → refused", async () => {
+    const res = await POST(req({ lines: [hosting] }));
+    expect(res.status).toBe(400);
   });
 });

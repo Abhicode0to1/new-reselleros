@@ -53,6 +53,7 @@ import { normalisePhone, splitName, type Registrant } from "@/lib/provisioning/d
 import { isTrialPlan, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 import { startHostingTrial } from "@/lib/hosting/start-trial";
 import { hostingLimitProblem } from "./hosting-limit";
+import { hostingDomain, BUY_A_DOMAIN_HREF } from "./hosting-domain";
 import { hostingRate } from "./hosting-prices";
 
 export const BUY_PAGE_TENANT_ID =
@@ -306,9 +307,24 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
           { status: 400 },
         );
       }
+      /* A trial is a hosting account, so it needs its domain too (owner, 30 Sep 2026;
+         until then a trial could start with none and the owner helped afterwards). */
+      const trialDomain = hostingDomain(domain);
+      if (!trialDomain) {
+        return NextResponse.json(
+          {
+            error:
+              "Please enter the domain your hosting should be set up on, like yourcompany.in. Nothing was saved. " +
+              "Don't have a domain yet? Register one first, then start your free trial.",
+            next: BUY_A_DOMAIN_HREF,
+            needDomain: true,
+          },
+          { status: 400 },
+        );
+      }
       const started = await startHostingTrial(
         createAdminClient(),
-        { fullName, companyName, email, phone, domain, cycle: t.cycle === "monthly" ? "monthly" : "yearly" },
+        { fullName, companyName, email, phone, domain: trialDomain, cycle: t.cycle === "monthly" ? "monthly" : "yearly" },
         request,
         body as Record<string, unknown>,
       );
@@ -393,11 +409,17 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
 
     // The hosting account is set up on the typed domain, or — when the customer is
     // buying exactly one domain in the same cart and typed nothing — on that domain.
-    const typedDomain = (domain || "").toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
+    const typedDomain = (domain || "").trim() ? hostingDomain(domain) : "";
     const cleanDomain = typedDomain || (hasHosting && domainNames.length === 1 ? domainNames[0] : "");
-    if (hasHosting && cleanDomain.length < 3) {
+    if (hasHosting && (typedDomain === null || !cleanDomain)) {
       return NextResponse.json(
-        { error: "Please enter the domain your hosting should be set up on.", needDomain: true },
+        {
+          error:
+            "Please enter the domain your hosting should be set up on, like yourcompany.in. Nothing was charged. " +
+            "Don't have a domain yet? Add one to this order — it is free with yearly hosting.",
+          next: BUY_A_DOMAIN_HREF,
+          needDomain: true,
+        },
         { status: 400 },
       );
     }

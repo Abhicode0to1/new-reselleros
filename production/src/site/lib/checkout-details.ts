@@ -8,13 +8,19 @@
  * says exactly what (AGENTS.md §7: what happened, why, what to do next).
  *
  * The company name is optional (owner, same day); the server uses the buyer's own name.
+ * A hosting domain is required for paid hosting AND for the free trial (owner, 30 Sep
+ * 2026), and it must be a real domain name — the same rule as the server
+ * (lib/checkout/hosting-domain.ts).
  * These rules must stay in step with `cartSchema` in lib/checkout/cart-checkout.ts.
  */
+import { hostingDomain } from "@/lib/checkout/hosting-domain";
+
 export interface CheckoutDetails {
   name: string;
   email: string;
   phone: string;
   domain: string;
+  /** Paid hosting or a hosting trial is in the cart, so a domain is needed. */
   hasHosting: boolean;
   hasDomain: boolean;
   address: { line1: string; city: string; state: string; pin: string };
@@ -25,7 +31,11 @@ export function missingCheckoutDetails(d: CheckoutDetails): string[] {
   if (d.name.trim().length < 2) missing.push("your name");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) missing.push("a valid email address");
   if (d.phone.replace(/\D/g, "").length < 10) missing.push("your mobile number (10 digits)");
-  if (d.hasHosting && d.domain.trim().length < 3) missing.push("the domain for your hosting");
+  if (d.hasHosting && !hostingDomain(d.domain)) {
+    missing.push(d.domain.trim()
+      ? "a valid domain for your hosting (like yourcompany.in)"
+      : "the domain for your hosting (like yourcompany.in)");
+  }
   if (d.hasDomain) {
     const a = d.address;
     if (a.line1.trim().length < 3 || a.city.trim().length < 2 || a.state.trim().length < 2 || !/^\d{6}$/.test(a.pin.trim())) {
