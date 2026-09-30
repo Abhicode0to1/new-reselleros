@@ -16,6 +16,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toastError } from "@/lib/errors/toast-error";
+import { startersToSubmit } from "@/lib/marketing/whatsapp-reminders-submit";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -87,8 +90,8 @@ function BeforeYouStart({ v }: { v: WaRemindersView }) {
       <h2 className="text-sm font-semibold text-ink">WhatsApp reminder tabhi jaata hai jab ye teeno sahi hon</h2>
       <ol className="list-decimal pl-5 space-y-1.5 text-sm text-ink-2">
         <li>
-          <b>Template Meta par approved ho.</b> Naam yahan likhne se kuch nahi jaata — WhatsApp Manager me same naam + language se
-          submit karo, approve hone par{" "}
+          <b>Template Meta par approved ho.</b> Naam yahan likhne se kuch nahi jaata — neeche ke button se starter templates app se hi
+          Meta ko bhejo (ya WhatsApp Manager me same naam + language se submit karo), approve hone par{" "}
           <Link href="/marketing/whatsapp" className="text-amber-ink hover:underline">Templates → Sync from Meta</Link> dabao.
           Reminder bill ke baare me hai, to category <b>UTILITY</b> rakho.
         </li>
@@ -114,7 +117,82 @@ function BeforeYouStart({ v }: { v: WaRemindersView }) {
         Jisne STOP likha hai use kabhi nahi jaata. Ek step (jaise &ldquo;7 din overdue&rdquo;) ek customer ko ek hi baar jaata hai.
         {!dialOk && " Abhi dial ki wajah se kuch reminders ruk jayenge — neeche har kind ke saamne likha hai."}
       </p>
+      <SubmitStarters v={v} />
     </Card>
+  );
+}
+
+// ── 1a. Starter templates → Meta, from the app ──────────────────────────────
+
+interface SubmitResult { kind: string; name: string; ok: boolean; status: string | null; error?: string }
+
+/** One button that submits every not-yet-submitted starter to Meta (POST …/reminders/submit). */
+function SubmitStarters({ v }: { v: WaRemindersView }) {
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const [results, setResults] = React.useState<SubmitResult[] | null>(null);
+  const pending = startersToSubmit(v.templates);
+  const submit = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/marketing/whatsapp/reminders/submit", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Meta ko template nahi bhej paaye — page refresh karke dobara try kariye.");
+      return j as { submitted: number; results: SubmitResult[] };
+    },
+    onSuccess: (r) => {
+      setResults(r.results);
+      qc.invalidateQueries({ queryKey: ["wa-reminders"] });
+      const failed = r.results.filter((x) => !x.ok).length;
+      if (failed === 0) toast.success(`${r.results.length} template Meta ko bhej diye — approval mein aam taur par kuch minute se 24 ghante lagte hain`);
+      else toast.warning(`${failed} template nahi gaye — neeche wajah likhi hai`);
+    },
+    onError: (err) => toastError(err),
+  });
+
+  if (!v.connected || (pending.length === 0 && !results)) return null;
+
+  return (
+    <div className="border-t border-amber/30 pt-3 space-y-2">
+      {pending.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button size="sm" disabled={submit.isPending} onClick={async () => {
+            const ok = await confirm({
+              title: `${pending.length} template Meta par bhejein?`,
+              body: `Ye starter templates (UTILITY, English) aapke WhatsApp Business account se Meta ko approval ke liye jayenge: ${pending.map((s) => s.name).join(", ")}. Customer ko abhi kuch nahi jaata.`,
+              confirmLabel: "Haan, bhejo", cancelLabel: "Nahi",
+            });
+            if (ok) submit.mutate();
+          }}>
+            {submit.isPending ? "Meta ko bhej rahe hain…" : `Meta par approval ke liye bhejo (${pending.length} template)`}
+          </Button>
+          <span className="text-xs text-ink-3">
+            WhatsApp Manager mein login karke type karne ki zaroorat nahi. Neeche har kind ke &ldquo;Starter wording&rdquo; se copy karna bhi chalta hai.
+          </span>
+        </div>
+      )}
+      {results && (
+        <div className="space-y-1" aria-live="polite">
+          <ul className="space-y-1 text-xs">
+            {results.map((r) => (
+              <li key={r.name} className="flex flex-wrap items-center gap-1.5">
+                <Badge kind={r.ok ? (r.status === "approved" ? "success" : "info") : "danger"} size="sm">
+                  {r.ok ? (r.status ?? "bheja") : "Nahi gaya"}
+                </Badge>
+                <span className="font-mono text-ink-2">{r.name}</span>
+                {r.error && <span className={r.ok ? "text-ink-3" : "text-rose-ink"}>{r.error}</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-ink-3">
+            Approve hone par{" "}
+            <Link href="/marketing/whatsapp" className="text-amber-ink hover:underline">Templates → Sync from Meta</Link>{" "}
+            dabao, phir neeche har kind par &ldquo;Template set karo&rdquo; — starter naam pehle se bhara milega.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
