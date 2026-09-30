@@ -148,7 +148,7 @@ describe("the customer is never kept waiting for the owner alert (30 Sep 2026)",
   });
 
   it("a confirmation that did not go out is reported, not claimed — the trial still stands", async () => {
-    sendEmail.mockResolvedValue({ status: "failed", providerId: null, errorMessage: "not on EMAIL_RECIPIENT_ALLOWLIST", provider: "stub" });
+    sendEmail.mockResolvedValue({ status: "failed", providerId: null, errorMessage: "SMTP: 550 mailbox unavailable", provider: "smtp" });
     const r = await startHostingTrial(adminWith({}), input, req, {});
     expect(r).toMatchObject({ ok: true, confirmationSent: false });
   });

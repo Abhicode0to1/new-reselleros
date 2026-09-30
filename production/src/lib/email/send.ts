@@ -29,7 +29,6 @@ import type { NotificationClass } from "@/lib/mastery/quiet-hours";
 import { resolveEmailProvider } from "./provider";
 import { sendViaGmail } from "./gmail-transport";
 import { sendViaSmtp, smtpConfigFromEnv } from "./smtp-transport";
-import { recipientAllowed } from "./recipient-allowlist";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export interface EmailAttachment {
@@ -265,17 +264,10 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
   // From. Reply-To stays the tenant's address, so customer replies still route right.
   const fromOverride = process.env.RESEND_FROM_OVERRIDE?.trim();
 
-  /* ── This machine's recipient filter (29 Sep 2026) — before EVERY transport ──
-     A dev machine holds real customers, so EMAIL_RECIPIENT_ALLOWLIST (unset in
-     production = no filter) decides who may be mailed at all. It runs before Gmail,
-     SMTP and Resend alike: a filter on one transport is a filter the next tenant
-     setting walks round. "failed" with the reason, never "sent" — the row must not say
-     a customer was reached. */
-  const gate = recipientAllowed(msg.to, process.env.EMAIL_RECIPIENT_ALLOWLIST);
-  if (!gate.allowed) {
-    console.warn(`[email/send] ${gate.reason} (subject: "${msg.subject}")`);
-    return { status: "failed", providerId: null, errorMessage: gate.reason, provider: "stub" };
-  }
+  /* No recipient filter (owner, 30 Sep 2026): the EMAIL_RECIPIENT_ALLOWLIST added on
+     29 Sep stopped every email outside @anutech.in on this machine, and the owner could not
+     test the app. It was removed from the code, not just unset, so it cannot return
+     silently. Every recipient is mailed, locally too. */
 
   /* The platform sender: SMTP when SMTP_* is set, else Resend. SMTP first because the
      owner chose it for every email (29 Sep 2026). */

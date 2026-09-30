@@ -1,7 +1,7 @@
 /**
  * sendEmail with SMTP configured (29 Sep 2026): SMTP is the platform sender ahead of
- * Resend, a tenant's Gmail choice still wins, and EMAIL_RECIPIENT_ALLOWLIST is checked
- * before ANY transport. No network: every edge is mocked, as in send.test.ts.
+ * Resend, a tenant's Gmail choice still wins, and no recipient filter stands in front of
+ * any transport (the EMAIL_RECIPIENT_ALLOWLIST of 29 Sep was removed on 30 Sep). No network: every edge is mocked, as in send.test.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { EmailLogEntry } from "./log";
@@ -57,7 +57,6 @@ beforeEach(async () => {
   tenantRow = { email_provider: "resend", gmail_sender_user_id: null };
   tokenRow = null;
   vi.stubEnv("RESEND_API_KEY", "re_test_key");
-  vi.stubEnv("EMAIL_RECIPIENT_ALLOWLIST", "");
   for (const k of ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "FROM_EMAIL"]) vi.stubEnv(k, "");
   ({ sendEmail, isEmailConfigured } = await import("./send"));
 });
@@ -106,30 +105,19 @@ describe("SMTP as the platform sender", () => {
   });
 });
 
-describe("EMAIL_RECIPIENT_ALLOWLIST runs before every transport", () => {
-  it("a customer not on the list reaches NO transport, and the row says not sent", async () => {
+describe("no recipient filter (owner, 30 Sep 2026: \"remove this restriction … permanently\")", () => {
+  it("a customer outside @anutech.in is mailed, even if the old setting is still lying around", async () => {
     smtpOn();
     vi.stubEnv("EMAIL_RECIPIENT_ALLOWLIST", "@anutech.in");
     const r = await sendEmail({ ...msg, to: "owner@customer.com" });
-    expect(r.status).toBe("failed");
-    expect(r.errorMessage).toMatch(/not on EMAIL_RECIPIENT_ALLOWLIST/);
-    expect(sendViaSmtp).not.toHaveBeenCalled();
-    expect(sendViaGmail).not.toHaveBeenCalled();
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(recorded[0].result.status).toBe("failed");
+    expect(r).toMatchObject({ status: "sent", provider: "smtp" });
+    expect(sendViaSmtp.mock.calls[0][0]).toMatchObject({ to: "owner@customer.com" });
   });
 
-  it("also before Gmail, for a tenant on Gmail", async () => {
-    vi.stubEnv("EMAIL_RECIPIENT_ALLOWLIST", "@anutech.in");
-    tenantRow = { email_provider: "gmail", gmail_sender_user_id: "u1" };
-    tokenRow = { access_token: "a", refresh_token: "r", scopes: "https://www.googleapis.com/auth/gmail.send", google_email: "o@t.in" };
-    await sendEmail({ ...msg, to: "owner@customer.com" });
-    expect(sendViaGmail).not.toHaveBeenCalled();
-  });
-
-  it("an allowed address goes through", async () => {
-    smtpOn();
-    vi.stubEnv("EMAIL_RECIPIENT_ALLOWLIST", "@anutech.in");
-    expect((await sendEmail(msg)).status).toBe("sent");
+  it("the filter module is gone from the app", async () => {
+    const { existsSync, readFileSync } = await import("node:fs");
+    expect(existsSync("src/lib/email/recipient-allowlist.ts")).toBe(false);
+    const code = readFileSync("src/lib/email/send.ts", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(code).not.toMatch(/process\.env\.EMAIL_RECIPIENT_ALLOWLIST/);
   });
 });
