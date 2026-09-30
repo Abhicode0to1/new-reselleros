@@ -546,6 +546,7 @@ function LeadsPageInner() {
           selectFolder={selectFolder}
           effectiveView={effectiveView}
           setView={setView}
+          isMobile={isMobile}
           activeFilterCount={activeFilterCount}
           filterStages={filterStages}
           stageFilter={stageFilter}
