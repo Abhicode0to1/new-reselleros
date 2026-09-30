@@ -299,11 +299,15 @@ export const APP_NAV: NavSection[] = [
     icon: "target",
     items: [
       { id: "leads",           href: "/leads",            label: "Sales & Pipeline", icon: "target", roles: ["owner", "manager", "sales"] },
-      /* "Deal Pipeline" removed 17 Aug 2026. /leads now shows every OPEN lead
-         whatever stage it reached, with the Board view for drag-drop, so there is
-         nothing left for a second entry to show. The ROUTE stays alive (bookmarks)
-         and resolves to the same list — see deals/page.tsx. The id "deals" must NOT be
-         reused: the command palette flattens every item by id. */
+      /* Deals — back in the menu 30 Sep 2026. "Deal Pipeline" was removed 17 Aug because
+         /leads then showed every open lead, so a second entry had nothing to add. R-057
+         (30 Sep) moved WON leads to /deals only, which left them unreachable from the
+         menu — and, because allowedRoutesForRole() is built from this list, a plain sales
+         user typing /deals was bounced to /leads by middleware. Same roles as Sales &
+         Pipeline (sales_senior sees what sales sees): the 17 Aug decision was that every
+         seller sees the pipeline. id "deals" also picks up nav_badges().deals (open
+         demo / trial / quote). Keep ids unique — the command palette flattens by id. */
+      { id: "deals",           href: "/deals",            label: "Deals",         icon: "trending_up", roles: ["owner", "manager", "sales"] },
       { id: "enquiries",       href: "/enquiries",        label: "Enquiries",     icon: "mail",   roles: ["owner", "manager", "sales"] },
       { id: "tasks",           href: "/tasks",            label: "Tasks",         icon: "clock",  roles: ["owner", "manager", "sales"] },
       /* Contacts is GONE from the nav entirely (10 Sep 2026): a customer's people live ON
@@ -540,9 +544,8 @@ export const CUSTOMER_NAV: NavSection[] = [
 /** Pages that are not nav entries: detail pages, sub-pages, and routes kept alive for
  *  bookmarks. `tail` is appended to the crumb of whatever they sit under. */
 const EXTRA_SCREENS: Record<string, { tail: string[]; under?: string }> = {
-  // NB: /leads + /deals share the same component (the /deals route file re-exports from
-  //     /leads). The titles still need separate entries.
-  "/deals":                  { tail: ["Deal Pipeline"], under: "/leads" },
+  // NB: /deals is an APP_NAV entry again (30 Sep 2026), so its crumb comes from the nav
+  //     ("Sell / Deals") — an entry here would override that with a stale title.
   "/contacts":               { tail: ["Contacts"], under: "/leads" },
   "/contacts/[id]":          { tail: ["Contacts", "Profile"], under: "/leads" },
   "/customers/groups/[id]":  { tail: ["Detail"] },

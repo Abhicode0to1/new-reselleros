@@ -58,9 +58,15 @@ const ADDED_FOR_EVERY_ROLE = ["/help"];
  *  (/api/leads/indiamart) is owner-only, so a manager gets no row (middleware does not gate
  *  managers, and the page tells one who can do it). */
 const ADDED_FOR_OWNER = ["/marketing/indiamart"];
+/** 30 Sep 2026: Deals back in Sell, for the roles that see Sales & Pipeline. R-057 moved WON
+ *  leads to /deals only; with no nav entry a sales user could not open /deals at all (the
+ *  guard bounced it to /leads), so this is a real, named grant — not a snapshot drift. */
+const ADDED_DEALS = ["/deals"];
+const DEALS_ROLES = ["owner", "manager", "sales", "sales_senior"];
 const addedFor = (role: string) => [
   ...(role === "owner" || role === "manager" ? ADDED_FOR_OWNER_MANAGER : []),
   ...(role === "owner" ? ADDED_FOR_OWNER : []),
+  ...(DEALS_ROLES.includes(role) ? ADDED_DEALS : []),
   ...(BOOKS_ROLES.includes(role) ? ADDED_FOR_BOOKS : []),
   ...ADDED_FOR_EVERY_ROLE,
 ];
@@ -236,6 +242,7 @@ describe("3. breadcrumbs come from the nav", () => {
     expect(getCrumb("/customers/groups")).toEqual(["Billing", "Parent Accounts"]);
     expect(getCrumb("/accounting/pnl")).toEqual(["Books", "Reports", "P&L Report"]);
     expect(getCrumb("/marketing/spend")).toEqual(["Sell", "Marketing Hub", "Spend"]);
+    expect(getCrumb("/deals")).toEqual(["Sell", "Deals"]);
   });
 
   it("keeps every Billing page's crumb exactly as it was (Abhishek's pages)", () => {
@@ -249,12 +256,37 @@ describe("3. breadcrumbs come from the nav", () => {
   it("gives sub-pages the crumb of the page they sit under", () => {
     expect(getCrumb("/reports/profit")).toEqual(["Books", "Reports", "Profit by product/service"]);
     expect(getCrumb("/accounting/tds-receivable/year-end")).toEqual(["Books", "Reports", "TDS Receivable", "Year-End"]);
-    expect(getCrumb("/deals")).toEqual(["Sell", "Sales & Pipeline", "Deal Pipeline"]);
     expect(getCrumb("/setup")).toEqual(["Settings", "Setup Wizard"]);
   });
 
   it("gives every old nav page a real crumb (not the Dashboard fallback)", () => {
     const fallback = OLD_HREFS.filter((h) => h !== "/dashboard" && getCrumb(h).at(-1) === "Dashboard");
     expect(fallback).toEqual([]);
+  });
+});
+
+describe("4. Deals sits in Sell right after Sales & Pipeline (30 Sep 2026)", () => {
+  const sellHrefs = (role: UserRole) =>
+    (filterNavForRole(APP_NAV, role).find((s) => s.section === "Sell")?.items ?? []).map((i) => i.href);
+
+  it.each(["owner", "manager", "sales", "sales_senior"] as UserRole[])("%s: /deals is the row after /leads, and the guard lets it through", (role) => {
+    const hrefs = sellHrefs(role);
+    const at = hrefs.indexOf("/leads");
+    expect(at, `${role} has no /leads in Sell`).toBeGreaterThanOrEqual(0);
+    expect(hrefs[at + 1]).toBe("/deals");
+    expect(permits(allowedRoutesForRole(role), "/deals")).toBe(true);
+  });
+
+  it.each(["billing", "accountant", "support", "delivery", "partner_agent"] as UserRole[])("%s: no Deals row, and the guard still refuses /deals", (role) => {
+    expect(sellHrefs(role)).not.toContain("/deals");
+    expect(permits(allowedRoutesForRole(role), "/deals")).toBe(false);
+  });
+
+  it("is labelled Deals and shares the Sales & Pipeline roles exactly", () => {
+    const sell = APP_NAV.find((s) => s.section === "Sell")!.items;
+    const leads = sell.find((i) => i.href === "/leads")!;
+    const deals = sell.find((i) => i.href === "/deals")!;
+    expect(deals.label).toBe("Deals");
+    expect(deals.roles).toEqual(leads.roles);
   });
 });
