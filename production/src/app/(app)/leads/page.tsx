@@ -219,8 +219,18 @@ function LeadsPageInner() {
   // Runs once when that lead has been looked up and the URL param is present. S40: looked
   // up by id — the lead may be on page 40 of the list, which the page has not loaded.
   const deepLinkHandledRef = React.useRef(false);
-  const deepLink = useLead(focusLeadId ?? undefined);
+  /* On /deals a deal opens its own page (/deals/<id>, 30 Sep 2026), so an old-style
+     /deals?lead=<id> link — the /today rows use it — goes there instead of the drawer. */
+  const deepLinkToPage = isDealsPage && !!focusLeadId;
+  const deepLink = useLead(deepLinkToPage ? undefined : (focusLeadId ?? undefined));
   React.useEffect(() => {
+    /* No "handled" ref here: under dev StrictMode the first run's navigation can be dropped
+       by the remount, and replacing to the same URL twice is harmless. */
+    if (!deepLinkToPage || !focusLeadId) return;
+    router.replace(`/deals/${encodeURIComponent(focusLeadId)}` as never);
+  }, [deepLinkToPage, focusLeadId, router]);
+  React.useEffect(() => {
+    if (deepLinkToPage) return;
     if (deepLinkHandledRef.current) return;
     if (!focusLeadId || !deepLink.isFetched) return;
 
@@ -244,7 +254,14 @@ function LeadsPageInner() {
     // path (not a hardcoded /leads) so a ?lead= deep-link opened on /deals
     // stays on /deals instead of bouncing the user to /leads.
     router.replace(pathname as never);
-  }, [focusLeadId, deepLink.isFetched, deepLink.data, router, pathname]);
+  }, [deepLinkToPage, focusLeadId, deepLink.isFetched, deepLink.data, router, pathname]);
+
+  /* Opening a row / card / queue item: /leads keeps its quick drawer; /deals opens the
+     deal's own page, where its whole history lives (30 Sep 2026). */
+  const openLead = React.useCallback((l: Pick<Lead, "id">) => {
+    if (isDealsPage) router.push(`/deals/${encodeURIComponent(l.id)}` as never);
+    else setSelected(l);
+  }, [isDealsPage, router]);
 
   // Quick "Send quote" from a list row — carries the lead's context into the
   // quote builder. Returning to /leads lands on the list (no auto-opened drawer).
@@ -626,7 +643,7 @@ function LeadsPageInner() {
           leads={dueQ.data ?? []}
           tenantName={currentUser?.tenantName}
           onOutcome={(o, l) => callLog.run(o, l)}
-          onOpen={(l) => setSelected(l)}
+          onOpen={openLead}
           onLogCall={(l) => queueLog.mutate({ leadId: l.id, kind: "call", detail: `Called ${l.contact_phone ?? ""}` })}
           onLogWhatsApp={(l) => queueLog.mutate({ leadId: l.id, kind: "whatsapp", detail: `WhatsApp to ${l.contact_phone ?? ""}` })}
         />
@@ -667,7 +684,7 @@ function LeadsPageInner() {
           columnTotals={boardQ.data?.totals}
           stages={DEAL_STAGES.filter((s) => stageShownOnPage(s.id, isDealsPage))}
           changeStage={changeStage}
-          setSelected={setSelected}
+          setSelected={openLead}
           setAddOpen={setAddOpen}
         />
       )}
@@ -701,7 +718,7 @@ function LeadsPageInner() {
           // raw lead's first move is to CONTACT (call/WhatsApp/email/follow-up/
           // send-quote) — all live in the drawer. Qualifying is still one click
           // away via the drawer's "Edit" button, so nothing is lost.
-          onRowClick={(l) => setSelected(l)}
+          onRowClick={openLead}
           onSendQuote={goSendQuote}
           onFollowUp={setFollowUpLead}
           onWhatsApp={(l) => setWaLead(l)}
