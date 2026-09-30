@@ -13,7 +13,7 @@ import { rupee, cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
 import type { LeadListRow } from "@/lib/leads/list-page";
 import type { useChangeLeadStage } from "@/lib/leads/use-change-stage";
-import { DEAL_STAGES, LEAD_STAGES } from "@/lib/leads/stage-meta";
+import { DEAL_STAGES, LEAD_STAGES, type StageMeta } from "@/lib/leads/stage-meta";
 import { BOARD_COLUMN_CAP } from "@/lib/queries/leads";
 
 export interface LeadsKanbanBoardProps {
@@ -23,9 +23,11 @@ export interface LeadsKanbanBoardProps {
   changeStage: ReturnType<typeof useChangeLeadStage>["changeStage"];
   setSelected: (l: LeadListRow) => void;
   setAddOpen: (open: boolean) => void;
+  /** The columns, in order. Default every deal stage; /leads leaves out Won (R-057). */
+  stages?: readonly StageMeta[];
 }
 
-export function LeadsKanbanBoard({ boardLeads, columnTotals, changeStage, setSelected, setAddOpen }: LeadsKanbanBoardProps) {
+export function LeadsKanbanBoard({ boardLeads, columnTotals, changeStage, setSelected, setAddOpen, stages = DEAL_STAGES }: LeadsKanbanBoardProps) {
   const router = useRouter();
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [overStage, setOverStage] = React.useState<Lead["stage"] | null>(null);
@@ -86,7 +88,7 @@ export function LeadsKanbanBoard({ boardLeads, columnTotals, changeStage, setSel
           pair's `1fr` to resolve to 0. Resetting the template makes all six implicit, so
           every column gets the 220px floor and the row scrolls as intended (1380px). */}
       <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-none lg:grid-flow-col lg:auto-cols-[minmax(220px,1fr)] lg:grid-rows-1 gap-3 overflow-x-auto overflow-y-hidden pb-1">
-        {DEAL_STAGES.map((stage) => {
+        {stages.map((stage) => {
           const stageLeads = boardLeads.filter((l) => l.stage === stage.id);
           const stageValue = stageLeads.reduce((s, l) => s + (l.value ?? 0), 0);
           const isOver = overStage === stage.id;

@@ -44,7 +44,8 @@ import { JunkAIReview } from "@/components/features/leads/junk-ai-review";
 import type { Lead } from "@/lib/supabase/database.types";
 import type { LeadListFilters, LeadListRow } from "@/lib/leads/list-page";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
-import { filterStagesFor } from "@/lib/leads/stage-meta";
+import { DEAL_STAGES, filterStagesFor } from "@/lib/leads/stage-meta";
+import { everythingCountForPage, scopeFiltersForPage, stageShownOnPage } from "@/lib/leads/page-scope";
 import {
   boardCut, inWorkspace, listCut, searchLeads, type SortCol,
 } from "@/lib/leads/list-selectors";
@@ -350,7 +351,9 @@ function LeadsPageInner() {
      that was megabytes per visit, and PostgREST's 1000-row cap meant the chips were
      silently counting only the newest 1000. supabase/tests/lead_counts.test.sql proves, for
      every view × folder, that the count equals the rows the list pages out. */
-  const listFilters = React.useMemo<LeadListFilters>(() => ({
+  /* R-057: on /leads the stages sent to BOTH readers leave out `won` (lib/leads/page-scope.ts),
+     so the list and its counts agree; /deals sends the filters unchanged. */
+  const listFilters = React.useMemo<LeadListFilters>(() => scopeFiltersForPage({
     owner_ids: teamIds ? [...teamIds] : undefined,
     search: debouncedSearch,
     stages: stageFilter,
@@ -361,7 +364,7 @@ function LeadsPageInner() {
     /* The default "wait" order (lib/leads/waiting.ts) is worked out by the server, so the
        lead that has waited longest is on page 1 even if it arrived months ago. */
     sort: sortBy === "wait" ? "wait" : "created",
-  }), [teamIds, debouncedSearch, stageFilter, priorityFilter, ownerFilter, smartView, folder, sortBy]);
+  }, isDealsPage), [teamIds, debouncedSearch, stageFilter, priorityFilter, ownerFilter, smartView, folder, sortBy, isDealsPage]);
 
   const countsQ = useLeadCounts(listFilters);
   const counts  = countsQ.data;
@@ -400,7 +403,8 @@ function LeadsPageInner() {
   const folderToday = React.useMemo(() => localDateISO(new Date()), []);
   const boardLeads = React.useMemo<LeadListRow[]>(() => {
     if (isList) return [];
-    const rows = boardQ.data?.rows ?? [];
+    /* R-057: the board on /leads holds no won cards either. */
+    const rows = (boardQ.data?.rows ?? []).filter((l) => stageShownOnPage(l.stage, isDealsPage));
     const workspace = teamIds === null ? rows : inWorkspace(rows, teamIds);
     const dup = computeDuplicates(workspace);
     const searched = searchLeads(workspace, {
@@ -412,7 +416,7 @@ function LeadsPageInner() {
        Won is also the board's DROP TARGET. So the board's base is every non-junk, non-lost
        lead; picking a folder hands control back to the list cut (list-selectors#boardCut). */
     return boardCut(searched, listCut(searched, folder, smartView, folderToday), folder, smartView);
-  }, [isList, boardQ.data, teamIds, search, stageFilter, priorityFilter, ownerFilter, smartView, currentUser, folder, folderToday]);
+  }, [isList, isDealsPage, boardQ.data, teamIds, search, stageFilter, priorityFilter, ownerFilter, smartView, currentUser, folder, folderToday]);
 
   /** The rows the current view is showing — what `filtered` was. */
   const shownRows = isList ? listRows : boardLeads;
@@ -439,12 +443,13 @@ function LeadsPageInner() {
      removing it. */
   const folderRows = React.useMemo(
     () =>
-      SALES_FOLDERS.map((f) => {
+      /* R-057: no Won folder on /leads — won leads live on /deals only. */
+      SALES_FOLDERS.filter((f) => f.id !== "won" || isDealsPage).map((f) => {
         const count = counts?.folders[f.id] ?? 0;
         /* Only when it IS empty — see the note above. */
         return { id: f.id as string, label: f.label, count, hint: count === 0 ? f.hint : "" };
       }),
-    [counts],
+    [counts, isDealsPage],
   );
 
   /* ── ONE SELECTION AT A TIME ────────────────────────────────────────────────
@@ -534,7 +539,7 @@ function LeadsPageInner() {
           search={search}
           setSearch={setSearch}
           viewCounts={counts.views}
-          everythingCount={counts.workspace.everything}
+          everythingCount={everythingCountForPage(counts, isDealsPage)}
           currentUser={currentUser}
           duplicateCountForTab={counts.views.duplicates}
           junkCount={counts.workspace.junk}
@@ -658,6 +663,7 @@ function LeadsPageInner() {
         <LeadsKanbanBoard
           boardLeads={boardLeads}
           columnTotals={boardQ.data?.totals}
+          stages={DEAL_STAGES.filter((s) => stageShownOnPage(s.id, isDealsPage))}
           changeStage={changeStage}
           setSelected={setSelected}
           setAddOpen={setAddOpen}
