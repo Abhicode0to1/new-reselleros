@@ -288,16 +288,13 @@ export default function CheckoutPage() {
 
           {step === "details" ? (
             <div style={{ maxWidth: 460 }}>
+              {/* Required first, optional last (owner, 30 Sep 2026): a buyer fills top to
+                  bottom and can stop at the "Optional" line. */}
               <Field label="YOUR NAME" value={name} onChange={setName} />
-              <Field label="COMPANY / BUSINESS NAME (OPTIONAL — YOUR NAME IS USED IF BLANK)" value={company} onChange={setCompany} />
               <Field label="EMAIL — THE GST INVOICE GOES HERE" value={email} onChange={setEmail} type="email" />
-              <Field label="GSTIN (OPTIONAL — FOR INPUT CREDIT)" value={gstin} onChange={setGstin} mono />
               <Field label="MOBILE" value={phone} onChange={setPhone} type="tel" />
               {hasHosting && (
                 <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
-              )}
-              {hasTrial && !hasHosting && (
-                <Field label="YOUR WEBSITE DOMAIN — LEAVE BLANK IF YOU DON'T HAVE ONE YET" value={domain} onChange={setDomain} mono />
               )}
               {hasDomain && (
                 <>
@@ -309,6 +306,15 @@ export default function CheckoutPage() {
                   <Field label="STATE" value={addrState} onChange={setAddrState} />
                   <Field label="PIN CODE" value={addrPin} onChange={setAddrPin} mono />
                 </>
+              )}
+
+              <div className="mono-label" style={{ color: "var(--text-muted)", borderTop: "1px solid var(--border-hairline)", paddingTop: 16, margin: "8px 0 14px" }}>
+                OPTIONAL
+              </div>
+              <Field label="COMPANY / BUSINESS NAME — YOUR NAME IS USED IF BLANK" value={company} onChange={setCompany} />
+              <Field label="GSTIN — FOR INPUT CREDIT" value={gstin} onChange={setGstin} mono />
+              {hasTrial && !hasHosting && (
+                <Field label="YOUR WEBSITE DOMAIN — LEAVE BLANK IF YOU DON'T HAVE ONE YET" value={domain} onChange={setDomain} mono />
               )}
               {trialMixed && (
                 <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
