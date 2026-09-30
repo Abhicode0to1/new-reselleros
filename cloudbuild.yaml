@@ -15,7 +15,10 @@
 #
 #   So the trigger must NOT watch the branch that is committed to daily. Two sane choices:
 #
-#     deploy branch   `git push anutech HEAD:deploy` when you actually want to ship.
+#     deploy branch   `git push <remote> HEAD:deploy` when you actually want to ship, where
+#                     <remote> is whichever remote points at
+#                     github.com/Abhicode0to1/new-reselleros (`origin` on Pardeep's
+#                     machine as of 30 Sep 2026; older notes call it `anutech`).
 #                     Committing and shipping stay separate decisions, and nothing about
 #                     the day-to-day workflow changes. Recommended while one person works
 #                     on a long-lived branch.
@@ -122,6 +125,12 @@ steps:
       # >= Cloud Scheduler's --attempt-deadline=540s (setup-cloud-scheduler.sh). The 300s
       # default cut long crons off mid-run and Scheduler retried them from the top (S22).
       - --timeout=600
+      # Cold starts (WC-ci, 30 Sep 2026): keep one instance warm and give each new instance
+      # extra CPU while it boots. COST: roughly one small always-on instance (billed while
+      # idle) — Pardeep approves this at deploy time. Note a staging trigger that reuses this
+      # file gets the same warm instance; drop these two lines there if that is unwanted.
+      - --min-instances=1
+      - --cpu-boost
       - --quiet
     # NOTE: no --set-env-vars here, deliberately. That flag REPLACES the whole set, and this
     # service carries eleven — including SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET and

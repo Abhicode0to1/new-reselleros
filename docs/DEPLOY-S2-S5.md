@@ -13,11 +13,15 @@
    ye ab prod ka check **nahi** hai. Iska result prod ka sach mat maano.
 3. Prod par migration ka jo tareeka repo me abhi likha hai (`docs/BACKUP.md`, `docs/SECURITY-RUNBOOK.md`):
    `gcloud sql connect` → `SET ROLE resellersos_migration` → `\i <file>` → `RESET ROLE` → `notify pgrst, 'reload schema';`
-4. `scripts/verify-deploy.mjs` me `PROD_URL = https://anutech.in`; `ROLLBACK.md` aur `cloudbuild.yaml`
-   (`_APP_URL`) `https://reselleros.anutech.in` kehte hain. Dono se `/api/version` check karo.
+4. ~~`scripts/verify-deploy.mjs` me `PROD_URL = https://anutech.in`~~ — **theek hua 30 Sep (WC-ci):** ab
+   `https://reselleros.anutech.in`, jo `ROLLBACK.md`, `cloudbuild.yaml` `_APP_URL` aur Dockerfile
+   `NEXT_PUBLIC_APP_URL` bhi kehte hain (commit 23eecf13, 7 Sep: anutech.in wahan 301 karta hai).
 5. R-013 kehta hai `definer_rpc_hardening.test.sql` "production par green" ho. `ROLLBACK.md` kehta hai SQL
    tests production par **kabhi nahi**. Neeche read-only SQL diya hai; test prod par chalana tumhara faisla.
-6. `cloudbuild.yaml` kehta hai `git push anutech HEAD:deploy`; is machine par sirf `origin` remote hai.
+6. ~~`cloudbuild.yaml` kehta hai `git push anutech HEAD:deploy`~~ — **theek hua 30 Sep (WC-ci):** remote ka
+   naam machine par nirbhar hai; jo remote `github.com/Abhicode0to1/new-reselleros` ko point kare wahi
+   (is machine par `origin`). `git remote -v` se pakka karo. (`.agents/AGENTS.md`,
+   `production/docs/STAGING.md`, `TASKS.md` me abhi bhi `anutech` likha hai — un files ke maalik badlein.)
 
 ## Pehle (1 din pehle)
 
@@ -128,7 +132,7 @@ Order ka niyam: pehle saari migrations, phir app (expand → deploy, `ROLLBACK.m
 
 ```bash
 git log --oneline -1                          # ye SHA live hona chahiye
-git push origin HEAD:deploy                   # remote naam pakka nahi — upar conflict #6
+git push origin HEAD:deploy                   # origin = github.com/Abhicode0to1/new-reselleros (git remote -v)
 cd production && npm run verify:deploy -- <short-sha>
 curl -s https://reselleros.anutech.in/api/version
 ```

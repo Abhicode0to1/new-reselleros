@@ -1,16 +1,18 @@
 /**
- * Next.js 14 instrumentation hook — Sentry server + edge init bridge.
+ * Next.js instrumentation hook — THE Sentry server + edge init.
  *
- * Next calls `register()` once at server boot. We forward to the appropriate
- * Sentry config based on runtime, but only if SENTRY_DSN is set (lazy import
- * to avoid the @sentry/nextjs bundle penalty during local dev without a DSN).
+ * Next 15 always loads this file and calls `register()` once per runtime at server
+ * boot (the `experimental.instrumentationHook` flag is gone — see next.config). This is
+ * the setup @sentry/nextjs v10 documents: import the runtime's config from `register()`
+ * and export `onRequestError = captureRequestError`. No SENTRY_DSN → nothing is imported
+ * and nothing initialises (local dev, CI builds).
  *
- * ⚠️ Known issue (2026-05-29): On Cloud Run + Next.js 14.2.15 + output:
- * "standalone", this hook is NOT actually called at boot (verified via boot
- * logs). As a workaround, server-side init runs via a module-level guard in
- * the routes that need it (see /api/sentry-test). Keep this file for future
- * Next.js upgrades where the hook may start working again — it's a no-op
- * when register() doesn't fire.
+ * History: on Next 14.2.15 standalone (verified 2026-05-29) this hook did NOT fire on
+ * Cloud Run, so init was bolted on via `import "@/lib/sentry"` (chokepoint:
+ * lib/supabase/server.ts). That import stays as belt-and-braces; it and both configs are
+ * guarded by `Sentry.getClient()`, so whichever runs first wins and the rest are no-ops.
+ * /api/sentry-test no longer imports it, so its `clientReady=` log line now proves that
+ * THIS hook initialised Sentry.
  */
 export async function register() {
   if (!process.env.SENTRY_DSN) return;

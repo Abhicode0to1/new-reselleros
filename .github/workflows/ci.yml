@@ -20,9 +20,14 @@ name: CI
 # warning ratchet, migration file order, and the full `next build`. It gates MERGES once
 # GitHub branch protection marks `checks` as a required status for main/deploy (a repo
 # setting — not something this file can switch on).
+#
+# ─── THE THREE WORKING BRANCHES WERE NOT WATCHED EITHER (WC-ci, 30 Sep 2026) ──
+# Day-to-day work lands on pardeep-sir / abhishek-pre-merge / pawan-api-system (and QA on
+# hitesh-qa), not on main — so until today CI ran on none of it until somebody opened a PR.
+# They are pushed to directly, so they are listed here directly.
 on:
   push:
-    branches: [main, deploy, 'session/**']
+    branches: [main, deploy, 'session/**', pardeep-sir, abhishek-pre-merge, pawan-api-system, hitesh-qa]
   pull_request:
 jobs:
   checks:
@@ -50,7 +55,18 @@ jobs:
           MIGRATION_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
         run: node scripts/migration-order-check.mjs
 
+      # The NEXT_PUBLIC_* values below must be the ones production/Dockerfile builds with
+      # (and cloudbuild.yaml substitutes). Files only, no install needed — so it runs first.
+      - name: Config drift check (ci.yml / cloudbuild.yaml vs Dockerfile)
+        run: node scripts/check-config-drift.mjs
+
       - run: npm ci
+      # Advisory, NOT blocking: a new advisory in a transitive dependency appears overnight
+      # without any commit here, and should not turn every branch red at once. It is visible
+      # in each run's log; Dependabot (.github/dependabot.yml) opens the upgrade PRs.
+      - name: npm audit (production deps, high+) — advisory
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm run test
       # Blocking since S18. `next lint` fails on any ESLint ERROR; the ratchet fails when any
@@ -67,14 +83,16 @@ jobs:
       # type-check. The cost of leaving it out was not a red tick — it was a production
       # release that could not happen, with nothing in the gate saying so.
       #
-      # Env: the SAME two publishable values production/Dockerfile:38-39 already sets, so
+      # Env: the SAME two publishable values production/Dockerfile's ARG defaults set, so
       # this build is the build that ships rather than a different one. They are public by
       # definition (anon key) and already committed there — this is not a new exposure.
-      # ⚠️ It IS a second copy: if the Dockerfile's values change, change these too.
+      # ⚠️ It IS a second copy. Until 30 Sep 2026 it still said the old hosted project
+      # (ontpnqjoysjgrlsukecm.supabase.co) after the Dockerfile moved to api.anutech.in;
+      # scripts/check-config-drift.mjs (step above) now fails the job when they differ.
       - name: Build (catches what typecheck cannot — see comment)
         env:
-          NEXT_PUBLIC_SUPABASE_URL: "https://ontpnqjoysjgrlsukecm.supabase.co"
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_M1d2SCgCNq5QXLVAOsBPUA_UwLutFUK"
+          NEXT_PUBLIC_SUPABASE_URL: "https://api.anutech.in"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9udHBucWpveXNqZ3Jsc3VrZWNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjc1NjcsImV4cCI6MjA5NDg0MzU2N30.tulYYDQSzq7IpEQCFbP7qjsSUxg4c-0ku5uO80-TKXI"
           # ─── THE RUNNER'S NODE HEAP IS SMALLER THAN THIS MACHINE'S ─────────
           # First real CI run, 28 Aug 2026: exit 134, "Ineffective mark-compacts near heap
           # limit", dying at 1898 of 2078 MB. That ceiling is Node's default old-space cap,
@@ -136,7 +154,12 @@ jobs:
           # link the app emails out. `resellersos-1005662057478.asia-south1.run.app` is a
           # live ALIAS for the same service and is what the Cloud Scheduler jobs call — do
           # not "fix" those to match this one.
-          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'https://resellersos-njvk4nxhdq-as.a.run.app' }}
+          #
+          # 30 Sep 2026 (WC-ci): the paragraph above is superseded by commit 23eecf13 (7 Sep) —
+          # NEXT_PUBLIC_APP_URL is now https://reselleros.anutech.in (Dockerfile ARG default,
+          # cloudbuild.yaml _APP_URL, docs/ROLLBACK.md), a domain bound to whichever service is
+          # live, so it survives the next region move the way a run.app host does not.
+          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'https://reselleros.anutech.in' }}
         # suite-health.spec.ts is the tripwire the repo built for "70 auth-gated
         # tests silently skip and the run still reads green" — and then left out
         # of this very list, so it never fired (audit A6, 1 Sep 2026). It is IN
