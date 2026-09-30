@@ -33,7 +33,11 @@ export type TodayKind =
   | "renewal"
   | "invoice_overdue"
   | "payment_failed"
-  | "compliance";
+  | "compliance"
+  /* Built in code from open deals — lib/today/deals.ts. */
+  | "deal_overdue"
+  | "deal_quote_stale"
+  | "deal_closing";
 
 export interface TodayItem {
   kind: string;
@@ -62,6 +66,9 @@ export const TODAY_KIND_META: Record<TodayKind, { label: string; icon: string }>
   invoice_overdue: { label: "Overdue",       icon: "receipt" },
   payment_failed:  { label: "Autopay",       icon: "alert" },
   compliance:      { label: "GST / TDS",     icon: "calendar" },
+  deal_overdue:     { label: "Deal late",       icon: "trending_up" },
+  deal_quote_stale: { label: "Quote follow-up", icon: "mail" },
+  deal_closing:     { label: "Closing",         icon: "target" },
 };
 
 export function kindMeta(kind: string): { label: string; icon: string } {

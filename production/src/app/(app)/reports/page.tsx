@@ -34,6 +34,8 @@ import { Card } from "@/components/ui/card";
 import { rupee } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { NavDirectory } from "@/components/layout/nav-directory";
+import { DealsReportCard } from "@/components/features/deals/deals-report-card";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -152,6 +154,7 @@ export default function ReportsPage() {
      pipeline card described the newest thousand. Junk is excluded, as the card always said. */
   const { data: stageCounts = {} } = useLeadStageCounts(PIPELINE_STAGE_IDS);
   const { data: snapshots } = useMrrSnapshots(13);
+  const { data: currentUser } = useCurrentUser();
 
   const loading = subsLoading || custsLoading;
 
@@ -416,6 +419,10 @@ export default function ReportsPage() {
           </div>
         </ReportCard>
       </div>
+
+      {/* ── Deals — win rate, avg deal, days to close, per owner (last 90 days).
+             Owner / manager / sales only, like the Deals nav row. ── */}
+      <DealsReportCard role={currentUser?.role} />
 
       {/* ── Row 2: Revenue donut + Risk donut ── */}
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">

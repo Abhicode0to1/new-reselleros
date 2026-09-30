@@ -26,6 +26,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import { createClient } from "@/lib/supabase/client";
 import { useComplianceLog, toFiledMap } from "@/lib/queries/compliance";
+import { useTodayDealItems } from "@/lib/queries/deals";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { canSeeDeals } from "@/lib/deals/access";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -102,6 +105,9 @@ function Row({ item, now }: { item: TodayItem; now: number }) {
 export default function TodayPage() {
   const inbox = useTodayInbox();
   const compliance = useComplianceLog();
+  /* Deal rows (lib/today/deals.ts) — built in code from open deals, same scale as the SQL. */
+  const { data: me } = useCurrentUser();
+  const deals = useTodayDealItems(canSeeDeals(me?.role));
   const [kindFilter, setKindFilter] = React.useState<string | null>(null);
   const now = Date.now();
 
@@ -110,8 +116,8 @@ export default function TodayPage() {
     [compliance.data],
   );
   const all = React.useMemo(
-    () => rankTodayItems([...(inbox.data ?? []), ...complianceItems]),
-    [inbox.data, complianceItems],
+    () => rankTodayItems([...(inbox.data ?? []), ...complianceItems, ...deals.items]),
+    [inbox.data, complianceItems, deals.items],
   );
   const counts = React.useMemo(() => {
     const m = new Map<string, number>();
@@ -122,7 +128,7 @@ export default function TodayPage() {
   const shown = kindFilter ? all.filter((i) => i.kind === kindFilter) : all;
   const first = shown.filter((i) => i.priority >= URGENT_PRIORITY);
   const rest = shown.filter((i) => i.priority < URGENT_PRIORITY);
-  const loading = inbox.isLoading || compliance.isLoading;
+  const loading = inbox.isLoading || compliance.isLoading || deals.isLoading;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1000px] mx-auto">
@@ -136,7 +142,7 @@ export default function TodayPage() {
             Har queue ka kaam ek list mein — sabse zaroori sabse upar. Click karo, seedha us screen par.
           </p>
         </div>
-        <Button icon="refresh" variant="ghost" onClick={() => { inbox.refetch(); compliance.refetch(); }}>
+        <Button icon="refresh" variant="ghost" onClick={() => { inbox.refetch(); compliance.refetch(); deals.refetch(); }}>
           Refresh
         </Button>
       </div>
@@ -156,6 +162,15 @@ export default function TodayPage() {
           <p className="text-sm text-amber-ink font-medium">GST / TDS deadlines could not be loaded — {(compliance.error as Error).message}</p>
           <p className="text-xs text-ink-3 mt-1">
             Their absence below does not mean nothing is due. <Link href={"/compliance" as Route} className="underline">Open the Compliance Calendar</Link>.
+          </p>
+        </Card>
+      )}
+
+      {deals.error && (
+        <Card className="p-4 mb-4 border-amber-soft">
+          <p className="text-sm text-amber-ink font-medium">Deals could not be loaded — {(deals.error as Error).message}</p>
+          <p className="text-xs text-ink-3 mt-1">
+            Late or closing deals are missing below until this loads. <Link href={"/deals" as Route} className="underline">Open Deals</Link>.
           </p>
         </Card>
       )}

@@ -42,6 +42,7 @@ import { GettingStartedCard } from "@/components/features/dashboard/getting-star
 import { MoneyHealthCard } from "@/components/features/dashboard/money-health-card";
 import { AiPerformanceCard } from "@/components/features/dashboard/ai-performance-card";
 import { PriorityActionHub } from "@/components/features/dashboard/priority-action-hub";
+import { DealsStrip } from "@/components/features/deals/deals-strip";
 import { PendingJoinRequestsCard } from "@/components/features/team/pending-join-requests-card";
 import { Badge } from "@/components/ui/badge";
 
@@ -559,6 +560,10 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {/* Deals — the pipeline's money at a glance, every tile links to /deals.
+          Renders nothing for roles that cannot open /deals. */}
+      <DealsStrip role={currentUser?.role} />
 
       {/* Money-health — silent when everything works, so its appearance means
           "stop and read". Placed above onboarding because a payment that is
