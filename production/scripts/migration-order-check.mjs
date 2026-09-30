@@ -3,7 +3,7 @@
  * Are the migration FILES in a shape that can be applied in order?  (git only — no database)
  *
  *   node scripts/migration-order-check.mjs                     # base = origin/main
- *   node scripts/migration-order-check.mjs --base origin/pardeep-sir
+ *   node scripts/migration-order-check.mjs --base origin/manager-pardeep
  *   MIGRATION_BASE=<sha> node scripts/migration-order-check.mjs
  *
  * Fails (exit 1) when:

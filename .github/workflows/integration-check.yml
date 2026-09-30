@@ -1,9 +1,13 @@
-# Nightly integration check — do the three branches still fit together?
+# Nightly integration check — do the long-lived branches still fit together?
 #
-# Three people work on three long-lived branches (pardeep-sir, abhishek-pre-merge,
-# pawan-api-system) and they meet only when somebody deploys. Every conflict and every
+# R-055 (30 Sep 2026): FOUR people now, not three. Hitesh joined on accounts-hitesh and the
+# branches were renamed by work (C-053). A branch missing from the list below is a branch
+# whose conflicts surface only on deploy day — the single thing this job exists to stop.
+#
+# Four people work on four long-lived branches (manager-pardeep, billing-abhishek,
+# website-pawan, accounts-hitesh) and they meet only when somebody deploys. Every conflict and every
 # "your change broke my page" is found on deploy day, under pressure. This job finds them
-# every night instead: it merges the three into a throwaway branch in the runner, reports
+# every night instead: it merges them into a throwaway branch in the runner, reports
 # textual conflicts file by file, and — when the merge is clean — runs the typecheck and the
 # unit tests on the combined code.
 #
@@ -37,7 +41,7 @@ jobs:
           set -u
           git config user.name "integration-check"
           git config user.email "integration-check@users.noreply.github.com"
-          BRANCHES="pardeep-sir abhishek-pre-merge pawan-api-system"
+          BRANCHES="manager-pardeep billing-abhishek website-pawan accounts-hitesh"
           {
             echo "## Integration check — $(date -u +%Y-%m-%dT%H:%MZ)"
             echo
@@ -46,14 +50,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           for b in $BRANCHES; do
             if git rev-parse --verify -q "origin/$b" >/dev/null; then
-              echo "| \`$b\` | \`$(git rev-parse --short origin/$b)\` | $(git rev-list --count origin/pardeep-sir...origin/$b 2>/dev/null || echo ?) |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| \`$b\` | \`$(git rev-parse --short origin/$b)\` | $(git rev-list --count origin/manager-pardeep...origin/$b 2>/dev/null || echo ?) |" >> "$GITHUB_STEP_SUMMARY"
             else
               echo "| \`$b\` | missing | — |" >> "$GITHUB_STEP_SUMMARY"
             fi
           done
-          git checkout -q -B integration origin/pardeep-sir
+          git checkout -q -B integration origin/manager-pardeep
           CONFLICTS=0
-          for b in abhishek-pre-merge pawan-api-system; do
+          for b in billing-abhishek website-pawan accounts-hitesh; do
             git rev-parse --verify -q "origin/$b" >/dev/null || continue
             if git merge --no-edit --no-ff -q "origin/$b" >/dev/null 2>&1; then
               echo "- ✔ merged \`$b\` cleanly" >> "$GITHUB_STEP_SUMMARY"

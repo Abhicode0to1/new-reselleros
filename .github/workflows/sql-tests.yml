@@ -29,7 +29,7 @@ name: SQL tests
 
 on:
   push:
-    branches: [main, deploy, 'session/**', pardeep-sir, abhishek-pre-merge, pawan-api-system, hitesh-qa]
+    branches: [main, deploy, 'session/**', manager-pardeep, billing-abhishek, website-pawan, accounts-hitesh, pardeep-sir, abhishek-pre-merge, pawan-api-system, hitesh-qa]
     paths:
       - "production/supabase/**"
       - "production/scripts/test-sql.mjs"

@@ -3,7 +3,7 @@
  * Which areas did this branch touch? Run before every push (docs/TEAM-PROTOCOL.md).
  *
  *   node scripts/areas.mjs                 # diff of HEAD against the merge-base with origin/main-ish
- *   node scripts/areas.mjs --base origin/abhishek-pre-merge
+ *   node scripts/areas.mjs --base origin/billing-abhishek
  *   node scripts/areas.mjs --files a.ts b.ts   # classify explicit paths (tests use this)
  *
  * Prints each changed file's owner (pardeep / abhishek / pawan / shared / unowned) and a
