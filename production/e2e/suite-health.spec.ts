@@ -23,6 +23,7 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { E2E_ROLES, missingEnvFor } from "./fixtures/e2e-roles.mjs";
 
 const ENV_FILE = path.join(process.cwd(), ".env.test");
 
@@ -36,6 +37,12 @@ test.describe("suite health", () => {
     if (!hasFile) missing.push("production/.env.test does not exist");
     if (!hasAnon) missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY is not set");
     if (!hasService) missing.push("SUPABASE_SERVICE_ROLE_KEY is not set");
+    // R-053: the logged-in workflow specs (wNN-*.spec.ts) skip per role without these,
+    // so their skips count here exactly like the older auth-gated ones.
+    for (const name of missingEnvFor(E2E_ROLES)) {
+      if (!name.startsWith("E2E_")) continue; // the Supabase vars are reported above
+      missing.push(`${name} is not set — the logged-in workflow specs for that role skip`);
+    }
 
     expect(
       missing,
@@ -45,8 +52,8 @@ test.describe("suite health", () => {
         "here proves almost nothing. Missing:",
         ...missing.map((m) => `  · ${m}`),
         "",
-        "Fix: create production/.env.test (gitignored) with the two keys, then seed the",
-        "fixture tenants — e2e/README.md has the steps. Until then the only specs that",
+        "Fix: create production/.env.test (gitignored) with the keys and the E2E_*_PASSWORD",
+        "vars, then seed (e2e/README.md, \"Logged-in E2E\"). Until then the only specs that",
         "really execute are the no-auth ones: smoke, and the public buy page.",
         "",
       ].join("\n"),
