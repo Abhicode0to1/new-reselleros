@@ -114,6 +114,10 @@ export default defineConfig({
     {
       name: "mobile-chrome",
       use:  { ...devices["Pixel 7"] },
+      // R-053 workflow specs (e2e/wNN-*.spec.ts) create real test-tenant documents and
+      // drive desktop tables; running them a second time on a phone viewport would only
+      // double the test data. They run once, on desktop Chromium.
+      testIgnore: /[\\/]w\d\d-[^\\/]*\.spec\.ts$/,
     },
   ],
 
