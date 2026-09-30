@@ -3,8 +3,9 @@ import Link from "@/site/components/ui/SiteLink";
 import { LEGAL } from "@/site/lib/data/misc";
 
 /* Where each document lives. `/terms` is the ResellerOS software's own terms, so the
-   terms for what customers buy are at /terms-and-conditions (30 Sep 2026). */
-const HREF: Record<keyof typeof LEGAL, string> = { terms: "/terms-and-conditions", refund: "/refund", privacy: "/privacy" };
+   terms for what customers buy are at /terms-and-conditions (30 Sep 2026); likewise
+   /privacy is the software's, and the buyer's privacy policy is at /privacy-policy. */
+const HREF: Record<keyof typeof LEGAL, string> = { terms: "/terms-and-conditions", refund: "/refund", privacy: "/privacy-policy" };
 
 export function LegalDoc({ page }: { page: keyof typeof LEGAL }) {
   const doc = LEGAL[page];

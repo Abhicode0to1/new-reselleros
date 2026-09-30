@@ -72,7 +72,7 @@ function normalize(raw: string): string | null {
    self-governed and excluded from the app's screen registry, but app pages
    legitimately link to the site root (logo, "back to home"). The buyer's terms and
    refund policy are marketing pages too, linked from Online Orders (30 Sep 2026). */
-const EXTRA_ROUTES = new Set(["/", "/terms-and-conditions", "/refund"]);
+const EXTRA_ROUTES = new Set(["/", "/terms-and-conditions", "/refund", "/privacy-policy"]);
 
 function resolves(link: string): boolean {
   if (EXTRA_ROUTES.has(link)) return true;

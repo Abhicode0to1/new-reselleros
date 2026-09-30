@@ -100,7 +100,7 @@ export const LEGAL: Readonly<Record<"terms" | "privacy" | "refund", LegalPage>> 
   },
   privacy: {
     title: "Privacy policy",
-    updated: "Last updated 31 August 2026",
+    updated: "Last updated 30 September 2026",
     intro: "How Anutech Digital Pvt Ltd handles personal data, aligned to the Digital Personal Data Protection Act, 2023. Placeholder draft — have your counsel review before publishing.",
     blocks: [
       { h: "What we collect", p: "Contact details you give us (name, company, email, mobile), billing details including GSTIN, records of quotes, orders and invoices, support conversations, and basic technical logs needed to operate the service." },
@@ -110,7 +110,7 @@ export const LEGAL: Readonly<Record<"terms" | "privacy" | "refund", LegalPage>> 
       { h: "Sharing", p: "We share data only with the vendor whose product you bought, with payment processors to collect payment, and where compelled by law. Each processor is bound by contract to purpose limitation." },
       { h: "Retention", p: "Invoices and tax records are retained as long as GST law requires. Other personal data is deleted within ninety days of a valid deletion request or of the account closing, whichever is later." },
       { h: "Your rights", p: "You may ask for access to your data, correction of it, or its deletion, and you may nominate another person to exercise these rights on your behalf. Write to us and we respond inside thirty days." },
-      { h: "Grievances", p: "Write to the grievance officer at the address on the About page. If unresolved, you may escalate to the Data Protection Board of India." },
+      { h: "Grievances", p: "Write to support@anutech.in with \"Grievance\" in the subject. If it is not resolved, you may escalate to the Data Protection Board of India." },
     ],
   },
   refund: {

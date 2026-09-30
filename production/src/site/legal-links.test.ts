@@ -14,6 +14,8 @@ describe("buyer-facing legal documents", () => {
   it("each has a real page", () => {
     expect(read("src/app/(marketing)/terms-and-conditions/page.tsx")).toMatch(/<LegalDoc page="terms" \/>/);
     expect(read("src/app/(marketing)/refund/page.tsx")).toMatch(/<LegalDoc page="refund" \/>/);
+    expect(read("src/app/(marketing)/privacy-policy/page.tsx")).toMatch(/<LegalDoc page="privacy" \/>/);
+    expect(existsSync("src/app/(public)/privacy/page.tsx")).toBe(true); // the software's own privacy policy stays
     expect(existsSync("src/app/(public)/terms/page.tsx")).toBe(true); // the software's own terms stay
   });
 
@@ -27,6 +29,7 @@ describe("buyer-facing legal documents", () => {
     const c = read("src/site/components/chrome/Chrome.tsx");
     expect(c).toMatch(/\["Terms", "\/terms-and-conditions"\]/);
     expect(c).not.toMatch(/\["Terms", "\/terms"\]/);
+    expect(c).toMatch(/\["Privacy", "\/privacy-policy"\]/);
   });
 
   it("the documents do not promise what checkout cannot do", () => {
@@ -34,6 +37,7 @@ describe("buyer-facing legal documents", () => {
     expect(text).not.toMatch(/NEFT|RTGS/);           // checkout takes Razorpay only
     expect(text).not.toMatch(/eleven minutes/);      // an average nobody measures
     expect(text).not.toMatch(/Message us on WhatsApp/); // the site's WhatsApp number is a placeholder
+    expect(text).not.toMatch(/address on the About page/); // the About page names no grievance officer
   });
 });
 
@@ -42,12 +46,15 @@ describe("inside the ResellerOS app", () => {
     const c = read("src/app/(auth)/login/page.tsx");
     expect(c).toMatch(/href=\{"\/terms-and-conditions" as never\}/);
     expect(c).toMatch(/href=\{"\/refund" as never\}/);
+    expect(c).toMatch(/href=\{"\/privacy-policy" as never\}/);
   });
   it("the public pages' footer names both sets of terms apart", () => {
     const c = read("src/app/(public)/_components/public-shell.tsx");
     expect(c).toMatch(/"\/terms" as never\}\s+className="hover:text-ink">ResellerOS terms</);
     expect(c).toMatch(/"\/terms-and-conditions" as never\} className="hover:text-ink">Terms and conditions</);
     expect(c).toMatch(/"\/refund" as never\}\s+className="hover:text-ink">Refund policy</);
+    expect(c).toMatch(/"\/privacy" as never\} className="hover:text-ink">ResellerOS privacy</);
+    expect(c).toMatch(/"\/privacy-policy" as never\} className="hover:text-ink">Privacy policy</);
   });
   it("Online Orders shows staff what buyers agreed to", () => {
     const c = read("src/app/(app)/online-orders/page.tsx");

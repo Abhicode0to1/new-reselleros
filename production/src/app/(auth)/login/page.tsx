@@ -271,7 +271,7 @@ function LoginPageInner() {
         {" · "}
         <Link href={"/refund" as never} className="hover:text-ink hover:underline">Refund policy</Link>
         {" · "}
-        <Link href={"/privacy" as never} className="hover:text-ink hover:underline">Privacy</Link>
+        <Link href={"/privacy-policy" as never} className="hover:text-ink hover:underline">Privacy policy</Link>
       </p>
     </Card>
   );
