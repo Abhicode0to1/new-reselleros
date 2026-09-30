@@ -9,6 +9,7 @@ Pardeep ne 30 Sep 2026 ko tay kiya: testing ka zyadatar kaam machine/AI kare, 4 
 | Har push | CI: typecheck, unit tests, lint, build, migration order; SQL tests (RLS, paise) | `.github/workflows/ci.yml` | S44 mein SQL job + teeno dev branches jud rahe hain |
 | Har push + raat | E2E (Playwright) — neeche ke 15 workflows, test company par, logged-in | `production/e2e/` | ~70 auth tests skip hote hain (test users/secrets nahi) — R-053 |
 | Roz 10:00 (Mon–Fri) | AI QA routine `reselleros-qa`: test site ke pages + flows, fail → bug card, fix ke baad auto retest | `production/e2e/qa/run.mjs` | Chal raha hai (abhi sirf public + buy pages) |
+| Button dabane par (board "🧪 AI se testing karwao") | AI tester `reselleros-qa-now`: insaan ki tarah website kholta, click karta, form bharta, numbers milata hai; bug → page owner ke naam card (source ai-tester) | test site (public) + localhost:3001 (logged-in) | 30 Sep se |
 | Roz 09:00 | Error routine `reselleros-errors`: production ke Cloud Run ERROR logs → group karke owner ke naam card | scheduled task | 30 Sep se |
 | Har minute | Uptime check "ResellerOS live" + alerts | Cloud Monitoring | S9 |
 | Raat 23:30 | Auto-worker: Pardeep ke area ke code cards local branch par | scheduled task | Chal raha hai |
@@ -60,3 +61,4 @@ Wo Pardeep ko 1–3 sudhaar suggest karta hai; Pardeep "haan" bole to card banta
 
 ### Sudhaar log
 - 30 Sep 2026 — system shuru: error routine, weekly sudhaar routine, 15 workflows ki list, R-053 (auth E2E).
+- 30 Sep 2026 — board par "🧪 AI se testing karwao" button + routine reselleros-qa-now (har 15 min request dekhta hai). Production kabhi nahi; logged-in testing sirf local app (3001) par.
