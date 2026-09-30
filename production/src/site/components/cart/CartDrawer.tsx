@@ -10,6 +10,7 @@ import Link from "@/site/components/ui/SiteLink";
 import { useRouter } from "next/navigation";
 import { useCart } from "./CartProvider";
 import { rupee, cycleLabel, isSingleUnit, isTrialLine, singleUnitNote } from "@/site/lib/money";
+import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
 
 export function CartDrawer() {
   const cart = useCart();
@@ -17,6 +18,7 @@ export function CartDrawer() {
   if (!cart.drawerOpen || cart.lines.length === 0) return null;
 
   const t = cart.totals;
+  const hostingWarning = hostingLimitWarning(cart.lines);
   const cta =
     cart.lines.length === 1
       ? `Checkout · ${rupee(t.payable)}`
@@ -107,6 +109,11 @@ export function CartDrawer() {
           {t.recurring > 0 && (
             <div className="meta" style={{ margin: "6px 0 4px" }}>
               Then {rupee(t.recurring * 1.18)}/month from next month, GST included
+            </div>
+          )}
+          {hostingWarning && (
+            <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginTop: 10 }}>
+              {hostingWarning}
             </div>
           )}
           <button

@@ -10,11 +10,13 @@ import Link from "@/site/components/ui/SiteLink";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, cycleLabel, COUPONS, isSingleUnit, isTrialLine, singleUnitNote } from "@/site/lib/money";
+import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
 
 export default function CartPage() {
   const cart = useCart();
   const router = useRouter();
   const t = cart.totals;
+  const hostingWarning = hostingLimitWarning(cart.lines);
   const code = cart.coupon.trim().toUpperCase();
   const couponValid = code in COUPONS;
 
@@ -102,6 +104,11 @@ export default function CartPage() {
           {t.recurring > 0 && (
             <div className="meta" style={{ marginBottom: 10 }}>
               Then {rupee(t.recurring * 1.18)}/month from next month, GST included
+            </div>
+          )}
+          {hostingWarning && (
+            <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+              {hostingWarning}
             </div>
           )}
           <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => router.push("/checkout" as never)}>

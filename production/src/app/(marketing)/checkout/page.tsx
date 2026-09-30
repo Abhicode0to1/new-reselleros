@@ -16,13 +16,18 @@ import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, cycleLabel } from "@/site/lib/money";
 import { missingCheckoutDetails, missingDetailsMessage } from "@/site/lib/checkout-details";
 import { BUY_A_DOMAIN_HREF } from "@/lib/checkout/hosting-domain";
+import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
+import { razorpayContact } from "@/lib/checkout/razorpay-contact";
 import { BusyPanel } from "@/components/ui/busy-panel";
 
+/* 30 Sep 2026: the choice was never sent anywhere, so every option opened the same Razorpay
+   window, and "Bank transfer — NEFT/RTGS, activated on credit" was not a path this checkout
+   has. Each option now opens Razorpay on that method (`prefill.method`); the customer can
+   still switch inside Razorpay's window. */
 const METHODS = [
-  { label: "UPI", note: "GPay, PhonePe, Paytm — instant" },
-  { label: "Netbanking", note: "All major Indian banks" },
-  { label: "Card", note: "Visa, Mastercard, RuPay" },
-  { label: "Bank transfer", note: "NEFT/RTGS — activated on credit" },
+  { label: "UPI", note: "GPay, PhonePe, Paytm or any UPI app", razorpay: "upi" },
+  { label: "Netbanking", note: "All major Indian banks", razorpay: "netbanking" },
+  { label: "Card", note: "Visa, Mastercard, RuPay", razorpay: "card" },
 ] as const;
 
 const RAZORPAY_SRC = "https://checkout.razorpay.com/v1/checkout.js";
@@ -96,6 +101,8 @@ export default function CheckoutPage() {
   const hasTrial = cart.lines.some((l) => (l.sku || "").startsWith("hosting-trial:"));
   const isTrialCart = hasTrial && cart.lines.length === 1;
   const trialMixed = hasTrial && cart.lines.length > 1;
+  /* More than one hosting account in the cart: the server refuses it at Pay, so say it here. */
+  const hostingWarning = hostingLimitWarning(cart.lines);
 
   // Remember the buyer's details across a refresh so nothing has to be re-typed.
   useEffect(() => {
@@ -148,6 +155,7 @@ export default function CheckoutPage() {
   /** Go on only when the details are complete; otherwise show what is missing. */
   function proceed(next: () => void) {
     if (trialMixed) return;
+    if (hostingWarning) return; // the amber alert above the button says why and links back to the cart
     if (!detailsOk) { setShowMissing(true); return; }
     next();
   }
@@ -268,7 +276,10 @@ export default function CheckoutPage() {
         name: "ANUTECH DIGITAL PVT LTD",
         description: `Order ${order.quoteId ?? ""}`,
         order_id: order.orderId,
-        prefill: { name, email, contact: phone },
+        prefill: {
+          name, email, contact: razorpayContact(phone),
+          method: METHODS.find((m) => m.label === method)?.razorpay,
+        },
         notes: { quoteId: order.quoteId ?? "", domain: hasHosting ? domain.trim() : "" },
         theme: { color: "#C2410C" },
         handler: () => {
@@ -349,6 +360,12 @@ export default function CheckoutPage() {
                 <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
                   The free trial checks out on its own. Remove the other items to start the trial now, or
                   remove the trial to pay for them.{" "}
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => router.push("/cart" as never)}>Back to cart</button>
+                </div>
+              )}
+              {hostingWarning && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  {hostingWarning}{" "}
                   <button type="button" className="btn btn-outline btn-sm" onClick={() => router.push("/cart" as never)}>Back to cart</button>
                 </div>
               )}
