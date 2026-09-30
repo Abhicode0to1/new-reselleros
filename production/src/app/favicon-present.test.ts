@@ -19,3 +19,15 @@ describe("favicon", () => {
     });
   }
 });
+
+describe("install icons (manifest)", () => {
+  it("192 and 512 are the logo as real PNGs of that size, not the old drawn \"R\" routes", () => {
+    for (const [f, size] of [["icon-192.png", 192], ["icon-512.png", 512]] as const) {
+      const b = readFileSync(join(process.cwd(), "public", f));
+      expect([...b.subarray(0, 4)], f).toEqual(PNG);
+      // PNG IHDR: width and height are big-endian at bytes 16 and 20.
+      expect([b.readUInt32BE(16), b.readUInt32BE(20)], f).toEqual([size, size]);
+      expect(existsSync(join(process.cwd(), "src/app", f, "route.tsx")), `${f} route would shadow the file`).toBe(false);
+    }
+  });
+});
