@@ -40,6 +40,9 @@ import { istToday } from "@/lib/dates/ist";
 import { UNASSIGNED } from "@/lib/leads/list-selectors";
 import { useTeamMembers } from "@/lib/queries/team";
 
+/** R-056: why the Kanban button does nothing on a phone. */
+export const KANBAN_MOBILE_HINT = "Kanban badi screen par milta hai";
+
 type TeamMember = NonNullable<ReturnType<typeof useTeamTree>["data"]>[number];
 type Priority = "low" | "medium" | "high";
 
@@ -66,6 +69,10 @@ export interface LeadsToolbarProps {
   selectFolder: (f: SalesFolder | "all") => void;
   effectiveView: "kanban" | "list";
   setView: (v: "kanban" | "list") => void;
+  /** R-056: on a phone the page always shows the list (the board needs width), so the
+      Kanban button is shown but unavailable — tapping it explains why instead of doing
+      nothing. */
+  isMobile?: boolean;
   activeFilterCount: number;
   filterStages: StageMeta[];
   stageFilter: Lead["stage"][];
@@ -87,7 +94,7 @@ export interface LeadsToolbarProps {
 export function LeadsToolbar({
   pool, leadMeMember, leadTeam, leadTeamMode, setLeadTeamMode, search, setSearch, viewCounts,
   everythingCount, currentUser, duplicateCountForTab, junkCount, junkSuspectCount, smartView,
-  selectSmartView, folderRows, folder, selectFolder, effectiveView, setView, activeFilterCount,
+  selectSmartView, folderRows, folder, selectFolder, effectiveView, setView, isMobile = false, activeFilterCount,
   filterStages, stageFilter, setStageFilter, priorityFilter, setPriorityFilter, ownerFilter, setOwnerFilter, isSales, kpiOpen,
   setKpiOpen, setCsvImportOpen, setCampaignOpen, setGoogleImportOpen, setShareOpen,
 }: LeadsToolbarProps) {
@@ -160,13 +167,27 @@ export function LeadsToolbar({
         <div className="inline-flex rounded-md border border-hairline overflow-hidden">
           <button
             type="button"
-            onClick={() => setView("kanban")}
+            onClick={() => {
+              /* R-056: the page forces the list on mobile, so setView("kanban") here was a
+                 silent no-op. aria-disabled (not `disabled`) keeps it focusable and tappable
+                 — a phone has no hover, so the tap is where the reason gets said. */
+              if (isMobile) {
+                toast.info(KANBAN_MOBILE_HINT);
+                return;
+              }
+              setView("kanban");
+            }}
             aria-pressed={effectiveView === "kanban"}
+            aria-disabled={isMobile || undefined}
             className={cn(
-              "px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors cursor-pointer",
-              effectiveView === "kanban" ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2"
+              "px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors",
+              isMobile
+                ? "bg-paper text-ink-3 opacity-60 cursor-not-allowed"
+                : effectiveView === "kanban"
+                  ? "bg-ink text-paper cursor-pointer"
+                  : "bg-paper text-ink-2 hover:bg-paper-2 cursor-pointer"
             )}
-            title="Kanban view — best for stage flow"
+            title={isMobile ? KANBAN_MOBILE_HINT : "Kanban view — best for stage flow"}
           >
             <Icon name="layout" size={13} /> Kanban
           </button>
