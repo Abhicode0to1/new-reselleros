@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { rupee, formatDate } from "@/lib/utils";
+import { newIdempotencyKey } from "@/lib/ops/idempotency-key";
 import type { Subscription } from "@/lib/supabase/database.types";
 
 interface Props {
@@ -59,6 +60,20 @@ export default function AddSeatsDialog({ sub, open, onOpenChange, initialSeats }
 
   const additionalSeats = Math.max(0, Math.min(5000, Math.round(Number(seatsStr) || 0)));
 
+  /* ── R-060: one key per submit INTENT ──────────────────────────────────────
+     `disabled={submitting}` below is still there and still useful, but it is a UI
+     convenience — it loses a double-click that beats React's state update, and it means
+     nothing to a second tab or a retried request. The server now refuses a repeat of the
+     same key; this is where the key comes from.
+
+     Cleared when the dialog opens, when it is reopened for a different subscription, and
+     when the seat count changes — each of those is a genuinely different intent that
+     deserves its own add. NOT cleared on an error: the server releases the key when the
+     attempt wrote nothing, so pressing the button again after fixing the cause is a
+     retry of the same intent, not a new one. */
+  const keyRef = React.useRef<string | null>(null);
+  React.useEffect(() => { keyRef.current = null; }, [open, sub.id, additionalSeats]);
+
   // Pro-rata math (client-side preview — server is source of truth)
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const renewal = sub.renewal_date ? new Date(sub.renewal_date) : null;
@@ -85,12 +100,13 @@ export default function AddSeatsDialog({ sub, open, onOpenChange, initialSeats }
       toast.error("Add at least 1 seat");
       return;
     }
+    if (!keyRef.current) keyRef.current = newIdempotencyKey();
     setSubmitting(true);
     try {
       const res  = await fetch(`/api/subscriptions/${sub.id}/add-seats`, {
         method:  "POST",
         headers: { "content-type": "application/json" },
-        body:    JSON.stringify({ additional_seats: additionalSeats }),
+        body:    JSON.stringify({ additional_seats: additionalSeats, idempotency_key: keyRef.current }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -98,9 +114,14 @@ export default function AddSeatsDialog({ sub, open, onOpenChange, initialSeats }
         return;
       }
       toast.success(
-        `+${additionalSeats} seats added · Quote ${json.quoteId} (${rupee(json.amount)})${
-          json.poId ? ` · PO ${json.poId} drafted` : ""
-        }`,
+        /* A replay says so. Claiming "+N seats added" a second time would tell the
+           operator two expansions happened when one did — the exact confusion the key
+           exists to prevent, moved from the database into their head. */
+        json.replayed
+          ? `Already added · Quote ${json.quoteId} (${rupee(json.amount)}) — opening it now`
+          : `+${additionalSeats} seats added · Quote ${json.quoteId} (${rupee(json.amount)})${
+              json.poId ? ` · PO ${json.poId} drafted` : ""
+            }`,
       );
       onOpenChange(false);
       router.push(`/quotes/${json.quoteId}`);

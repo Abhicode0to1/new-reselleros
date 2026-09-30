@@ -1141,6 +1141,12 @@ type ColumnPatches = {
   attendance_reminder_log: {
     kind: "check_in" | "check_out";
   };
+  /* R-060. Text in the DB (same reasoning as invoice_dunning_log.dunning_step), so the
+     set of values lives here where a typo is a compile error rather than a claim that
+     silently never replays. */
+  seat_increase_claims: {
+    status: "in_progress" | "done" | "failed";
+  };
 };
 
 /**

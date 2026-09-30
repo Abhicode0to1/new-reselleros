@@ -8649,6 +8649,73 @@ export type Database = {
         }
         Relationships: []
       }
+      seat_increase_claims: {
+        Row: {
+          additional_seats: number
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          idempotency_key: string
+          requested_by: string | null
+          result: Json | null
+          status: string
+          subscription_id: string
+          tenant_id: string
+        }
+        Insert: {
+          additional_seats: number
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          idempotency_key: string
+          requested_by?: string | null
+          result?: Json | null
+          status?: string
+          subscription_id: string
+          tenant_id: string
+        }
+        Update: {
+          additional_seats?: number
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string
+          requested_by?: string | null
+          result?: Json | null
+          status?: string
+          subscription_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seat_increase_claims_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seat_increase_claims_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seat_increase_claims_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seat_requests: {
         Row: {
           created_at: string
@@ -11905,6 +11972,7 @@ export type Database = {
       create_tenant_backup: { Args: { p_label?: string }; Returns: Json }
       current_customer_id: { Args: never; Returns: string }
       current_tenant_id: { Args: never; Returns: string }
+      current_user_has_role: { Args: { p_roles: string[] }; Returns: boolean }
       current_user_is_owner: { Args: never; Returns: boolean }
       default_doc_prefix: { Args: { p_doc_type: string }; Returns: string }
       delete_bank_account: {
@@ -12088,6 +12156,7 @@ export type Database = {
         Returns: string[]
       }
       get_tenant_backup: { Args: { p_id: string }; Returns: Json }
+      guard_backup_owner_only: { Args: never; Returns: undefined }
       hierarchy_sees_all: { Args: never; Returns: boolean }
       import_indiamart_lead: {
         Args: {
@@ -12126,6 +12195,7 @@ export type Database = {
         }
         Returns: Json
       }
+      ist_today: { Args: never; Returns: string }
       lead_counts: { Args: { p_filters?: Json }; Returns: Json }
       lead_looks_like_junk: {
         Args: {
@@ -12226,7 +12296,7 @@ export type Database = {
       nav_badges: { Args: { p_approval_tiers?: string[] }; Returns: Json }
       next_customer_number: { Args: { p_tenant: string }; Returns: string }
       next_document_number: {
-        Args: { p_doc_type: string; p_tenant_id?: string }
+        Args: { p_doc_type: string; p_on?: string; p_tenant_id?: string }
         Returns: string
       }
       pay_referral_commission: {

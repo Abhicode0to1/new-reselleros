@@ -31,6 +31,10 @@ import { useDebitNotesByInvoice } from "@/lib/queries/debit-notes";
 import { ReceiptVoucherDialog } from "@/components/features/quotes/receipt-voucher-dialog";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { supplierIdentity, supplierIdentityMessage } from "@/lib/invoices/supplier-identity";
+/* R-060. `status = 'overdue'` has no writer anywhere in the product, so the Overdue tab
+   and its KPI were permanently empty while invoices ran months late. Derived from
+   due_date instead — see the header of lib/invoices/overdue.ts for why not a cron. */
+import { invoiceIsOverdue, invoiceOverdueDays, invoiceBucket } from "@/lib/invoices/overdue";
 import { Icon } from "@/components/ui/icon";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -206,9 +210,13 @@ function InvoicesPageInner() {
   const counts = React.useMemo(() => {
     const map: Record<string, number> = { all: viewInvoices.length, partial: 0, pending_bare: 0 };
     for (const inv of viewInvoices) {
-      map[inv.status] = (map[inv.status] ?? 0) + 1;
+      /* R-060: bucket, not raw status. An unpaid invoice past its due date counts as
+         Overdue and leaves Pending/Partial — exactly where it would have been if the
+         cron this replaces had written the status. One invoice, one tab. */
+      const bucket = invoiceBucket(inv);
+      map[bucket] = (map[bucket] ?? 0) + 1;
       const hasAdv = Array.isArray(inv.adjusted_advances) && inv.adjusted_advances.length > 0;
-      if (inv.status === "pending") {
+      if (bucket === "pending") {
         if (hasAdv) map.partial += 1;
         else        map.pending_bare += 1;
       }
@@ -231,10 +239,11 @@ function InvoicesPageInner() {
   const rows = dateFilteredInvoices.filter((i) => {
     // Status tab
     if (tab !== "all") {
-      const hasAdv = Array.isArray(i.adjusted_advances) && i.adjusted_advances.length > 0;
-      if (tab === "partial")      { if (!(i.status === "pending" && hasAdv)) return false; }
-      else if (tab === "pending") { if (!(i.status === "pending" && !hasAdv)) return false; }
-      else if (i.status !== tab)  { return false; }
+      const hasAdv  = Array.isArray(i.adjusted_advances) && i.adjusted_advances.length > 0;
+      const bucket  = invoiceBucket(i);   // R-060 — same function the counts use
+      if (tab === "partial")      { if (!(bucket === "pending" && hasAdv)) return false; }
+      else if (tab === "pending") { if (!(bucket === "pending" && !hasAdv)) return false; }
+      else if (bucket !== tab)    { return false; }
     }
     // Search
     if (search.trim()) {
@@ -242,7 +251,8 @@ function InvoicesPageInner() {
       const hit =
         i.id.toLowerCase().includes(s) ||
         (i.customer_name?.toLowerCase().includes(s) ?? false) ||
-        i.status.toLowerCase().includes(s);
+        // The bucket, so typing "overdue" finds the invoices the tab shows (R-060).
+        invoiceBucket(i).toLowerCase().includes(s);
       if (!hit) return false;
     }
     return true;
@@ -253,7 +263,7 @@ function InvoicesPageInner() {
     .filter((i) => i.status !== "paid")
     .reduce((s, i) => s + (i.net_payable ?? i.amount), 0);
   const overdueTotal = (invoices ?? [])
-    .filter((i) => i.status === "overdue")
+    .filter((i) => invoiceIsOverdue(i))          // R-060 — was `status === "overdue"`, always ₹0
     .reduce((s, i) => s + (i.net_payable ?? i.amount), 0);
   const overdueCount = counts.overdue ?? 0;
   const collectedMTD = (invoices ?? [])
@@ -856,18 +866,19 @@ function MobileInvoiceCard({ inv }: { inv: Invoice; isProject?: boolean }) {
             {inv.created_at ? formatDate(inv.created_at) : "—"}
           </span>
           <div className="flex items-center gap-1.5">
+            {/* Mobile card. Same derived bucket as the desktop row, or the phone and the
+                laptop would name the same invoice differently (R-060). */}
             <Badge
               kind={
-                inv.status === "paid"    ? "success" :
-                inv.status === "overdue" ? "danger"  :
-                inv.status === "pending" ? "warning" :
-                inv.status === "void"    ? "muted"   :
-                                           "muted"
+                invoiceBucket(inv) === "paid"    ? "success" :
+                invoiceBucket(inv) === "overdue" ? "danger"  :
+                invoiceBucket(inv) === "pending" ? "warning" :
+                                                   "muted"
               }
               size="sm"
               dot
             >
-              {inv.status}
+              {invoiceBucket(inv)}
             </Badge>
           </div>
         </div>
@@ -987,12 +998,18 @@ function InvoiceRow({
           // (paid_amount — project invoices' milestone receipts, migration 0184).
           const hasAdvancesApplied = Array.isArray(inv.adjusted_advances) && inv.adjusted_advances.length > 0;
           const partial = (hasAdvancesApplied || (inv.paid_amount ?? 0) > 0) && inv.status !== "paid";
+          /* R-060. Both the state and the day count are derived. `inv.overdue_days` is a
+             column with `default 0` and no writer anywhere, so the old branch could only
+             ever have rendered "Overdue 0d" — and never did, because nothing set the
+             status that reached it either. */
+          const bucket = invoiceBucket(inv);
+          const lateBy = invoiceOverdueDays(inv);
           const badge =
-              inv.status === "paid"    ? <Badge kind="success" dot>Paid</Badge>
-            : inv.status === "pending" ? (partial ? <Badge kind="warning" dot>Partial</Badge> : <Badge kind="warning" dot>Pending</Badge>)
-            : inv.status === "overdue" ? (partial ? <Badge kind="danger" dot>Overdue · Partial · {inv.overdue_days}d</Badge> : <Badge kind="danger" dot>Overdue {inv.overdue_days}d</Badge>)
-            : inv.status === "draft"   ? <Badge kind="muted">Draft</Badge>
-            : inv.status === "void"    ? <Badge kind="muted">Void</Badge>
+              bucket === "paid"    ? <Badge kind="success" dot>Paid</Badge>
+            : bucket === "pending" ? (partial ? <Badge kind="warning" dot>Partial</Badge> : <Badge kind="warning" dot>Pending</Badge>)
+            : bucket === "overdue" ? (partial ? <Badge kind="danger" dot>Overdue · Partial · {lateBy}d</Badge> : <Badge kind="danger" dot>Overdue {lateBy}d</Badge>)
+            : bucket === "draft"   ? <Badge kind="muted">Draft</Badge>
+            : bucket === "void"    ? <Badge kind="muted">Void</Badge>
             : null;
           // Draft/void have no receipts — badge stays static. Others toggle the
           // payment-receipts accordion on click.
@@ -1013,7 +1030,11 @@ function InvoiceRow({
       </td>
       <td className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
         {(() => {
-          const moneyDue = inv.status === "pending" || inv.status === "overdue";
+          /* Same bucket as the badge above. `|| status === "overdue"` used to sit here as
+             a second condition that could never be true — every overdue invoice is stored
+             as `pending` — so it read as coverage that was not there (L112). */
+          const due = invoiceBucket(inv);
+          const moneyDue = due === "pending" || due === "overdue";
           return (
         <div className="flex gap-1 items-center justify-end">
           {/* One contextual primary action keeps the column tight (no h-scroll).
