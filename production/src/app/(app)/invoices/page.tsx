@@ -35,6 +35,9 @@ import { supplierIdentity, supplierIdentityMessage } from "@/lib/invoices/suppli
    and its KPI were permanently empty while invoices ran months late. Derived from
    due_date instead — see the header of lib/invoices/overdue.ts for why not a cron. */
 import { invoiceIsOverdue, invoiceOverdueDays, invoiceBucket } from "@/lib/invoices/overdue";
+/* R-066. The GST breakdown comes from one place, shared with the server PDF builder —
+   see the header of lib/invoices/display-amounts.ts. */
+import { invoiceDisplayAmounts } from "@/lib/invoices/display-amounts";
 import { Icon } from "@/components/ui/icon";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -1245,11 +1248,17 @@ function InvoicePreviewContainer({
   const supplier = identity.ok ? identity.supplier : null;
 
   const lineItems = quote?.line_items ?? [];
-  const subtotal  = quote?.subtotal ?? invoice.amount;
-  const discount  = Math.round(subtotal * ((quote?.discount_pct ?? 0) / 100));
-  const taxable   = subtotal - discount;
-  const taxRate   = quote?.tax_rate ?? 18;
-  const tax       = Math.round(taxable * (taxRate / 100));
+  /* R-066. This used to be `subtotal = quote?.subtotal ?? invoice.amount` and then 18%
+     on top — but `invoice.amount` is the GST-INCLUSIVE gross, so a quote-less invoice
+     was taxed on tax: ₹5,90,000 showed "Tax Total ₹1,06,200" instead of ₹90,000.
+     Quote-less is the NORMAL case for project-milestone and subscription-instalment
+     invoices, and `quote` is also undefined on every first render while the query is in
+     flight, so the wrong figure flashed on quote-backed invoices too.
+
+     One call, and it is the same one the server PDF builder makes — these four numbers
+     go straight into TaxInvoiceDialog and both PDF buttons below, so the file a customer
+     receives was wrong in the same way. */
+  const { subtotal, discount, taxable, taxRate, tax } = invoiceDisplayAmounts(invoice, quote);
   const total     = quote?.amount ?? invoice.amount;
 
   /* `supplier` is null until the identity is complete, so this cannot silently pick a
