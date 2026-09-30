@@ -29,49 +29,25 @@ import { splitItc, itcEligibility, type ItcSplit } from "@/lib/gst/itc";
 import { gstPaidForPeriods } from "@/lib/accounting/tax-payments";
 import { useTaxPayments } from "@/lib/queries/tax-payments";
 import { rupee, formatDate } from "@/lib/utils";
-import { buildGstr1, gstr1Csv, gstr1Json, gstSplit, hsnLines, GSTR1_HEADERS } from "@/lib/gst/gstr1";
+import { buildGstr1, buildAdvances, docHeads, gstr1Csv, gstr1Json, gstr3bClass, hsnLines, isExportDoc, GSTR1_HEADERS, type Advance } from "@/lib/gst/gstr1";
+import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { computeGstr3b, gstr3bRows, type Heads } from "@/lib/gst/gstr3b";
 import { parseGstr2b, reconcile2b, type Reconciliation } from "@/lib/gst/gstr2b";
 import { createClient } from "@/lib/supabase/client";
 import { Term } from "@/components/shared/term";
-import { utcDateISO } from "@/lib/dates/ist";
+import { toIstDate } from "@/lib/dates/ist";
+import { gstLastMonth, gstThisMonth, gstThisQuarter, istRangeUtc, type GstPeriod } from "@/lib/gst/periods";
 
 // ────────────────────────────────────────────────────────────────
 // Date range helpers — month default (most common GST filing cadence)
 // ────────────────────────────────────────────────────────────────
 
-function istToday(): Date {
-  return new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
-}
-function yyyymmdd(d: Date): string {
-  return utcDateISO(d);
-}
-
-interface DateRange { from: string; to: string; label: string }
-
-function thisMonth(): DateRange {
-  const t = istToday();
-  const first = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1));
-  const last  = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0));
-  const label = first.toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
-  return { from: yyyymmdd(first), to: yyyymmdd(last), label };
-}
-
-function lastMonth(): DateRange {
-  const t = istToday();
-  const first = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - 1, 1));
-  const last  = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 0));
-  const label = first.toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
-  return { from: yyyymmdd(first), to: yyyymmdd(last), label };
-}
-
-function thisQuarter(): DateRange {
-  const t = istToday();
-  const qStart = Math.floor(t.getUTCMonth() / 3) * 3;
-  const first  = new Date(Date.UTC(t.getUTCFullYear(), qStart, 1));
-  const last   = new Date(Date.UTC(t.getUTCFullYear(), qStart + 3, 0));
-  return { from: yyyymmdd(first), to: yyyymmdd(last), label: `Q${(qStart / 3) + 1} ${t.getUTCFullYear()}` };
-}
+/* GST periods are IST calendar months: lib/gst/periods.ts (WC-gst, 30 Sep 2026 — was a
+   hand-rolled +5.5h copy here). */
+type DateRange = GstPeriod;
+const thisMonth = () => gstThisMonth();
+const lastMonth = () => gstLastMonth();
+const thisQuarter = () => gstThisQuarter();
 
 // ────────────────────────────────────────────────────────────────
 // GST aggregation hook
@@ -84,6 +60,8 @@ interface OutputRow {
   customerGstin: string | null;
   customerStateCode: string | null;  // buyer's GST state code (place of supply)
   customerState:     string | null;
+  /** Customer's country — outside India with no GSTIN = export (GSTR-1 EXP, 3B 3.1(b)). */
+  customerCountry:   string | null;
   amount:       number;        // GST-inclusive
   taxableValue: number;        // persisted (migration 0116), else reverse-derived
   gst:          number;        // total GST (persisted, else reverse-derived)
@@ -130,6 +108,8 @@ interface GstReport {
   sellerState:     string | null;
   /** Company GSTIN from Settings — the Portal JSON is refused without it. */
   sellerGstin:     string | null;
+  /** Receipt-voucher advances relevant to GSTR-1 Table 11A / 11B (lib/gst/gstr1.ts buildAdvances). */
+  advances:        Advance[];
 }
 
 function useGstReport(range: DateRange) {
@@ -141,7 +121,7 @@ function useGstReport(range: DateRange) {
       // ── Output: invoices issued in the period ─────────────────────
       const { data: invoices, error: invErr } = await supabase
         .from("invoices")
-        .select("id, amount, invoice_date, customer_name, customer_id, status, taxable_value, tax_amount, tax_rate, inter_state, line_items")
+        .select("id, amount, invoice_date, customer_name, customer_id, status, taxable_value, tax_amount, tax_rate, inter_state, line_items, adjusted_advances")
         .gte("invoice_date", range.from)
         .lte("invoice_date", range.to)
         .in("status", ["pending", "paid", "overdue"]);
@@ -158,19 +138,42 @@ function useGstReport(range: DateRange) {
           .gte("debit_date", range.from).lte("debit_date", range.to),
       ]);
 
-      // Pull GSTIN from customers table (invoices + notes)
+      /* ── Advances received in the period (GSTR-1 Table 11A) ─────────────────
+         Every quote payment gets a receipt voucher; it is an advance until the quote's
+         invoice is issued. received_at is a timestamp, so the period is the IST day range. */
+      const { data: pays } = await supabase
+        .from("payments")
+        .select("id, receipt_voucher_no, amount, received_at, quote_id, customer_id")
+        .eq("status", "received")
+        .gte("received_at", istRangeUtc(range.from, range.to).fromUtc)
+        .lt("received_at", istRangeUtc(range.from, range.to).toUtcExclusive);
+      const payQuoteIds = Array.from(new Set((pays ?? []).map((p) => p.quote_id).filter((x): x is string => !!x)));
+      const quoteById = new Map<string, { invoiceId: string | null; rate: number | null; customerId: string | null }>();
+      const invDateById = new Map<string, string>();
+      if (payQuoteIds.length) {
+        const { data: qs } = await supabase.from("quotes").select("id, invoice_id, tax_rate, customer_id").in("id", payQuoteIds);
+        for (const q of qs ?? []) quoteById.set(q.id, { invoiceId: q.invoice_id ?? null, rate: q.tax_rate ?? null, customerId: q.customer_id ?? null });
+        const invIds = Array.from(new Set((qs ?? []).map((q) => q.invoice_id).filter((x): x is string => !!x)));
+        if (invIds.length) {
+          const { data: qInv } = await supabase.from("invoices").select("id, invoice_date").in("id", invIds);
+          for (const iv of qInv ?? []) invDateById.set(iv.id, iv.invoice_date);
+        }
+      }
+
+      // Pull GSTIN / state / country from customers table (invoices + notes + advances)
       const customerIds = Array.from(new Set([
         ...(invoices ?? []).map((i) => i.customer_id),
         ...(creditNotes ?? []).map((n) => n.customer_id),
         ...(debitNotes ?? []).map((n) => n.customer_id),
+        ...(pays ?? []).map((p) => p.customer_id ?? (p.quote_id ? quoteById.get(p.quote_id)?.customerId : null)),
       ].filter((x): x is string => !!x)));
-      const custById = new Map<string, { gstin: string | null; stateCode: string | null; state: string | null }>();
+      const custById = new Map<string, { gstin: string | null; stateCode: string | null; state: string | null; country: string | null }>();
       if (customerIds.length > 0) {
         const { data: customers } = await supabase
           .from("customers")
-          .select("id, gstin, state_code, state")
+          .select("id, gstin, state_code, state, country")
           .in("id", customerIds);
-        for (const c of customers ?? []) custById.set(c.id, { gstin: c.gstin ?? null, stateCode: c.state_code ?? null, state: c.state ?? null });
+        for (const c of customers ?? []) custById.set(c.id, { gstin: c.gstin ?? null, stateCode: c.state_code ?? null, state: c.state ?? null, country: c.country ?? null });
       }
       const custOf = (id: string | null | undefined) => (id ? custById.get(id) : undefined);
 
@@ -208,6 +211,7 @@ function useGstReport(range: DateRange) {
           customerGstin: c?.gstin ?? null,
           customerStateCode: c?.stateCode ?? null,
           customerState:     c?.state ?? null,
+          customerCountry:   c?.country ?? null,
           amount,
           taxableValue,
           gst,
@@ -225,7 +229,7 @@ function useGstReport(range: DateRange) {
         const c = custOf(n.customer_id);
         outputRows.push({
           invoiceId: n.id, invoiceDate: n.credit_date, customerName: n.customer_name ?? "—",
-          customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null,
+          customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null, customerCountry: c?.country ?? null,
           amount: -(n.amount ?? 0), taxableValue: -(n.taxable_value ?? 0), gst: -(n.tax_amount ?? 0),
           taxRate: n.tax_rate ?? 18, interState: n.inter_state ?? false, docType: "credit_note",
         });
@@ -234,12 +238,42 @@ function useGstReport(range: DateRange) {
         const c = custOf(n.customer_id);
         outputRows.push({
           invoiceId: n.id, invoiceDate: n.debit_date, customerName: n.customer_name ?? "—",
-          customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null,
+          customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null, customerCountry: c?.country ?? null,
           amount: n.amount ?? 0, taxableValue: n.taxable_value ?? 0, gst: n.tax_amount ?? 0,
           taxRate: n.tax_rate ?? 18, interState: n.inter_state ?? false, docType: "debit_note",
         });
       }
       outputRows.sort((a, b) => b.invoiceDate.localeCompare(a.invoiceDate));
+
+      /* Advances for 11A (received this period, from payments) and 11B (received earlier,
+         adjusted on an invoice dated this period, from the invoice's frozen
+         adjusted_advances snapshot). buildAdvances decides which table each lands in. */
+      const advances: Advance[] = [];
+      for (const p of pays ?? []) {
+        const q = p.quote_id ? quoteById.get(p.quote_id) : undefined;
+        const c = custOf(p.customer_id ?? q?.customerId);
+        advances.push({
+          paymentId: p.id, voucherNo: p.receipt_voucher_no ?? null,
+          receivedDate: toIstDate(p.received_at),
+          adjustedOn: q?.invoiceId ? invDateById.get(q.invoiceId) ?? null : null,
+          gross: p.amount ?? 0, rate: q?.rate ?? 18,
+          interState: isInterStateSupply(c?.stateCode ?? null, sellerStateCode, { customerGstin: c?.gstin ?? null, sellerGstin }),
+          customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null, customerCountry: c?.country ?? null,
+        });
+      }
+      for (const i of invoices ?? []) {
+        const c = custOf(i.customer_id);
+        for (const a of Array.isArray(i.adjusted_advances) ? i.adjusted_advances : []) {
+          if (!a?.received_at) continue;
+          const receivedDate = toIstDate(a.received_at);
+          if (receivedDate >= range.from) continue;   // same-period advance: already neither 11A nor 11B
+          advances.push({
+            paymentId: a.payment_id, voucherNo: a.voucher_no ?? null, receivedDate, adjustedOn: i.invoice_date,
+            gross: a.amount ?? 0, rate: i.tax_rate ?? 18, interState: i.inter_state ?? false,
+            customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null, customerCountry: c?.country ?? null,
+          });
+        }
+      }
 
       // ── Input: vendor bills + GST-paying expenses ─────────────────
       const { data: bills } = await supabase
@@ -344,7 +378,7 @@ function useGstReport(range: DateRange) {
       const inputGST     = inputRows.reduce((s, r) => s + r.gst, 0);
       const netLiability = outputGST - inputGST;
 
-      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability, blockedItc, blocked17Heads, rcmRows, sellerStateCode, sellerState, sellerGstin };
+      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability, blockedItc, blocked17Heads, rcmRows, sellerStateCode, sellerState, sellerGstin, advances };
     },
   });
 }
@@ -354,7 +388,7 @@ function useGstReport(range: DateRange) {
 // their own tables with positive values, the way the portal wants them.
 const toGstr1Doc = (r: OutputRow) => ({
   id: r.invoiceId, date: r.invoiceDate, docType: r.docType, customerName: r.customerName,
-  customerGstin: r.customerGstin, customerStateCode: r.customerStateCode, customerState: r.customerState,
+  customerGstin: r.customerGstin, customerStateCode: r.customerStateCode, customerState: r.customerState, customerCountry: r.customerCountry,
   amount: r.amount, taxableValue: r.taxableValue, gst: r.gst, taxRate: r.taxRate, interState: r.interState, lines: r.lines,
 });
 
@@ -434,10 +468,11 @@ export default function GstReportPage() {
       ["Invoice #", "Invoice date", "Customer", "Customer GSTIN", "Place of supply",
        "Taxable value", "Rate %", "CGST", "SGST", "IGST", "Total GST", "Invoice total"],
       data.outputRows.map((r) => {
-        const s = gstSplit(r);
+        const s = docHeads(r);
         return [
           r.invoiceId, r.invoiceDate, r.customerName, r.customerGstin ?? "",
-          r.interState ? "Inter-state (IGST)" : "Intra-state (CGST+SGST)",
+          isExportDoc(r)
+            ? "Export (zero-rated)" : r.interState ? "Inter-state (IGST)" : "Intra-state (CGST+SGST)",
           r.taxableValue, r.taxRate, s.cgst, s.sgst, s.igst, r.gst, r.amount,
         ];
       }),
@@ -446,11 +481,13 @@ export default function GstReportPage() {
 
   function exportGstr1() {
     if (!data) return;
-    const secs = buildGstr1(data.outputRows.map(toGstr1Doc), { stateCode: data.sellerStateCode, state: data.sellerState });
-    const csv = gstr1Csv(secs);
+    const seller = { stateCode: data.sellerStateCode, state: data.sellerState };
+    const secs = buildGstr1(data.outputRows.map(toGstr1Doc), seller);
+    const adv = buildAdvances(data.advances, range, seller);
+    const csv = gstr1Csv(secs, adv);
     const stamp = `${range.from}-to-${range.to}`;
     let files = 0;
-    for (const key of ["b2b", "b2cl", "b2cs", "cdnr", "cdnur", "hsn"] as const) {
+    for (const key of ["b2b", "b2cl", "b2cs", "cdnr", "cdnur", "exp", "at", "atadj", "hsn"] as const) {
       if (!csv[key].length) continue;
       downloadCSV(`gstr1-${key}-${stamp}.csv`, [...GSTR1_HEADERS[key]], csv[key]);
       files++;
@@ -459,6 +496,8 @@ export default function GstReportPage() {
     const notes: string[] = [];
     if (secs.skipped.length) notes.push(`${secs.skipped.length} B2C document(s) skipped (${secs.skipped.slice(0, 3).join(", ")}) — add the customer's state, then re-export.`);
     if (secs.notesNettedIntoB2cs) notes.push(`${secs.notesNettedIntoB2cs} small unregistered note(s) netted into B2CS.`);
+    if (adv.skipped.length) notes.push(`${adv.skipped.length} advance(s) skipped — customer's state missing.`);
+    if (adv.exportsSkipped) notes.push(`${adv.exportsSkipped} export advance(s) not reported (zero-rated under LUT).`);
     toast.success(`${files} GSTR-1 file(s) downloaded — import each into the GST Offline Tool.${notes.length ? " " + notes.join(" ") : ""}`);
   }
 
@@ -472,8 +511,10 @@ export default function GstReportPage() {
       toast.error("Company GSTIN nahi mila — Settings → Company mein GSTIN bharo, phir JSON banao.");
       return;
     }
-    const secs = buildGstr1(data.outputRows.map(toGstr1Doc), { stateCode: data.sellerStateCode, state: data.sellerState });
-    const payload = gstr1Json(secs, data.sellerGstin, range.from.slice(5, 7) + range.from.slice(0, 4));
+    const seller = { stateCode: data.sellerStateCode, state: data.sellerState };
+    const secs = buildGstr1(data.outputRows.map(toGstr1Doc), seller);
+    const adv = buildAdvances(data.advances, range, seller);
+    const payload = gstr1Json(secs, data.sellerGstin, range.from.slice(5, 7) + range.from.slice(0, 4), adv);
 
     const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(jsonBlob);
@@ -484,19 +525,33 @@ export default function GstReportPage() {
     URL.revokeObjectURL(url);
     const parts = [
       secs.b2b.length && `B2B ${secs.b2b.length}`, secs.b2cl.length && `B2CL ${secs.b2cl.length}`, secs.b2cs.length && `B2CS ${secs.b2cs.length}`,
-      secs.cdnr.length && `CDNR ${secs.cdnr.length}`, secs.cdnur.length && `CDNUR ${secs.cdnur.length}`, `HSN ${secs.hsn.length}`,
+      secs.cdnr.length && `CDNR ${secs.cdnr.length}`, secs.cdnur.length && `CDNUR ${secs.cdnur.length}`, secs.exp.length && `EXP ${secs.exp.length}`,
+      adv.at.length && `11A ${adv.at.length}`, adv.atadj.length && `11B ${adv.atadj.length}`, `HSN ${secs.hsn.length}`,
     ].filter(Boolean).join(" · ");
     const warn = secs.skipped.length ? ` ⚠ ${secs.skipped.length} B2C document(s) skipped — add the customer's state.` : "";
     toast.success(`GSTR-1 JSON downloaded (${parts}). Upload on gst.gov.in → Returns → GSTR-1 → Import JSON, then check every table before filing.${warn}`);
   }
 
-  const g3b = data ? computeGstr3b({
-    output: data.outputRows.map((r) => ({ taxableValue: r.taxableValue, heads: gstSplit(r) })),
+  const g3b = data ? (() => {
+    const seller = { stateCode: data.sellerStateCode, state: data.sellerState };
+    const adv = buildAdvances(data.advances, range, seller);
+    return computeGstr3b({
+    output: [
+      ...data.outputRows.map((r) => {
+        const d = toGstr1Doc(r);
+        const c = gstr3bClass(d, seller);
+        return { taxableValue: r.taxableValue, heads: docHeads(d), zeroRated: c.zeroRated, unregInterPos: c.unregInterPos };
+      }),
+      /* Tax on advances: 11A adds to 3.1(a), 11B takes it back out. */
+      ...adv.at.map((a) => ({ taxableValue: a.advance, heads: a.heads })),
+      ...adv.atadj.map((a) => ({ taxableValue: -a.advance, heads: { igst: -a.heads.igst, cgst: -a.heads.cgst, sgst: -a.heads.sgst } })),
+    ],
     itc: data.inputRows.map((r) => ({ igst: r.igst, cgst: r.cgst, sgst: r.sgst })),
     blocked17: data.blocked17Heads,
     notIn2b: data.blockedItc.blocked - data.blocked17Heads.reduce((s, h) => s + h.igst + h.cgst + h.sgst, 0),
     rcm: data.rcmRows,
-  }) : null;
+    });
+  })() : null;
 
   function exportGstr3b() {
     if (!g3b) return;
@@ -627,7 +682,7 @@ export default function GstReportPage() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-ink text-base">File GSTR-1 for {range.label}</div>
                 <p className="text-xs text-ink-2 mt-1 leading-relaxed max-w-3xl">
-                  Export sales data in official <b>GST Portal JSON</b> or <b>GST Offline Tool CSVs</b> (B2B, B2CL, B2CS, CDNR/CDNUR, HSN). Direct upload on <a href="https://gst.gov.in" target="_blank" rel="noreferrer" className="text-amber-ink underline font-medium">gst.gov.in</a> → file returns with OTP.
+                  Export sales data in official <b>GST Portal JSON</b> or <b>GST Offline Tool CSVs</b> (B2B, B2CL, B2CS, CDNR/CDNUR, EXP, advances 11A/11B, HSN). Direct upload on <a href="https://gst.gov.in" target="_blank" rel="noreferrer" className="text-amber-ink underline font-medium">gst.gov.in</a> → file returns with OTP.
                 </p>
               </div>
             </div>
@@ -735,7 +790,7 @@ export default function GstReportPage() {
               </thead>
               <tbody className="divide-y divide-hairline">
                 {data.outputRows.map((r) => {
-                  const s = gstSplit(r);
+                  const s = docHeads(r);
                   return (
                   <tr key={r.invoiceId} className="hover:bg-paper-2/40">
                     <td className="px-4 py-3 font-mono text-ink-2">{r.invoiceId}</td>
@@ -744,14 +799,16 @@ export default function GstReportPage() {
                     <td className="px-4 py-3 font-mono text-ink-3 text-xs">{r.customerGstin ?? "—"}</td>
                     <td className="px-4 py-3 text-right font-mono text-ink-2">{rupee(r.taxableValue)}</td>
                     <td className="px-4 py-3 text-ink-3 text-xs">
-                      {r.interState
+                      {isExportDoc(r)
+                        ? (r.gst ? `Export · IGST ${r.taxRate}%` : "Export · LUT (0%)")
+                        : r.interState
                         ? `IGST ${r.taxRate}%`
                         : `CGST ${r.taxRate / 2}% + SGST ${r.taxRate / 2}%`}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-emerald">
                       {rupee(r.gst)}
                       <span className="block text-xs text-ink-3">
-                        {r.interState ? `IGST ${rupee(s.igst)}` : `${rupee(s.cgst)} + ${rupee(s.sgst)}`}
+                        {r.interState || isExportDoc(r) ? `IGST ${rupee(s.igst)}` : `${rupee(s.cgst)} + ${rupee(s.sgst)}`}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold text-ink">{rupee(r.amount)}</td>
