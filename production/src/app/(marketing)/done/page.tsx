@@ -11,16 +11,46 @@
  */
 import Link from "@/site/components/ui/SiteLink";
 import { useEffect, useState } from "react";
+import { COMPANY } from "@/site/lib/config";
 
 export default function DonePage() {
   const [orderNo, setOrderNo] = useState<string | null>(null);
   const [trialEmail, setTrialEmail] = useState<string | null>(null);
+  /* False only when the server said the confirmation link did NOT go out (30 Sep 2026). */
+  const [trialSent, setTrialSent] = useState(true);
   useEffect(() => {
     try {
       setOrderNo(window.sessionStorage.getItem("anutech.order") || null);
       setTrialEmail(window.sessionStorage.getItem("anutech.trial") || null);
+      setTrialSent(window.sessionStorage.getItem("anutech.trial.sent") !== "0");
     } catch { /* storage blocked: the generic wording below still holds */ }
   }, []);
+
+  if (trialEmail && !trialSent) {
+    return (
+      <section className="section rise">
+        <div className="wrap" style={{ maxWidth: 640 }}>
+          <div className="mono-label" style={{ display: "inline-block", padding: "8px 14px", borderRadius: 999, background: "#FFFBEB", color: "#92400E", border: "1px solid #FDE68A", marginBottom: 22 }}>
+            TRIAL SAVED · CONFIRMATION EMAIL NOT SENT
+          </div>
+          <h1 className="h1-narrow" style={{ marginBottom: 14 }}>Your trial is saved — but the email did not go out.</h1>
+          <p className="body-lg" style={{ margin: "0 0 10px" }}>
+            We tried to send the confirmation link to <strong>{trialEmail}</strong> and it did not go
+            through. Nothing was charged, and your request is with us.
+          </p>
+          <p className="body-lg" style={{ margin: "0 0 26px" }}>
+            Write to <a href={`mailto:${COMPANY.supportEmail}?subject=${encodeURIComponent("Please start my hosting trial")}`} style={{ color: "var(--primary)", fontWeight: 600 }}>{COMPANY.supportEmail}</a> from
+            that address and we will start the trial for you. If the address was mistyped, start again
+            with the right one.
+          </p>
+          <div style={{ display: "flex", gap: 12 }}>
+            <Link href="/hosting" className="btn btn-primary">Back to hosting</Link>
+            <Link href="/" className="btn btn-outline">Back to home</Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (trialEmail) {
     return (

@@ -166,9 +166,14 @@ export default function CheckoutPage() {
           lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle })),
         }),
       });
-      const json = (await res.json().catch(() => ({}))) as { success?: boolean; trial?: boolean; error?: string };
+      const json = (await res.json().catch(() => ({}))) as { success?: boolean; trial?: boolean; error?: string; confirmationSent?: boolean };
       if (!res.ok || !json.success || !json.trial) throw new Error(json.error || "Could not start your trial. Nothing was saved — please try again.");
-      try { window.sessionStorage.setItem("anutech.trial", email.trim()); window.sessionStorage.removeItem("anutech.order"); } catch { /* done page falls back */ }
+      try {
+        window.sessionStorage.setItem("anutech.trial", email.trim());
+        // Whether the confirmation link really left — the done page must not claim it did.
+        window.sessionStorage.setItem("anutech.trial.sent", json.confirmationSent === false ? "0" : "1");
+        window.sessionStorage.removeItem("anutech.order");
+      } catch { /* done page falls back */ }
       cart.clear();
       router.push("/done" as never);
     } catch (err) {

@@ -73,5 +73,5 @@ export async function POST(request: NextRequest) {
       { status: started.alreadyTrialled ? 409 : 500 },
     );
   }
-  return NextResponse.json({ success: true, leadId: started.leadId, trialEnds: started.trialEnds });
+  return NextResponse.json({ success: true, leadId: started.leadId, trialEnds: started.trialEnds, confirmationSent: started.confirmationSent });
 }

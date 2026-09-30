@@ -339,6 +339,9 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
 
   // ── SMTP (the platform sender when configured) ───────────────────
   if (smtp) {
+    /* Timed, so a slow send is visible in the log (30 Sep 2026: one owner alert took 25 s
+       while a customer waited on it). */
+    const t0 = Date.now();
     const r = await sendViaSmtp({
       to: msg.to,
       subject: msg.subject,
@@ -348,6 +351,7 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
       replyTo: msg.replyTo,
       attachments: msg.attachments,
     }, smtp);
+    console.info(`[email/send] smtp ${r.ok ? "sent" : "FAILED"} to ${msg.to} in ${Date.now() - t0} ms (${msg.kind ?? "no kind"})`);
     return r.ok
       ? { status: "sent", providerId: r.messageId, errorMessage: null, provider: "smtp" }
       : { status: "failed", providerId: null, errorMessage: `SMTP: ${r.detail}`, provider: "smtp" };

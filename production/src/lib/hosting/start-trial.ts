@@ -22,6 +22,7 @@ import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { makeTrialToken } from "@/lib/hosting/trial-token";
 import { TRIAL_PLAN_ID, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 import { checkTrialHistory, recordTrialInDms } from "@/lib/dms-engine/trials";
+import { afterResponse } from "@/lib/server/after-response";
 
 const FROM_EMAIL = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const BUY_PAGE_TENANT_ID =
@@ -41,7 +42,14 @@ export interface StartTrialInput {
 }
 
 export type StartTrialResult =
-  | { ok: true; leadId: string; trialEnds: string }
+  | {
+      ok: true;
+      leadId: string;
+      trialEnds: string;
+      /** Did the confirmation link actually leave? The page must not say "we sent a link"
+          when it did not (30 Sep 2026). */
+      confirmationSent: boolean;
+    }
   | { ok: false; error: string; alreadyTrialled?: true };
 
 /** Escape LIKE wildcards, so an email containing `_` or `%` matches only itself. */
@@ -316,15 +324,37 @@ days fully free. Trial ends ${trialEndsFmt}.
 
 ${signOff}`;
 
-  await Promise.allSettled([
-    owner.ok && sendEmail({
-      to: owner.to,
-      from: FROM_EMAIL,
-      kind: "buy_page_trial_owner",
-      route: { tenantId: BUY_PAGE_TENANT_ID },
-      replyTo: email,
-      subject: `🎯 HOSTING TRIAL — ${companyName} · ${tierName} · ${cleanDomain || (domainStatus === "need" ? "needs domain" : "no domain")}`,
-      text:
+  /* ── The customer's confirmation link: the one email the customer is waiting for ──
+     Sent first, on its own, and whatever the owner alert does. Until 30 Sep 2026 both
+     emails were awaited together AND gated on the owner alert resolving: the customer sat
+     on "Starting your trial…" while the owner was emailed (25 s of a 30 s wait, measured),
+     and a workspace with no owner alert address sent the customer no link at all while
+     the page still said "We sent a link". */
+  const confirmation = await sendEmail({
+    to: email,
+    from: FROM_EMAIL,
+    ...(owner.ok ? { replyTo: owner.to } : {}),
+    kind: "buy_page_trial_customer",
+    route: { tenantId: BUY_PAGE_TENANT_ID },
+    subject: customerSubject,
+    text: customerText,
+  }).catch((e: unknown) => ({ status: "failed" as const, errorMessage: (e as Error).message }));
+  const confirmationSent = confirmation.status === "sent";
+  if (!confirmationSent) {
+    console.error(`[trial/hosting] lead ${leadId}: the confirmation link did NOT reach ${email}: ${confirmation.errorMessage ?? confirmation.status}`);
+  }
+
+  /* ── The owner alert: internal, so it goes AFTER the response (lib/server/after-response). */
+  if (owner.ok) {
+    afterResponse(async () => {
+      const r = await sendEmail({
+        to: owner.to,
+        from: FROM_EMAIL,
+        kind: "buy_page_trial_owner",
+        route: { tenantId: BUY_PAGE_TENANT_ID },
+        replyTo: email,
+        subject: `🎯 HOSTING TRIAL — ${companyName} · ${tierName} · ${cleanDomain || (domainStatus === "need" ? "needs domain" : "no domain")}`,
+        text:
 `A new hosting trial request just landed. The customer wants to try the
 ${tierName} plan for ${TRIAL_DAYS} days, no card.
 
@@ -339,24 +369,10 @@ Open the lead:
 ${new URL(`/leads/${leadId}`, request.url).toString()}
 
 — ResellerOS`,
-    }),
+      });
+      if (r.status === "failed") console.error(`[trial/hosting] owner alert failed: ${r.errorMessage}`);
+    }, "trial owner alert");
+  }
 
-    owner.ok && sendEmail({
-      to: email,
-      from: FROM_EMAIL,
-      replyTo: owner.to,
-      kind: "buy_page_trial_customer",
-      route: { tenantId: BUY_PAGE_TENANT_ID },
-      subject: customerSubject,
-      text: customerText,
-    }),
-  ]).then((results) => {
-    const labels = ["owner alert", "customer acknowledgement"];
-    results.forEach((r, i) => {
-      if (r.status === "rejected") console.error(`[trial/hosting] ${labels[i]} failed:`, r.reason);
-      else if (r.value && r.value.status === "failed") console.error(`[trial/hosting] ${labels[i]} failed:`, r.value.errorMessage);
-    });
-  });
-
-  return { ok: true, leadId, trialEnds: trialExpiresAt.toISOString() };
+  return { ok: true, leadId, trialEnds: trialExpiresAt.toISOString(), confirmationSent };
 }

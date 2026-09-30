@@ -329,7 +329,7 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
         body as Record<string, unknown>,
       );
       if (!started.ok) return NextResponse.json({ error: started.error }, { status: 500 });
-      return NextResponse.json({ success: true, trial: true, leadId: started.leadId, trialEnds: started.trialEnds });
+      return NextResponse.json({ success: true, trial: true, leadId: started.leadId, trialEnds: started.trialEnds, confirmationSent: started.confirmationSent });
     }
 
     // One hosting account per order until several can be provisioned (lib/checkout/hosting-limit.ts).
