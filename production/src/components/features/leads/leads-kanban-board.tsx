@@ -11,17 +11,20 @@ import { LeadCard } from "@/components/features/leads/lead-card";
 import { Icon } from "@/components/ui/icon";
 import { rupee, cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
-import type { LeadListRow } from "@/lib/leads/list-page";
+import type { LeadListRow, StageTotal } from "@/lib/leads/list-page";
 import type { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { DEAL_STAGES, LEAD_STAGES, type StageMeta } from "@/lib/leads/stage-meta";
 import { BOARD_COLUMN_CAP } from "@/lib/queries/leads";
 import { checkBoardMove } from "@/lib/leads/deal-rules";
-import { columnSummary } from "@/lib/leads/forecast";
+import { boardColumnSummary } from "@/lib/leads/forecast";
 
 export interface LeadsKanbanBoardProps {
   boardLeads: LeadListRow[];
   /** Each column's server total (useLeadsBoard) — the board holds the newest BOARD_COLUMN_CAP. */
   columnTotals?: Partial<Record<Lead["stage"], number>>;
+  /** R-070: each column's header from the server (lead_counts().stage_totals) — count, ₹ and
+      weighted ₹ over the whole stage, not the visible cards. Undefined = sum the cards (≈). */
+  serverColumnTotals?: Partial<Record<Lead["stage"], StageTotal>>;
   changeStage: ReturnType<typeof useChangeLeadStage>["changeStage"];
   setSelected: (l: LeadListRow) => void;
   setAddOpen: (open: boolean) => void;
@@ -29,7 +32,7 @@ export interface LeadsKanbanBoardProps {
   stages?: readonly StageMeta[];
 }
 
-export function LeadsKanbanBoard({ boardLeads, columnTotals, changeStage, setSelected, setAddOpen, stages = DEAL_STAGES }: LeadsKanbanBoardProps) {
+export function LeadsKanbanBoard({ boardLeads, columnTotals, serverColumnTotals, changeStage, setSelected, setAddOpen, stages = DEAL_STAGES }: LeadsKanbanBoardProps) {
   const router = useRouter();
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [overStage, setOverStage] = React.useState<Lead["stage"] | null>(null);
@@ -103,9 +106,16 @@ export function LeadsKanbanBoard({ boardLeads, columnTotals, changeStage, setSel
       <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-none lg:grid-flow-col lg:auto-cols-[minmax(220px,1fr)] lg:grid-rows-1 gap-3 overflow-x-auto overflow-y-hidden pb-1">
         {stages.map((stage) => {
           const stageLeads = boardLeads.filter((l) => l.stage === stage.id);
-          /* count · ₹ total · probability-weighted ₹ (lib/leads/forecast.ts). A capped column
-             sums only its visible cards — said so, since true server totals need a migration. */
-          const sum = columnSummary(stageLeads, (columnTotals?.[stage.id] ?? 0) > BOARD_COLUMN_CAP);
+          /* count · ₹ total · probability-weighted ₹ (lib/leads/forecast.ts). From the server
+             when it sent this column (R-070 — exact even when capped); otherwise the visible
+             cards, and a capped column says "≈". A stage the server did not send (no lead in
+             it, or Lost — page-scope.ts#boardServerTotals) sums its own cards, which is exact
+             for a column that cannot be capped. */
+          const sum = boardColumnSummary(
+            stageLeads,
+            (columnTotals?.[stage.id] ?? 0) > BOARD_COLUMN_CAP,
+            serverColumnTotals?.[stage.id],
+          );
           const isOver = overStage === stage.id;
 
           return (

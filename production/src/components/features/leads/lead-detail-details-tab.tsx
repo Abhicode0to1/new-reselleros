@@ -24,6 +24,7 @@ import type { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { LEAD_STAGES } from "@/lib/leads/stage-meta";
 import { ACTIVITY_META, Fact, fmtActTime } from "@/components/features/leads/lead-detail-format";
 import { ExpectedCloseField } from "@/components/features/leads/expected-close-field";
+import { BillingCycleField, CurrentProviderField } from "@/components/features/leads/billing-cycle-fields";
 
 type DrawerTab = "email" | "details" | "followups" | "activity";
 
@@ -131,6 +132,9 @@ export function LeadDetailsTab({
             <ExpectedCloseField lead={lead} />
             <Fact label="Source" value={lead.source} mono />
             <Fact label="New / switching" value={lead.subscription_type === "fresh" ? "Fresh subscription" : lead.subscription_type === "switch" ? "Switching vendor" : "—"} />
+            {/* R-071 — licence deals only; a project has no cycle or provider. */}
+            {lead.enquiry_type !== "project" && <BillingCycleField lead={lead} />}
+            {lead.enquiry_type !== "project" && <CurrentProviderField lead={lead} />}
             <Fact label="Contact name" value={lead.contact_name} />
             <Fact label="Email" value={lead.contact_email} mono />
             <Fact label="Phone" value={lead.contact_phone} mono />

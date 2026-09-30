@@ -5670,6 +5670,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          billing_cycle: string | null
           company: string
           contact_email: string | null
           contact_id: string | null
@@ -5678,6 +5679,7 @@ export type Database = {
           country: string
           created_at: string
           created_by: string | null
+          current_provider: string | null
           customer_id: string | null
           domain: string | null
           enquiry_type: string
@@ -5727,6 +5729,7 @@ export type Database = {
           wbraid: string | null
         }
         Insert: {
+          billing_cycle?: string | null
           company: string
           contact_email?: string | null
           contact_id?: string | null
@@ -5735,6 +5738,7 @@ export type Database = {
           country?: string
           created_at?: string
           created_by?: string | null
+          current_provider?: string | null
           customer_id?: string | null
           domain?: string | null
           enquiry_type?: string
@@ -5784,6 +5788,7 @@ export type Database = {
           wbraid?: string | null
         }
         Update: {
+          billing_cycle?: string | null
           company?: string
           contact_email?: string | null
           contact_id?: string | null
@@ -5792,6 +5797,7 @@ export type Database = {
           country?: string
           created_at?: string
           created_by?: string | null
+          current_provider?: string | null
           customer_id?: string | null
           domain?: string | null
           enquiry_type?: string
@@ -11983,6 +11989,26 @@ export type Database = {
         Args: { p_since: string; p_tenant: string }
         Returns: Json
       }
+      find_lead_duplicates: {
+        Args: {
+          p_company?: string
+          p_email?: string
+          p_exclude_id?: string
+          p_gstin?: string
+          p_phone?: string
+        }
+        Returns: {
+          company: string
+          contact_name: string
+          created_at: string
+          id: string
+          is_junk: boolean
+          matched_on: string[]
+          owner_id: string
+          owner_name: string
+          stage: string
+        }[]
+      }
       format_document_number: {
         Args: { p_fiscal_year: string; p_number: number; p_prefix: string }
         Returns: string
@@ -12122,6 +12148,8 @@ export type Database = {
         Returns: boolean
       }
       lead_norm_company: { Args: { c: string }; Returns: string }
+      lead_norm_email: { Args: { e: string }; Returns: string }
+      lead_norm_gstin: { Args: { g: string }; Returns: string }
       lead_norm_phone: { Args: { p: string }; Returns: string }
       list_leads: {
         Args: { p_cursor?: Json; p_filters?: Json; p_limit?: number }

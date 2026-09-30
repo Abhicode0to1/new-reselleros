@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   STAGE_PROBABILITY, stageProbability, weightedValue, buildForecast, closingBy,
-  isOpenStage, probabilityLabel, winRate, columnSummary,
+  isOpenStage, probabilityLabel, winRate, columnSummary, boardColumnSummary,
 } from "./forecast";
 import type { Lead } from "@/lib/supabase/database.types";
 
@@ -274,5 +274,17 @@ describe("columnSummary — Kanban column header (Deals audit, 30 Sep 2026)", ()
   });
   it("won is weighted at 100%", () => {
     expect(columnSummary([{ stage: "won", value: 7777 }]).weighted).toBe(7777);
+  });
+});
+
+describe("boardColumnSummary — the server's column total (R-070)", () => {
+  const visible = [{ stage: "quote" as const, value: 1000 }];
+  it("a capped column with a server total is EXACT — no ≈", () => {
+    expect(boardColumnSummary(visible, true, { count: 350, value: 9_00_000, weighted: 7_20_000 }))
+      .toEqual({ count: 350, total: 9_00_000, weighted: 7_20_000, partial: false });
+  });
+  it("without one it is the visible cards' sum, and a capped column still says so", () => {
+    expect(boardColumnSummary(visible, true, undefined)).toEqual({ count: 1, total: 1000, weighted: 800, partial: true });
+    expect(boardColumnSummary(visible, false, null)).toEqual(columnSummary(visible));
   });
 });

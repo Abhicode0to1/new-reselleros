@@ -51,7 +51,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useCreateLead, useUpdateLead, useLeadDuplicateCheck } from "@/lib/queries/leads";
-import { normPhone, normCompany } from "@/lib/leads/duplicates";
+import { dupCheckKeys, duplicateWarning, pickDuplicate } from "@/lib/leads/duplicate-check";
+import { BILLING_CYCLE_OPTIONS, billingCycleLabel, monthlyBill, toBillingCycle } from "@/lib/leads/billing-cycle";
+import { stageShownOnPage } from "@/lib/leads/page-scope";
 import { PROJECT_PLAN_LABEL } from "@/lib/leads/enquiry";
 import { amountInIndianWords } from "@/lib/accounting/amount-words";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -132,7 +134,7 @@ const STEP_LABELS = ["Contact", "Enquiry", "Review"] as const;
 const STEP_FIELDS = [
   ["company", "contact_name", "contact_email", "contact_phone", "gstin"],
   ["enquiry_type", "plan", "seats", "value", "requirement", "project_timeline", "stage", "source", "priority",
-   "subscription_type", "follow_up_date", "expected_close_date", "owner_id", "notes"],
+   "subscription_type", "billing_cycle", "current_provider", "follow_up_date", "expected_close_date", "owner_id", "notes"],
 ] as const;
 
 /** The list price per seat per month for a plan, or undefined (Custom / Mixed, unknown). */
@@ -244,6 +246,9 @@ const schema = z.object({
   expected_close_date: z.string().optional().or(z.literal("")),
   owner_id:     z.string().optional().or(z.literal("")),
   subscription_type: z.enum(["fresh", "switch"]).optional().or(z.literal("")),
+  /* R-071: descriptive — `value` stays the ANNUAL deal value (lib/leads/billing-cycle.ts). */
+  billing_cycle: z.enum(["monthly", "yearly"]).optional().or(z.literal("")),
+  current_provider: z.string().max(120, "Keep it short").optional().or(z.literal("")),
   notes:         z.string().optional(),
 });
 
@@ -346,6 +351,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           expected_close_date: editingLead.expected_close_date ?? "",
           owner_id:       editingLead.owner_id      ?? "",
           subscription_type: editingLead.subscription_type ?? "",
+          billing_cycle:  editingLead.billing_cycle ?? "",
+          current_provider: editingLead.current_provider ?? "",
           notes:          editingLead.notes         ?? "",
         }
       : {
@@ -394,30 +401,22 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
   // already matches — so they open it instead of creating a second record.
   // Prevention beats cleanup. Skips the lead being edited. Non-blocking:
   // it's a heads-up with a link, never a hard stop.
-  /* S40: asked of the server (list_leads' dup_like — the same phone / company keys as
-     duplicates.ts), not looked up in every lead loaded with select("*"). That load ran as
-     soon as the leads page opened, because this form is always mounted. Only the typed
-     KEYS go to the server, a beat after the last keystroke, and only while the dialog is
-     open with something that can match. */
+  /* R-072: asked of find_lead_duplicates() — GSTIN, email, phone or company (lib/leads/
+     duplicate-check.ts), strongest match first, with the owner's name. Only keys worth
+     asking go to the server, a beat after the last keystroke, and only while the dialog is
+     open. For an existing customer their closed (won / lost) leads are history, not a
+     duplicate (pickDuplicate). */
   const wCompany = watch("company");
   const wPhone   = watch("contact_phone");
-  const [dupKeys, setDupKeys] = React.useState({ company: "", phone: "" });
+  const wEmail   = watch("contact_email");
+  const wGstin   = watch("gstin");
+  const [dupKeys, setDupKeys] = React.useState(() => dupCheckKeys({}));
   React.useEffect(() => {
-    const t = setTimeout(() => setDupKeys({
-      company: normCompany(wCompany) ? (wCompany ?? "") : "",
-      phone:   normPhone(wPhone) ? (wPhone ?? "") : "",
-    }), 300);
+    const t = setTimeout(() => setDupKeys(dupCheckKeys({ company: wCompany, phone: wPhone, email: wEmail, gstin: wGstin })), 300);
     return () => clearTimeout(t);
-  }, [wCompany, wPhone]);
-  const { data: dupCandidates } = useLeadDuplicateCheck(dupKeys.company, dupKeys.phone, editingLead?.id, open);
-  const dupMatch = React.useMemo(
-    () => (dupCandidates ?? []).find(
-      /* For an existing customer, their closed (won / lost) leads are history, not a
-         duplicate — a new need from them is exactly what this lead is. */
-      (l) => !(forCustomer && (l.stage === "won" || l.stage === "lost")),
-    ) ?? null,
-    [dupCandidates, forCustomer],
-  );
+  }, [wCompany, wPhone, wEmail, wGstin]);
+  const { data: dupCandidates } = useLeadDuplicateCheck(dupKeys, editingLead?.id, open);
+  const dupMatch = React.useMemo(() => pickDuplicate(dupCandidates, forCustomer), [dupCandidates, forCustomer]);
 
   /**
    * Open the native Contacts Picker (Android Chrome / Edge Mobile only).
@@ -586,6 +585,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         expected_close_date: editingLead.expected_close_date ?? "",
         owner_id:       editingLead.owner_id      ?? "",
         subscription_type: editingLead.subscription_type ?? "",
+        billing_cycle:  editingLead.billing_cycle ?? "",
+        current_provider: editingLead.current_provider ?? "",
         notes:          editingLead.notes         ?? "",
       });
       setStage((editingLead.stage as FormData["stage"]) ?? "new");
@@ -679,6 +680,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         expected_close_date: data.expected_close_date || null,
         owner_id:       data.owner_id       || null,
         subscription_type: project ? null : (data.subscription_type || null),
+        billing_cycle:  project ? null : toBillingCycle(data.billing_cycle),
+        current_provider: project ? null : (data.current_provider?.trim() || null),
         notes:          data.notes          || null,
         customer_id:    forCustomer ? (customerId || null) : null,
       };
@@ -883,12 +886,17 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
             <div className="rounded-md bg-amber-soft/60 border border-amber/30 px-3 py-2.5 flex items-start gap-2 min-w-0">
               <Icon name="copy" size={14} className="text-amber-ink flex-shrink-0 mt-0.5" />
               <div className="min-w-0 flex-1 text-xs text-amber-ink leading-snug">
-                <b>Shayad ye lead pehle se hai:</b> {dupMatch.company}
-                {dupMatch.contact_phone ? ` · ${dupMatch.contact_phone}` : ""}.
-                Naya banane ke bajaye usi ko kholein?
+                <b>{duplicateWarning(dupMatch).title}</b>
+                {" · "}{duplicateWarning(dupMatch).matched}.
+                Naya banane ke bajaye usi ko kholein? (Save phir bhi ho sakta hai.)
                 <button
                   type="button"
-                  onClick={() => { onOpenChange(false); router.push(`/leads?lead=${dupMatch.id}` as Route); }}
+                  onClick={() => {
+                    onOpenChange(false);
+                    /* Won leads live on /deals only (page-scope.ts). */
+                    const page = stageShownOnPage(dupMatch.stage as Lead["stage"], false) ? "/leads" : "/deals";
+                    router.push(`${page}?lead=${dupMatch.id}` as Route);
+                  }}
                   className="ml-1.5 font-semibold underline underline-offset-2 hover:text-amber"
                 >
                   Open existing lead
@@ -1177,6 +1185,12 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
             {plan === "Custom / Mixed" && (
               <p className="mt-1 text-xs text-ink-3">Negotiated deal value bharo</p>
             )}
+            {/* R-071: the value stays yearly on a monthly deal; one month's bill is shown. */}
+            {watch("billing_cycle") === "monthly" && monthlyBill(parseMoney(valueText)) !== null && (
+              <p className="mt-1 text-xs text-ink-3">
+                Monthly billing: ≈ <b className="text-ink">₹{monthlyBill(parseMoney(valueText))!.toLocaleString("en-IN")}/month</b> (value upar saal ka hai)
+              </p>
+            )}
           </FormField>
           </>
           )}
@@ -1275,6 +1289,31 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               &ldquo;Switching&rdquo; = they already use this product, just moving billing/reseller to you (migration).
             </p>
           </FormField>
+          )}
+
+          {/* R-071: billing cycle + current provider (leads.billing_cycle / current_provider).
+              Licence questions only, like the one above. */}
+          {!isProject && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FormField label="Billing cycle" htmlFor="billing_cycle">
+              <select
+                id="billing_cycle"
+                {...register("billing_cycle")}
+                className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+              >
+                <option value="">Not sure yet</option>
+                {BILLING_CYCLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Current provider" htmlFor="current_provider">
+              <Input
+                id="current_provider"
+                placeholder="e.g. Direct Google, another reseller"
+                error={errors.current_provider?.message}
+                {...register("current_provider")}
+              />
+            </FormField>
+          </div>
           )}
 
           {/* Expected close — `leads.expected_close_date` (Deals audit, 30 Sep 2026: the column
@@ -1376,7 +1415,9 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                     <Review label="Plan"        value={plan} />
                     <Review label="Seats"       value={watchedSeats == null || Number.isNaN(watchedSeats) ? "" : String(watchedSeats)} />
                     <Review label="Price / seat" value={priceText ? `₹${priceText}/month` : ""} />
-                    <Review label="Deal value"  value={valueText ? `₹${valueText}` : ""} />
+                    <Review label="Deal value"  value={valueText ? `₹${valueText}/year` : ""} />
+                    <Review label="Billing"     value={billingCycleLabel(watch("billing_cycle"))} />
+                    <Review label="Current provider" value={watch("current_provider")} />
                   </>
                 )}
                 <Review label="Stage"       value={STAGES.find((s) => s.value === stage)?.label} />
