@@ -33,12 +33,12 @@ Pardeep ne 30 Sep 2026 ko tay kiya: testing ka zyadatar kaam machine/AI kare, 4 
 | W5 | Quote pay (Razorpay test) → invoice → subscription | Abhishek | money-spine.spec.ts |
 | W6 | Seats badhana (duplicate nahi) | Abhishek | — (Journey 2 haath se) |
 | W7 | Renewal reminder → renewal quote → pay → nayi date | Abhishek | — |
-| W8 | Overdue invoice → dunning email/WhatsApp | Pardeep | — |
+| W8 | Overdue invoice → dunning email/WhatsApp | Abhishek | — |
 | W9 | Credit note / refund | Abhishek | — |
-| W10 | Expense / purchase bill → GST input | Pardeep | — |
-| W11 | GST reports: GSTR-1, 3B, HSN — invoice se milaan | Pardeep | — |
-| W12 | Trial balance, P&L, Day Book | Pardeep | — |
-| W13 | Salary / payroll run | Pardeep | — |
+| W10 | Expense / purchase bill → GST input | Hitesh | — |
+| W11 | GST reports: GSTR-1, 3B, HSN — invoice se milaan | Hitesh | — |
+| W12 | Trial balance, P&L, Day Book | Hitesh | — |
+| W13 | Salary / payroll run | Hitesh | — |
 | W14 | Customer buy page (public) → checkout | Pawan | e2e/qa/buy-workspace.spec.ts |
 | W15 | Ek company doosri ka data na dekh sake; sales role owner ka kaam na kar sake | Sab | cross-tenant.spec.ts, role-permissions.spec.ts |
 
