@@ -312,7 +312,7 @@ export function DomainLanding() {
                   <span style={{ fontSize: 13, color: C.muted }}>
                     {transferText.trim() ? `${transferText.split("\n").filter((l) => l.trim()).length} domain(s) ready · +1 year each` : "Auth code goes after the name, separated by a space."}
                   </span>
-                  <a href="/support" style={{ background: C.accent, color: "#fff", borderRadius: 9, padding: "12px 22px", fontSize: 14.5, fontWeight: 600, textDecoration: "none" }}>Start transfer</a>
+                  <a href="/contact" style={{ background: C.accent, color: "#fff", borderRadius: 9, padding: "12px 22px", fontSize: 14.5, fontWeight: 600, textDecoration: "none" }}>Start transfer</a>
                 </div>
                 <p style={{ fontSize: 13, color: C.muted, marginTop: 12 }}>No auth codes handy? Send us the list and we&apos;ll pull them with your authorisation, free — portfolios included.</p>
               </div>
@@ -499,7 +499,7 @@ export function DomainLanding() {
         <div>
           <div style={eyebrow}>Objections</div>
           <h2 style={h2}>The four reasons people skip the hosting box — and two we agree with.</h2>
-          <a href="/support" style={{ display: "inline-block", marginTop: 18, background: C.card, border: `1px solid ${C.line}`, borderRadius: 9, padding: "11px 16px", fontSize: 14, fontWeight: 500, color: C.ink, textDecoration: "none" }}>WhatsApp a human →</a>
+          <a href="/contact" style={{ display: "inline-block", marginTop: 18, background: C.card, border: `1px solid ${C.line}`, borderRadius: 9, padding: "11px 16px", fontSize: 14, fontWeight: 500, color: C.ink, textDecoration: "none" }}>Talk to a person →</a>
         </div>
         <div>
           {DOMAIN_FAQS.map((f, i) => {

@@ -167,7 +167,7 @@ export const HOSTING_BAD_FIT: readonly string[] = [
 export const HOSTING_CHANNELS: readonly { t: string; d: string; a: string; href: string }[] = [
   { t: "WhatsApp", d: "Fastest for one quick question before you buy", a: "Chat now", href: WHATSAPP_URL },
   { t: "Written quote", d: "Prices, GST split and renewal in writing", a: "Request a quote", href: "/quote" },
-  { t: "Knowledge base", d: "Setup and migration guides", a: "Read the docs", href: "/support" },
+  { t: "Support", d: "Setup and migration questions, answered by a person", a: "Ask us", href: "/contact" },
   { t: "All prices", d: "Domains, email and add-ons, itemised", a: "Open the rate card", href: "/pricing" },
 ];
 

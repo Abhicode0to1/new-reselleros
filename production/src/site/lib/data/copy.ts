@@ -13,7 +13,7 @@ export const CATALOGUE = [
   { name: "Business email", from: "from ₹79/mo", body: "Anutech Mail, Google Workspace or Microsoft 365 — quoted side by side.", chips: ["NO SEAT MINIMUM", "FREE MIGRATION"], href: "/email" },
   { name: "SSL & security", from: "from ₹0", body: "Free DV on every site, wildcard and OV when a client needs the paperwork.", chips: ["DV", "OV", "WILDCARD"], href: "/ssl" },
   { name: "Reseller program", from: "₹0 to join", body: "Published wholesale rates with no slabs and no advance deposit.", chips: ["NO DEPOSIT", "ONE RATE", "WHITE LABEL"], href: "/reseller" },
-  { name: "Migration desk", from: "free", body: "Sites, mail and DNS moved by us, outside your business hours.", chips: ["ANY SIZE", "ANY HOST", "OVERNIGHT"], href: "/support" },
+  { name: "Migration desk", from: "free", body: "Sites, mail and DNS moved by us, outside your business hours.", chips: ["ANY SIZE", "ANY HOST", "OVERNIGHT"], href: "/contact" },
 ] as const;
 
 export const CASES = [

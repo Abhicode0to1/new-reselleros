@@ -18,10 +18,13 @@ export const KB_ARTICLES = [
   { title: "What happens if a domain expires", cat: "BILLING" },
 ] as const;
 
+/* 30 Sep 2026: these cards said the migration desk confirms "on WhatsApp" (the site's
+   WhatsApp number is still a placeholder) and that SLA credits are "applied automatically"
+   (nothing measures uptime yet). They now say only what happens. */
 export const SUPPORT_CHANNELS = [
-  { title: "support@anutech.in", body: "Any time. Answered inside four working hours, usually sooner." },
-  { title: "Migration desk", body: "Send a site list or a portfolio. We schedule the move and confirm on WhatsApp." },
-  { title: "System status", body: "Ninety days of uptime per service, with SLA credits applied automatically." },
+  { title: "Moving from another host or mail provider", body: "Free. Email us what you have today and where it is, and we schedule the move with you." },
+  { title: "Bills and GST invoices", body: "Every order is billed by Anutech Digital in your business name. Ask for a copy of any bill by email." },
+  { title: "Renewals", body: "We email you before anything expires. Renew from the client area, or reply to the reminder." },
 ] as const;
 
 export interface StatusService {
