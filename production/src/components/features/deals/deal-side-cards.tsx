@@ -16,15 +16,12 @@ import { ExpectedCloseField } from "@/components/features/leads/expected-close-f
 import { LeadFollowupsTab } from "@/components/features/leads/lead-detail-followups-tab";
 import { addedByLabel } from "@/lib/leads/added-by";
 import type { DealMoney } from "@/lib/deals/timeline";
+import type { DealQuoteRow } from "@/lib/deals/deal-quotes";
 import type { Lead, Quote } from "@/lib/supabase/database.types";
 import type { useUserNames } from "@/lib/hooks/useUserNames";
 import type { useTasksForLead, useCompleteTask, useSnoozeTask, useDeleteTask } from "@/lib/queries/tasks";
 
 type TaskRow = NonNullable<ReturnType<typeof useTasksForLead>["data"]>[number];
-
-const QUOTE_KIND: Record<string, "muted" | "warning" | "success" | "info" | "danger"> = {
-  draft: "muted", sent: "warning", viewed: "info", accepted: "success", rejected: "danger", expired: "danger",
-};
 
 export function DealSummaryCard({ lead, latestQuote }: { lead: Lead; latestQuote: Quote | undefined }) {
   /* leads.value is the ANNUAL deal value (lib/leads/deal-rules.ts#autoDealValue = seats ×
@@ -101,30 +98,32 @@ export function DealFollowupsCard(props: {
   );
 }
 
-export function DealQuotesCard({ quotes, onNewQuote }: { quotes: Quote[]; onNewQuote: () => void }) {
+export function DealQuotesCard({ rows, onNewQuote, projectFailed }: { rows: DealQuoteRow[]; onNewQuote: () => void; projectFailed?: boolean }) {
   return (
-    <Card title={`Quotes${quotes.length ? ` (${quotes.length})` : ""}`} actions={<Button size="sm" variant="ghost" icon="plus" onClick={onNewQuote}>Naya</Button>}>
-      {quotes.length === 0 ? (
+    <Card title={`Quotes${rows.length ? ` (${rows.length})` : ""}`} actions={<Button size="sm" variant="ghost" icon="plus" onClick={onNewQuote}>Naya</Button>}>
+      {rows.length === 0 ? (
         <p className="text-sm italic text-ink-3">Abhi koi quote nahi.</p>
       ) : (
         <ul className="-mx-1 divide-y divide-hairline">
-          {quotes.map((q) => (
-            <li key={q.id}>
-              <Link href={`/quotes/${q.id}` as never}
+          {rows.map((q) => (
+            <li key={q.key}>
+              <Link href={q.href as never}
                 className="flex items-center justify-between gap-3 rounded px-1 py-2.5 hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-mono text-xs font-semibold text-ink">{q.id}</span>
-                    <Badge kind={QUOTE_KIND[q.status] ?? "muted"} size="sm" dot>{q.status}</Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {q.kind === "project" && <Badge kind="outline" size="sm">Project</Badge>}
+                    <span className={`truncate text-xs font-semibold text-ink ${q.kind === "project" ? "" : "font-mono"}`}>{q.ref}</span>
+                    <Badge kind={q.badge} size="sm" dot>{q.statusLabel}</Badge>
                   </div>
-                  <div className="mt-0.5 text-xs text-ink-3">{formatDate(q.created_at)}{q.plan ? ` · ${q.plan}` : ""}</div>
+                  <div className="mt-0.5 text-xs text-ink-3">{formatDate(q.createdAt)}{q.kind === "subscription" && q.sub ? ` · ${q.sub}` : ""}</div>
                 </div>
-                <span className="shrink-0 font-serif text-sm tabular-nums text-ink">{rupee(q.amount ?? 0)}</span>
+                <span className="shrink-0 font-serif text-sm tabular-nums text-ink">{rupee(q.amount)}</span>
               </Link>
             </li>
           ))}
         </ul>
       )}
+      {projectFailed && <p className="mt-2 text-xs text-rose">Project quotation load nahi hui — list adhoori ho sakti hai.</p>}
     </Card>
   );
 }
@@ -132,20 +131,27 @@ export function DealQuotesCard({ quotes, onNewQuote }: { quotes: Quote[]; onNewQ
 export function DealMoneyCard({ money, subscriptions, failed, hasQuotes }: {
   money: DealMoney; subscriptions: number; failed: boolean; hasQuotes: boolean;
 }) {
+  const p = money.project;
   return (
-    <Card title="Paise" sub="Is deal ke quotes se jude invoice aur payment">
+    <Card title="Paise" sub="Is deal ke quotes aur project quotation se jude invoice aur payment">
       {!hasQuotes ? (
         <p className="text-sm italic text-ink-3">Quote ke baad invoice aur payment yahan dikhenge.</p>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2">
           <MetricCard label="Invoiced" value={money.invoiceCount ? rupee(money.invoiced) : "—"} hint={money.invoiceCount ? `${money.invoiceCount} invoice` : "Abhi nahi"} />
-          <MetricCard label="Paid" value={money.paymentCount ? rupee(money.paid) : "—"} tone={money.paid > 0 ? "success" : "default"} hint={money.paymentCount ? `${money.paymentCount} payment` : undefined} />
+          <MetricCard label="Paid" value={money.paymentCount ? rupee(money.paid) : "—"} tone={money.paid > 0 ? "success" : "default"} hint={money.paymentCount ? `${money.paymentCount} payment${p.tds > 0 ? ` · ${rupee(p.tds)} TDS` : ""}` : undefined} />
           <MetricCard
             label="Baaki"
             value={money.outstanding === null ? "—" : money.outstanding > 0 ? rupee(money.outstanding) : "Clear"}
             tone={money.outstanding && money.outstanding > 0 ? "danger" : money.outstanding === 0 ? "success" : "default"}
           />
         </div>
+      )}
+      {p.value > 0 && (
+        <p className="mt-2 text-xs text-ink-3">
+          Project ki kul value {rupee(p.value)}
+          {p.notInvoiced > 0 ? ` — ${rupee(p.notInvoiced)} ki milestones ka invoice abhi nahi bana.` : " — saari milestones invoice ho chuki."}
+        </p>
       )}
       {subscriptions > 0 && (
         <p className="mt-2 text-xs text-ink-3">{subscriptions} subscription is deal ke quote se bani.</p>

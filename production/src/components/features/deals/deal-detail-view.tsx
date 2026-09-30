@@ -20,13 +20,14 @@ import { useLead } from "@/lib/queries/leads";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { useQuotesByLead } from "@/lib/queries/quotes";
 import { useTasksForLead, useCompleteTask, useSnoozeTask, useDeleteTask } from "@/lib/queries/tasks";
-import { useDealLeadSources, useDealQuoteSources } from "@/lib/queries/deal-history";
+import { useDealLeadSources, useDealQuoteSources, useDealProjectSources } from "@/lib/queries/deal-history";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useUserNames } from "@/lib/hooks/useUserNames";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { useCallLog } from "@/components/features/leads/call-log-dialog";
 import { canSeeDeals } from "@/lib/deals/access";
 import { buildDealHistory, dealMoney } from "@/lib/deals/timeline";
+import { dealQuoteRows } from "@/lib/deals/deal-quotes";
 import { isDealStage, isCloseOverdue, closeDateShort } from "@/lib/leads/deal-rules";
 import { STAGE_LABEL } from "@/lib/leads/stage-meta";
 import { leadDisplayName } from "@/lib/leads/display-name";
@@ -97,6 +98,8 @@ export function DealDetailView({ leadId }: { leadId: string }) {
   const quotes = React.useMemo(() => quotesQ.data ?? [], [quotesQ.data]);
   const leadSrc = useDealLeadSources(lead?.id);
   const quoteSrc = useDealQuoteSources(quotesQ.data);
+  /* leads.project_id → the project quotation (lib/queries/deal-history.ts#useDealProjectSources). */
+  const projectSrc = useDealProjectSources(lead ? lead.project_id : undefined);
   const { data: userNames } = useUserNames();
 
   const logActivity = useLogLeadActivity();
@@ -119,6 +122,7 @@ export function DealDetailView({ leadId }: { leadId: string }) {
   const history = React.useMemo(() => {
     const l = leadSrc.data;
     const q = quoteSrc.data;
+    const pr = projectSrc.data;
     return buildDealHistory({
       lead,
       activities,
@@ -133,14 +137,26 @@ export function DealDetailView({ leadId }: { leadId: string }) {
       invoices: q?.invoices,
       payments: q?.payments,
       subscriptions: q?.subscriptions,
+      projects: pr?.projects,
+      projectMilestones: pr?.projectMilestones,
+      projectInvoices: pr?.projectInvoices,
+      projectPayments: pr?.projectPayments,
       auditLog: [...(l?.auditLog ?? []), ...(q?.auditLog ?? [])],
     }, nameOf);
-  }, [lead, activities, tasks, quotesQ.data, leadSrc.data, quoteSrc.data, nameOf]);
+  }, [lead, activities, tasks, quotesQ.data, leadSrc.data, quoteSrc.data, projectSrc.data, nameOf]);
 
-  const money = React.useMemo(() => dealMoney({ invoices: quoteSrc.data?.invoices, payments: quoteSrc.data?.payments }), [quoteSrc.data]);
+  const money = React.useMemo(() => dealMoney({
+    invoices: quoteSrc.data?.invoices, payments: quoteSrc.data?.payments,
+    projects: projectSrc.data?.projects, projectMilestones: projectSrc.data?.projectMilestones,
+    projectInvoices: projectSrc.data?.projectInvoices, projectPayments: projectSrc.data?.projectPayments,
+  }), [quoteSrc.data, projectSrc.data]);
+  const quoteRows = React.useMemo(() => dealQuoteRows(quotes, projectSrc.data?.projects ?? []), [quotes, projectSrc.data]);
   const failed = React.useMemo(
-    () => [...new Set([...(leadSrc.data?.failed ?? []), ...(quoteSrc.data?.failed ?? []), ...(leadSrc.error || quoteSrc.error ? ["Kuch records"] : [])])],
-    [leadSrc.data, quoteSrc.data, leadSrc.error, quoteSrc.error],
+    () => [...new Set([
+      ...(leadSrc.data?.failed ?? []), ...(quoteSrc.data?.failed ?? []), ...(projectSrc.data?.failed ?? []),
+      ...(leadSrc.error || quoteSrc.error || projectSrc.error ? ["Kuch records"] : []),
+    ])],
+    [leadSrc.data, quoteSrc.data, projectSrc.data, leadSrc.error, quoteSrc.error, projectSrc.error],
   );
 
   // ── Gates ────────────────────────────────────────────────────────────────
@@ -242,7 +258,7 @@ export function DealDetailView({ leadId }: { leadId: string }) {
             >Email</Button>
             <Button icon="edit" variant="ghost" onClick={() => setEditOpen(true)}>Edit</Button>
             {lead.stage !== "won" && lead.stage !== "lost" && (
-              <Button variant="primary" icon="send" onClick={newQuote}>{quotes.length ? "Naya quote" : "Quote bhejo"}</Button>
+              <Button variant="primary" icon="send" onClick={newQuote}>{quoteRows.length ? "Naya quote" : "Quote bhejo"}</Button>
             )}
           </div>
         </div>
@@ -270,7 +286,7 @@ export function DealDetailView({ leadId }: { leadId: string }) {
         <DealHistoryFeed
           lead={lead}
           history={history}
-          loading={!activities || leadSrc.isLoading || quotesQ.isLoading || quoteSrc.isLoading}
+          loading={!activities || leadSrc.isLoading || quotesQ.isLoading || quoteSrc.isLoading || projectSrc.isLoading}
           failed={failed}
           logActivity={logActivity}
           onCallLog={() => callLog.run("talked", lead)}
@@ -282,12 +298,12 @@ export function DealDetailView({ leadId }: { leadId: string }) {
             openTasks={openTasks} doneTasks={doneTasks} setAddTaskOpen={setAddTaskOpen}
             completeTask={completeTask} snoozeTask={snoozeTask} deleteTask={deleteTask}
           />
-          <DealQuotesCard quotes={quotes} onNewQuote={newQuote} />
+          <DealQuotesCard rows={quoteRows} onNewQuote={newQuote} projectFailed={(projectSrc.data?.failed ?? []).includes("Project quotation") || !!projectSrc.error} />
           <DealMoneyCard
             money={money}
             subscriptions={quoteSrc.data?.subscriptions?.length ?? 0}
-            failed={(quoteSrc.data?.failed ?? []).some((f) => f === "Invoices" || f === "Payments")}
-            hasQuotes={quotes.length > 0}
+            failed={[...(quoteSrc.data?.failed ?? []), ...(projectSrc.data?.failed ?? [])].some((f) => f === "Invoices" || f === "Payments" || f.startsWith("Project"))}
+            hasQuotes={quoteRows.length > 0}
           />
           <DealDetailsCard lead={lead} userNames={userNames} onEdit={() => setEditOpen(true)} />
         </div>
