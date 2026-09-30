@@ -109,7 +109,7 @@ When in doubt, **read the prototype** for UX reference. Do NOT copy prototype co
 | Toast | **sonner** |
 | i18n | **None — by decision.** Pardeep, 1 Sep 2026: "hindi ui nahi karna hai". UI is English + Hinglish; next-intl was a dead dep (zero imports ever) and was uninstalled the same day. Do not re-propose Hindi/i18n. |
 | Icons | **lucide-react** |
-| Email | **Resend** |
+| Email | **SMTP** as the platform sender (`lib/email/smtp-transport.ts`), then **Resend**; a tenant's own Gmail wins. Every recipient is mailed — no allow-list (AGENTS.md §0). |
 | Payments | **Razorpay** |
 | GST | **ClearTax IRP API** (or NIC direct) |
 | Reseller APIs | **Google CSP API**, Microsoft Partner Center, Zoho Partner |
@@ -747,6 +747,16 @@ every `toast.error(...)` that carries neither `description:` nor `action:` and f
 if the count ever RISES above its measured baseline (450 of 481 on 1 Sep — twenty days of
 "migrate opportunistically" had moved exactly one). New error toasts must ship §24-complete;
 fixing an old one means lowering the baseline in that test so it can never climb back.
+
+**The customer site follows the same rule for presses and waits (30 Sep 2026)**, each pinned by a
+scan test:
+- **No silently disabled button.** A press with details missing says what is missing instead of
+  doing nothing, and a disabled button looks disabled (`src/site/silent-disabled-buttons.test.ts`).
+- **A wait shows progress.** A page that POSTs and makes the customer wait renders `<BusyPanel>`
+  (`components/ui/busy-panel.tsx`): what is being done, a seconds count, and a "taking longer than
+  usual" line (`src/site/busy-feedback.test.ts`).
+- **Success only when it happened.** A form says "check your inbox" only when the server reports the
+  email was sent, and a failure says nothing was saved and to try again (`src/site/honest-submit.test.ts`).
 
 ---
 
