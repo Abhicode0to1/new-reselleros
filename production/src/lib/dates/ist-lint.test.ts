@@ -26,11 +26,18 @@ describe("naive-UTC-date lint rule scope", () => {
     expect((ov!.rules!["no-restricted-syntax"] as unknown[])[0]).toBe("error");
   });
 
-  it("covers exactly pardeep's src paths from OWNERS.json", () => {
-    const want = owners.areas.pardeep.paths
-      .filter((p) => p.startsWith("production/src/"))
-      .map((p) => p.slice("production/".length) + (p.endsWith("/") ? "**" : ""));
-    expect([...ov!.files].sort()).toEqual([...want].sort());
+  /* 30 Sep 2026: OWNERS.json was re-split (accounting → hitesh, crons/ops/backup → abhishek).
+     The rule stays on those paths — it guards GST / books / cron dates, whoever owns them — so
+     the check is now: every pardeep src path is covered, and every covered path is owned by
+     someone in OWNERS.json (no stale globs). */
+  const glob = (p: string) => p.slice("production/".length) + (p.endsWith("/") ? "**" : "");
+  it("covers every pardeep src path from OWNERS.json", () => {
+    const want = owners.areas.pardeep.paths.filter((p) => p.startsWith("production/src/")).map(glob);
+    for (const w of want) expect(ov!.files).toContain(w);
+  });
+  it("covers only paths some owner in OWNERS.json has", () => {
+    const all = Object.values(owners.areas).flatMap((a) => a.paths).filter((p) => p.startsWith("production/src/")).map(glob);
+    for (const f of ov!.files) expect(all).toContain(f);
   });
 
   it("touches no other owner's area (no sub-path of these is carved out for someone else)", () => {
