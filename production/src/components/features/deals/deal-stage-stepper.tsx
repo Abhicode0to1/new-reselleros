@@ -103,7 +103,7 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
         )}
       >
         <Icon name="x_circle" size={12} />
-        {lead.stage === "lost" ? "Lost" : "Mark as lost"}
+        Lost
       </button>
     </div>
     </div>
