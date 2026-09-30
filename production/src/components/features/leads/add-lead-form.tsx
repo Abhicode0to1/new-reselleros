@@ -57,11 +57,12 @@ import { amountInIndianWords } from "@/lib/accounting/amount-words";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { sourceOptions } from "@/lib/leads/lead-sources";
+import { canonicalSource, sourceOptions } from "@/lib/leads/lead-sources";
+import { autoDealValue, dealFormErrors, needsDealDetails, type DealFormField } from "@/lib/leads/deal-rules";
 import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
 import { useCustomers } from "@/lib/queries/customers";
 import type { Lead, LeadPriority } from "@/lib/supabase/database.types";
-import { istToday } from "@/lib/dates/ist";
+import { formatIstDate, istToday } from "@/lib/dates/ist";
 
 const STAGES = [
   { value: "new",     label: "New" },
@@ -131,8 +132,13 @@ const STEP_LABELS = ["Contact", "Enquiry", "Review"] as const;
 const STEP_FIELDS = [
   ["company", "contact_name", "contact_email", "contact_phone", "gstin"],
   ["enquiry_type", "plan", "seats", "value", "requirement", "project_timeline", "stage", "source", "priority",
-   "subscription_type", "follow_up_date", "owner_id", "notes"],
+   "subscription_type", "follow_up_date", "expected_close_date", "owner_id", "notes"],
 ] as const;
+
+/** The list price per seat per month for a plan, or undefined (Custom / Mixed, unknown). */
+function listPricePerSeat(plan: string): number | undefined {
+  return PLAN_PRICE_PER_SEAT_PM[plan];
+}
 
 /* ── Two kinds of enquiry ─────────────────────────────────────────────────────
    A licence enquiry is a plan × seats; a custom-software enquiry is a requirement, a
@@ -233,7 +239,10 @@ const schema = z.object({
   source:        z.string(),
   priority:      z.enum(["low", "medium", "high"]),
   follow_up_date: z.string().optional().or(z.literal("")),
-  owner_id:      z.string().optional().or(z.literal("")),
+  /* Plain YYYY-MM-DD (the column is `date`). Required-ness and "not in the past" depend on
+     the stage and on today, so they live in lib/leads/deal-rules.ts#dealFormErrors. */
+  expected_close_date: z.string().optional().or(z.literal("")),
+  owner_id:     z.string().optional().or(z.literal("")),
   subscription_type: z.enum(["fresh", "switch"]).optional().or(z.literal("")),
   notes:         z.string().optional(),
 });
@@ -284,7 +293,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
   const [stage, setStage] = React.useState<FormData["stage"]>(
     (editingLead?.stage as FormData["stage"]) ?? "new",
   );
-  const [source, setSource]     = React.useState<string>(editingLead?.source ?? "manual");
+  const [source, setSource]     = React.useState<string>(canonicalSource(editingLead?.source) || "manual");
   const [plan, setPlan]         = React.useState<string>(editingLead?.plan ?? "");
   const [priority, setPriority] = React.useState<LeadPriority>((editingLead?.priority as LeadPriority) ?? "medium");
   const [ownerId, setOwnerId]   = React.useState<string>(editingLead?.owner_id ?? "");
@@ -311,6 +320,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
     watch,
     getValues,
     trigger,
+    setError,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -330,9 +340,10 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           seats:          editingLead.seats         ?? undefined,
           value:          editingLead.value         ?? undefined,
           stage:         (editingLead.stage  as FormData["stage"]) ?? "new",
-          source:         editingLead.source        ?? "manual",
+          source:         canonicalSource(editingLead.source) || "manual",
           priority:      (editingLead.priority as LeadPriority) ?? "medium",
           follow_up_date: editingLead.follow_up_date ?? "",
+          expected_close_date: editingLead.expected_close_date ?? "",
           owner_id:       editingLead.owner_id      ?? "",
           subscription_type: editingLead.subscription_type ?? "",
           notes:          editingLead.notes         ?? "",
@@ -440,31 +451,63 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
     }
   }, [setValue]);
 
-  // Auto-calculate annual deal value when plan or seats change.
-  // Formula: pricePerSeatPerMonth × seats × 12
-  // Skips auto-calc for "Custom / Mixed" or unknown plans.
+  /* ── Deal value = seats × price per seat × 12 — only when the USER changes an input ──
+     Price per seat is editable (prefilled from the plan's list price, PLAN_PRICE_PER_SEAT_PM)
+     because a reseller's real price is negotiated.
+
+     BUG this replaces (Deals audit, 30 Sep 2026): the effect ran on plan/seats with no
+     editingLead guard, so merely OPENING Edit on a deal recalculated list price × seats × 12
+     and overwrote the negotiated value that was saved. Now `autoCalcArmed` starts false on
+     every open and only the user's own change of plan / seats / price arms it; a value the
+     user typed wins until they clear it (lib/leads/deal-rules.ts#autoDealValue). */
+  const [priceText, setPriceText] = React.useState("");
+  const pricePerSeat = parseMoney(priceText) ?? undefined;
+  const autoCalcArmed = React.useRef(false);
+  const valueTyped    = React.useRef(false);
+  const armAutoCalc = () => { autoCalcArmed.current = true; };
   React.useEffect(() => {
-    const pricePerSeat = PLAN_PRICE_PER_SEAT_PM[plan];
-    if (!pricePerSeat || !watchedSeats || watchedSeats < 1) return;
-    const annualValue = Math.round(pricePerSeat * watchedSeats * 12);
-    setValue("value", annualValue, { shouldValidate: true });
-  }, [plan, watchedSeats, setValue]);
+    const next = autoDealValue({
+      armed: autoCalcArmed.current, valueTyped: valueTyped.current, seats: watchedSeats, pricePerSeat,
+    });
+    if (next !== null) setValue("value", next, { shouldValidate: true, shouldDirty: true });
+  }, [watchedSeats, pricePerSeat, setValue]);
 
   // Quote-first funnel: Demo/Trial/Quote/Won are reachable ONLY after a quote
   // is sent. So a pre-quote lead (New/Contacted, or a brand-new one) may only
   // be set to New / Contacted / Lost here — sending a quote (not this form) is
   // what crosses the gate into the deal stages. A lead already past the gate
   // (stage quote/demo/trial/won/lost) gets the deal-stage set.
+  // Deal stages are allowed when editing a lead already past the quote gate, OR
+  // when adding a NEW record straight into the Deal Pipeline (defaultStage is a
+  // deal stage — "Add Deal" on /deals). Otherwise a raw lead can only be New / Contacted / Lost.
+  const dealMode = editingLead
+    ? (POST_QUOTE_STAGE_VALUES as readonly string[]).includes(editingLead.stage)
+    : !!defaultStage && (POST_QUOTE_STAGE_VALUES as readonly string[]).includes(defaultStage);
   const availableStages = React.useMemo(() => {
-    // Deal stages are allowed when editing a lead already past the quote gate, OR
-    // when adding a NEW record straight into the Deal Pipeline (defaultStage is a
-    // deal stage). Otherwise a raw lead can only be New / Contacted / Lost.
-    const dealMode = editingLead
-      ? (POST_QUOTE_STAGE_VALUES as readonly string[]).includes(editingLead.stage)
-      : !!defaultStage && (POST_QUOTE_STAGE_VALUES as readonly string[]).includes(defaultStage);
     const allowed = dealMode ? POST_QUOTE_STAGE_VALUES : RAW_LEAD_STAGE_VALUES;
     return STAGES.filter((s) => (allowed as readonly string[]).includes(s.value));
-  }, [editingLead, defaultStage]);
+  }, [dealMode]);
+  /** Plan, company and close date are required at this stage (lib/leads/deal-rules.ts). */
+  const dealDetailsRequired = needsDealDetails(stage);
+
+  /** The deal rules zod cannot hold (stage- and today-dependent). Marks each field and
+   *  returns false when something is missing. Run on "Next" from step 2 and on save. */
+  const checkDealRules = (): boolean => {
+    const v = getValues();
+    const errs = dealFormErrors({
+      stage, isProject, company: v.company, plan, requirement: v.requirement, value: v.value,
+      expectedClose: v.expected_close_date, today: istToday(),
+      savedClose: editingLead?.expected_close_date ?? null,
+    });
+    const fields = Object.keys(errs) as DealFormField[];
+    for (const f of fields) setError(f, { type: "deal", message: errs[f] });
+    if (fields.length > 0) {
+      toast.error("Deal ke liye kuch zaroori cheezein baaki hain", {
+        description: fields.map((f) => errs[f]).join(" · "),
+      });
+    }
+    return fields.length === 0;
+  };
 
   // Keep the selected stage within the allowed set (e.g. if it drifted out of
   // range for this lead's funnel position).
@@ -503,8 +546,14 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
 
   // Reset form when modal closes OR when editingLead changes (re-fills defaults).
   React.useEffect(() => {
+    /* Every open starts disarmed: nothing is recalculated until the user changes seats,
+       price or plan. On an edit the price box opens at the price the saved value implies,
+       so changing seats later scales the negotiated value instead of resetting it to list. */
+    autoCalcArmed.current = false;
+    valueTyped.current = false;
     if (!open) {
       reset();
+      setPriceText("");
       setStage("new");
       setSource("manual");
       setPlan("");
@@ -531,16 +580,25 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         seats:          editingLead.seats         ?? undefined,
         value:          editingLead.value         ?? undefined,
         stage:         (editingLead.stage  as FormData["stage"]) ?? "new",
-        source:         editingLead.source        ?? "manual",
+        source:         canonicalSource(editingLead.source) || "manual",
         priority:      (editingLead.priority as LeadPriority) ?? "medium",
         follow_up_date: editingLead.follow_up_date ?? "",
+        expected_close_date: editingLead.expected_close_date ?? "",
         owner_id:       editingLead.owner_id      ?? "",
         subscription_type: editingLead.subscription_type ?? "",
         notes:          editingLead.notes         ?? "",
       });
       setStage((editingLead.stage as FormData["stage"]) ?? "new");
-      setSource(editingLead.source ?? "manual");
+      setSource(canonicalSource(editingLead.source) || "manual");
       setPlan(editingLead.plan ?? "");
+      /* Price per seat on an existing deal: what its saved value implies (value ÷ seats ÷ 12),
+         else the plan's list price. Display only — nothing is recalculated on open. */
+      {
+        const s = editingLead.seats ?? 0;
+        const implied = editingLead.value && s > 0 ? Math.round(editingLead.value / s / 12) : undefined;
+        const p = implied ?? listPricePerSeat(editingLead.plan ?? "");
+        setPriceText(p ? commitMoney(String(p)) : "");
+      }
       setPriority((editingLead.priority as LeadPriority) ?? "medium");
       setOwnerId(editingLead.owner_id ?? "");
       setEnquiry(editingLead.enquiry_type ?? "subscription");
@@ -584,6 +642,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
   };
 
   const onSubmit = async (data: FormData) => {
+    /* Edit has no steps, so this is the only place its deal rules run. */
+    if (!checkDealRules()) return;
     try {
       // Normalize empties → null so the DB row honors "not qualified yet".
       // A raw lead (no plan/seats/value) lives in Inbox; once these get set,
@@ -616,6 +676,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         source:         data.source,
         priority:       data.priority,
         follow_up_date: data.follow_up_date || null,
+        expected_close_date: data.expected_close_date || null,
         owner_id:       data.owner_id       || null,
         subscription_type: project ? null : (data.subscription_type || null),
         notes:          data.notes          || null,
@@ -757,10 +818,14 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 if (v.name)  setValue("contact_name",  v.name,  { shouldDirty: true });
                 if (v.email) setValue("contact_email", liveEmail(v.email), { shouldDirty: true });
                 if (v.phone) setValue("contact_phone", commitPhone(v.phone), { shouldDirty: true });
+                /* A paste is the user's own input — it arms seats × price like typing does. */
+                if (v.seats || v.product) armAutoCalc();
                 if (v.seats) setValue("seats",         v.seats, { shouldDirty: true });
                 if (v.product) {
                   setPlan(v.product.name);
                   setValue("plan", v.product.name, { shouldDirty: true });
+                  const list = listPricePerSeat(v.product.name);
+                  setPriceText(list ? commitMoney(String(list)) : "");
                 }
                 toast.success("Filled from the pasted text.", {
                   description: "Check each field before saving — anything it could not read is still blank.",
@@ -990,18 +1055,23 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
             </>
           ) : (
           <>
-          {/* Plan — optional. If empty → lead lands in Inbox (raw, awaiting
-              qualification). If picked → lead enters Pipeline as a deal. */}
-          <FormField label="Interested plan" htmlFor="plan">
+          {/* Plan. On /leads it may stay empty (a raw lead in the Inbox). Once the stage is
+              past New / Contacted — always, on "Add Deal" — a plan is required (Custom /
+              Mixed counts): a deal with no product cannot be quoted or forecast. */}
+          <FormField label="Interested plan" required={dealDetailsRequired} htmlFor="plan">
             <Select
               value={plan}
               onValueChange={(v) => {
+                armAutoCalc();
                 setPlan(v);
                 (register("plan") as any).onChange({ target: { value: v, name: "plan" } });
+                /* The plan's current list price, as a starting point the rep can change. */
+                const list = listPricePerSeat(v);
+                setPriceText(list ? commitMoney(String(list)) : "");
               }}
             >
               <SelectTrigger id="plan" error={!!errors.plan}>
-                <SelectValue placeholder="Skip to capture as raw lead (Inbox)" />
+                <SelectValue placeholder={dealMode ? "Plan chuno (zaroori)" : "Abhi pata nahi? Khaali chhodo — Lead Inbox me jaayegi"} />
               </SelectTrigger>
               <SelectContent>
                 {PLANS.map((p) => (
@@ -1012,68 +1082,102 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </SelectContent>
             </Select>
             <input type="hidden" {...register("plan")} value={plan} />
-            <p className="text-xs text-ink-3 mt-1">
-              {plan
-                ? "Will go straight into Deal Pipeline as a qualified opportunity."
-                : "Leave empty to drop into Lead Inbox — you can qualify later."}
-            </p>
+            {errors.plan?.message ? (
+              <p className="text-xs text-rose mt-1">{errors.plan.message}</p>
+            ) : (
+              <p className="text-xs text-ink-3 mt-1">
+                {dealDetailsRequired
+                  ? "Deal ke liye plan zaroori hai — mix ho to Custom / Mixed chuno."
+                  : plan
+                    ? "Plan hai — quote bhejne par ye Deals me jaayegi."
+                    : "Khaali chhodo to Lead Inbox me jaayegi — baad me qualify kar sakte ho."}
+              </p>
+            )}
           </FormField>
 
-          {/* Seats + Value in grid — both optional now */}
+          {/* Seats × price per seat → deal value. Price is prefilled from the plan's list
+              price and is editable (the real price is negotiated). The value follows seats ×
+              price × 12 until the rep types a value of their own. */}
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Seats" htmlFor="seats">
-              <Input
-                id="seats"
-                type="number"
-                min={0}
-                placeholder="—"
-                error={errors.seats?.message}
-                {...register("seats", { valueAsNumber: true, setValueAs: (v) => v === "" || v === null ? undefined : Number(v) })}
-              />
+              {(() => {
+                const reg = register("seats", { valueAsNumber: true, setValueAs: (v) => v === "" || v === null ? undefined : Number(v) });
+                return (
+                  <Input
+                    id="seats"
+                    type="number"
+                    min={0}
+                    placeholder="—"
+                    error={errors.seats?.message}
+                    {...reg}
+                    onChange={(e) => { armAutoCalc(); return reg.onChange(e); }}
+                  />
+                );
+              })()}
             </FormField>
-            {/* "(whole rupees)" said in the label, not left to be discovered. This app
-                stores money as integers (CLAUDE.md §13) and a field that quietly rounds
-                1500.50 has decided something about somebody's money without telling them
-                — checkMoney reports that instead. */}
-            <FormField label="Deal value (₹ — whole rupees)" htmlFor="value">
+            <FormField label="Price per seat (₹/month)" htmlFor="price_per_seat">
               <Input
-                id="value"
+                id="price_per_seat"
                 type="text"
                 inputMode="numeric"
                 prefix="₹"
-                error={errors.value?.message}
-                /* The BOX holds a display string ("1,76,640"); the FORM holds a number.
-                   Keeping them apart is what lets the field group digits the Indian way
-                   without the grouping breaking its own validation — and it keeps the
-                   registered field typed as the number it actually is, with no cast. */
-                value={valueText}
-                onChange={(e) => {
-                  const next = liveMoney(e.target.value);
-                  setValueText(next);
-                  setValue("value", parseMoney(next) ?? undefined, { shouldDirty: true });
-                }}
-                onBlur={() => setValueText((t) => commitMoney(t))}
+                placeholder="—"
+                value={priceText}
+                onChange={(e) => { armAutoCalc(); setPriceText(liveMoney(e.target.value)); }}
+                onBlur={() => setPriceText((t) => commitMoney(t))}
               />
-              <FieldPill check={checkMoney(valueText)} />
-              {(parseMoney(valueText) ?? 0) > 0 && (
-                <p className="mt-1 text-xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
-              )}
-              {/* Auto-calc hint */}
-              {PLAN_PRICE_PER_SEAT_PM[plan] && (watchedSeats ?? 0) >= 1 && (
+              {listPricePerSeat(plan) !== undefined && pricePerSeat !== listPricePerSeat(plan) && (
                 <p className="mt-1 text-xs text-ink-3">
-                  ₹{PLAN_PRICE_PER_SEAT_PM[plan].toLocaleString("en-IN")}/seat/mo
-                  {" × "}{watchedSeats} seats × 12 mo
-                  {" = "}
-                  <span className="font-semibold text-ink">
-                    ₹{(PLAN_PRICE_PER_SEAT_PM[plan] * (watchedSeats ?? 0) * 12).toLocaleString("en-IN")}
-                  </span>
+                  List price ₹{listPricePerSeat(plan)!.toLocaleString("en-IN")}
                 </p>
-              )}
-              {plan === "Custom / Mixed" && (
-                <p className="mt-1 text-xs text-ink-3">Enter your negotiated deal value</p>
               )}
             </FormField>
           </div>
+          {/* "(whole rupees)" said in the label, not left to be discovered. This app
+              stores money as integers (CLAUDE.md §13) and a field that quietly rounds
+              1500.50 has decided something about somebody's money without telling them
+              — checkMoney reports that instead. */}
+          <FormField label="Deal value (₹/year — whole rupees)" required={stage === "won"} htmlFor="value">
+            <Input
+              id="value"
+              type="text"
+              inputMode="numeric"
+              prefix="₹"
+              error={errors.value?.message}
+              /* The BOX holds a display string ("1,76,640"); the FORM holds a number.
+                 Keeping them apart is what lets the field group digits the Indian way
+                 without the grouping breaking its own validation — and it keeps the
+                 registered field typed as the number it actually is, with no cast. */
+              value={valueText}
+              onChange={(e) => {
+                const next = liveMoney(e.target.value);
+                /* A typed value is the rep's own and stops the auto-calc; clearing the box
+                   hands it back to seats × price. */
+                valueTyped.current = next.trim() !== "";
+                setValueText(next);
+                setValue("value", parseMoney(next) ?? undefined, { shouldDirty: true });
+              }}
+              onBlur={() => setValueText((t) => commitMoney(t))}
+            />
+            <FieldPill check={checkMoney(valueText)} />
+            {(parseMoney(valueText) ?? 0) > 0 && (
+              <p className="mt-1 text-xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
+            )}
+            {/* The sum the auto-calc uses, shown so the rep can see where the number came from. */}
+            {(pricePerSeat ?? 0) > 0 && (watchedSeats ?? 0) >= 1 && (
+              <p className="mt-1 text-xs text-ink-3">
+                ₹{(pricePerSeat ?? 0).toLocaleString("en-IN")}/seat/mo
+                {" × "}{watchedSeats} seats × 12 mo
+                {" = "}
+                <span className="font-semibold text-ink">
+                  ₹{Math.round((pricePerSeat ?? 0) * (watchedSeats ?? 0) * 12).toLocaleString("en-IN")}
+                </span>
+              </p>
+            )}
+            {plan === "Custom / Mixed" && (
+              <p className="mt-1 text-xs text-ink-3">Negotiated deal value bharo</p>
+            )}
+          </FormField>
           </>
           )}
 
@@ -1099,11 +1203,13 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 </SelectContent>
               </Select>
               <input type="hidden" {...register("stage")} value={stage} />
-              {!isProject && !plan && (
-                <p className="mt-1 text-xs text-ink-3 leading-snug">
-                  Pick a plan to unlock Demo / Trial / Quote / Won.
-                </p>
-              )}
+              {/* What actually unlocks the deal stages is SENDING A QUOTE (quote-first gate,
+                  lib/leads/stage-options.ts) — not picking a plan, as this line used to say. */}
+              <p className="mt-1 text-xs text-ink-3 leading-snug">
+                {dealMode
+                  ? "Quote / Demo / Trial / Won: plan, company aur close date zaroori. Won ke liye value bhi."
+                  : "Quote bhejne par lead Deals me aati hai — tab Demo / Trial / Won khulte hain."}
+              </p>
             </FormField>
             <FormField label="Source" htmlFor="source">
               <Select
@@ -1170,6 +1276,23 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
             </p>
           </FormField>
           )}
+
+          {/* Expected close — `leads.expected_close_date` (Deals audit, 30 Sep 2026: the column
+              existed and nothing wrote it, so "Closing this month" and the forecast were
+              empty). Required from Quote onward; not in the past (IST). An edit may keep an
+              already-saved past date — lib/leads/deal-rules.ts#dealFormErrors. */}
+          <FormField label="Kab tak band hogi? (expected close)" required={dealDetailsRequired} htmlFor="expected_close_date">
+            <Input
+              id="expected_close_date"
+              type="date"
+              min={isEditing && (editingLead?.expected_close_date ?? "") < istToday() ? undefined : istToday()}
+              error={errors.expected_close_date?.message}
+              {...register("expected_close_date")}
+            />
+            <p className="mt-1 text-xs text-ink-3">
+              Forecast aur &ldquo;Closing this month&rdquo; isi date se chalte hain.
+            </p>
+          </FormField>
 
           {/* Follow-up date + Owner — sales workflow row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1252,10 +1375,12 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   <>
                     <Review label="Plan"        value={plan} />
                     <Review label="Seats"       value={watchedSeats == null || Number.isNaN(watchedSeats) ? "" : String(watchedSeats)} />
+                    <Review label="Price / seat" value={priceText ? `₹${priceText}/month` : ""} />
                     <Review label="Deal value"  value={valueText ? `₹${valueText}` : ""} />
                   </>
                 )}
                 <Review label="Stage"       value={STAGES.find((s) => s.value === stage)?.label} />
+                <Review label="Expected close" value={watch("expected_close_date") ? formatIstDate(watch("expected_close_date") ?? "") : ""} />
                 <Review label="Priority"    value={PRIORITY_OPTIONS.find((p) => p.value === priority)?.label} />
               </dl>
               {/* Blanks are stated, not shown as gaps — a blank row reads as a
@@ -1294,7 +1419,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                      yet, which is the same "shouting at an untouched field" the pills
                      were built to stop. */
                   const ok = await trigger(step === 1 ? STEP_FIELDS[0] : STEP_FIELDS[1]);
-                  if (ok) setStep(step + 1);
+                  /* Step 2 also runs the deal rules (plan / company / close date / Won value). */
+                  if (ok && (step !== 2 || checkDealRules())) setStep(step + 1);
                 }}
               >
                 Next

@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/button";
 
 export interface LeadsHeaderBarProps {
   salesTab: "raw" | "deals" | "all";
+  /** /deals gets its own title — it holds only real deals (quote → won / lost). */
+  isDealsPage?: boolean;
   setAddOpen: (open: boolean) => void;
 }
 
-export function LeadsHeaderBar({ salesTab, setAddOpen }: LeadsHeaderBarProps) {
+export function LeadsHeaderBar({ salesTab, isDealsPage = false, setAddOpen }: LeadsHeaderBarProps) {
   return (
     <>
       {/* Top App Bar — sticky, so the primary action never scrolls away.
@@ -49,10 +51,13 @@ export function LeadsHeaderBar({ salesTab, setAddOpen }: LeadsHeaderBarProps) {
       <div className="sticky top-0 z-20 shrink-0 mb-2.5 -mx-3 sm:-mx-4 px-3 sm:px-4 pt-1.5 pb-1.5 bg-paper/95 backdrop-blur-sm border-b border-hairline/60">
         {/* Row 1 — title, opposite the primary action */}
         <div className="flex items-center justify-between gap-3 mb-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="min-w-0">
             <h1 className="font-serif text-xl sm:text-2xl font-bold leading-none text-ink truncate">
-              Sales & Pipeline
+              {isDealsPage ? "Deals" : "Sales & Pipeline"}
             </h1>
+            {isDealsPage && (
+              <p className="mt-1 text-xs text-ink-3 truncate">Qualified deals — quote se won tak</p>
+            )}
           </div>
 
           {/* Primary action — top-right, and sticky with this bar. */}

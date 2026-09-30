@@ -58,6 +58,7 @@ import { chipsForStage, type LeadOutcome } from "@/lib/leads/outcomes";
 import type { Lead } from "@/lib/supabase/database.types";
 import type { LeadListRow } from "@/lib/leads/list-page";
 import { istToday } from "@/lib/dates/ist";
+import { CloseDateBadge } from "@/components/features/leads/close-date-badge";
 
 // LEAD_STAGES mirrors the array in leads/page.tsx — kept here as a small
 // constant to avoid coupling the swipe card to that file's internals. If
@@ -337,6 +338,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               <p className="font-serif text-base tabular-nums text-ink leading-none">
                 {lead.value ? rupee(lead.value, { compact: true }) : "—"}
               </p>
+              <CloseDateBadge lead={lead} className="block text-xs mt-0.5" />
               {lead.seats && (
                 <p className="text-xs text-ink-3 tabular-nums mt-0.5">{lead.seats} seats</p>
               )}

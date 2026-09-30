@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { LEAD_SOURCES, sourceOptions, sourceLabel } from "./lead-sources";
+import { LEAD_SOURCES, canonicalSource, sourceOptions, sourceLabel } from "./lead-sources";
 import { AD_CHANNELS } from "@/lib/marketing/ad-channels";
 
 describe("lead sources", () => {
@@ -29,5 +29,21 @@ describe("lead sources", () => {
     expect(sourceLabel("meta-ads")).toBe("Facebook / Instagram Ads");
     expect(sourceLabel("xyz")).toBe("xyz");
     expect(sourceLabel(null)).toBe("—");
+  });
+});
+
+describe("a saved source spelled differently is not listed twice (Deals audit, 30 Sep 2026)", () => {
+  it('"Added manually" / "Manual" map to the manual key, and the dropdown has one "Added manually"', () => {
+    for (const saved of ["Added manually", "Manual", " manual ", "MANUAL"]) {
+      expect(canonicalSource(saved)).toBe("manual");
+      expect(sourceOptions(saved).filter((s) => s.label === "Added manually")).toHaveLength(1);
+      expect(sourceOptions(saved)).toBe(LEAD_SOURCES);
+    }
+  });
+
+  it("an unknown source still stays visible, once", () => {
+    expect(canonicalSource("old-partner-form")).toBe("old-partner-form");
+    expect(sourceOptions("old-partner-form").filter((s) => s.value === "old-partner-form")).toHaveLength(1);
+    expect(sourceLabel("Added manually")).toBe("Added manually");
   });
 });

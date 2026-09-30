@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import type { Lead } from "@/lib/supabase/database.types";
 import {
   boardCut, daysSince, inWorkspace, isOpenLead, junkCounts, listCut, nextSort, openTaskIndex,
-  pipelineTotals, searchLeads, sortLeads, UNASSIGNED, type SearchInput,
+  pipelineTotals, searchLeads, sortLeads, UNASSIGNED, wonThisMonth, type SearchInput,
 } from "./list-selectors";
 
 let seq = 0;
@@ -188,11 +188,21 @@ describe("searchLeads — the page's old `searched` memo", () => {
     expect(ids(searchLeads([n, c], { ...base, smartView: "new" }))).toEqual([n.id]);
   });
 
-  it("won-mtd: won AND CREATED this month (by created_at, not by when it was won)", () => {
-    const thisMonth = mk({ stage: "won", created_at: "2026-09-02T00:00:00.000Z" });
-    const lastMonth = mk({ stage: "won", created_at: "2026-08-15T00:00:00.000Z" });
-    const openThisMonth = mk({ stage: "quote", created_at: "2026-09-05T00:00:00.000Z" });
-    expect(ids(searchLeads([thisMonth, lastMonth, openThisMonth], { ...base, smartView: "won-mtd" }))).toEqual([thisMonth.id]);
+  it("won-mtd: WON this month by the win date (stage_changed_at), not by when the lead arrived", () => {
+    /* Deals audit, 30 Sep 2026: an August lead won on 3 Sep is September's win; a lead created
+       in September but won in August (impossible-looking, but stage_changed_at says so) is not. */
+    const arrivedAugWonSep = mk({ stage: "won", created_at: "2026-08-10T06:00:00.000Z", stage_changed_at: "2026-09-03T06:00:00.000Z" });
+    const wonLastMonth = mk({ stage: "won", created_at: "2026-09-01T06:00:00.000Z", stage_changed_at: "2026-08-20T06:00:00.000Z" });
+    const legacyNoWinDate = mk({ stage: "won", created_at: "2026-09-02T06:00:00.000Z" });
+    const openThisMonth = mk({ stage: "quote", stage_changed_at: "2026-09-05T06:00:00.000Z" });
+    expect(ids(searchLeads([arrivedAugWonSep, wonLastMonth, legacyNoWinDate, openThisMonth], { ...base, smartView: "won-mtd" })))
+      .toEqual([arrivedAugWonSep.id, legacyNoWinDate.id]);
+  });
+
+  it("won-mtd uses the IST month: won at 00:30 IST on 1 Oct is October's, not September's", () => {
+    const now = new Date("2026-10-01T00:00:00.000Z"); // 05:30 IST, 1 Oct
+    expect(wonThisMonth({ stage: "won", created_at: null, stage_changed_at: "2026-09-30T19:00:00.000Z" } as never, now)).toBe(true);
+    expect(wonThisMonth({ stage: "won", created_at: null, stage_changed_at: "2026-09-30T18:00:00.000Z" } as never, now)).toBe(false);
   });
 
   it("closing: open, dated, on or before month end; undated excluded", () => {

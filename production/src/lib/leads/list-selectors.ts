@@ -20,6 +20,7 @@ import { isHotLead } from "@/lib/leads/heat";
 import { staleDeals } from "@/lib/leads/velocity";
 import { inSalesFolder, type SalesFolder } from "@/lib/leads/folders";
 import { waitPriority, waitState } from "@/lib/leads/waiting";
+import { istMonth, toIstDate } from "@/lib/dates/ist";
 
 export type PriorityFilter = "low" | "medium" | "high";
 
@@ -130,7 +131,6 @@ export function searchLeads<T extends LeadListRow>(workspaceLeads: readonly T[],
        swallowed leads due today, for anyone working early. Same trap documented in
        lib/leads/outcomes.ts for the follow-up writes. */
     const todayStr = localDateISO(now);
-    const monthStart = new Date(now); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
     if (smartView === "mine") {
       list = list.filter((l) => currentUser && l.owner_id === currentUser.userId);
     } else if (smartView === "waiting") {
@@ -151,7 +151,7 @@ export function searchLeads<T extends LeadListRow>(workspaceLeads: readonly T[],
     } else if (smartView === "new") {
       list = list.filter((l) => l.stage === "new");
     } else if (smartView === "won-mtd") {
-      list = list.filter((l) => l.stage === "won" && l.created_at && new Date(l.created_at) >= monthStart);
+      list = list.filter((l) => wonThisMonth(l, now));
     } else if (smartView === "closing") {
       /* Same rule as closingBy() in lib/leads/forecast.ts: open, dated, on or before
          month end. Undated deals are excluded. */
@@ -320,4 +320,24 @@ export function openTaskIndex(
     }
   }
   return m;
+}
+
+/**
+ * "Won this month" — WON this month, by the IST calendar month of the win.
+ *
+ * It used to be `stage = 'won' AND created_at >= 1st of the month (browser time)`: a lead that
+ * came in in August and was won on 3 September never counted as September's win, while one
+ * created on 1 September and won last week did. The win date is `stage_changed_at` (the last
+ * stage move — for a won lead, the move to won; won is locked, so nothing moves it after).
+ * A won row with no stage_changed_at (older data) falls back to created_at.
+ *
+ * ⚠ The SQL twin in lead_counts() (migration 20260929130000, `v_view = 'won-mtd'`) still uses
+ * created_at. Changing it needs a migration; until then a server-paged list in this view can
+ * differ from this rule. The View menu does not offer won-mtd, so no chip shows that count.
+ */
+export function wonThisMonth(l: Pick<Lead, "stage" | "stage_changed_at" | "created_at">, now: Date): boolean {
+  if (l.stage !== "won") return false;
+  const at = l.stage_changed_at ?? l.created_at;
+  if (!at) return false;
+  return toIstDate(at).slice(0, 7) === istMonth(now);
 }

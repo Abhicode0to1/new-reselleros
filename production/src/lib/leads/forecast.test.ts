@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   STAGE_PROBABILITY, stageProbability, weightedValue, buildForecast, closingBy,
-  isOpenStage, probabilityLabel, winRate,
+  isOpenStage, probabilityLabel, winRate, columnSummary,
 } from "./forecast";
 import type { Lead } from "@/lib/supabase/database.types";
 
@@ -259,5 +259,20 @@ describe("winRate — undecided is not lost", () => {
 
   it("says 0% when deals really have been lost", () => {
     expect(winRate([at("lost"), at("lost"), at("new")]).pct).toBe(0);
+  });
+});
+
+describe("columnSummary — Kanban column header (Deals audit, 30 Sep 2026)", () => {
+  it("count, rupee total and probability-weighted rupees", () => {
+    const s = columnSummary([
+      { stage: "quote", value: 100000 }, { stage: "quote", value: 50000 }, { stage: "quote", value: null },
+    ]);
+    expect(s).toEqual({ count: 3, total: 150000, weighted: 120000, partial: false });
+  });
+  it("a capped column is marked partial — its sums cover visible cards only", () => {
+    expect(columnSummary([{ stage: "demo", value: 1000 }], true)).toEqual({ count: 1, total: 1000, weighted: 400, partial: true });
+  });
+  it("won is weighted at 100%", () => {
+    expect(columnSummary([{ stage: "won", value: 7777 }]).weighted).toBe(7777);
   });
 });

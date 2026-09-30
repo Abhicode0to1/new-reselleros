@@ -9,6 +9,7 @@ import { rupee, initials, formatDate } from "@/lib/utils";
 import { getLeadWhatsAppUrl } from "@/lib/whatsapp";
 import { useWhatsAppSender } from "@/lib/hooks/useWhatsAppSender";
 import { intentMeta, staleWarning, isHighValueLead } from "@/lib/leads/heat";
+import { CloseDateBadge } from "@/components/features/leads/close-date-badge";
 import type { LeadListRow } from "@/lib/leads/list-page";
 import { cn } from "@/lib/utils";
 
@@ -160,7 +161,8 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
             A second one used to sit here computed from `created_at`, so a lead
             created 30 days ago but worked on yesterday was labelled "30d" —
             it measured the lead's AGE, not neglect. */}
-        <div className="flex items-center gap-1 text-xs text-ink-3">
+        <div className="flex items-center gap-1.5 text-xs text-ink-3">
+          <CloseDateBadge lead={lead} />
           <span>{age}</span>
         </div>
       </div>

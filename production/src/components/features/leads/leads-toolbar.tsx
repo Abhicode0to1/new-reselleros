@@ -58,6 +58,8 @@ export interface LeadsToolbarProps {
   /** lead_counts().views — the View menu's counts. */
   viewCounts: LeadCounts["views"];
   everythingCount: number;
+  /** /deals: the everything entry reads "Saari deals" and the New view is not offered. */
+  isDealsPage?: boolean;
   currentUser: ReturnType<typeof useCurrentUser>["data"];
   duplicateCountForTab: number;
   junkCount: number;
@@ -93,7 +95,7 @@ export interface LeadsToolbarProps {
 
 export function LeadsToolbar({
   pool, leadMeMember, leadTeam, leadTeamMode, setLeadTeamMode, search, setSearch, viewCounts,
-  everythingCount, currentUser, duplicateCountForTab, junkCount, junkSuspectCount, smartView,
+  everythingCount, isDealsPage = false, currentUser, duplicateCountForTab, junkCount, junkSuspectCount, smartView,
   selectSmartView, folderRows, folder, selectFolder, effectiveView, setView, isMobile = false, activeFilterCount,
   filterStages, stageFilter, setStageFilter, priorityFilter, setPriorityFilter, ownerFilter, setOwnerFilter, isSales, kpiOpen,
   setKpiOpen, setCsvImportOpen, setCampaignOpen, setGoogleImportOpen, setShareOpen,
@@ -151,6 +153,7 @@ export function LeadsToolbar({
       <LeadsSmartViews
         counts={viewCounts}
         everythingCount={everythingCount}
+        isDealsPage={isDealsPage}
         currentUserId={currentUser?.userId}
         duplicateCount={duplicateCountForTab}
         junkCount={junkCount}

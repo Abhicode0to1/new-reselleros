@@ -28,6 +28,7 @@ import {
   AVATAR_TOKENS, GRID_TD, GRID_TD_ATOM, STICK_L_IDENTITY, STICK_L_SELECT, type AvatarColor,
 } from "@/components/features/leads/lead-list-grid";
 import { RowActions } from "@/components/features/leads/lead-row-actions";
+import { CloseDateBadge } from "@/components/features/leads/close-date-badge";
 
 type TeamMember = NonNullable<ReturnType<typeof useTeamMembers>["data"]>[number];
 
@@ -495,8 +496,13 @@ export function LeadListRow({
                         </span>
                       );
                     })()}
+                    {/* Expected close under the money — rose + "overdue" once it has passed. */}
+                    <CloseDateBadge lead={lead} className="text-3xs" />
                   </span>
-                : <span className="text-ink-3">—</span>
+                : <span className="inline-flex flex-col items-end gap-0.5">
+                    <span className="text-ink-3">—</span>
+                    <CloseDateBadge lead={lead} className="text-3xs" />
+                  </span>
             }
           />
         </td>
