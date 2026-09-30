@@ -23,6 +23,7 @@ import {
   type LeadCounts, type LeadListCursor, type LeadListFilters, type LeadListPage, type LeadListRow,
 } from "@/lib/leads/list-page";
 import type { JunkReasonId } from "@/lib/leads/qualification";
+import { hasDupKeys, type DupCheckKeys, type LeadDuplicate } from "@/lib/leads/duplicate-check";
 
 // ============================================================
 // Optimistic writes across every cached shape of "leads"
@@ -529,29 +530,29 @@ export async function fetchMergeCluster(leadId: string, ownerIds: readonly strin
 }
 
 /**
- * Existing leads that the lead being typed would duplicate (same phone key or company key —
- * lib/leads/duplicates.ts), newest first. The Add-lead form's warning; it used to load every
- * lead to look for one. Debounced by the caller; nothing is asked until something is typed.
+ * Existing leads that the lead being typed would duplicate — same GSTIN, email, phone or
+ * company key, strongest match first (find_lead_duplicates, R-072 / migration
+ * 20260930200000; lib/leads/duplicate-check.ts). The Add-lead form's warning. Debounced by the
+ * caller, which sends only keys worth asking (dupCheckKeys); nothing is asked before that.
+ * RLS applies (invoker): a rep is warned about the leads they can see.
  */
-export function useLeadDuplicateCheck(company: string, phone: string, excludeId: string | undefined, enabled: boolean) {
-  const c = company.trim();
-  const p = phone.trim();
+export function useLeadDuplicateCheck(keys: DupCheckKeys, excludeId: string | undefined, enabled: boolean) {
   return useQuery({
-    queryKey: ["leads", "dup-check", c, p, excludeId ?? null],
-    enabled: enabled && (c.length > 0 || p.length > 0),
+    queryKey: ["leads", "dup-check", keys.phone, keys.email, keys.gstin, keys.company, excludeId ?? null],
+    enabled: enabled && hasDupKeys(keys),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
-    queryFn: async (): Promise<LeadListRow[]> => {
+    queryFn: async (): Promise<LeadDuplicate[]> => {
       const supabase = createClient();
-      const { data, error } = await supabase.rpc("list_leads", {
-        p_cursor: null,
-        p_limit: 10,
-        p_filters: toListLeadsFilters({
-          junk: "any", dup_like: { company: c, contact_phone: p, exclude_id: excludeId },
-        }) as unknown as Json,
+      const { data, error } = await supabase.rpc("find_lead_duplicates", {
+        p_phone: keys.phone,
+        p_email: keys.email,
+        p_gstin: keys.gstin,
+        p_company: keys.company,
+        ...(excludeId ? { p_exclude_id: excludeId } : {}),
       });
       if (error) throw error;
-      return ((data as unknown as LeadListPage | null)?.rows ?? []);
+      return (data ?? []) as LeadDuplicate[];
     },
   });
 }

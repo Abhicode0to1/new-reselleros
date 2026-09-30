@@ -12,15 +12,19 @@
  * The one count lead_counts() takes before any filter — workspace.everything, the "All
  * leads" entry — is corrected per page: /leads subtracts kpi.won (same base); /deals sums its
  * own folders (quoted + proving + won + lost), which ARE counted over the stage-scoped set.
- * That sum narrows with search / filters like the list does; an un-narrowed deals-only
- * count, and View-menu counts (lead_counts().views) scoped to deal stages, need a change to
- * lead_counts() — a migration, not done here.
+ * That sum narrows with search / filters like the list does.
+ *
+ * R-070 (migration 20260930200000): the View-menu counts (lead_counts().views) are scoped to
+ * the page too — scopeFiltersForPage also sends `page_stages` (every stage the page shows),
+ * which lead_counts() applies to the View menu only. So on /deals "Hot", "Stalled" … count
+ * deals, not New / Contacted leads. list_leads() never receives it (toListLeadsFilters).
  *
  * Lost stays on /leads too: the R-057 decision named Won only.
  */
 import type { Lead } from "@/lib/supabase/database.types";
 import type { LeadCounts, LeadListFilters } from "@/lib/leads/list-page";
 import type { SalesFolder } from "@/lib/leads/folders";
+import type { SmartView } from "@/components/features/leads/leads-smart-views";
 import { STAGE_LABEL } from "@/lib/leads/stage-meta";
 import { DEALS_PAGE_STAGES } from "@/lib/leads/deal-rules";
 
@@ -48,7 +52,7 @@ export function pageStages(isDealsPage: boolean): Lead["stage"][] {
 export function scopeFiltersForPage(f: LeadListFilters, isDealsPage: boolean): LeadListFilters {
   const picked = (f.stages ?? []).filter((s) => stageShownOnPage(s, isDealsPage));
   const stages = picked.length > 0 ? picked : pageStages(isDealsPage);
-  return { ...f, stages };
+  return { ...f, stages, page_stages: pageStages(isDealsPage) };
 }
 
 /** Folders whose stage cannot be on this page (Inbox = new, Talks = contact on /deals). */
@@ -68,4 +72,24 @@ export function everythingCountForPage(
     return f.quoted + f.proving + f.won + f.lost;
   }
   return counts.workspace.everything - counts.kpi.won;
+}
+
+/**
+ * R-070: the Kanban header totals the server can vouch for — lead_counts().stage_totals, or
+ * undefined when the board is not showing the set the server counted:
+ *   • a folder is picked, or the Junk view is on — the board then shows the list cut
+ *     (list-selectors.ts#boardCut), which stage_totals does not count;
+ *   • the counts have not arrived, or the server predates the migration (no stage_totals).
+ * With no folder the board leaves LOST out (boardCut: open + won), so Lost is dropped here
+ * and that column keeps summing its own cards rather than showing a total it does not hold.
+ */
+export function boardServerTotals(
+  counts: Pick<LeadCounts, "stage_totals"> | undefined,
+  folder: SalesFolder | "all",
+  smartView: SmartView,
+): LeadCounts["stage_totals"] | undefined {
+  if (!counts?.stage_totals || folder !== "all" || smartView === "junk") return undefined;
+  return Object.fromEntries(
+    Object.entries(counts.stage_totals).filter(([stage]) => stage !== "lost"),
+  ) as LeadCounts["stage_totals"];
 }

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  everythingCountForPage, folderShownOnPage, pageStages, scopeFiltersForPage, stageShownOnPage,
+  boardServerTotals, everythingCountForPage, folderShownOnPage, pageStages, scopeFiltersForPage, stageShownOnPage,
 } from "@/lib/leads/page-scope";
 import { toLeadCountsFilters, toListLeadsFilters, type LeadListFilters } from "@/lib/leads/list-page";
 
@@ -91,5 +91,50 @@ describe("the page wiring", () => {
   it("the board reads only this page's columns", () => {
     expect(src).toMatch(/useLeadsBoard\([^)]*stages: boardStages/);
     expect(src).toContain("stages={DEAL_STAGES.filter((s) => stageShownOnPage(s.id, isDealsPage))}");
+  });
+
+  it("R-070: the board's column totals come from lead_counts (same filters as the list)", () => {
+    expect(src).toContain("serverColumnTotals={boardServerTotals(counts, folder, smartView)}");
+  });
+});
+
+describe("R-070 — View-menu counts are the page's (page_stages)", () => {
+  it("/deals sends page_stages = the deal stages to lead_counts, whatever the stage pick", () => {
+    const f = scopeFiltersForPage({ ...base, stages: ["quote"] }, true);
+    expect(toLeadCountsFilters(f).page_stages).toEqual(["demo", "lost", "quote", "trial", "won"]);
+    expect(toLeadCountsFilters(f).stages).toEqual(["quote"]);
+  });
+
+  it("/leads sends its own page stages (no won)", () => {
+    expect(toLeadCountsFilters(scopeFiltersForPage(base, false)).page_stages).toEqual(
+      ["contact", "demo", "lost", "new", "quote", "trial"]);
+  });
+
+  it("list_leads never receives page_stages — its query key is unchanged", () => {
+    expect(toListLeadsFilters(scopeFiltersForPage(base, true))).not.toHaveProperty("page_stages");
+  });
+});
+
+describe("R-070 — boardServerTotals", () => {
+  const stage_totals = {
+    quote: { count: 350, value: 9_00_000, weighted: 7_20_000 },
+    won: { count: 2, value: 1_50_000, weighted: 1_50_000 },
+    lost: { count: 5, value: 2_00_000, weighted: 0 },
+  };
+
+  it("hands the board the server's totals when it shows the counted set — minus Lost", () => {
+    expect(boardServerTotals({ stage_totals }, "all", "everything")).toEqual({
+      quote: stage_totals.quote, won: stage_totals.won,
+    });
+  });
+
+  it("none under a folder or the Junk view (the board shows the list cut there)", () => {
+    expect(boardServerTotals({ stage_totals }, "quoted", "everything")).toBeUndefined();
+    expect(boardServerTotals({ stage_totals }, "all", "junk")).toBeUndefined();
+  });
+
+  it("none before the counts arrive or from a server without the migration — the board then says ≈", () => {
+    expect(boardServerTotals(undefined, "all", "everything")).toBeUndefined();
+    expect(boardServerTotals({}, "all", "everything")).toBeUndefined();
   });
 });

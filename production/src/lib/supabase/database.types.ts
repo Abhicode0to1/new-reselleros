@@ -893,6 +893,9 @@ type ColumnPatches = {
     junk_reason: "fake_phone" | "spam_email" | "not_commercial" | "unresponsive" | "other" | null;
     priority: LeadPriority;
     subscription_type: "fresh" | "switch" | null;
+    /* R-071 (migration 20260930200000): leads_billing_cycle_check. Descriptive only —
+       leads.value stays the ANNUAL deal value whatever this says. */
+    billing_cycle: "monthly" | "yearly" | null;
   };
   quotes: {
     line_items: QuoteLineItem[];

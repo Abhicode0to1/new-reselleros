@@ -331,9 +331,9 @@ export function openTaskIndex(
  * stage move — for a won lead, the move to won; won is locked, so nothing moves it after).
  * A won row with no stage_changed_at (older data) falls back to created_at.
  *
- * ⚠ The SQL twin in lead_counts() (migration 20260929130000, `v_view = 'won-mtd'`) still uses
- * created_at. Changing it needs a migration; until then a server-paged list in this view can
- * differ from this rule. The View menu does not offer won-mtd, so no chip shows that count.
+ * The SQL twins in lead_counts() and list_leads() (`v_view = 'won-mtd'`) use the same rule
+ * since R-070 (migration 20260930200000: coalesce(stage_changed_at, created_at) ≥ the IST
+ * month start) — supabase/tests/deal_totals_billing_dup.test.sql pins both.
  */
 export function wonThisMonth(l: Pick<Lead, "stage" | "stage_changed_at" | "created_at">, now: Date): boolean {
   if (l.stage !== "won") return false;

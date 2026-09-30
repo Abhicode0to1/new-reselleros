@@ -78,6 +78,13 @@ export interface LeadListFilters {
   dup_of?: string;
   /** Leads that a lead being TYPED would duplicate (the Add-lead form's warning). */
   dup_like?: { company?: string; contact_phone?: string; exclude_id?: string };
+  /**
+   * lead_counts() only (R-070, migration 20260930200000): the stages the PAGE shows
+   * (page-scope.ts#pageStages) — the View menu counts only these. Not the user's stage pick,
+   * which the View menu never reads. list_leads() does not take it (its `stages` already
+   * carry the page scope), so toListLeadsFilters drops it.
+   */
+  page_stages?: Lead["stage"][];
 }
 
 /**
@@ -166,13 +173,24 @@ export interface LeadCounts {
   };
   /** Non-junk workspace: "Show the numbers". */
   kpi: { open_count: number; open_value: number; open_value_project: number; won: number; lost: number };
+  /**
+   * R-070 (migration 20260930200000): the searched set per stage — cards, ₹ value (value > 0
+   * summed) and weighted ₹ (forecast.ts#weightedValue per deal, summed). A stage with no
+   * lead is absent. Optional: a server without the migration does not send it, and the
+   * board then falls back to summing its visible cards (and says "≈").
+   */
+  stage_totals?: Partial<Record<Lead["stage"], StageTotal>>;
 }
 
-/** lead_counts() takes the list's filters minus the paging-only keys. */
+/** One stage of lead_counts().stage_totals. */
+export interface StageTotal { count: number; value: number; weighted: number }
+
+/** lead_counts() takes the list's filters minus the paging-only keys, plus page_stages. */
 export function toLeadCountsFilters(input: LeadListFilters): LeadListFilters {
   const f = toListLeadsFilters(input);
   delete f.sort;
   delete f.dup_of;
   delete f.dup_like;
+  if (input.page_stages && input.page_stages.length > 0) f.page_stages = [...input.page_stages].sort();
   return f;
 }

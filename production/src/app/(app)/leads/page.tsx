@@ -44,7 +44,7 @@ import type { Lead } from "@/lib/supabase/database.types";
 import type { LeadListFilters, LeadListRow } from "@/lib/leads/list-page";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { DEAL_STAGES, filterStagesFor } from "@/lib/leads/stage-meta";
-import { everythingCountForPage, folderShownOnPage, scopeFiltersForPage, stageShownOnPage } from "@/lib/leads/page-scope";
+import { boardServerTotals, everythingCountForPage, folderShownOnPage, scopeFiltersForPage, stageShownOnPage } from "@/lib/leads/page-scope";
 import {
   boardCut, inWorkspace, listCut, searchLeads, type SortCol,
 } from "@/lib/leads/list-selectors";
@@ -682,6 +682,9 @@ function LeadsPageInner() {
         <LeadsKanbanBoard
           boardLeads={boardLeads}
           columnTotals={boardQ.data?.totals}
+          /* R-070: column ₹ totals from the server (lead_counts, same filters) — exact even
+             for a capped column; undefined under a folder / the Junk view (page-scope.ts). */
+          serverColumnTotals={boardServerTotals(counts, folder, smartView)}
           stages={DEAL_STAGES.filter((s) => stageShownOnPage(s.id, isDealsPage))}
           changeStage={changeStage}
           setSelected={openLead}

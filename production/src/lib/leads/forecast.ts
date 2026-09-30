@@ -209,7 +209,8 @@ export function probabilityLabel(stage: Lead["stage"] | null | undefined): strin
  * A Kanban column's header numbers: cards, ₹ total and probability-weighted ₹ (the
  * probabilities above). `partial` = the column holds only its newest cards (the board reads
  * BOARD_COLUMN_CAP per column), so both sums cover the VISIBLE cards only and the header must
- * say so — a true column total needs a server sum (lead_counts / board RPC, a migration).
+ * say so. R-070: the true column total now comes from the server (lead_counts().stage_totals)
+ * — see boardColumnSummary; this sum is its fallback.
  */
 export interface ColumnSummary {
   count: number;
@@ -228,4 +229,20 @@ export function columnSummary(
     weighted += weightedValue(c);
   }
   return { count: cards.length, total, weighted, partial: capped };
+}
+
+/**
+ * R-070: a Kanban column's header from the SERVER when it has sent one — lead_counts()'s
+ * stage_totals (migration 20260930200000), counted over every lead of the stage that the
+ * page's filters keep, not over the newest BOARD_COLUMN_CAP cards the board holds. So it is
+ * exact (`partial: false`) even for a capped column. Without a server total (an older server,
+ * or a board cut the server does not count — the caller decides) it is columnSummary above.
+ */
+export function boardColumnSummary(
+  cards: readonly Pick<Lead, "value" | "stage">[],
+  capped: boolean,
+  server: { count: number; value: number; weighted: number } | null | undefined,
+): ColumnSummary {
+  if (!server) return columnSummary(cards, capped);
+  return { count: server.count, total: server.value, weighted: server.weighted, partial: false };
 }
