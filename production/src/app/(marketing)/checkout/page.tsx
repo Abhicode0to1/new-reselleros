@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, cycleLabel } from "@/site/lib/money";
+import { missingCheckoutDetails, missingDetailsMessage } from "@/site/lib/checkout-details";
 
 const METHODS = [
   { label: "UPI", note: "GPay, PhonePe, Paytm — instant" },
@@ -71,6 +72,9 @@ export default function CheckoutPage() {
   const [agreed, setAgreed] = useState(false);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Set once the buyer presses Continue / Start trial with something missing, so the list
+     of what is missing shows from then on and shrinks as they type. */
+  const [showMissing, setShowMissing] = useState(false);
   /* Set when the server's re-priced total differs from what this page showed. */
   const [priceCheck, setPriceCheck] = useState<{
     server: number; shown: number;
@@ -125,15 +129,21 @@ export default function CheckoutPage() {
     );
   }
 
-  const detailsOk =
-    name.trim().length >= 2 &&
-    company.trim().length >= 2 &&
-    email.includes("@") &&
-    phone.trim().length >= 10 &&
-    (!hasHosting || domain.trim().length >= 3) &&
-    !trialMixed &&
-    (!hasDomain ||
-      (addrLine1.trim().length >= 3 && addrCity.trim().length >= 2 && addrState.trim().length >= 2 && /^\d{6}$/.test(addrPin.trim())));
+  /* The company name is optional (owner, 29 Sep 2026); the server uses the buyer's name.
+     The buttons are never silently disabled for missing details any more — pressing one
+     says what is still needed (lib/checkout-details). */
+  const missing = missingCheckoutDetails({
+    name, email, phone, domain, hasHosting, hasDomain,
+    address: { line1: addrLine1, city: addrCity, state: addrState, pin: addrPin },
+  });
+  const missingMsg = missingDetailsMessage(missing);
+  const detailsOk = missing.length === 0 && !trialMixed;
+  /** Go on only when the details are complete; otherwise show what is missing. */
+  function proceed(next: () => void) {
+    if (trialMixed) return;
+    if (!detailsOk) { setShowMissing(true); return; }
+    next();
+  }
 
   /** The trial path: no payment, no quote — the server starts the trial and we show the done page. */
   async function startTrial() {
@@ -277,7 +287,7 @@ export default function CheckoutPage() {
           {step === "details" ? (
             <div style={{ maxWidth: 460 }}>
               <Field label="YOUR NAME" value={name} onChange={setName} />
-              <Field label="COMPANY / BUSINESS NAME — ON THE GST INVOICE" value={company} onChange={setCompany} />
+              <Field label="COMPANY / BUSINESS NAME (OPTIONAL — YOUR NAME IS USED IF BLANK)" value={company} onChange={setCompany} />
               <Field label="EMAIL — THE GST INVOICE GOES HERE" value={email} onChange={setEmail} type="email" />
               <Field label="GSTIN (OPTIONAL — FOR INPUT CREDIT)" value={gstin} onChange={setGstin} mono />
               <Field label="MOBILE" value={phone} onChange={setPhone} type="tel" />
@@ -308,9 +318,14 @@ export default function CheckoutPage() {
               {isTrialCart && error && (
                 <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
               )}
+              {showMissing && missingMsg && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  {missingMsg}
+                </div>
+              )}
               {isTrialCart ? (
                 <>
-                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk || paying} onClick={() => void startTrial()}>
+                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={paying || trialMixed} onClick={() => proceed(() => void startTrial())}>
                     {paying ? "Starting your trial…" : "Start my 15-day free trial"}
                   </button>
                   <p className="meta" style={{ marginTop: 10 }}>
@@ -318,7 +333,7 @@ export default function CheckoutPage() {
                   </p>
                 </>
               ) : (
-                <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk} onClick={() => setStep("payment")}>
+                <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={trialMixed} onClick={() => proceed(() => setStep("payment"))}>
                   Continue
                 </button>
               )}

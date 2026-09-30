@@ -70,7 +70,9 @@ const lineSchema = z.object({
 });
 const cartSchema = z.object({
   fullName: z.string().min(2).max(120),
-  companyName: z.string().min(2).max(200),
+  /** Optional (owner, 29 Sep 2026). Blank means an individual buyer: the buyer's own name
+      is used on the lead, the customer and the GST invoice. */
+  companyName: z.string().max(200).optional(),
   email: z.string().email().max(200),
   phone: z.string().min(10).max(20),
   gstin: z.string().max(20).optional(),
@@ -249,7 +251,8 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
         { status: 400 },
       );
     }
-    const { fullName, companyName, email, phone, gstin, domain, lines, coupon, address, simulate } = parsed.data;
+    const { fullName, email, phone, gstin, domain, lines, coupon, address, simulate } = parsed.data;
+    const companyName = parsed.data.companyName?.trim() || fullName.trim();
 
     if (panel && simulate) {
       return NextResponse.json(

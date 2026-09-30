@@ -310,3 +310,37 @@ describe("a free Starter trial in the cart (24 Sep 2026: no form in between)", (
     expect(startHostingTrial.mock.calls[0][1].domain).toBeUndefined();
   });
 });
+
+describe("the company name is optional (29 Sep 2026)", () => {
+  const hosting = { sku: "hosting:starter", label: "Starter hosting", qty: 1, cycle: "yearly" };
+
+  it("a blank company → the buyer's own name is used on the quote and the lead", async () => {
+    const res = await POST(req({ companyName: "", lines: [hosting], domain: "acme.in" }));
+    expect(res.status).toBe(200);
+    expect(quote()!.customer_name).toBe("Test Buyer");
+    expect(lead()!.company).toBe("Test Buyer");
+  });
+
+  it("an omitted company is the same as a blank one", async () => {
+    const { companyName: _omit, ...noCompany } = buyer;
+    void _omit;
+    const res = await POST(new NextRequest("https://example.invalid/api/public/checkout/cart", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...noCompany, lines: [hosting], domain: "acme.in" }),
+    }));
+    expect(res.status).toBe(200);
+    expect(quote()!.customer_name).toBe("Test Buyer");
+  });
+
+  it("a company that IS given is kept", async () => {
+    await POST(req({ lines: [hosting], domain: "acme.in" }));
+    expect(quote()!.customer_name).toBe("Test Co");
+  });
+
+  it("the trial gets the buyer's name when the company is blank", async () => {
+    const res = await POST(req({ companyName: "  ", lines: [{ sku: "hosting-trial:starter", label: "Starter trial", qty: 1, cycle: "yearly" }] }));
+    expect(res.status).toBe(200);
+    expect(startHostingTrial.mock.calls[0][1]).toMatchObject({ companyName: "Test Buyer" });
+  });
+});
