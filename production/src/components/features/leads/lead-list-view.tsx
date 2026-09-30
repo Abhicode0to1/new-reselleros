@@ -13,7 +13,7 @@ import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { useDeleteLead, useSetLeadJunk, useUpdateLead, useLeadQuotes } from "@/lib/queries/leads";
 import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
-import { useTasks } from "@/lib/queries/tasks";
+import { useOpenTasksForLeads } from "@/lib/queries/tasks";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { useLeadFirstReplies } from "@/lib/queries/lead-first-reply";
 import { useTeamMembers } from "@/lib/queries/team";
@@ -103,8 +103,13 @@ export function LeadListView({
   onMerge: (l: LeadRowData) => void;
   dupIds: Set<string>;
 }) {
+  /* WC-scale: the three per-row lookups below (quote pill, task chip, first reply) read
+     only the leads ON SCREEN — they used to read whole tables, which PostgREST cut at 1000
+     rows, so rows past that silently lost their pill / chip / wait time. */
+  const leadIds = React.useMemo(() => leads.map((l) => l.id), [leads]);
+
   /* Har lead ki quote — PLAN cell ka pill isi se banta hai. Ek map, ek query. */
-  const { data: leadQuotes } = useLeadQuotes();
+  const { data: leadQuotes } = useLeadQuotes(leadIds);
 
   /* Stage options now come from the LEAD, not from the page — rowStageOptions() in
      lib/leads/stage-options.ts (17 tests), which is where the quote-first gate and the
@@ -138,7 +143,7 @@ export function LeadListView({
 
   // Open follow-up tasks per lead — surfaced as a chip on the row so the rep
   // sees at a glance which leads have a pending task (earliest/most-overdue).
-  const { data: allTasks = [] } = useTasks("all");
+  const { data: allTasks = [] } = useOpenTasksForLeads(leadIds);
   const openTaskByLead = React.useMemo(() => openTaskIndex(allTasks, Date.now()), [allTasks]);
 
 
@@ -198,7 +203,7 @@ export function LeadListView({
   /* Pehla jawab, poori list ke liye ek query me — dekho queries/lead-first-reply.ts.
      Ek hi `now` sab rows par: har row apna `new Date()` lene par ek hi render me do rows
      ka intezaar ek-do second alag nikalta, aur wo sort ko hila deta. */
-  const { data: firstReplies = new Map<string, string>() } = useLeadFirstReplies();
+  const { data: firstReplies = new Map<string, string>() } = useLeadFirstReplies(leadIds);
 
   /* Owner ka naam — `useTeamMembers` isi ke liye hai ("show who owns what", team.ts:3).
      Map isliye ki har row par `.find()` chalana 50 leads × 10 members = 500 chakkar hai

@@ -14,7 +14,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
-import { useLeads } from "@/lib/queries/leads";
+import { useLeadsCreatedSince, useLeadTotalCount, type LeadSourceRow } from "@/lib/queries/leads";
 import { AddLeadForm } from "@/components/features/leads/add-lead-form";
 import { ShareFormSheet, ENQUIRY_SHARE, BUY_SHARE, type ShareTarget } from "@/components/features/leads/share-form-sheet";
 import { KPI } from "@/components/shared/kpi";
@@ -68,13 +68,13 @@ function normalizeSource(raw: string | null | undefined): string {
   return s;
 }
 
-interface CaptureChannel { id: string; label: string; icon: string; count: number; won: number; conv: number; leads: Lead[]; }
+interface CaptureChannel { id: string; label: string; icon: string; count: number; won: number; conv: number; leads: LeadSourceRow[]; }
 
 /** This-month lead count + conversion by capture channel, from real leads.
  *  Also carries the matching leads so a channel row can expand to show them. */
-function computeCaptureChannels(leads: Lead[]): CaptureChannel[] {
+function computeCaptureChannels(leads: readonly LeadSourceRow[]): CaptureChannel[] {
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-  const byKey = new Map<string, Lead[]>();
+  const byKey = new Map<string, LeadSourceRow[]>();
   for (const l of leads) {
     if (!l.created_at || new Date(l.created_at) < monthStart) continue;
     const key = normalizeSource(l.source);
@@ -126,7 +126,17 @@ function SourceIcon({ source }: { source: string | null }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function LeadGenPage() {
-  const { data: leads, isLoading } = useLeads();
+  /* WC-scale: only the leads this page counts — created since the earlier of the 1st of the
+     month and 14 days ago (the week-over-week delta) — read whole in pages, plus an exact
+     all-time count. It used to be useLeads(): every lead, cut at PostgREST's 1000 rows, so
+     "Total leads" stopped at 1,000 and a busy month's channels counted part of it. */
+  const [windowStart] = React.useState(() => {
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    const twoWeeks = new Date(Date.now() - 14 * 86_400_000);
+    return (monthStart < twoWeeks ? monthStart : twoWeeks).toISOString();
+  });
+  const { data: leads, isLoading } = useLeadsCreatedSince(windowStart);
+  const { data: totalLeads } = useLeadTotalCount();
   const router = useRouter();
   // Real capture channels: this-month lead count + conversion by source.
   const captureChannels = React.useMemo(() => computeCaptureChannels(leads ?? []), [leads]);
@@ -227,7 +237,7 @@ export default function LeadGenPage() {
         />
         <KPI
           label="Total leads"
-          value={(leads ?? []).length}
+          value={totalLeads ?? 0}
           trend="all time · all sources"
           trendKind="neutral"
           icon="users"
