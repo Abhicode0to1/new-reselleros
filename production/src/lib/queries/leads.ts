@@ -168,6 +168,7 @@ function ownerOr(ids: readonly string[]): string {
 
 /** The board's columns (stage-meta.ts DEAL_STAGES) — lost has no column. */
 export const BOARD_STAGES = ["new", "contact", "quote", "demo", "trial", "won"] as const satisfies readonly Lead["stage"][];
+export type BoardStage = (typeof BOARD_STAGES)[number];
 /** Cards read per column. A column with more says so (BoardData.totals) and the list view pages them all. */
 export const BOARD_COLUMN_CAP = 200;
 
@@ -175,7 +176,7 @@ export interface BoardData {
   /** Up to BOARD_COLUMN_CAP newest rows per column, newest first. */
   rows: LeadListRow[];
   /** How many leads each column holds in total (same owner + junk cut as the rows). */
-  totals: Record<(typeof BOARD_STAGES)[number], number>;
+  totals: Partial<Record<BoardStage, number>>;
 }
 
 /**
@@ -189,16 +190,22 @@ export interface BoardData {
  * BOARD_COLUMN_CAP newest cards, with an exact count so the column can say "200 of 3,400".
  * The browser still applies the page's search / filters on top (list-selectors.ts#boardCut).
  */
-export function useLeadsBoard(enabled: boolean, opts: { ownerIds?: readonly string[] | null; junk?: boolean } = {}) {
+/* `stages`: the columns this page shows (lib/leads/page-scope.ts) — /deals has no New /
+   Contacted, so it does not read them at all. */
+export function useLeadsBoard(
+  enabled: boolean,
+  opts: { ownerIds?: readonly string[] | null; junk?: boolean; stages?: readonly BoardStage[] } = {},
+) {
   const ownerIds = opts.ownerIds ?? null;
   const junk = opts.junk ?? false;
+  const stages = opts.stages ?? BOARD_STAGES;
   return useQuery({
-    queryKey: ["leads", "board", ownerIds, junk],
+    queryKey: ["leads", "board", ownerIds, junk, stages],
     enabled,
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<BoardData> => {
       const supabase = createClient();
-      const results = await Promise.all(BOARD_STAGES.map((stage) => {
+      const results = await Promise.all(stages.map((stage) => {
         let q = supabase
           .from("leads").select(SLIM, { count: "exact" })
           .eq("stage", stage)
@@ -214,7 +221,7 @@ export function useLeadsBoard(enabled: boolean, opts: { ownerIds?: readonly stri
         if (r.error) throw r.error;
         const got = (r.data ?? []) as unknown as LeadListRow[];
         rows.push(...got);
-        totals[BOARD_STAGES[i]] = r.count ?? got.length;
+        totals[stages[i]] = r.count ?? got.length;
       });
       return { rows, totals };
     },

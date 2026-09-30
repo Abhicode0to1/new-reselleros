@@ -23,6 +23,7 @@ import type { useLeadActivities } from "@/lib/queries/lead-activities";
 import type { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { LEAD_STAGES } from "@/lib/leads/stage-meta";
 import { ACTIVITY_META, Fact, fmtActTime } from "@/components/features/leads/lead-detail-format";
+import { ExpectedCloseField } from "@/components/features/leads/expected-close-field";
 
 type DrawerTab = "email" | "details" | "followups" | "activity";
 
@@ -127,6 +128,7 @@ export function LeadDetailsTab({
                 </div>
               );
             })()}
+            <ExpectedCloseField lead={lead} />
             <Fact label="Source" value={lead.source} mono />
             <Fact label="New / switching" value={lead.subscription_type === "fresh" ? "Fresh subscription" : lead.subscription_type === "switch" ? "Switching vendor" : "—"} />
             <Fact label="Contact name" value={lead.contact_name} />

@@ -1,19 +1,18 @@
 /**
  * Leads + Deals — same component drives BOTH /leads and /deals URLs.
  *
- * Route convention (after split, migration 0045):
- *   /leads  → raw leads inbox (NULL plan) — list view, no Kanban
- *   /deals  → qualified deal pipeline      — Kanban (default) + list toggle
+ * The split is BY STAGE (lib/leads/page-scope.ts), not by plan:
+ *   /leads  → every stage except won (R-057)          — list + board
+ *   /deals  → real deals only: quote / demo / trial / won / lost — board + list
+ *             (New / Contacted stay on /leads; Deals audit, 30 Sep 2026)
  *
- * The same DB table backs both views — the split is just a filter cut
- * (raw vs qualified). Industry convention (HubSpot / Salesforce / Pipedrive)
- * matches: Leads ≠ Deals, they're distinct UI concepts on shared data.
+ * The same DB table backs both views — each page sends its own `stages` to
+ * list_leads() and lead_counts(), so the rows and the counts agree.
  *
  * Layout (URL-driven):
- *   - Header: eyebrow "Sales" + page-specific title + subtitle
- *   - Actions: search + view toggle (Deals only) + Filter + advanced + Add
- *   - GeminiCard with AI lead intelligence (Deals page only)
- *   - Kanban (default on /deals): 6 stage columns with drag-drop
+ *   - Header: page-specific title ("Leads" area = Sales & Pipeline, /deals = Deals)
+ *   - Actions: search + view toggle + Filter + advanced + Add
+ *   - Kanban: one column per stage this page shows, with drag-drop (deal-rules.ts gate)
  *   - List: sortable table for scanning many at scale
  *   - Detail Sheet on card / row click (shared)
  */
@@ -26,7 +25,7 @@ import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import {
-  fetchMergeCluster, useDueLeads, useLead, useLeadCounts, useLeadsBoard, useLeadsInfinite, useLostLeads,
+  BOARD_STAGES, fetchMergeCluster, useDueLeads, useLead, useLeadCounts, useLeadsBoard, useLeadsInfinite, useLostLeads,
   type MergeLead,
 } from "@/lib/queries/leads";
 import { LossReasonsCard } from "@/components/features/leads/loss-reasons-card";
@@ -45,7 +44,7 @@ import type { Lead } from "@/lib/supabase/database.types";
 import type { LeadListFilters, LeadListRow } from "@/lib/leads/list-page";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { DEAL_STAGES, filterStagesFor } from "@/lib/leads/stage-meta";
-import { everythingCountForPage, scopeFiltersForPage, stageShownOnPage } from "@/lib/leads/page-scope";
+import { everythingCountForPage, folderShownOnPage, scopeFiltersForPage, stageShownOnPage } from "@/lib/leads/page-scope";
 import {
   boardCut, inWorkspace, listCut, searchLeads, type SortCol,
 } from "@/lib/leads/list-selectors";
@@ -373,7 +372,9 @@ function LeadsPageInner() {
      junk are filtered on the server, the newest BOARD_COLUMN_CAP cards per column come back
      with the column's true total, and the browser cuts the rest as before. Slim columns,
      only while the board is on screen. Its chips are server counts like the list's. */
-  const boardQ  = useLeadsBoard(viewKnown && !isList, { ownerIds: teamIds, junk: smartView === "junk" });
+  /* Only this page's columns — /deals has no New / Contacted (lib/leads/page-scope.ts). */
+  const boardStages = React.useMemo(() => BOARD_STAGES.filter((s) => stageShownOnPage(s, isDealsPage)), [isDealsPage]);
+  const boardQ  = useLeadsBoard(viewKnown && !isList, { ownerIds: teamIds, junk: smartView === "junk", stages: boardStages });
   /* The call queue and the loss card read their own small slices. */
   const dueQ    = useDueLeads(teamIds, search.trim() === "");
   const lostQ   = useLostLeads(teamIds, isDealsPage);
@@ -443,8 +444,8 @@ function LeadsPageInner() {
      removing it. */
   const folderRows = React.useMemo(
     () =>
-      /* R-057: no Won folder on /leads — won leads live on /deals only. */
-      SALES_FOLDERS.filter((f) => f.id !== "won" || isDealsPage).map((f) => {
+      /* R-057: no Won folder on /leads; no Inbox / Talks on /deals (page-scope.ts). */
+      SALES_FOLDERS.filter((f) => folderShownOnPage(f.id, isDealsPage)).map((f) => {
         const count = counts?.folders[f.id] ?? 0;
         /* Only when it IS empty — see the note above. */
         return { id: f.id as string, label: f.label, count, hint: count === 0 ? f.hint : "" };
@@ -502,7 +503,7 @@ function LeadsPageInner() {
     <div className="h-[calc(100vh-3.5rem-4rem)] md:h-[calc(100vh-3.5rem)] max-w-[1800px] mx-auto p-3 sm:p-4 flex flex-col overflow-hidden min-w-0">
       {/* The sticky title bar, and why its offsets and this wrapper's height are what they
           are — see leads-header-bar.tsx. */}
-      <LeadsHeaderBar salesTab={salesTab} setAddOpen={setAddOpen} />
+      <LeadsHeaderBar salesTab={salesTab} isDealsPage={isDealsPage} setAddOpen={setAddOpen} />
 
 
       {/* Expanded Intelligence Drawer */}
@@ -540,6 +541,7 @@ function LeadsPageInner() {
           setSearch={setSearch}
           viewCounts={counts.views}
           everythingCount={everythingCountForPage(counts, isDealsPage)}
+          isDealsPage={isDealsPage}
           currentUser={currentUser}
           duplicateCountForTab={counts.views.duplicates}
           junkCount={counts.workspace.junk}

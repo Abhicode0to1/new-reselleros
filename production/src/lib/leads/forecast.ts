@@ -204,3 +204,28 @@ export function probabilityLabel(stage: Lead["stage"] | null | undefined): strin
   if (!stage) return "—";
   return `${stageProbability(stage)}%`;
 }
+
+/**
+ * A Kanban column's header numbers: cards, ₹ total and probability-weighted ₹ (the
+ * probabilities above). `partial` = the column holds only its newest cards (the board reads
+ * BOARD_COLUMN_CAP per column), so both sums cover the VISIBLE cards only and the header must
+ * say so — a true column total needs a server sum (lead_counts / board RPC, a migration).
+ */
+export interface ColumnSummary {
+  count: number;
+  total: number;
+  weighted: number;
+  partial: boolean;
+}
+
+export function columnSummary(
+  cards: readonly Pick<Lead, "value" | "stage">[], capped = false,
+): ColumnSummary {
+  let total = 0;
+  let weighted = 0;
+  for (const c of cards) {
+    total += Math.max(0, c.value ?? 0);
+    weighted += weightedValue(c);
+  }
+  return { count: cards.length, total, weighted, partial: capped };
+}

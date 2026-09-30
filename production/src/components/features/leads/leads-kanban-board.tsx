@@ -15,6 +15,8 @@ import type { LeadListRow } from "@/lib/leads/list-page";
 import type { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { DEAL_STAGES, LEAD_STAGES, type StageMeta } from "@/lib/leads/stage-meta";
 import { BOARD_COLUMN_CAP } from "@/lib/queries/leads";
+import { checkBoardMove } from "@/lib/leads/deal-rules";
+import { columnSummary } from "@/lib/leads/forecast";
 
 export interface LeadsKanbanBoardProps {
   boardLeads: LeadListRow[];
@@ -53,7 +55,18 @@ export function LeadsKanbanBoard({ boardLeads, columnTotals, changeStage, setSel
         setOverStage(null);
         return;
       }
-      if (lead && lead.stage !== toStage) {
+      /* The form's rules, on the board too (lib/leads/deal-rules.ts#checkBoardMove): no
+         jumping the quote-first gate from New / Contacted, and Won needs a deal value and a
+         close date. Checked BEFORE the write, so a refused card never moves — the toast says
+         what is missing. Not inside changeStage: the outcome chips and the manager's stage
+         override in the drawer are deliberate, confirmed routes with rules of their own. */
+      const verdict = lead ? checkBoardMove(lead, toStage) : null;
+      if (lead && verdict && !verdict.ok) {
+        toast.error(verdict.title, {
+          description: verdict.description,
+          action: { label: "Lead kholo", onClick: () => setSelected(lead) },
+        });
+      } else if (lead && lead.stage !== toStage) {
         // Dropping onto Lost opens the reason prompt first; if it's dismissed
         // changeStage returns false and the card stays where it was.
         const moved = await changeStage(lead, toStage);
@@ -90,7 +103,9 @@ export function LeadsKanbanBoard({ boardLeads, columnTotals, changeStage, setSel
       <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-none lg:grid-flow-col lg:auto-cols-[minmax(220px,1fr)] lg:grid-rows-1 gap-3 overflow-x-auto overflow-y-hidden pb-1">
         {stages.map((stage) => {
           const stageLeads = boardLeads.filter((l) => l.stage === stage.id);
-          const stageValue = stageLeads.reduce((s, l) => s + (l.value ?? 0), 0);
+          /* count · ₹ total · probability-weighted ₹ (lib/leads/forecast.ts). A capped column
+             sums only its visible cards — said so, since true server totals need a migration. */
+          const sum = columnSummary(stageLeads, (columnTotals?.[stage.id] ?? 0) > BOARD_COLUMN_CAP);
           const isOver = overStage === stage.id;
 
           return (
@@ -107,18 +122,28 @@ export function LeadsKanbanBoard({ boardLeads, columnTotals, changeStage, setSel
                 isOver ? "border-solid border-amber" : "border-dashed border-hairline"
               )}
             >
-              {/* Column header */}
-              <div className="flex items-center justify-between px-1 pb-2 mb-2 border-b border-hairline shrink-0">
-                <div className="flex items-center gap-1.5">
-                  <span className={cn("w-2 h-2 rounded-full", stage.dot)} />
-                  <span className="text-xs font-bold text-ink">{stage.label}</span>
-                  <span className="text-3xs px-1.5 py-0.5 rounded-full bg-paper text-ink-2 font-mono tabular-nums border border-hairline">
-                    {stageLeads.length}
+              {/* Column header — count · ₹ total, then the weighted ₹ on its own line. */}
+              <div className="px-1 pb-2 mb-2 border-b border-hairline shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn("w-2 h-2 rounded-full", stage.dot)} />
+                    <span className="text-xs font-bold text-ink">{stage.label}</span>
+                    <span className="text-3xs px-1.5 py-0.5 rounded-full bg-paper text-ink-2 font-mono tabular-nums border border-hairline">
+                      {sum.count}
+                    </span>
+                  </div>
+                  <span className="font-serif text-xs font-bold text-amber-ink tabular-nums">
+                    {sum.total > 0 ? `${sum.partial ? "≈ " : ""}${rupee(sum.total, { compact: true })}` : ""}
                   </span>
                 </div>
-                <span className="font-serif text-xs font-bold text-amber-ink tabular-nums">
-                  {stageValue > 0 ? rupee(stageValue, { compact: true }) : ""}
-                </span>
+                {(sum.total > 0 || sum.partial) && (
+                  <div className="mt-1 flex items-center justify-between text-3xs text-ink-3 tabular-nums">
+                    <span title="Har deal ki value × stage ki jeetne ki sambhavna (lib/leads/forecast.ts)">
+                      Weighted {rupee(sum.weighted, { compact: true })}
+                    </span>
+                    {sum.partial && <span>total ≈ (sirf dikhne wale cards)</span>}
+                  </div>
+                )}
               </div>
 
               {/* Cards container — per-column independent vertical scroll */}

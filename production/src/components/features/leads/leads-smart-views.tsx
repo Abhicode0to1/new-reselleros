@@ -59,6 +59,9 @@ interface LeadsSmartViewsProps {
   duplicateCount?: number;
   /** Every non-junk lead, won and lost included — the "All leads" count. */
   everythingCount?: number;
+  /** /deals holds only deals (quote → won / lost): its first entry says "Saari deals", and
+   *  "New" is not offered — no New lead is on that page. */
+  isDealsPage?: boolean;
   /** Count of leads marked junk. Junk shows when > 0 (or suspects exist). */
   junkCount?: number;
   /** Count of NON-junk leads the heuristic suspects as junk — nudges review. */
@@ -99,7 +102,7 @@ interface ViewDef {
 }
 
 export function LeadsSmartViews({
-  counts, currentUserId, everythingCount, duplicateCount = 0, junkCount = 0, junkSuspectCount = 0, active, onChange,
+  counts, currentUserId, everythingCount, isDealsPage = false, duplicateCount = 0, junkCount = 0, junkSuspectCount = 0, active, onChange,
   folders = [], activeFolder = "all", onFolder,
 }: LeadsSmartViewsProps) {
   // ── Counts (server — lead_counts().views, S40) ────────────────────────────
@@ -136,8 +139,10 @@ export function LeadsSmartViews({
     /* The page opens here (26 Sep 2026, Pardeep: "by default saari leads show honi
        chahiye"). With one deal just moved to Won, "All open" showed an empty page with
        "No leads match" — every lead existed, the default view simply hid it. */
-    { id: "everything", label: "All leads", count: everythingCount ?? all, tone: "default",
-      hint: "Har lead — open, won aur lost. Junk alag hai." },
+    { id: "everything", label: isDealsPage ? "Saari deals" : "All leads", count: everythingCount ?? all, tone: "default",
+      hint: isDealsPage
+        ? "Har deal — quote se won aur lost tak. New / Contacted Leads page par hain."
+        : "Har lead — open, won aur lost. Junk alag hai." },
     { id: "all",   label: "All open", count: all,     tone: "default",
       hint: "Every open lead. Won and lost are not open — they have their own folders." },
     ...(currentUserId
@@ -154,7 +159,7 @@ export function LeadsSmartViews({
     { id: "today", label: "Today",   count: todayDue, tone: "amber",   hint: "Arrived today" },
     { id: "overdue", label: "Overdue", count: overdue, tone: "rose",   hint: "Follow-up date has passed" },
     { id: "hot",   label: "Hot",     count: hot,      tone: "default", hint: "High priority or late-stage" },
-    { id: "new",   label: "New",     count: newCt,    tone: "default", hint: "Not contacted yet" },
+    ...(isDealsPage ? [] : [{ id: "new" as SmartView, label: "New", count: newCt, tone: "default" as Tone, hint: "Not contacted yet" }]),
     /* Closing this month — the forecast cut. Deliberately EXCLUDES deals with no
        expected close date: "closing this month" is a claim, and a deal nobody has dated
        has not made it. Those show up as "undated" in the KPI strip instead. */

@@ -2,22 +2,21 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  everythingCountForPage, scopeFiltersForPage, stageShownOnPage,
+  everythingCountForPage, folderShownOnPage, pageStages, scopeFiltersForPage, stageShownOnPage,
 } from "@/lib/leads/page-scope";
 import { toLeadCountsFilters, toListLeadsFilters, type LeadListFilters } from "@/lib/leads/list-page";
 
 /* R-057 (Pardeep, 30 Sep 2026): "Won leads sirf Deals page par (Leads page se hatao)".
-   /leads listed won deals and counted them in "All leads 37" while its Filter offered only
-   New / Contacted. These pin the params both RPCs receive on each page. */
+   Deals audit (30 Sep 2026): /deals holds only real deals — quote, demo, trial, won, lost.
+   These pin the params both RPCs receive on each page. */
 
 const base: LeadListFilters = { smart_view: "everything", folder: "all", owner_ids: ["u1"] };
+const folders = { inbox: 9, talks: 26, quoted: 4, proving: 3, won: 2, lost: 5, hot: 1, followup: 0 };
 
-describe("R-057 — Leads page leaves out won; Deals page keeps it", () => {
+describe("R-057 — Leads page leaves out won", () => {
   it("Leads page: list_leads and lead_counts params carry stages without won", () => {
     const f = scopeFiltersForPage(base, false);
-    const list = toListLeadsFilters(f);
-    const counts = toLeadCountsFilters(f);
-    for (const p of [list, counts]) {
+    for (const p of [toListLeadsFilters(f), toLeadCountsFilters(f)]) {
       expect(p.stages).toBeDefined();
       expect(p.stages).not.toContain("won");
       expect(p.stages).toEqual(expect.arrayContaining(["new", "contact", "demo", "trial", "quote", "lost"]));
@@ -32,33 +31,65 @@ describe("R-057 — Leads page leaves out won; Deals page keeps it", () => {
     expect(wonOnly.stages).not.toContain("won");
   });
 
-  it("Deals page: params unchanged — no stage constraint, so won is still listed and counted", () => {
+  it('"All leads" count on /leads subtracts the won leads of the same base', () => {
+    const counts = { workspace: { junk: 2, everything: 37, suspects: 0 },
+      kpi: { open_count: 30, open_value: 0, open_value_project: 0, won: 4, lost: 3 }, folders };
+    expect(everythingCountForPage(counts, false)).toBe(33);
+  });
+});
+
+describe("Deals page = only real deals (quote → won / lost)", () => {
+  it("both RPCs get exactly the deal stages — no New / Contacted", () => {
     const f = scopeFiltersForPage(base, true);
-    expect(toListLeadsFilters(f).stages).toBeUndefined();
-    expect(toLeadCountsFilters(f).stages).toBeUndefined();
-    expect(toListLeadsFilters(scopeFiltersForPage({ ...base, stages: ["won"] }, true)).stages).toEqual(["won"]);
+    for (const p of [toListLeadsFilters(f), toLeadCountsFilters(f)]) {
+      expect(p.stages).toEqual(["demo", "lost", "quote", "trial", "won"]);
+    }
   });
 
-  it("stageShownOnPage: won only on /deals, lost on both", () => {
+  it("a stage pick is kept; a New-only pick cannot bring New back", () => {
+    expect(toListLeadsFilters(scopeFiltersForPage({ ...base, stages: ["won"] }, true)).stages).toEqual(["won"]);
+    expect(toListLeadsFilters(scopeFiltersForPage({ ...base, stages: ["new", "quote"] }, true)).stages).toEqual(["quote"]);
+    expect(toListLeadsFilters(scopeFiltersForPage({ ...base, stages: ["new"] }, true)).stages)
+      .toEqual(["demo", "lost", "quote", "trial", "won"]);
+  });
+
+  it("stageShownOnPage / pageStages", () => {
     expect(stageShownOnPage("won", false)).toBe(false);
     expect(stageShownOnPage("won", true)).toBe(true);
     expect(stageShownOnPage("lost", false)).toBe(true);
-    expect(stageShownOnPage("new", false)).toBe(true);
+    expect(stageShownOnPage("new", true)).toBe(false);
+    expect(stageShownOnPage("contact", true)).toBe(false);
+    expect(pageStages(true).sort()).toEqual(["demo", "lost", "quote", "trial", "won"]);
   });
 
-  it('"All leads" count: Leads page subtracts the won leads of the same base; Deals page does not', () => {
-    const counts = { workspace: { junk: 2, everything: 37, suspects: 0 },
-      kpi: { open_count: 30, open_value: 0, open_value_project: 0, won: 4, lost: 3 } };
-    expect(everythingCountForPage(counts, false)).toBe(33);
-    expect(everythingCountForPage(counts, true)).toBe(37);
+  it("folders: no Inbox / Talks on /deals, no Won on /leads", () => {
+    expect(folderShownOnPage("inbox", true)).toBe(false);
+    expect(folderShownOnPage("talks", true)).toBe(false);
+    expect(folderShownOnPage("quoted", true)).toBe(true);
+    expect(folderShownOnPage("won", false)).toBe(false);
+    expect(folderShownOnPage("inbox", false)).toBe(true);
   });
 
-  it("the page sends the scoped filters to BOTH readers", () => {
-    const src = readFileSync(join(process.cwd(), "src", "app", "(app)", "leads", "page.tsx"), "utf8");
+  it('"Saari deals" count = the deal folders, not every lead in the workspace', () => {
+    const counts = { workspace: { junk: 2, everything: 49, suspects: 0 },
+      kpi: { open_count: 42, open_value: 0, open_value_project: 0, won: 2, lost: 5 }, folders };
+    expect(everythingCountForPage(counts, true)).toBe(4 + 3 + 2 + 5);
+  });
+});
+
+describe("the page wiring", () => {
+  const src = readFileSync(join(process.cwd(), "src", "app", "(app)", "leads", "page.tsx"), "utf8");
+
+  it("sends the scoped filters to BOTH readers", () => {
     expect(src).toMatch(/listFilters = React\.useMemo<LeadListFilters>\(\(\) => scopeFiltersForPage\(\{/);
     expect(src).toMatch(/\}, isDealsPage\), \[/);
     expect(src).toContain("useLeadCounts(listFilters)");
     expect(src).toContain("useLeadsInfinite(listFilters,");
     expect(src).toContain("everythingCount={everythingCountForPage(counts, isDealsPage)}");
+  });
+
+  it("the board reads only this page's columns", () => {
+    expect(src).toMatch(/useLeadsBoard\([^)]*stages: boardStages/);
+    expect(src).toContain("stages={DEAL_STAGES.filter((s) => stageShownOnPage(s.id, isDealsPage))}");
   });
 });

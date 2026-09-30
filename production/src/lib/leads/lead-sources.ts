@@ -47,16 +47,32 @@ export const LEAD_SOURCES: readonly LeadSource[] = [
 ];
 
 /**
+ * The key a saved source stands for. Older rows (hand-typed, early imports) hold a LABEL or a
+ * different case — "Added manually", "Manual" — instead of the key "manual". sourceOptions
+ * then appended the unknown value as a second entry, so the dropdown listed "Added manually"
+ * twice (Deals audit, 30 Sep 2026). A value that matches a key or a label, ignoring case and
+ * spaces, is that key; anything else is returned as it was.
+ */
+export function canonicalSource(value: string | null | undefined): string {
+  const v = (value ?? "").trim();
+  if (!v) return v;
+  const k = v.toLowerCase();
+  const hit = LEAD_SOURCES.find((s) => s.value.toLowerCase() === k || s.label.toLowerCase() === k);
+  return hit ? hit.value : v;
+}
+
+/**
  * The options to show for a lead whose saved source may be one this list no longer
  * names (an old import, a form tag). Kept visible rather than shown blank, so opening
- * and saving a lead never silently rewrites where it came from.
+ * and saving a lead never silently rewrites where it came from — unless it is just another
+ * spelling of a listed source (canonicalSource), which is never offered twice.
  */
 export function sourceOptions(current: string | null | undefined): readonly LeadSource[] {
-  const c = (current ?? "").trim();
+  const c = canonicalSource(current);
   if (!c || LEAD_SOURCES.some((s) => s.value === c)) return LEAD_SOURCES;
   return [...LEAD_SOURCES, { value: c, label: c }];
 }
 
 export function sourceLabel(value: string | null | undefined): string {
-  return LEAD_SOURCES.find((s) => s.value === value)?.label ?? (value || "—");
+  return LEAD_SOURCES.find((s) => s.value === canonicalSource(value))?.label ?? (value || "—");
 }
