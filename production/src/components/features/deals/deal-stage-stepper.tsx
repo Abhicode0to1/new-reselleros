@@ -37,8 +37,8 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
     if (to !== "lost") {
       const ok = await confirm({
         title: `${name}: ${STAGE_LABEL[lead.stage]} → ${STAGE_LABEL[to]}?`,
-        body: "Stage badalne se board, forecast aur report sab isi hisaab se chalenge.",
-        confirmLabel: "Haan, badlo",
+        body: "The board, forecast and reports will all follow the new stage.",
+        confirmLabel: "Yes, change",
       });
       if (!ok) return;
     }
@@ -49,11 +49,18 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
         void qc.invalidateQueries({ queryKey: ["deal-history"] });
       }
     } catch (e) {
-      toast.error("Stage nahi badla", { description: (e as Error).message });
+      toast.error("Stage not changed", { description: (e as Error).message });
     }
   };
 
+  /* 1 Oct 2026, Pardeep: "4 Won ka matlab nahi samjh aaya". The pills showed a step number
+     ("4 Won") and a ✓ on every earlier stage — but a deal can jump straight from quote to
+     won (Excel Technologies did), so the ✓ claimed a demo and trial that never happened.
+     Now: no numbers, no ticks; the current stage says "Current:" (English on his ask — "Abhi" read as confusing), the rest are plain
+     "click to move" pills, and one caption says what the row is for. */
   return (
+    <div className="space-y-1.5">
+    <p className="text-[11px] text-ink-3">Click a stage to change it</p>
     <div className="flex flex-wrap items-center gap-2">
       <ol className="flex min-w-0 flex-wrap items-center gap-1" aria-label="Deal stage">
         {STEPS.map((s, i) => {
@@ -67,18 +74,17 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
                 onClick={() => void move(s)}
                 disabled={current || isPending}
                 aria-current={current ? "step" : undefined}
-                title={current ? "Abhi yahi stage hai" : `${STAGE_LABEL[s]} par le jao`}
+                title={current ? "This is the current stage" : `Move to ${STAGE_LABEL[s]}`}
                 className={cn(
                   "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber",
                   current && s === "won" && "border-emerald bg-emerald-soft text-emerald cursor-default",
                   current && s !== "won" && "border-amber bg-amber-soft text-amber-ink cursor-default",
-                  !current && done && "border-amber/40 bg-paper text-ink-2 hover:bg-paper-2",
-                  !current && !done && "border-hairline bg-paper text-ink-3 hover:bg-paper-2 hover:text-ink",
+                  !current && "border-hairline bg-paper text-ink-3 hover:bg-paper-2 hover:text-ink",
                 )}
               >
-                {done ? <Icon name="check" size={12} /> : <span aria-hidden className="tabular-nums">{i + 1}</span>}
-                {STAGE_LABEL[s]}
+                {current && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />}
+                {current ? `Current: ${STAGE_LABEL[s]}` : STAGE_LABEL[s]}
               </button>
             </li>
           );
@@ -97,8 +103,9 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
         )}
       >
         <Icon name="x_circle" size={12} />
-        {lead.stage === "lost" ? "Lost" : "Lost mark karo"}
+        {lead.stage === "lost" ? "Current: Lost" : "Mark as lost"}
       </button>
+    </div>
     </div>
   );
 }
