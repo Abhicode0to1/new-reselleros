@@ -6,7 +6,7 @@
  */
 
 export type DayBookVoucher =
-  | "Sales" | "Receipt" | "Refund" | "Credit Note" | "Debit Note" | "Purchase" | "Payment";
+  | "Sales" | "Receipt" | "Refund" | "Credit Note" | "Debit Note" | "Purchase" | "Payment" | "Journal";
 
 export interface DayBookRow {
   date: string;              // YYYY-MM-DD (IST)
@@ -17,9 +17,10 @@ export interface DayBookRow {
   amount: number;            // whole rupees
 }
 
-/** Tally ka kram: pehle bechna-lena (Sales, Receipt…), phir kharidna-dena. */
+/** Tally ka kram: pehle bechna-lena (Sales, Receipt…), phir kharidna-dena, aakhir me Journal
+ *  (salary ka kharcha — Salaries / Director's Remuneration, migration 20260929185929). */
 export const DAY_BOOK_VOUCHERS: readonly DayBookVoucher[] = [
-  "Sales", "Receipt", "Refund", "Credit Note", "Debit Note", "Purchase", "Payment",
+  "Sales", "Receipt", "Refund", "Credit Note", "Debit Note", "Purchase", "Payment", "Journal",
 ];
 
 export interface DayBookSummary {

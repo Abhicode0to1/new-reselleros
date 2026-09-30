@@ -7,21 +7,74 @@
 "use client";
 
 import * as React from "react";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient, type QueryKey,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import { requireTenantId } from "@/lib/queries/require-tenant";
 import type { Json, Lead, Database } from "@/lib/supabase/database.types";
 import { flattenPages } from "@/lib/queries/keyset";
+import { fetchAllRows, fetchAllRowsIn, idsKey } from "@/lib/ops/fetch-all";
+import { istToday } from "@/lib/dates/ist";
 import {
-  toListLeadsFilters, type LeadListCursor, type LeadListFilters, type LeadListPage,
+  LEAD_LIST_COLUMNS, toLeadCountsFilters, toListLeadsFilters,
+  type LeadCounts, type LeadListCursor, type LeadListFilters, type LeadListPage, type LeadListRow,
 } from "@/lib/leads/list-page";
 import type { JunkReasonId } from "@/lib/leads/qualification";
 
 // ============================================================
+// Optimistic writes across every cached shape of "leads"
+// ============================================================
+/* S40: the leads page no longer reads the ["leads"] array — its list is paged
+   (["leads","pages",…]) and its board is ["leads","board"]. The mutations below used to
+   patch only ["leads"], so on the page the optimistic edit silently stopped showing and a
+   junked row sat there until the refetch. These patch every lead-shaped cache under
+   ["leads"] and roll every one of them back on failure. */
+type LeadCacheSnapshot = Array<[QueryKey, unknown]>;
+
+function isRow(v: unknown): v is { id: string } {
+  return typeof v === "object" && v !== null && typeof (v as { id?: unknown }).id === "string";
+}
+function isPaged(v: unknown): v is { pages: { rows: unknown[] }[] } {
+  return typeof v === "object" && v !== null && Array.isArray((v as { pages?: unknown }).pages);
+}
+/** The board's { rows, totals } (useLeadsBoard). */
+function isRowsBox(v: unknown): v is { rows: unknown[] } {
+  return typeof v === "object" && v !== null && Array.isArray((v as { rows?: unknown }).rows);
+}
+
+async function patchCachedLeads(qc: QueryClient, ids: readonly string[], patch: Partial<Lead>): Promise<LeadCacheSnapshot> {
+  await qc.cancelQueries({ queryKey: ["leads"] });
+  const snapshot = qc.getQueriesData({ queryKey: ["leads"] });
+  const idSet = new Set(ids);
+  const fix = (r: unknown) => (isRow(r) && idSet.has(r.id) ? { ...r, ...patch } : r);
+  qc.setQueriesData({ queryKey: ["leads"] }, (old: unknown) => {
+    if (Array.isArray(old)) return old.map(fix);
+    if (isPaged(old)) return { ...old, pages: old.pages.map((p) => ({ ...p, rows: p.rows.map(fix) })) };
+    if (isRowsBox(old)) return { ...old, rows: old.rows.map(fix) };
+    if (isRow(old) && "company" in old) return fix(old);   // one lead (useLead)
+    return old;                                              // counts, quote map, …
+  });
+  return snapshot;
+}
+
+function restoreCachedLeads(qc: QueryClient, snapshot: LeadCacheSnapshot | undefined) {
+  for (const [key, data] of snapshot ?? []) qc.setQueryData(key, data);
+}
+
+// ============================================================
 // Read
 // ============================================================
+/**
+ * @deprecated WC-scale (30 Sep 2026): select("*") of every lead, and PostgREST stops at 1000
+ * rows without saying so — any count or total built on it is wrong past the thousandth lead.
+ * Use a bounded read instead: useLeadCounts / useLeadsInfinite (the leads page),
+ * useLeadStageCounts / useLeadStageTotals (reports, dashboard), useLeadsCreatedSince (lead
+ * sources), useLead(id) (one lead). Kept only for quote-builder.tsx (Abhishek's area), which
+ * looks one lead up by id in it.
+ */
 export function useLeads() {
   return useQuery({
     queryKey: ["leads"],
@@ -44,19 +97,21 @@ export function useLeads() {
 }
 
 /**
- * Leads in keyset pages from `list_leads()` (migration 20260928200000, S37) — slim rows,
- * newest first, server-side filters.
+ * Leads in keyset pages from `list_leads()` (S37; views, folders, the owner filter and the
+ * wait order since S40, migration 20260929130000) — slim rows, server-side filters.
  *
- * NOT a drop-in for useLeads(): the rows are LeadListRow (no notes / attribution columns),
- * and the Sales & Pipeline screen still computes its counts and its default sort over the
- * full set — see lib/leads/list-page.ts for why it is not switched over yet and which
- * filters the server reproduces exactly. Under ["leads"], so every lead mutation's
- * invalidation reaches it.
+ * NOT a drop-in for useLeads(): the rows are LeadListRow (no notes / attribution columns).
+ * The Sales & Pipeline list reads this and its chips read useLeadCounts() with the SAME
+ * filters, so a chip and the list cannot disagree (lead_counts.test.sql). Under ["leads"],
+ * so every lead mutation's invalidation reaches it. `placeholderData` keeps the old rows on
+ * screen while a new filter loads, instead of flashing an empty list.
  */
-export function useLeadsInfinite(filters: LeadListFilters = {}, limit = 50) {
+export function useLeadsInfinite(filters: LeadListFilters = {}, limit = 50, opts: { enabled?: boolean } = {}) {
   const f = toListLeadsFilters(filters);
   const q = useInfiniteQuery({
     queryKey: ["leads", "pages", f, limit],
+    enabled: opts.enabled ?? true,
+    placeholderData: keepPreviousData,
     initialPageParam: null as LeadListCursor | null,
     queryFn: async ({ pageParam }): Promise<LeadListPage> => {
       const supabase = createClient();
@@ -79,6 +134,438 @@ export function useLeadsInfinite(filters: LeadListFilters = {}, limit = 50) {
 }
 
 /**
+ * Every number the Sales & Pipeline screen shows, from `lead_counts()` (S40) — for the same
+ * filters the list uses (paging-only keys dropped). One round trip; see LeadCounts for what
+ * each section counts over.
+ */
+export function useLeadCounts(filters: LeadListFilters = {}) {
+  const f = toLeadCountsFilters(filters);
+  return useQuery({
+    queryKey: ["leads", "counts", f],
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<LeadCounts> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("lead_counts", { p_filters: f as unknown as Json });
+      if (error) throw error;
+      return data as unknown as LeadCounts;
+    },
+  });
+}
+
+// ── Slim, bounded reads (S40) ────────────────────────────────────────────────
+// Everything below names its columns and (except the board and the export) caps its rows.
+// They replaced useLeads() — select("*") of every lead — in places that show a handful:
+// the three layout panels mounted on EVERY page, and the parts of the leads page that are
+// not the list. The column list is the list row's (LEAD_LIST_COLUMNS), so a slim row can
+// go anywhere a list row goes.
+
+const SLIM = LEAD_LIST_COLUMNS.join(", ");
+
+/** Workspace cut for a PostgREST read: listed owners OR unowned (list-selectors#inWorkspace). */
+function ownerOr(ids: readonly string[]): string {
+  return ids.length > 0 ? `owner_id.is.null,owner_id.in.(${ids.join(",")})` : "owner_id.is.null";
+}
+
+/** The board's columns (stage-meta.ts DEAL_STAGES) — lost has no column. */
+export const BOARD_STAGES = ["new", "contact", "quote", "demo", "trial", "won"] as const satisfies readonly Lead["stage"][];
+/** Cards read per column. A column with more says so (BoardData.totals) and the list view pages them all. */
+export const BOARD_COLUMN_CAP = 200;
+
+export interface BoardData {
+  /** Up to BOARD_COLUMN_CAP newest rows per column, newest first. */
+  rows: LeadListRow[];
+  /** How many leads each column holds in total (same owner + junk cut as the rows). */
+  totals: Record<(typeof BOARD_STAGES)[number], number>;
+}
+
+/**
+ * The Kanban board's rows — slim columns, READ PER COLUMN (WC-scale, 30 Sep 2026).
+ *
+ * It used to be one select of every lead, newest first, cut at PostgREST's 1000-row max_rows
+ * — so at 20,000 leads the board held whichever 1000 were newest, and a column's count was
+ * however many of its deals happened to fall inside them: Won read 12 when it was 3,400.
+ * Now each column is its own query, filtered on the server — the stage, the owner cut
+ * (`ownerIds`, as useDueLeads) and junk (only the Junk view shows junk) — capped at
+ * BOARD_COLUMN_CAP newest cards, with an exact count so the column can say "200 of 3,400".
+ * The browser still applies the page's search / filters on top (list-selectors.ts#boardCut).
+ */
+export function useLeadsBoard(enabled: boolean, opts: { ownerIds?: readonly string[] | null; junk?: boolean } = {}) {
+  const ownerIds = opts.ownerIds ?? null;
+  const junk = opts.junk ?? false;
+  return useQuery({
+    queryKey: ["leads", "board", ownerIds, junk],
+    enabled,
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<BoardData> => {
+      const supabase = createClient();
+      const results = await Promise.all(BOARD_STAGES.map((stage) => {
+        let q = supabase
+          .from("leads").select(SLIM, { count: "exact" })
+          .eq("stage", stage)
+          .eq("is_junk", junk);
+        if (ownerIds) q = q.or(ownerOr(ownerIds));
+        return q
+          .order("created_at", { ascending: false }).order("id", { ascending: false })
+          .limit(BOARD_COLUMN_CAP);
+      }));
+      const rows: LeadListRow[] = [];
+      const totals = {} as BoardData["totals"];
+      results.forEach((r, i) => {
+        if (r.error) throw r.error;
+        const got = (r.data ?? []) as unknown as LeadListRow[];
+        rows.push(...got);
+        totals[BOARD_STAGES[i]] = r.count ?? got.length;
+      });
+      return { rows, totals };
+    },
+  });
+}
+
+/**
+ * Follow-ups due today or earlier on open, non-junk leads, most overdue first — the call
+ * queue's input (lib/leads/call-queue.ts#buildCallQueue re-checks every rule). Capped at
+ * 500: the queue shows three, and its "N more due" line says when there are more.
+ */
+export function useDueLeads(ownerIds: readonly string[] | null, enabled = true) {
+  const today = istToday();
+  return useQuery({
+    queryKey: ["leads", "due", today, ownerIds],
+    enabled,
+    queryFn: async (): Promise<LeadListRow[]> => {
+      const supabase = createClient();
+      let q = supabase
+        .from("leads").select(SLIM)
+        .eq("is_junk", false)
+        .not("stage", "in", "(won,lost)")
+        .lte("follow_up_date", today)
+        .order("follow_up_date", { ascending: true })
+        .limit(500);
+      if (ownerIds) q = q.or(ownerOr(ownerIds));
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as unknown as LeadListRow[];
+    },
+  });
+}
+
+/** Lost leads, only the columns the loss-reasons card reads. */
+export function useLostLeads(ownerIds: readonly string[] | null, enabled = true) {
+  return useQuery({
+    queryKey: ["leads", "lost", ownerIds],
+    enabled,
+    queryFn: async () => {
+      const supabase = createClient();
+      let q = supabase.from("leads").select("id, stage, value, lost_reason, lost_at").eq("stage", "lost");
+      if (ownerIds) q = q.or(ownerOr(ownerIds));
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/**
+ * The command palette's leads: the newest few when nothing is typed, else a server search
+ * (list_leads' search — company, contact, email, phone, plan) capped at 25. It used to load
+ * every lead so cmdk could filter them in the browser.
+ */
+export function useLeadSearch(query: string, enabled: boolean) {
+  const q = query.trim() === "" ? "" : query;
+  return useQuery({
+    queryKey: ["leads", "palette", q],
+    enabled,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    queryFn: async (): Promise<LeadListRow[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("list_leads", {
+        p_cursor: null,
+        p_limit: q ? 25 : 10,
+        p_filters: toListLeadsFilters({ search: q, junk: "any" }) as unknown as Json,
+      });
+      if (error) throw error;
+      return ((data as unknown as LeadListPage | null)?.rows ?? []);
+    },
+  });
+}
+
+/** Leads created in the last 7 days — the notification panel's "New lead" rows (it shows 30). */
+export function useRecentLeads(enabled = true) {
+  return useQuery({
+    queryKey: ["leads", "recent-7d"],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const supabase = createClient();
+      const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("leads").select("id, company, value, contact_name, created_at")
+        .gte("created_at", since).order("created_at", { ascending: false }).limit(30);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/**
+ * The quick-actions panel's leads block: how many follow-ups are due today and overdue
+ * (counts, not rows), and the three biggest late-stage deals.
+ *
+ * Same rules as the page now: open, non-junk leads, IST date. The panel used to count every
+ * lead (won, lost and junk included) against the UTC date, so its "3 overdue" and the
+ * page's Overdue view could name different numbers for the same morning.
+ */
+export function useLeadActionSummary(enabled = true) {
+  const today = istToday();
+  return useQuery({
+    queryKey: ["leads", "action-summary", today],
+    enabled,
+    queryFn: async () => {
+      const supabase = createClient();
+      const open = () => supabase.from("leads").select("id", { count: "exact", head: true })
+        .eq("is_junk", false).not("stage", "in", "(won,lost)");
+      const [due, overdue, hot] = await Promise.all([
+        open().eq("follow_up_date", today),
+        open().lt("follow_up_date", today),
+        supabase.from("leads").select("id, company, plan, seats, stage, value")
+          .eq("is_junk", false).in("stage", ["quote", "trial", "demo"])
+          .order("value", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(3),
+      ]);
+      for (const r of [due, overdue, hot]) if (r.error) throw r.error;
+      return { dueToday: due.count ?? 0, overdue: overdue.count ?? 0, hot: hot.data ?? [] };
+    },
+  });
+}
+
+// ── Aggregate reads for pages that are not the leads page (WC-scale, 30 Sep 2026) ──────
+// Reports, the dashboard and Lead Sources each called useLeads() — select("*") of every lead
+// — and counted in the browser. PostgREST stops at 1000 rows without saying so, so at 20,000
+// leads every one of those numbers was a count of the newest thousand. These return the
+// numbers themselves (exact HEAD counts) or page through only the two or six columns a
+// number needs. Junk is excluded everywhere, as the leads page's own totals exclude it
+// (list-selectors.ts#pipelineTotals: "EVERY NON-JUNK LEAD IS A DEAL").
+
+/** Exact non-junk lead count per stage — one HEAD request per stage, in parallel. */
+export function useLeadStageCounts(stages: readonly Lead["stage"][]) {
+  return useQuery({
+    queryKey: ["leads", "stage-counts", [...stages]],
+    queryFn: async (): Promise<Partial<Record<Lead["stage"], number>>> => {
+      const supabase = createClient();
+      const res = await Promise.all(stages.map((stage) => supabase
+        .from("leads").select("id", { count: "exact", head: true })
+        .eq("is_junk", false).eq("stage", stage)));
+      const out: Partial<Record<Lead["stage"], number>> = {};
+      res.forEach((r, i) => {
+        if (r.error) throw r.error;
+        out[stages[i]] = r.count ?? 0;
+      });
+      return out;
+    },
+  });
+}
+
+export type StageTotals = Partial<Record<Lead["stage"], { count: number; value: number }>>;
+
+/**
+ * Count and summed `value` per stage over every non-junk, non-lost lead — the dashboard's
+ * "Pipeline by Stage". Pages through `stage, value` only (lib/ops/fetch-all.ts), so the sums
+ * are over every lead, not the first 1000. A one-round-trip RPC would be cheaper still at
+ * 20k leads; that needs a migration + a types regen, so it is a follow-up, not this change.
+ */
+export function useLeadStageTotals(enabled = true) {
+  return useQuery({
+    queryKey: ["leads", "stage-totals"],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<StageTotals> => {
+      const supabase = createClient();
+      const rows = await fetchAllRows((from, to) => supabase
+        .from("leads").select("stage, value")
+        .eq("is_junk", false).neq("stage", "lost")
+        .order("id", { ascending: true })
+        .range(from, to));
+      const out: StageTotals = {};
+      for (const r of rows) {
+        const t = (out[r.stage] ??= { count: 0, value: 0 });
+        t.count += 1;
+        t.value += r.value ?? 0;
+      }
+      return out;
+    },
+  });
+}
+
+/** The dashboard's lead cards: exact counts, and only the handful of rows each card lists. */
+export function useDashboardLeads(enabled = true) {
+  const today = istToday();
+  return useQuery({
+    queryKey: ["leads", "dashboard", today],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const supabase = createClient();
+      const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+      const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const weekOut = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      const open = () => supabase.from("leads").select("id", { count: "exact", head: true })
+        .eq("is_junk", false).not("stage", "in", "(won,lost)");
+      const [newToday, overdue, upcoming, recent] = await Promise.all([
+        supabase.from("leads").select("id", { count: "exact", head: true })
+          .eq("is_junk", false).gte("created_at", dayStart.toISOString()),
+        open().lt("follow_up_date", today),
+        /* Overdue first, then the coming week — the card shows five. */
+        supabase.from("leads").select("id, company, stage, follow_up_date")
+          .eq("is_junk", false).not("stage", "in", "(won,lost)")
+          .not("follow_up_date", "is", null).lte("follow_up_date", weekOut)
+          .order("follow_up_date", { ascending: true }).order("id", { ascending: true })
+          .limit(5),
+        /* The activity feed shows six items across leads and quotes. */
+        supabase.from("leads").select("id, company, stage, plan, value, created_at")
+          .eq("is_junk", false).gte("created_at", since24h)
+          .order("created_at", { ascending: false }).limit(6),
+      ]);
+      for (const r of [newToday, overdue, upcoming, recent]) if (r.error) throw r.error;
+      return {
+        newToday: newToday.count ?? 0,
+        overdueFollowups: overdue.count ?? 0,
+        upcoming: upcoming.data ?? [],
+        recent: recent.data ?? [],
+      };
+    },
+  });
+}
+
+export type LeadSourceRow = Pick<Lead, "id" | "company" | "contact_name" | "contact_email" | "source" | "stage" | "created_at">;
+
+/**
+ * Every lead created since `sinceISO`, newest first, with the columns Lead Sources shows —
+ * paged (lib/ops/fetch-all.ts), so a busy month is counted whole. Junk included, as the page
+ * always counted it (a junk lead still came in through a channel).
+ */
+export function useLeadsCreatedSince(sinceISO: string) {
+  return useQuery({
+    queryKey: ["leads", "created-since", sinceISO],
+    staleTime: 60_000,
+    queryFn: async (): Promise<LeadSourceRow[]> => {
+      const supabase = createClient();
+      return fetchAllRows((from, to) => supabase
+        .from("leads").select("id, company, contact_name, contact_email, source, stage, created_at")
+        .gte("created_at", sinceISO)
+        .order("created_at", { ascending: false }).order("id", { ascending: false })
+        .range(from, to));
+    },
+  });
+}
+
+/** How many leads the workspace has, all time, junk included — an exact HEAD count. */
+export function useLeadTotalCount() {
+  return useQuery({
+    queryKey: ["leads", "total-count"],
+    staleTime: 60_000,
+    queryFn: async (): Promise<number> => {
+      const supabase = createClient();
+      const { count, error } = await supabase.from("leads").select("id", { count: "exact", head: true });
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
+/**
+ * Every lead the caller can see, for "Export CSV" — fetched when the button is pressed, in
+ * 1000-row pages (PostgREST's max_rows), with only the columns the CSV writes. The old
+ * export wrote whatever useLeads() had loaded, which stopped silently at 1000.
+ */
+export async function fetchLeadsForExport(): Promise<LeadListRow[]> {
+  const supabase = createClient();
+  const out: LeadListRow[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("leads").select(SLIM)
+      .order("created_at", { ascending: false }).order("id", { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as LeadListRow[];
+    out.push(...rows);
+    if (rows.length < PAGE) return out;
+  }
+}
+
+/** The columns the merge dialog reads (its "richest record" pick counts gstin and notes). */
+export const MERGE_COLUMNS =
+  "id, company, contact_name, contact_email, contact_phone, plan, seats, value, gstin, notes, created_at" as const;
+export type MergeLead = Pick<Lead, "id" | "company" | "contact_name" | "contact_email" | "contact_phone"
+  | "plan" | "seats" | "value" | "gstin" | "notes" | "created_at">;
+
+/**
+ * A lead and the leads that duplicate it (list_leads' dup_of — same workspace and keys as
+ * the row's "Duplicate?" flag), with the columns the merge dialog needs. Fetched when the
+ * rep presses Merge; the page no longer holds every lead to look the matches up.
+ */
+export async function fetchMergeCluster(leadId: string, ownerIds: readonly string[] | null): Promise<MergeLead[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("list_leads", {
+    p_cursor: null,
+    p_limit: 200,
+    p_filters: toListLeadsFilters({ junk: "any", dup_of: leadId, owner_ids: ownerIds ? [...ownerIds] : undefined }) as unknown as Json,
+  });
+  if (error) throw error;
+  const ids = [leadId, ...((data as unknown as LeadListPage | null)?.rows ?? []).map((r) => r.id)];
+  if (ids.length < 2) return [];
+  const { data: rows, error: e2 } = await supabase.from("leads").select(MERGE_COLUMNS).in("id", ids);
+  if (e2) throw e2;
+  const byId = new Map((rows ?? []).map((r) => [r.id, r as MergeLead]));
+  return ids.map((id) => byId.get(id)).filter((r): r is MergeLead => Boolean(r));
+}
+
+/**
+ * Existing leads that the lead being typed would duplicate (same phone key or company key —
+ * lib/leads/duplicates.ts), newest first. The Add-lead form's warning; it used to load every
+ * lead to look for one. Debounced by the caller; nothing is asked until something is typed.
+ */
+export function useLeadDuplicateCheck(company: string, phone: string, excludeId: string | undefined, enabled: boolean) {
+  const c = company.trim();
+  const p = phone.trim();
+  return useQuery({
+    queryKey: ["leads", "dup-check", c, p, excludeId ?? null],
+    enabled: enabled && (c.length > 0 || p.length > 0),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    queryFn: async (): Promise<LeadListRow[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("list_leads", {
+        p_cursor: null,
+        p_limit: 10,
+        p_filters: toListLeadsFilters({
+          junk: "any", dup_like: { company: c, contact_phone: p, exclude_id: excludeId },
+        }) as unknown as Json,
+      });
+      if (error) throw error;
+      return ((data as unknown as LeadListPage | null)?.rows ?? []);
+    },
+  });
+}
+
+/** A lead's name by id — for a picker that shows a chosen lead it did not load. */
+export function useLeadLabel(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ["leads", "label", id],
+    enabled: Boolean(id),
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("leads").select("id, company, contact_name").eq("id", id!).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/**
  * Har lead ki SABSE NAYI quote — id aur status — ek hi query me.
  *
  * ─── KYON ───────────────────────────────────────────────────────────────────
@@ -96,19 +583,30 @@ export interface LeadQuoteRef {
   status: string | null;
 }
 
-export function useLeadQuotes() {
+/**
+ * WC-scale (30 Sep 2026): for THESE leads only — the rows on screen. It used to read every
+ * quote that had a lead, which past PostgREST's 1000-row cap meant the newest thousand: an
+ * older lead's quote pill silently vanished. Now 200 lead ids a request, every page read
+ * (lib/ops/fetch-all.ts). Newest first inside each chunk — a lead's quotes are all in its
+ * one chunk, so "first seen = newest" still holds.
+ */
+export function useLeadQuotes(leadIds: readonly string[]) {
+  const ids = idsKey(leadIds);
   return useQuery({
-    queryKey: ["leads", "quotes-by-lead"],
+    queryKey: ["leads", "quotes-by-lead", ids],
+    enabled: ids.length > 0,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<Record<string, LeadQuoteRef>> => {
       const supabase = createClient();
-      const { data, error } = await supabase
+      const data = await fetchAllRowsIn(ids, (chunkIds, from, to) => supabase
         .from("quotes")
         .select("id, lead_id, status, created_at")
-        .not("lead_id", "is", null)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+        .in("lead_id", chunkIds)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to));
       const map: Record<string, LeadQuoteRef> = {};
-      for (const q of (data ?? []) as { id: string; lead_id: string | null; status: string | null }[]) {
+      for (const q of data as { id: string; lead_id: string | null; status: string | null }[]) {
         if (q.lead_id && !map[q.lead_id]) map[q.lead_id] = { id: q.id, status: q.status };
       }
       return map;
@@ -161,15 +659,11 @@ export function useUpdateLeadStage() {
     },
     // Optimistic update — UI updates immediately, rolls back on error
     onMutate: async ({ id, stage }) => {
-      await qc.cancelQueries({ queryKey: ["leads"] });
-      const previous = qc.getQueryData<Lead[]>(["leads"]);
-      qc.setQueryData<Lead[]>(["leads"], (old) =>
-        old?.map((l) => (l.id === id ? { ...l, stage } : l))
-      );
+      const previous = await patchCachedLeads(qc, [id], { stage });
       return { previous };
     },
     onError: (err, _vars, ctx) => {
-      qc.setQueryData(["leads"], ctx?.previous);
+      restoreCachedLeads(qc, ctx?.previous);
       // The optimistic move was just rolled back — say so, or the card silently
       // snapping back to its old column looks like the drag simply didn't work.
       toastError(err, {
@@ -221,12 +715,7 @@ export function useSetLeadJunk() {
        junk removes the row from every working view, so the optimistic write IS the
        feedback — there is no cell left on screen to animate. */
     onMutate: async ({ ids, isJunk }) => {
-      await qc.cancelQueries({ queryKey: ["leads"] });
-      const previous = qc.getQueryData<Lead[]>(["leads"]);
-      const idSet = new Set(ids);
-      qc.setQueryData<Lead[]>(["leads"], (old) =>
-        old?.map((l) => (idSet.has(l.id) ? { ...l, is_junk: isJunk } : l)),
-      );
+      const previous = await patchCachedLeads(qc, ids, { is_junk: isJunk });
       return { previous };
     },
     onSuccess: (_r, { ids, isJunk }) => {
@@ -236,7 +725,7 @@ export function useSetLeadJunk() {
     },
     onError: (err, _vars, ctx) => {
       // Put the rows back, or the rep believes leads were hidden that were not.
-      qc.setQueryData(["leads"], ctx?.previous);
+      restoreCachedLeads(qc, ctx?.previous);
       toastError(err, { description: "The leads were put back — nothing was changed." });
     },
   });
@@ -335,11 +824,7 @@ export function useUpdateLead(opts: { quiet?: boolean } = {}) {
     // Optimistic — an inline cell must feel instant, and the row is right there
     // to show the rollback if the write fails.
     onMutate: async ({ id, patch }) => {
-      await qc.cancelQueries({ queryKey: ["leads"] });
-      const previous = qc.getQueryData<Lead[]>(["leads"]);
-      qc.setQueryData<Lead[]>(["leads"], (old) =>
-        old?.map((l) => (l.id === id ? { ...l, ...(patch as Partial<Lead>) } : l)),
-      );
+      const previous = await patchCachedLeads(qc, [id], patch as Partial<Lead>);
       return { previous };
     },
     onSuccess: () => {
@@ -348,7 +833,7 @@ export function useUpdateLead(opts: { quiet?: boolean } = {}) {
       if (!opts.quiet) toast.success("Lead updated");
     },
     onError: (err, _vars, ctx) => {
-      qc.setQueryData(["leads"], ctx?.previous);
+      restoreCachedLeads(qc, ctx?.previous);
       toastError(err, { description: "The cell was put back to its previous value — nothing was saved." });
     },
   });

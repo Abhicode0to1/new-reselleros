@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { B2CL_THRESHOLD, buildGstr1, gstr1Csv, gstr1Json, gstSplit, hsnLines, posFor, type Gstr1Doc } from "./gstr1";
+import { B2CL_THRESHOLD, buildAdvances, buildGstr1, gstr1Csv, gstr1Json, gstr3bClass, gstSplit, hsnLines, posFor, GSTR1_HEADERS, type Advance, type Gstr1Doc } from "./gstr1";
 import { SAAS_HSN } from "./hsn";
 
 const seller = { stateCode: "07", state: "Delhi", gstin: "07AABCU9603R1ZM" };
@@ -123,9 +123,9 @@ describe("GSTR-1 sections", () => {
     expect(j.hsn.data[0]).toMatchObject({ hsn_sc: SAAS_HSN, uqc: "OTH" });
   });
 
-  it("gstSplit halves CGST/SGST exactly, also for a signed note", () => {
-    expect(gstSplit({ gst: 181, interState: false })).toEqual({ igst: 0, cgst: 90, sgst: 91 });
-    expect(gstSplit({ gst: -181, interState: false })).toEqual({ igst: 0, cgst: -90, sgst: -91 });
+  it("gstSplit halves CGST/SGST exactly (odd rupee → CGST, like the invoice), mirrored for a signed note", () => {
+    expect(gstSplit({ gst: 181, interState: false })).toEqual({ igst: 0, cgst: 91, sgst: 90 });
+    expect(gstSplit({ gst: -181, interState: false })).toEqual({ igst: 0, cgst: -91, sgst: -90 });
     expect(gstSplit({ gst: 181, interState: true })).toEqual({ igst: 181, cgst: 0, sgst: 0 });
   });
 
@@ -134,5 +134,149 @@ describe("GSTR-1 sections", () => {
     expect(posFor({ customerGstin: null, customerStateCode: "9", customerState: null, interState: true }, seller)).toEqual({ code: "09", name: "Uttar Pradesh" });
     expect(posFor({ customerGstin: null, customerStateCode: null, customerState: null, interState: false }, seller)?.code).toBe("07");
     expect(posFor({ customerGstin: null, customerStateCode: null, customerState: null, interState: true }, seller)).toBeNull();
+  });
+});
+
+describe("WC-gst: odd tax amounts", () => {
+  it("B2CS, B2B and HSN all put the odd rupee in CGST, the same split the invoice printed", () => {
+    const s = buildGstr1([
+      doc({ id: "ODD-B2C", customerStateCode: "07", customerState: "Delhi", amount: 1181, taxableValue: 1000, gst: 181 }),
+      doc({ id: "ODD-B2B", customerGstin: "07AABCU9603R1ZM", amount: 1181, taxableValue: 1000, gst: 181 }),
+    ], seller);
+    expect(s.b2cs[0].heads).toEqual({ igst: 0, cgst: 91, sgst: 90 });
+    expect(s.b2b[0].heads).toEqual({ igst: 0, cgst: 91, sgst: 90 });
+    expect(s.hsn[0].heads).toEqual({ igst: 0, cgst: 182, sgst: 180 });
+  });
+
+  it("a credit note reversing an odd-tax invoice reverses the same heads (CDNR positive)", () => {
+    const s = buildGstr1([doc({ id: "CN-ODD", docType: "credit_note", customerGstin: "07AABCU9603R1ZM", amount: -1181, taxableValue: -1000, gst: -181 })], seller);
+    expect(s.cdnr[0].heads).toEqual({ igst: 0, cgst: 91, sgst: 90 });
+  });
+});
+
+describe("WC-gst: exports (Table 6A EXP)", () => {
+  const exportDoc = (over: Partial<Gstr1Doc>) => doc({ customerCountry: "United Arab Emirates", customerStateCode: null, customerState: null, ...over });
+
+  it("an export under LUT goes to EXP as WOPAY, rate 0 (not B2CS, not skipped)", () => {
+    const s = buildGstr1([exportDoc({ id: "EXP-1", amount: 100000, taxableValue: 100000, gst: 0 })], seller);
+    expect(s.exp).toEqual([{ exportType: "WOPAY", id: "EXP-1", date: "2026-08-10", value: 100000, rate: 0, taxable: 100000, igst: 0 }]);
+    expect(s.b2cs).toHaveLength(0);
+    expect(s.skipped).toHaveLength(0);
+    expect(s.hsn[0].taxable).toBe(100000);   // still an outward supply in Table 12
+  });
+
+  it("an export with IGST paid is WPAY and the tax is IGST even if the row said intra-state", () => {
+    const s = buildGstr1([exportDoc({ id: "EXP-2", interState: false, amount: 118000, taxableValue: 100000, gst: 18000 })], seller);
+    expect(s.exp[0]).toMatchObject({ exportType: "WPAY", rate: 18, igst: 18000 });
+    expect(s.hsn[0].heads).toEqual({ igst: 18000, cgst: 0, sgst: 0 });
+  });
+
+  it("a customer marked India, or with no country, is never zero-rated", () => {
+    const s = buildGstr1([
+      doc({ id: "IN", customerCountry: "India", customerStateCode: "07", customerState: "Delhi" }),
+      doc({ id: "BLANK", customerCountry: "", customerStateCode: "07", customerState: "Delhi" }),
+    ], seller);
+    expect(s.exp).toHaveLength(0);
+    expect(s.b2cs[0].taxable).toBe(200000);
+  });
+
+  it("a foreign-country customer WITH an Indian GSTIN stays B2B", () => {
+    const s = buildGstr1([doc({ id: "GSTIN", customerCountry: "United States", customerGstin: "07AABCU9603R1ZM" })], seller);
+    expect(s.b2b).toHaveLength(1);
+    expect(s.exp).toHaveLength(0);
+  });
+
+  it("an export credit note is CDNUR with UR Type EXPWOP / EXPWP and no place of supply", () => {
+    const s = buildGstr1([
+      exportDoc({ id: "CN-EXP", docType: "credit_note", amount: -5000, taxableValue: -5000, gst: 0 }),
+      exportDoc({ id: "CN-EXPWP", docType: "credit_note", amount: -1180, taxableValue: -1000, gst: -180 }),
+    ], seller);
+    expect(s.cdnur.map((r) => [r.id, r.urType, r.pos, r.value])).toEqual([["CN-EXP", "EXPWOP", "", 5000], ["CN-EXPWP", "EXPWP", "", 1180]]);
+    const j = gstr1Json(s, seller.gstin, "082026");
+    expect(j.cdnur[0]).toMatchObject({ typ: "EXPWOP", ntty: "C" });
+    expect(j.cdnur[0]).not.toHaveProperty("pos");
+  });
+
+  it("EXP CSV follows the Offline Tool template; JSON groups by exp_typ", () => {
+    const s = buildGstr1([
+      exportDoc({ id: "EXP-1", amount: 100000, taxableValue: 100000, gst: 0 }),
+      exportDoc({ id: "EXP-2", amount: 118000, taxableValue: 100000, gst: 18000 }),
+    ], seller);
+    const csv = gstr1Csv(s);
+    expect(GSTR1_HEADERS.exp).toEqual(["Export Type", "Invoice Number", "Invoice date", "Invoice Value", "Port Code", "Shipping Bill Number", "Shipping Bill Date", "Rate", "Taxable Value", "Cess Amount"]);
+    expect(csv.exp[0]).toEqual(["WOPAY", "EXP-1", "10-Aug-2026", 100000, "", "", "", 0, 100000, 0]);
+    expect(csv.exp[0]).toHaveLength(GSTR1_HEADERS.exp.length);
+    const j = gstr1Json(s, seller.gstin, "082026");
+    expect(j.exp.map((g) => g.exp_typ)).toEqual(["WPAY", "WOPAY"]);
+    expect(j.exp[0].inv[0]).toMatchObject({ inum: "EXP-2", idt: "10-08-2026", val: 118000, itms: [{ txval: 100000, rt: 18, iamt: 18000, csamt: 0 }] });
+  });
+
+  it("3B class: export is zero-rated; inter-state unregistered gets its POS for 3.2", () => {
+    expect(gstr3bClass(exportDoc({}), seller)).toEqual({ zeroRated: true, unregInterPos: null });
+    expect(gstr3bClass(doc({ interState: true, customerStateCode: "27", customerState: "Maharashtra" }), seller)).toEqual({ zeroRated: false, unregInterPos: "27-Maharashtra" });
+    expect(gstr3bClass(doc({ interState: true, customerGstin: "27ABCDE1234F1Z5" }), seller).unregInterPos).toBeNull();
+    expect(gstr3bClass(doc({ interState: false }), seller).unregInterPos).toBeNull();
+  });
+});
+
+describe("WC-gst: advances (Tables 11A / 11B)", () => {
+  const period = { from: "2026-08-01", to: "2026-08-31" };
+  const adv = (over: Partial<Advance>): Advance => ({
+    paymentId: "P1", voucherNo: "RV-1", receivedDate: "2026-08-05", adjustedOn: null,
+    gross: 11800, rate: 18, interState: false,
+    customerGstin: null, customerStateCode: "07", customerState: "Delhi", ...over,
+  });
+
+  it("11A: advance received this month and not invoiced by month-end, taxable part only", () => {
+    const t = buildAdvances([adv({})], period, seller);
+    expect(t.at).toEqual([{ pos: "07-Delhi", interState: false, rate: 18, advance: 10000, heads: { igst: 0, cgst: 900, sgst: 900 } }]);
+    expect(t.atadj).toHaveLength(0);
+  });
+
+  it("11A also when the invoice comes next month", () => {
+    expect(buildAdvances([adv({ adjustedOn: "2026-09-02" })], period, seller).at).toHaveLength(1);
+  });
+
+  it("received and invoiced in the same month: neither table", () => {
+    const t = buildAdvances([adv({ adjustedOn: "2026-08-20" })], period, seller);
+    expect(t.at).toHaveLength(0);
+    expect(t.atadj).toHaveLength(0);
+  });
+
+  it("11B: received last month, invoiced this month", () => {
+    const t = buildAdvances([adv({ receivedDate: "2026-07-28", adjustedOn: "2026-08-03", interState: true, customerStateCode: "27", customerState: "Maharashtra" })], period, seller);
+    expect(t.at).toHaveLength(0);
+    expect(t.atadj).toEqual([{ pos: "27-Maharashtra", interState: true, rate: 18, advance: 10000, heads: { igst: 1800, cgst: 0, sgst: 0 } }]);
+  });
+
+  it("odd tax on an advance splits with the shared rule and consolidates per POS + rate", () => {
+    const t = buildAdvances([adv({ gross: 1187 }), adv({ paymentId: "P2", gross: 11800 })], period, seller);
+    // 1187 -> taxable 1006, tax 181 -> CGST 91 / SGST 90
+    expect(t.at).toHaveLength(1);
+    expect(t.at[0].advance).toBe(1006 + 10000);
+    expect(t.at[0].heads).toEqual({ igst: 0, cgst: 91 + 900, sgst: 90 + 900 });
+  });
+
+  it("export advances are not taxed (LUT) and are counted, not reported", () => {
+    const t = buildAdvances([adv({ customerCountry: "Singapore", customerStateCode: null, customerState: null })], period, seller);
+    expect(t.at).toHaveLength(0);
+    expect(t.exportsSkipped).toBe(1);
+  });
+
+  it("no place of supply: skipped by payment id", () => {
+    const t = buildAdvances([adv({ paymentId: "NOPOS", interState: true, customerStateCode: null, customerState: null })], period, seller);
+    expect(t.skipped).toEqual(["NOPOS"]);
+  });
+
+  it("CSV matches the Offline Tool at / atadj templates; JSON has at / txpd with ad_amt", () => {
+    const t = buildAdvances([adv({}), adv({ paymentId: "P0", receivedDate: "2026-07-10", adjustedOn: "2026-08-10" })], period, seller);
+    const csv = gstr1Csv(buildGstr1([], seller), t);
+    expect(GSTR1_HEADERS.at).toEqual(["Place Of Supply", "Applicable % of Tax Rate", "Rate", "Gross Advance Received", "Cess Amount"]);
+    expect(GSTR1_HEADERS.atadj).toEqual(["Place Of Supply", "Applicable % of Tax Rate", "Rate", "Gross Advance Adjusted", "Cess Amount"]);
+    expect(csv.at).toEqual([["07-Delhi", "", 18, 10000, 0]]);
+    expect(csv.atadj).toEqual([["07-Delhi", "", 18, 10000, 0]]);
+    const j = gstr1Json(buildGstr1([], seller), seller.gstin, "082026", t);
+    expect(j.at).toEqual([{ pos: "07", sply_ty: "INTRA", itms: [{ rt: 18, ad_amt: 10000, iamt: 0, camt: 900, samt: 900, csamt: 0 }] }]);
+    expect(j.txpd[0]).toMatchObject({ pos: "07", sply_ty: "INTRA" });
   });
 });

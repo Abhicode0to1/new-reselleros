@@ -3,6 +3,9 @@
  * The Sales & Pipeline toolbar — whose leads, search, views, Kanban/List, Filter and More.
  * Moved verbatim out of (app)/leads/page.tsx (S35, 28 Sep 2026). All state stays in the
  * page; this only draws it.
+ *
+ * S40: every number here is a server count (lead_counts() — `pool`, `viewCounts`, …); the
+ * toolbar no longer receives the lead list. Export CSV fetches the leads when pressed.
  */
 import * as React from "react";
 import { toast } from "sonner";
@@ -13,6 +16,9 @@ import type { useTeamTree } from "@/lib/queries/team-tree";
 import { LeadsSmartViews, type SmartView } from "@/components/features/leads/leads-smart-views";
 import { downloadCSV } from "@/lib/csv";
 import { LEADS_CSV_HEADERS, leadsCsvRows } from "@/lib/export/crm-csv";
+import { fetchLeadsForExport } from "@/lib/queries/leads";
+import { toastError } from "@/lib/errors/toast-error";
+import type { LeadCounts } from "@/lib/leads/list-page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
@@ -31,19 +37,23 @@ import type { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import type { SalesFolder } from "@/lib/leads/folders";
 import type { StageMeta } from "@/lib/leads/stage-meta";
 import { istToday } from "@/lib/dates/ist";
+import { UNASSIGNED } from "@/lib/leads/list-selectors";
+import { useTeamMembers } from "@/lib/queries/team";
 
 type TeamMember = NonNullable<ReturnType<typeof useTeamTree>["data"]>[number];
 type Priority = "low" | "medium" | "high";
 
 export interface LeadsToolbarProps {
-  leads: Lead[] | undefined;
+  /** lead_counts().pool — every lead the caller can see, before any filter. */
+  pool: LeadCounts["pool"];
   leadMeMember: TeamMember | null;
   leadTeam: TeamMember[];
   leadTeamMode: TeamViewMode;
   setLeadTeamMode: (m: TeamViewMode) => void;
   search: string;
   setSearch: (v: string) => void;
-  leadsForTab: Lead[];
+  /** lead_counts().views — the View menu's counts. */
+  viewCounts: LeadCounts["views"];
   everythingCount: number;
   currentUser: ReturnType<typeof useCurrentUser>["data"];
   duplicateCountForTab: number;
@@ -62,6 +72,9 @@ export interface LeadsToolbarProps {
   setStageFilter: React.Dispatch<React.SetStateAction<Lead["stage"][]>>;
   priorityFilter: Priority[];
   setPriorityFilter: React.Dispatch<React.SetStateAction<Priority[]>>;
+  /** "Kiska" — owner ids, or UNASSIGNED; empty = everyone. */
+  ownerFilter: string[];
+  setOwnerFilter: React.Dispatch<React.SetStateAction<string[]>>;
   isSales: boolean;
   kpiOpen: boolean;
   setKpiOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -72,12 +85,30 @@ export interface LeadsToolbarProps {
 }
 
 export function LeadsToolbar({
-  leads, leadMeMember, leadTeam, leadTeamMode, setLeadTeamMode, search, setSearch, leadsForTab,
+  pool, leadMeMember, leadTeam, leadTeamMode, setLeadTeamMode, search, setSearch, viewCounts,
   everythingCount, currentUser, duplicateCountForTab, junkCount, junkSuspectCount, smartView,
   selectSmartView, folderRows, folder, selectFolder, effectiveView, setView, activeFilterCount,
-  filterStages, stageFilter, setStageFilter, priorityFilter, setPriorityFilter, isSales, kpiOpen,
+  filterStages, stageFilter, setStageFilter, priorityFilter, setPriorityFilter, ownerFilter, setOwnerFilter, isSales, kpiOpen,
   setKpiOpen, setCsvImportOpen, setCampaignOpen, setGoogleImportOpen, setShareOpen,
 }: LeadsToolbarProps) {
+  // Names for the "Kiska" filter — the reporting tree (leadTeam) carries ids and roles only.
+  const { data: members = [] } = useTeamMembers();
+  const meId = currentUser?.userId ?? leadMeMember?.id ?? null;
+  const [exporting, setExporting] = React.useState(false);
+  /* Data-portability (audit B7): saari leads, jaisi darj hain. Fetched on the click, in
+     pages — the export used to write whatever the page had loaded, which stopped at 1000. */
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const rows = await fetchLeadsForExport();
+      downloadCSV(`leads-${istToday()}.csv`, [...LEADS_CSV_HEADERS], leadsCsvRows(rows));
+      toast.success(`Exported ${rows.length} leads to CSV`);
+    } catch (err) {
+      toastError(err, { fallback: "Could not export the leads" });
+    } finally {
+      setExporting(false);
+    }
+  };
   return (
     <>
     {/* Whose leads. Renders nothing for a rep with no reports — both halves would show
@@ -94,8 +125,8 @@ export function LeadsToolbar({
          filtered, not the result. Unowned rows show in both halves, so without this the
          note claims "only records assigned to you" over rows assigned to nobody. */
       counts={{
-        total: (leads ?? []).length,
-        unassigned: (leads ?? []).filter((l) => !l.owner_id).length,
+        total: pool.total,
+        unassigned: pool.unassigned,
       }}
     />
 
@@ -111,7 +142,7 @@ export function LeadsToolbar({
       </div>
 
       <LeadsSmartViews
-        leads={leadsForTab}
+        counts={viewCounts}
         everythingCount={everythingCount}
         currentUserId={currentUser?.userId}
         duplicateCount={duplicateCountForTab}
@@ -203,11 +234,43 @@ export function LeadsToolbar({
                 {p}
               </DropdownMenuCheckboxItem>
             ))}
+            {/* Kiska — only when there is someone besides me to pick. Me first, then the
+                team by name, then leads nobody owns. Counts are over every lead you can see
+                (lead_counts().pool — server counts, S40). */}
+            {members.length > 1 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">Kiska</DropdownMenuLabel>
+                {[
+                  ...(meId ? [{ id: meId, label: "Mera" }] : []),
+                  ...members
+                    .filter((m) => m.id !== meId)
+                    .map((m) => ({ id: m.id, label: m.full_name || m.email || "Unknown" }))
+                    .sort((a, b) => a.label.localeCompare(b.label)),
+                  { id: UNASSIGNED, label: "Unassigned" },
+                ].map((o) => {
+                  const n = o.id === UNASSIGNED ? pool.unassigned : (pool.by_owner[o.id] ?? 0);
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={o.id}
+                      checked={ownerFilter.includes(o.id)}
+                      onCheckedChange={(checked) => {
+                        setOwnerFilter((prev) => (checked ? [...prev, o.id] : prev.filter((x) => x !== o.id)));
+                      }}
+                      className="text-sm"
+                    >
+                      <span className="flex-1 truncate">{o.label}</span>
+                      <span className="ml-2 text-xs text-ink-3 tabular-nums">{n}</span>
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+              </>
+            )}
             {activeFilterCount > 0 && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onSelect={() => { setStageFilter([]); setPriorityFilter([]); }}
+                  onSelect={() => { setStageFilter([]); setPriorityFilter([]); setOwnerFilter([]); }}
                   className="text-sm text-rose"
                 >
                   Clear all filters
@@ -232,8 +295,8 @@ export function LeadsToolbar({
                 <Icon name="download" size={14} className="text-ink-3" /> Import CSV
               </DropdownMenuItem>
               {/* Data-portability (audit B7): saari leads, jaisi darj hain. */}
-              <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => { downloadCSV(`leads-${istToday()}.csv`, [...LEADS_CSV_HEADERS], leadsCsvRows(leads ?? [])); toast.success(`Exported ${(leads ?? []).length} leads to CSV`); }}>
-                <Icon name="upload" size={14} className="text-ink-3" /> Export CSV
+              <DropdownMenuItem className="gap-2 cursor-pointer" disabled={exporting} onSelect={() => { void exportCsv(); }}>
+                <Icon name="upload" size={14} className="text-ink-3" /> {exporting ? "Exporting…" : "Export CSV"}
               </DropdownMenuItem>
               <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => setCampaignOpen(true)}>
                 <Icon name="send" size={14} className="text-ink-3" /> Send campaign

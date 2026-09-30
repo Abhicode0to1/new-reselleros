@@ -14,28 +14,29 @@ import { GeminiCard } from "@/components/shared/gemini-card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
-import type { Lead } from "@/lib/supabase/database.types";
 import type { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import type { LeadCounts } from "@/lib/leads/list-page";
 
 export interface LeadsHotCardProps {
-  filtered: Lead[];
+  /** Quote / trial leads in the current list — lead_counts().list.hot (S40). */
+  hotCount: number;
+  /** The highest-value one of them — lead_counts().list.hot_top. */
+  topHot: LeadCounts["list"]["hot_top"];
   currentUser: ReturnType<typeof useCurrentUser>["data"];
   tipsOpen: boolean;
   toggleTips: () => void;
 }
 
-export function LeadsHotCard({ filtered, currentUser, tipsOpen, toggleTips }: LeadsHotCardProps) {
-  const hotLeads = filtered
-    .filter((l) => l.stage === "quote" || l.stage === "trial")
-    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
-  const topHot = hotLeads[0] ?? null;
+/* S40: the count and the top lead come from the server, over the WHOLE list and not the
+   page of it that is loaded — same rule as before: quote or trial, highest value first. */
+export function LeadsHotCard({ hotCount, topHot, currentUser, tipsOpen, toggleTips }: LeadsHotCardProps) {
   // The new Insight band (KPI pills + pulse) already surfaces "Hot"
   // count at the top of the page. Showing this card with a "0 hot
   // leads" empty state is just noise. Render only when there's
   // actually a hot lead to act on. Sales role gets the band only —
   // this card is owner/manager territory (it surfaces aggregate
   // tenant info beyond the rep's individual book).
-  if (hotLeads.length === 0) return null;
+  if (hotCount === 0) return null;
 
   const handleCallTop = () => {
     if (!topHot) { toast.info("No hot leads right now"); return; }
@@ -85,7 +86,7 @@ export function LeadsHotCard({ filtered, currentUser, tipsOpen, toggleTips }: Le
             <Button size="sm" variant="ghost" icon="chevron_up" aria-label="Hide tips" onClick={toggleTips} />
           }
         >
-          <b className="text-ink">{hotLeads.length} hot lead{hotLeads.length === 1 ? "" : "s"} worth focusing today.</b>{" "}
+          <b className="text-ink">{hotCount} hot lead{hotCount === 1 ? "" : "s"} worth focusing today.</b>{" "}
           {topHot
             ? <>Top: <b>{topHot.company}</b> ({topHot.plan ?? "—"}, {topHot.value ? rupee(topHot.value, { compact: true }) : "value pending"}). Quote/Trial stages convert highest — prioritize today.</>
             : <>No leads in Quote Sent or Trial Active right now. Move some forward to surface hot opportunities.</>}
@@ -98,7 +99,7 @@ export function LeadsHotCard({ filtered, currentUser, tipsOpen, toggleTips }: Le
         >
           <span className="inline-flex items-center gap-1.5">
             <Icon name="sparkles" size={13} className="text-amber-ink" />
-            Lead intelligence · <b className="text-ink">{hotLeads.length}</b> hot lead{hotLeads.length === 1 ? "" : "s"} today
+            Lead intelligence · <b className="text-ink">{hotCount}</b> hot lead{hotCount === 1 ? "" : "s"} today
           </span>
           <span className="inline-flex items-center gap-1 text-ink-3"><Icon name="chevron_down" size={13} /> Show</span>
         </button>

@@ -33,7 +33,7 @@ import { rupee, cn } from "@/lib/utils";
 // already cached by TanStack Query so opening the palette is instant once
 // the user has visited the corresponding page at least once. First-time
 // open shows a brief loading flicker per group (acceptable trade-off).
-import { useLeads } from "@/lib/queries/leads";
+import { useLeadSearch } from "@/lib/queries/leads";
 import { useCustomers } from "@/lib/queries/customers";
 import { useQuotes } from "@/lib/queries/quotes";
 import { useAllContacts } from "@/lib/queries/contacts";
@@ -106,7 +106,6 @@ export function CommandPalette({
   // Pull real tenant-scoped data. RLS ensures we only see this tenant's
   // rows. Queries are cached by TanStack Query — opening the palette
   // multiple times is instant after first load.
-  const { data: leads }     = useLeads();
   const { data: customers } = useCustomers();
   const { data: quotes }    = useQuotes({ status: "all" });
   const { data: contacts }  = useAllContacts();
@@ -148,6 +147,18 @@ export function CommandPalette({
   // into the next open — reopening onto a stale search reads as a stuck palette.
   const [query, setQuery] = React.useState("");
   React.useEffect(() => { if (!open) setQuery(""); }, [open]);
+
+  /* Leads are searched ON THE SERVER (S40), not loaded whole: this palette is mounted on
+     every page, and it used to pull every lead with select("*") — at 20,000 leads, on every
+     page view, to show ten of them. Now it asks only while open: the newest few, or the
+     matches for what is typed (list_leads' search — company, contact, email, phone, plan).
+     A beat after the last keystroke, so typing a name is one query, not one per letter. */
+  const [leadQuery, setLeadQuery] = React.useState("");
+  React.useEffect(() => {
+    const t = setTimeout(() => setLeadQuery(query), 200);
+    return () => clearTimeout(t);
+  }, [query]);
+  const { data: leads } = useLeadSearch(leadQuery, open);
 
   // Seats can only be added to something currently running. A paused or expired
   // subscription needs reviving first, and offering the action on one would send
@@ -299,7 +310,10 @@ export function CommandPalette({
                         icon="target"
                         label={l.company}
                         meta={meta}
-                        keywords={leadKeywords(l)}
+                        /* email / phone mapped by name: LeadLike calls them email / phone, the
+                           row contact_email / contact_phone — passed as-is they were silently
+                           dropped, and cmdk then hid a lead the server found BY its phone. */
+                        keywords={leadKeywords({ ...l, email: l.contact_email, phone: l.contact_phone })}
                         onSelect={() => go(`/leads?lead=${l.id}`)}
                       />
                     );

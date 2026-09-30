@@ -14,33 +14,44 @@ Collections:
 
 | collection | one doc = | key fields |
 |---|---|---|
-| `tasks` | one piece of work, id `R-nnn` (someone asked another area) or `Snn` (roadmap) | `kind` request/roadmap · `owner` pardeep/abhishek/pawan/hitesh/sab · `from` · `priority` p0–p3 · `bucket` · `title` · `why` · `fix` · `where` · `doneWhen` · `status` · `commits[]` · `dependsOn[]` · `outcome` · `updatedAt` |
+| `tasks` | one piece of work, id `R-nnn` (someone asked another area) or `Snn` (roadmap) | `plain` (one Hinglish line, max 90 chars: what the work achieves, no jargon — the card headline) · `kind` request/roadmap · `owner` pardeep/abhishek/pawan/hitesh/sab · `from` · `priority` p0–p3 · `bucket` · `title` · `why` · `fix` · `where` · `doneWhen` · `status` · `commits[]` · `dependsOn[]` · `outcome` · `statusNote` · `nextStep` · `waitingOn` · `humanStep` (the ONE thing only the owner can do — a login, a key, a yes; the board shows it instead of status buttons) · `humanStepDoneAt` (set by the owner pressing “✔ Maine kar diya”; the next Claude session picks the card up from there) · `updatedAt` |
 | `changes` | one thing others must know (a migration, a changed RPC signature, a new env var, a data note) | `at` · `owner` (who changed it) · `title` · `body_html` · `affects[]` (owners) · `migrations[]` · `commit` · `acked{}` |
 | `messages` | a chat message | `ch` general/requests/roadmap/deploy/accounting/billing/customer/qa · `text` · `by` · `at` |
 
 **Statuses:** `open` → `doing` → `review` → `done` (or `blocked`, `declined`). An agent may move
 a task to `doing` and to `review`. **Only a human moves it to `done`** (or `declined`), after
 checking the `doneWhen` line.
+*Exception (Pardeep, 29 Sep 2026):* a human may give their OWN Claude sessions standing
+permission to set `done` on that human's cards once every part of `doneWhen` is verified. Pardeep
+has. The session then writes `statusNote: "<date>: Claude ne Done kiya — <what was checked>"`.
+It never covers another owner's card, anything waiting on deploy / a prod migration / another
+person, or a fix on a page Hitesh reported (his retest still decides).
 
 Ownership of code is in [`OWNERS.json`](../OWNERS.json) (repo root). `node production/scripts/areas.mjs`
 tells you whose area a branch touched.
 
-## Testing (Hitesh, QA) — 28 Sep 2026
+## Team areas — re-split 30 Sep 2026
 
-Hitesh Baghel tests the app's user flows on the online **test** environment (never production)
-and files what he finds. His guide is [`docs/qa/README.md`](qa/README.md); his area is
-`production/e2e/` and `docs/qa/` on branch `hitesh-qa` — he does not change app code.
+Pardeep (manager) re-split the areas on 30 Sep 2026 (`OWNERS.json` is the truth):
+- **Pardeep** — manager; CRM/leads, deals, enquiries, referrals, partners, Marketing & Advertising, attendance/HR, reports, team docs, and the QA system (`production/e2e/`, `docs/qa/`).
+- **Hitesh** — Accounts: the app's Accounting module (books, GST, TDS, compliance, payroll, banking, expenses, purchases, vendor portal). Branch `accounts-hitesh`.
+- **Abhishek** — Billing & Subscriptions + technical/infra: deploy, `cloudbuild.yaml`, CI (`.github/`), crons, backups, ops scripts.
+- **Pawan** — website and everything customer-facing (public/marketing pages, auth, checkout, customer portal, `/api/v1`).
 
-- A bug is an `R-nnn` request: `owner` = the area owner of that page, `from: "hitesh"`,
-  title `Bug: …`, with URL, steps, expected, actual, screenshot.
-- The owner's agent fixes it like any request and sets `review`. Hitesh retests on the test
-  environment and posts `R-nnn retest pass` / `retest fail: …` in `#qa`. A human (Pardeep)
-  then sets `done`. **A fix that touches a page Hitesh reported is not `done` without his retest.**
-- Agents: when you move a `from: "hitesh"` task to `review`, say in `#qa` what to retest and where.
+## Testing — 30 Sep 2026
+
+Testing is automatic first: see [`docs/QA-SYSTEM.md`](QA-SYSTEM.md) (CI on every push, E2E, daily AI QA on the
+online **test** environment — never production — and the daily live-error routine).
+
+- A bug is an `R-nnn` request: `owner` = the area owner of that page, title `Bug: …`, with URL, steps,
+  expected, actual. (Cards from the AI QA routine carry `from: "hitesh"` and a `qaKey` for history.)
+- The owner fixes it **with a test** and sets `review`. The AI QA routine retests automatically and posts
+  `R-nnn retest pass` / `retest fail: …` in `#qa`; cards without a `qaKey` are retested by the person who
+  reported them. **A reported bug is not `done` before its retest passes.**
 
 ## Session start (every time, before any code)
 
-1. Know who you work for: the branch → owner in `OWNERS.json` (`pardeep-sir` → pardeep, …).
+1. Know who you work for: the branch → owner in `OWNERS.json` (`manager-pardeep` → pardeep, …).
 2. `ArtifactData query tasks where owner in [me, "sab"] and status in [open, doing, review, blocked]`
    — list them to the human, P0 first, with any `review` ones they still need to check.
 3. `ArtifactData query changes` for docs whose `affects` contains me and `acked` lacks me —
@@ -71,6 +82,10 @@ or, if they asked "what next", propose the top unblocked task.
 4. Board, in one `ArtifactData batch`:
    - the task → `status: "review"`, `commits: [sha…]`, `outcome` (what you did, what you did NOT
      do and why — the same honesty as the existing R-001…R-008 outcomes);
+   - `nextStep`: one plain line, what happens next ("Deploy ke baad renewals cron 540s se kam")
+     and `waitingOn`: who holds it now — a person key, `"deploy"`, or a task id (`"R-029"`).
+     The board shows both on every card as **Agla kadam / Kiske paas** and sorts My work by them
+     (karna hai / check karke Done / intezaar). Left out, the board guesses from status and note.
    - one `changes` doc if anything others must know;
    - one `messages` line in your area channel: `S13 → review (abc1234): RLS wrap on 212 policies`.
 
@@ -97,8 +112,8 @@ Board: https://claude.ai/artifact/2E442MT5zCLxm2oE1Lipos (use the ArtifactData t
 2. tasks where from = <me> and status = review: these wait for MY check ("Done jab").
 3. changes whose affects contains <me> and acked has no <me>: one line each.
 4. messages from the last 24h in #general, #deploy and my area channel, and any @<Name>.
-5. git fetch; how many commits pardeep-sir has that my branch does not
-   (git log --oneline HEAD..origin/pardeep-sir | wc -l) — if > 0, say "merge karo".
+5. git fetch; how many commits manager-pardeep has that my branch does not
+   (git log --oneline HEAD..origin/manager-pardeep | wc -l) — if > 0, say "merge karo".
 Then suggest the one task I should pick first today. At most 15 lines.
 ```
 

@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
-import { useLeads } from "@/lib/queries/leads";
+import { useLeadActionSummary } from "@/lib/queries/leads";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { rupee } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -100,7 +100,10 @@ export function QuickActionsPanel({ open, onOpenChange }: QuickActionsPanelProps
 function LeadsActions({ onClose }: { onClose: () => void }) {
   const router            = useRouter();
   const pathname          = usePathname();
-  const { data: leads }   = useLeads();
+  /* Two counts and three rows from the server (S40) — this used to load every lead with
+     select("*") to count them in the browser. Same rules as the page now: open, non-junk
+     leads, by the IST date; see queries/leads.ts#useLeadActionSummary. */
+  const { data: summary } = useLeadActionSummary();
   const { data: me }      = useCurrentUser();
   // Sales role gets the same capture actions but the bulk operations
   // (Import CSV, Send campaign, Start trial) are hidden — same gating
@@ -108,15 +111,11 @@ function LeadsActions({ onClose }: { onClose: () => void }) {
   const isSales = me?.role === "sales";
 
   // ─── Pending today + overdue ──────────────────────────────
-  const todayStr   = new Date().toISOString().slice(0, 10);
-  const dueToday   = (leads ?? []).filter((l) => l.follow_up_date === todayStr);
-  const overdue    = (leads ?? []).filter((l) => l.follow_up_date && l.follow_up_date < todayStr);
+  const dueTodayCount = summary?.dueToday ?? 0;
+  const overdueCount  = summary?.overdue ?? 0;
 
   // ─── Hot leads — top 3 by value in late stages ────────────
-  const hotLeads = (leads ?? [])
-    .filter((l) => l.stage === "quote" || l.stage === "trial" || l.stage === "demo")
-    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
-    .slice(0, 3);
+  const hotLeads = summary?.hot ?? [];
 
   /**
    * Trigger a page-level action by pushing a `?action=` URL. The Leads
@@ -142,22 +141,22 @@ function LeadsActions({ onClose }: { onClose: () => void }) {
       {/* Section: Pending today / overdue.
           Most important — if there's something due NOW, surface it loudly.
           Hidden when both buckets are empty. */}
-      {(dueToday.length > 0 || overdue.length > 0) && (
+      {(dueTodayCount > 0 || overdueCount > 0) && (
         <Section title="Pending today">
           <div className="grid grid-cols-2 gap-3">
-            {dueToday.length > 0 && (
+            {dueTodayCount > 0 && (
               <ActionCard
                 icon="clock"
-                title={`${dueToday.length} due today`}
+                title={`${dueTodayCount} due today`}
                 description="Follow-ups scheduled for today"
                 tone="amber"
                 onClick={() => triggerAction("today")}
               />
             )}
-            {overdue.length > 0 && (
+            {overdueCount > 0 && (
               <ActionCard
                 icon="alert"
-                title={`${overdue.length} overdue`}
+                title={`${overdueCount} overdue`}
                 description="Missed follow-ups — call now"
                 tone="rose"
                 onClick={() => triggerAction("overdue")}

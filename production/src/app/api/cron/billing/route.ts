@@ -34,6 +34,7 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows, fetchAllRowsIn, errorMessage } from "@/lib/ops/fetch-all";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { plannedInstalments, instalmentSkip, instalmentsDue } from "@/lib/billing/instalments";
@@ -41,6 +42,16 @@ import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/** Every active subscription, paged past PostgREST's 1000-row cap, in a stable order. */
+function readActiveSubs(supabase: ReturnType<typeof createAdminClient>) {
+  return fetchAllRows((from, to) => supabase
+    .from("subscriptions")
+    .select("id, tenant_id, quote_id, mrr, billing_cycle, term_months, start_date, renewal_date")
+    .eq("status", "active")
+    .order("id", { ascending: true })
+    .range(from, to));
+}
 
 interface SkipRow  { subscription_id: string; code: string; reason: string }
 interface RaisedRow { subscription_id: string; period_index: number; invoice_id: string; gross: number }
@@ -89,33 +100,36 @@ async function handle(req: Request): Promise<NextResponse<BillingCronResult | { 
     errors: [],
   };
 
-  const { data: subs, error: subErr } = await supabase
-    .from("subscriptions")
-    .select("id, tenant_id, quote_id, mrr, billing_cycle, term_months, start_date, renewal_date")
-    .eq("status", "active");
-
-  if (subErr) {
-    return NextResponse.json({ error: subErr.message }, { status: 500 });
+  /* WC-scale: paged (lib/ops/fetch-all.ts). One select stopped at PostgREST's 1000-row
+     cap without saying so — subscription 1001 was never billed. */
+  let subs: Awaited<ReturnType<typeof readActiveSubs>>;
+  try {
+    subs = await readActiveSubs(supabase);
+  } catch (e) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
-  result.total_active = subs?.length ?? 0;
+  result.total_active = subs.length;
 
   /* Quote payment state, fetched separately rather than as an embedded join. This
      schema has two paths between quotes and subscriptions and PostgREST answers an
      ambiguous embed with PGRST201 — which surfaces as an empty page, not an error. */
-  const quoteIds = [...new Set((subs ?? []).map((s) => s.quote_id).filter((q): q is string => q != null))];
   const quoteById = new Map<string, { amount: number | null; payment_amount: number | null }>();
-  if (quoteIds.length > 0) {
-    const { data: quotes, error: qErr } = await supabase
+  try {
+    /* 200 ids a request — the whole list in one url stops working long before 5,000. */
+    const quotes = await fetchAllRowsIn(subs.map((s) => s.quote_id), (ids, from, to) => supabase
       .from("quotes")
       .select("id, amount, payment_amount")
-      .in("id", quoteIds);
-    if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 });
-    for (const q of quotes ?? []) {
+      .in("id", ids)
+      .order("id", { ascending: true })
+      .range(from, to));
+    for (const q of quotes) {
       quoteById.set(q.id, { amount: q.amount, payment_amount: q.payment_amount });
     }
+  } catch (e) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
 
-  for (const sub of subs ?? []) {
+  for (const sub of subs) {
     try {
       const planned = plannedInstalments(sub);
       const quote   = sub.quote_id ? quoteById.get(sub.quote_id) : undefined;

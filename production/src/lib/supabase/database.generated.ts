@@ -12126,6 +12126,18 @@ export type Database = {
         }
         Returns: Json
       }
+      lead_counts: { Args: { p_filters?: Json }; Returns: Json }
+      lead_looks_like_junk: {
+        Args: {
+          p_company: string
+          p_contact_email: string
+          p_contact_name: string
+          p_contact_phone: string
+        }
+        Returns: boolean
+      }
+      lead_norm_company: { Args: { c: string }; Returns: string }
+      lead_norm_phone: { Args: { p: string }; Returns: string }
       list_leads: {
         Args: { p_cursor?: Json; p_filters?: Json; p_limit?: number }
         Returns: Json

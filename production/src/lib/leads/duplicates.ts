@@ -37,23 +37,25 @@ export function normCompany(c?: string | null): string {
 }
 
 export type DupReason = "phone" | "company" | "both";
-export type DupMatch = { lead: Lead; reason: DupReason };
+/** The fields the rule reads — a full Lead, or the list's slim row (S40). */
+type DupLead = Pick<Lead, "id" | "company" | "contact_phone">;
+export type DupMatch<T extends DupLead = Lead> = { lead: T; reason: DupReason };
 
-export interface DuplicateIndex {
+export interface DuplicateIndex<T extends DupLead = Lead> {
   /** ids of leads that have at least one duplicate match. */
   flagged: Set<string>;
   /** leadId → the other leads it duplicates (with the reason). */
-  matchesOf: Map<string, DupMatch[]>;
+  matchesOf: Map<string, DupMatch<T>[]>;
 }
 
 /**
  * Build the duplicate index across the whole lead set. O(n) grouping, then
  * pairwise within each same-key bucket.
  */
-export function computeDuplicates(leads: Lead[]): DuplicateIndex {
+export function computeDuplicates<T extends DupLead>(leads: readonly T[]): DuplicateIndex<T> {
   const byPhone = new Map<string, string[]>();
   const byCompany = new Map<string, string[]>();
-  const leadById = new Map<string, Lead>();
+  const leadById = new Map<string, T>();
 
   for (const l of leads) {
     leadById.set(l.id, l);
@@ -67,7 +69,7 @@ export function computeDuplicates(leads: Lead[]): DuplicateIndex {
     }
   }
 
-  const matchesOf = new Map<string, DupMatch[]>();
+  const matchesOf = new Map<string, DupMatch<T>[]>();
   const flagged = new Set<string>();
 
   const link = (aId: string, bId: string, reason: "phone" | "company") => {

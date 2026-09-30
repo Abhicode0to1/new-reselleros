@@ -19,11 +19,11 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDate, cn } from "@/lib/utils";
 import type { CloseStep } from "@/lib/accounting/month-close";
+import { addDaysISO, istMonth, monthBounds } from "@/lib/dates/ist";
 
+/** Last IST calendar month (YYYY-MM) — the GST period being closed. lib/dates/ist.ts. */
 function prevPeriod(): string {
-  const d = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1);
-  return d.toISOString().slice(0, 7);
+  return addDaysISO(monthBounds(istMonth()).start, -1).slice(0, 7);
 }
 function periodLabel(p: string): string {
   const [y, m] = p.split("-").map(Number);

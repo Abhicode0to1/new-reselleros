@@ -1,0 +1,32 @@
+# Dependabot — weekly dependency update PRs (WC-ci, 30 Sep 2026).
+#
+# PRs target the repository's DEFAULT branch unless `target-branch` is set. Each PR runs
+# ci.yml (pull_request trigger), so a bump that breaks typecheck / tests / build shows red
+# before anyone merges it. Five open PRs per ecosystem at most, so it never floods the queue.
+# Security updates (Dependabot alerts) are separate: switch them on in
+# Settings → Code security → Dependabot security updates.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /production
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    groups:
+      # Minor + patch bumps in one PR instead of one PR per package.
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"

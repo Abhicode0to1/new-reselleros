@@ -14,10 +14,11 @@ import { GeminiCard } from "@/components/shared/gemini-card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useClassifyJunk, useSetLeadJunk, type JunkAiVerdict } from "@/lib/queries/leads";
-import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
 import { cn } from "@/lib/utils";
 
-export function JunkAIReview({ leads }: { leads: Lead[] }) {
+/* S40: takes the list's slim rows (it reads id / company / contact only). */
+export function JunkAIReview({ leads }: { leads: readonly LeadListRow[] }) {
   const classify = useClassifyJunk();
   const setJunk = useSetLeadJunk();
   const [verdicts, setVerdicts] = React.useState<Record<string, JunkAiVerdict>>({});

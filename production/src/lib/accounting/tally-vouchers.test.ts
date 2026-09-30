@@ -29,10 +29,10 @@ describe("tallyVouchersXml", () => {
     for (const v of vs) expect(amounts(v).reduce((a, b) => a + b, 0)).toBe(0);
   });
 
-  it("intra-state splits CGST/SGST exactly like GSTR-1 (remainder into SGST)", () => {
+  it("intra-state splits CGST/SGST exactly like GSTR-1 and the invoice (odd rupee into CGST, lib/gst/tax-split.ts)", () => {
     const e = salesEntries(SALES[0], DEFAULT_TALLY_LEDGERS);
-    expect(e.find((x) => x.ledger === "Output CGST")?.amount).toBe(90);
-    expect(e.find((x) => x.ledger === "Output SGST")?.amount).toBe(91);
+    expect(e.find((x) => x.ledger === "Output CGST")?.amount).toBe(91);
+    expect(e.find((x) => x.ledger === "Output SGST")?.amount).toBe(90);
     expect(e.find((x) => x.ledger === "Output IGST")?.amount).toBe(0);
   });
 
@@ -109,12 +109,12 @@ describe("tallyVouchersXml", () => {
               <ALLLEDGERENTRIES.LIST>
                 <LEDGERNAME>Output CGST</LEDGERNAME>
                 <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                <AMOUNT>90</AMOUNT>
+                <AMOUNT>91</AMOUNT>
               </ALLLEDGERENTRIES.LIST>
               <ALLLEDGERENTRIES.LIST>
                 <LEDGERNAME>Output SGST</LEDGERNAME>
                 <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                <AMOUNT>91</AMOUNT>
+                <AMOUNT>90</AMOUNT>
               </ALLLEDGERENTRIES.LIST>
             </VOUCHER>
             <VOUCHER VCHTYPE="Receipt" ACTION="Create">

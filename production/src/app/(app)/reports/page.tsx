@@ -26,7 +26,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useCustomers } from "@/lib/queries/customers";
-import { useLeads } from "@/lib/queries/leads";
+import { useLeadStageCounts } from "@/lib/queries/leads";
 import { useMrrSnapshots } from "@/lib/queries/seat-requests";
 import { KPI } from "@/components/shared/kpi";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,7 +48,7 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-import type { Subscription } from "@/lib/supabase/database.types";
+import type { Lead, Subscription } from "@/lib/supabase/database.types";
 
 /** "2026-08-01" → "Aug '26" — chart ki dhuri ke liye. */
 function periodLabel(period: string): string {
@@ -131,7 +131,7 @@ function ReportCard({
 // Ye "funnel conversion" nahi hai: stage ka itihaas record nahi hota, sirf
 // aaj ki stage — isliye card kehta hai "Pipeline today" aur % kul ka hissa
 // hai, conversion nahi.
-const PIPELINE_STAGES: ReadonlyArray<{ id: string; label: string; color: string }> = [
+const PIPELINE_STAGES: ReadonlyArray<{ id: Lead["stage"]; label: string; color: string }> = [
   { id: "new",     label: "New leads",      color: "#64748b" },
   { id: "contact", label: "Contacted",      color: "#6366f1" },
   { id: "demo",    label: "Demo scheduled", color: "#0ea5e9" },
@@ -140,12 +140,17 @@ const PIPELINE_STAGES: ReadonlyArray<{ id: string; label: string; color: string 
   { id: "won",     label: "Closed won",     color: "#16a34a" },
 ];
 
+const PIPELINE_STAGE_IDS = PIPELINE_STAGES.map((s) => s.id);
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
   const { data: subs,      isLoading: subsLoading  } = useSubscriptions();
   const { data: customers, isLoading: custsLoading } = useCustomers();
-  const { data: leads } = useLeads();
+  /* WC-scale: exact per-stage counts from the server. This used to be useLeads() — every
+     lead, cut at PostgREST's 1000 rows — counted here, so past the thousandth lead the
+     pipeline card described the newest thousand. Junk is excluded, as the card always said. */
+  const { data: stageCounts = {} } = useLeadStageCounts(PIPELINE_STAGE_IDS);
   const { data: snapshots } = useMrrSnapshots(13);
 
   const loading = subsLoading || custsLoading;
@@ -205,10 +210,6 @@ export default function ReportsPage() {
   const lowRisk    = activeSubs.filter((s) => riskLevel(s) === "low").length;
 
   /* Pipeline today — leads ki asli stage-ginti ("junk"/lost ginti me nahi). */
-  const stageCounts = (leads ?? []).reduce<Record<string, number>>((acc, l) => {
-    acc[l.stage] = (acc[l.stage] ?? 0) + 1;
-    return acc;
-  }, {});
   const pipelineTotal = PIPELINE_STAGES.reduce((s, st) => s + (stageCounts[st.id] ?? 0), 0);
   const pipeline = PIPELINE_STAGES.map((st) => ({
     ...st,

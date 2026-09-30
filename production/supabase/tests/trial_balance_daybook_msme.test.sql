@@ -85,6 +85,9 @@ insert into public.expenses (id, tenant_id, category, vendor_name, vendor_id, ex
   ('S33-E4', 'd3300000-0000-0000-0000-0000000000a1', 'Supplies', 'Micro Supplies', 'd3300000-0000-0000-0000-00000000fe01', '2026-06-01', 1000, 0, null,   true,  '2026-06-05', 'bank'),
   ('S33-E5', 'd3300000-0000-0000-0000-0000000000a1', 'Supplies', 'Unknown Cat Co', 'd3300000-0000-0000-0000-00000000fe05', '2026-08-10', 3000, 0, null,   false, null, null),
   ('S33-E6', 'd3300000-0000-0000-0000-0000000000a1', 'Software', 'Micro Supplies', 'd3300000-0000-0000-0000-00000000fe01', '2026-07-08', 1200, 0, 'SW-7', true,  '2026-07-18', 'card'),
+  -- Salary expense rows (20260929185929): Journal voucher, Purchase nahi. Paid wali ka bhugtan Payment hi.
+  ('S33-E7', 'd3300000-0000-0000-0000-0000000000a1', 'Salaries', 'S33 Employee', null, '2026-07-31', 30000, 0, 'SAL-7', true,  '2026-07-31', 'bank'),
+  ('S33-E8', 'd3300000-0000-0000-0000-0000000000a1', 'Director''s Remuneration', 'S33 Director', null, '2026-07-31', 50000, 0, 'DIR-7', false, null, null),
   ('S33-EB', 'd3300000-0000-0000-0000-0000000000b1', 'Supplies', 'Micro Supplies', 'd3300000-0000-0000-0000-00000000feb1', '2026-07-01', 5555, 0, null,   false, null, null);
 
 -- Salary: har salary ek expense row bhi hoti hai; Day Book salary_payments se kuch na le.
@@ -137,13 +140,18 @@ begin
          ('Refund', 1, 1500),
          ('Credit Note', 1, 590),
          ('Debit Note', 1, 1180),
-         ('Purchase', 5, 23200),       -- E1 7000 + E2 9000 + E3 4000 + E6 1200 + VB3 2000
-         ('Payment', 1, 1200)) then
+         ('Purchase', 5, 23200),       -- E1 7000 + E2 9000 + E3 4000 + E6 1200 + VB3 2000 (salary nahi)
+         ('Journal', 2, 80000),        -- E7 Salaries 30000 + E8 Director's Remuneration 50000
+         ('Payment', 2, 31200)) then   -- E6 1200 + E7 salary ka bhugtan 30000
       raise exception 'FAIL 1: day book % = % rows / ₹% — %', r.voucher, r.n, r.amt, j;
     end if;
   end loop;
   select count(distinct x->>'voucher') into v_n from jsonb_array_elements(j) x;
-  if v_n <> 7 then raise exception 'FAIL 1: expected all 7 voucher types, got % — %', v_n, j; end if;
+  if v_n <> 8 then raise exception 'FAIL 1: expected all 8 voucher types, got % — %', v_n, j; end if;
+  if not j @> '[{"voucher":"Journal","reference":"SAL-7","narration":"Salaries"}]'::jsonb
+     or j @> '[{"voucher":"Purchase","reference":"SAL-7"}]'::jsonb then
+    raise exception 'FAIL 1: a salary expense must be a Journal voucher, never Purchase: %', j;
+  end if;
   if not j @> '[{"voucher":"Receipt","reference":"S33-RV1","date":"2026-07-01","narration":"upi · UTR9","party":"S33 Customer"}]'::jsonb then
     raise exception 'FAIL 1: P1 should sit on 1 Jul (IST day of 30 Jun 20:00 UTC): %', j;
   end if;

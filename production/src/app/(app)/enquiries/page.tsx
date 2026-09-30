@@ -36,7 +36,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn, formatDate, rupee } from "@/lib/utils";
 import { useQuotes } from "@/lib/queries/quotes";
-import { useLeads } from "@/lib/queries/leads";
+import { useLead } from "@/lib/queries/leads";
 import { answeredState, answeredNote, quoteButtonLabel, answeredTone } from "@/lib/inbound/answered";
 import { matchQuotesToEnquiry, weakestBasis, basisCaveat } from "@/lib/inbound/quote-match";
 import { useInboundEmailPages, useConvertInboundToLead, useSetInboundState, useEmailSender } from "@/lib/queries/inbound-emails";
@@ -183,7 +183,7 @@ export default function EnquiriesPage() {
       <Button size="sm" variant="ghost" loading={isFetchingNextPage} onClick={() => void fetchNextPage()}>
         Load older mail
       </Button>
-      <p className="mt-1 text-2xs text-ink-3">
+      <p className="mt-1 text-xs text-ink-3">
         Counts and search cover the mail loaded so far — older mail may be in this folder too.
       </p>
     </div>
@@ -253,11 +253,11 @@ export default function EnquiriesPage() {
      builder was opened from, so the match reads all of them and REPORTS which one it used
      — see lib/inbound/quote-match.ts. */
   const { data: allQuotes } = useQuotes();
-  const { data: allLeads }  = useLeads();
-  const enquiryLead = React.useMemo(
-    () => (allLeads ?? []).find((l) => l.id === selected?.lead_id) ?? null,
-    [allLeads, selected?.lead_id],
-  );
+  /* WC-scale: the ONE lead this enquiry is filed against, read by id. It used to be looked
+     up in useLeads() — every lead, cut at PostgREST's 1000 rows — so an enquiry on an older
+     lead found no lead at all. */
+  const { data: enquiryLeadRow } = useLead(selected?.lead_id ?? undefined);
+  const enquiryLead = selected?.lead_id ? enquiryLeadRow ?? null : null;
 
   const matchedQuotes = React.useMemo(
     () => matchQuotesToEnquiry(

@@ -21,6 +21,7 @@
 import { NextResponse } from "next/server";
 import { replyToAddress } from "@/lib/email/reply-to";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows, errorMessage } from "@/lib/ops/fetch-all";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { reportCron } from "@/lib/ops/cron-report";
@@ -105,14 +106,20 @@ async function handle(req: Request): Promise<NextResponse<GreetingResult | { err
   const todayDay   = istNow.getUTCDate();
   const year       = istNow.getUTCFullYear();
 
-  // Contacts with a birthday or anniversary set. Small table → filter month-day
-  // in JS (no date-part index needed; keeps the SQL portable).
-  const { data: contacts, error } = await admin
-    .from("contacts")
-    .select("id, tenant_id, full_name, email, birthday, anniversary")
-    .or("birthday.not.is.null,anniversary.not.is.null");
-  if (error) {
-    return NextResponse.json({ error: `contacts fetch failed: ${error.message}` }, { status: 500 });
+  // Contacts with a birthday or anniversary set → filter month-day in JS (no
+  // date-part index needed; keeps the SQL portable).
+  /* WC-scale: paged (lib/ops/fetch-all.ts). "Small table" stopped being true across every
+     tenant — one select got the first 1000 and the rest never got a greeting. */
+  let contacts: { id: string; tenant_id: string; full_name: string; email: string | null; birthday: string | null; anniversary: string | null }[];
+  try {
+    contacts = await fetchAllRows((from, to) => admin
+      .from("contacts")
+      .select("id, tenant_id, full_name, email, birthday, anniversary")
+      .or("birthday.not.is.null,anniversary.not.is.null")
+      .order("id", { ascending: true })
+      .range(from, to));
+  } catch (e) {
+    return NextResponse.json({ error: `contacts fetch failed: ${errorMessage(e)}` }, { status: 500 });
   }
 
   const isToday = (d: string | null): boolean => {
@@ -141,7 +148,7 @@ async function handle(req: Request): Promise<NextResponse<GreetingResult | { err
     return t;
   };
 
-  for (const c of contacts ?? []) {
+  for (const c of contacts) {
     const kinds: Kind[] = [];
     if (isToday((c as { birthday?: string | null }).birthday ?? null))    kinds.push("birthday");
     if (isToday((c as { anniversary?: string | null }).anniversary ?? null)) kinds.push("anniversary");

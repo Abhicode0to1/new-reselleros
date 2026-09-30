@@ -29,6 +29,7 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows, errorMessage } from "@/lib/ops/fetch-all";
 import { buildComplianceRows } from "@/lib/compliance/obligations";
 import { dueReminders, renderReminder, type PlannedReminder } from "@/lib/compliance/reminders";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
@@ -93,11 +94,19 @@ async function handle(req: Request) {
     errors: [], details: [],
   };
 
-  const { data: tenants, error: tErr } = await supabase.from("tenants").select("id, name");
-  if (tErr) return NextResponse.json({ error: `tenants fetch failed: ${tErr.message}` }, { status: 500 });
-  result.tenants = tenants?.length ?? 0;
+  /* WC-scale: every list read here is paged (lib/ops/fetch-all.ts). The reminder log is the
+     one that mattered: it grows by obligations × periods × rungs × recipients, and a tenant
+     past 1000 rows had its OLDEST sends cut off the read — which looked like "not sent yet". */
+  let tenants: { id: string; name: string }[];
+  try {
+    tenants = await fetchAllRows((from, to) => supabase
+      .from("tenants").select("id, name").order("id", { ascending: true }).range(from, to));
+  } catch (e) {
+    return NextResponse.json({ error: `tenants fetch failed: ${errorMessage(e)}` }, { status: 500 });
+  }
+  result.tenants = tenants.length;
 
-  for (const tenant of tenants ?? []) {
+  for (const tenant of tenants) {
     try {
       // Recipients: the owner(s) and the CA. `accountant` is an existing role, so
       // the CA is whoever the operator already invited as one — no shadow contact
@@ -113,10 +122,12 @@ async function handle(req: Request) {
       if (recipients.length === 0) { result.no_recipients += 1; continue; }
 
       // What is already filed, so a filed period is neither chased nor counted.
-      const { data: filedRows } = await supabase
+      const filedRows = await fetchAllRows((from, to) => supabase
         .from("compliance_log")
         .select("obligation_key, period_key, filed_date")
-        .eq("tenant_id", tenant.id);
+        .eq("tenant_id", tenant.id)
+        .order("id", { ascending: true })
+        .range(from, to));
       const filed = new Map<string, string>(
         (filedRows ?? []).map((r) => [`${r.obligation_key}|${r.period_key}`, r.filed_date as string]),
       );
@@ -130,14 +141,18 @@ async function handle(req: Request) {
       // every single day, and never record a thing. Sending nothing is a missed
       // reminder the operator can still catch on the page; sending daily is how
       // they mute the sender for good.
-      const { data: sentRows, error: sentErr } = await supabase
-        .from("compliance_reminder_log")
-        .select("obligation_key, period_key, days_before, recipient_email")
-        .eq("tenant_id", tenant.id);
-      if (sentErr) {
+      let sentRows: { obligation_key: string; period_key: string; days_before: number; recipient_email: string }[];
+      try {
+        sentRows = await fetchAllRows((from, to) => supabase
+          .from("compliance_reminder_log")
+          .select("obligation_key, period_key, days_before, recipient_email")
+          .eq("tenant_id", tenant.id)
+          .order("id", { ascending: true })
+          .range(from, to));
+      } catch (sentErr) {
         result.errors.push({
           tenant: tenant.id,
-          message: `reminder log unreadable (${sentErr.message}) — skipped without sending, since idempotency cannot be guaranteed. Apply migration 0229.`,
+          message: `reminder log unreadable (${errorMessage(sentErr)}) — skipped without sending, since idempotency cannot be guaranteed. Apply migration 0229.`,
         });
         continue;
       }

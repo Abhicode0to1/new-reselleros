@@ -4,16 +4,14 @@
  * Only initialises when SENTRY_DSN is set. Filters out tenant_id and PII
  * from event payloads before sending — see beforeSend below.
  *
- * NOTE: On Cloud Run + Next.js 14.2 standalone, instrumentation.ts is NOT
- * called at boot, so this file is currently a fallback. Server-side init
- * actually happens via the module-level guard in /api/sentry-test/route.ts.
- * Keep this file for future Next.js versions where the hook works.
+ * Loaded by instrumentation.ts `register()` (Next 15 calls it at boot). The
+ * getClient() guard makes it a no-op if src/lib/sentry.ts got there first.
  */
 import * as Sentry from "@sentry/nextjs";
 
 const DSN = process.env.SENTRY_DSN;
 
-if (DSN) {
+if (DSN && !Sentry.getClient()) {
   Sentry.init({
     dsn:              DSN,
     environment:      process.env.NODE_ENV,
