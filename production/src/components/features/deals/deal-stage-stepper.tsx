@@ -56,7 +56,7 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
   /* 1 Oct 2026, Pardeep: "4 Won ka matlab nahi samjh aaya". The pills showed a step number
      ("4 Won") and a ✓ on every earlier stage — but a deal can jump straight from quote to
      won (Excel Technologies did), so the ✓ claimed a demo and trial that never happened.
-     Now: no numbers, no ticks; the current stage says "Current:" (English on his ask — "Abhi" read as confusing), the rest are plain
+     Now: no numbers, no ticks; the current stage is just highlighted (Pardeep: no "Abhi:"/"Current:" prefix — the highlight says it), the rest are plain
      "click to move" pills, and one caption says what the row is for. */
   return (
     <div className="space-y-1.5">
@@ -84,7 +84,7 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
                 )}
               >
                 {current && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />}
-                {current ? `Current: ${STAGE_LABEL[s]}` : STAGE_LABEL[s]}
+                {STAGE_LABEL[s]}
               </button>
             </li>
           );
@@ -103,7 +103,7 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
         )}
       >
         <Icon name="x_circle" size={12} />
-        {lead.stage === "lost" ? "Current: Lost" : "Mark as lost"}
+        {lead.stage === "lost" ? "Lost" : "Mark as lost"}
       </button>
     </div>
     </div>
