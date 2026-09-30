@@ -189,9 +189,24 @@ comment on function public.next_document_number(text, uuid, date) is
   'Allocates the next gapless document number. p_on is the DOCUMENT''s date and decides '
   'which financial year series it comes from; null means IST today. R-015 / §17a.';
 
-revoke all on function public.next_document_number(text, uuid, date) from public;
+/* ── GRANTS, and why `anon` is NOT here ──────────────────────────────────────
+   The old two-argument function's `proacl` did include `anon`, and restoring it verbatim
+   was the obvious thing to do. It is wrong, and R-013 is why:
+   `20260927100000_definer_rpc_hardening.sql` revoked anon EXECUTE from every definer
+   function in `public` precisely because anon could call them. That migration ran once,
+   over the functions that existed at the time — it cannot defend a function created
+   afterwards.
+
+   And this one IS created afterwards, because it was DROPPED and recreated (a third
+   parameter cannot be added with `create or replace`). That distinction is the whole
+   mechanism: **`create or replace` keeps a function's grants; `drop` + `create` resets
+   them to the PUBLIC default.** The other six functions in this migration are replaced in
+   place, so their hardened grants survive; this one would have silently handed anon the
+   gapless GST counter back — where a single anon call burns a number that can never be
+   reused and leaves a permanent hole in a series a GST audit reads. */
+revoke all on function public.next_document_number(text, uuid, date) from public, anon;
 grant execute on function public.next_document_number(text, uuid, date)
-  to anon, authenticated, service_role;
+  to authenticated, service_role;
 
 -- ══ 3. THE SIX GST DOCUMENT CREATORS ══════════════════════════════════════════
 --
@@ -335,7 +350,19 @@ declare
 begin
   select * into v_ms from public.project_milestones where id = p_milestone_id for update;
   if not found then raise exception 'Milestone not found'; end if;
-  if v_tenant is not null and v_ms.tenant_id is distinct from v_tenant then
+  /* R-013 (Pardeep, 27 Sep 2026): the hardened form. The old guard opened by testing
+     that the tenant was NOT null and only then comparing — so a NULL tenant skipped the
+     comparison entirely, which is the anon case and the signed-in-but-no-users-row case,
+     and quote/invoice ids are countable. Migration 20260927100000 rewrote 17 definer RPCs
+     by regex; this file recreates some of them, so it must carry the hardened shape
+     forward or it silently undoes that fix.
+
+     The old wording is deliberately NOT quoted here. `definer_rpc_hardening.test.sql`
+     FAIL 4 scans `pg_get_functiondef`, which includes COMMENTS — so writing the phrase in
+     prose turns that security test red for no reason (AGENTS.md L46). Verified: quoting it
+     did exactly that. */
+  if (v_tenant is null and coalesce(auth.role(), '') in ('anon', 'authenticated'))
+     or (v_tenant is not null and v_ms.tenant_id is distinct from v_tenant) then
     raise exception 'Milestone not in caller''s tenant' using errcode = 'insufficient_privilege';
   end if;
   if v_ms.invoice_id is not null then

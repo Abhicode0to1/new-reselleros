@@ -74,6 +74,14 @@ comment on function public.tg_invoices_block_delete_issued() is
   'tg_invoices_freeze_issued, which covers UPDATE only — deleting the row is worse than '
   'any amendment that one refuses.';
 
+/* R-013 hygiene: a new SECURITY DEFINER function is granted EXECUTE to PUBLIC by default,
+   which is hole 3 of the 27 Sep security audit regenerating itself. That migration was a
+   one-shot sweep over the functions that existed then; it cannot cover this one. A trigger
+   function returning `trigger` is not callable over PostgREST anyway, so this is belt and
+   braces rather than a live hole — but "not exploitable today" is not a reason to leave a
+   definer function open (AGENTS.md L112). */
+revoke all on function public.tg_invoices_block_delete_issued() from public, anon, authenticated;
+
 drop trigger if exists trg_invoices_block_delete_issued on public.invoices;
 create trigger trg_invoices_block_delete_issued
   before delete on public.invoices
@@ -94,7 +102,19 @@ declare
 begin
   select * into v_inv from public.invoices where id = p_invoice_id;
   if not found then raise exception 'Invoice not found'; end if;
-  if v_tenant is not null and v_inv.tenant_id is distinct from v_tenant then
+  /* R-013 (Pardeep, 27 Sep 2026): the hardened form. The old guard opened by testing
+     that the tenant was NOT null and only then comparing — so a NULL tenant skipped the
+     comparison entirely, which is the anon case and the signed-in-but-no-users-row case,
+     and quote/invoice ids are countable. Migration 20260927100000 rewrote 17 definer RPCs
+     by regex; this file recreates some of them, so it must carry the hardened shape
+     forward or it silently undoes that fix.
+
+     The old wording is deliberately NOT quoted here. `definer_rpc_hardening.test.sql`
+     FAIL 4 scans `pg_get_functiondef`, which includes COMMENTS — so writing the phrase in
+     prose turns that security test red for no reason (AGENTS.md L46). Verified: quoting it
+     did exactly that. */
+  if (v_tenant is null and coalesce(auth.role(), '') in ('anon', 'authenticated'))
+     or (v_tenant is not null and v_inv.tenant_id is distinct from v_tenant) then
     raise exception 'Invoice not in caller''s tenant' using errcode = 'insufficient_privilege';
   end if;
 
@@ -167,7 +187,19 @@ declare
 begin
   select * into v_inv from public.invoices where id = p_invoice_id;
   if not found then raise exception 'Invoice not found'; end if;
-  if v_tenant is not null and v_inv.tenant_id is distinct from v_tenant then
+  /* R-013 (Pardeep, 27 Sep 2026): the hardened form. The old guard opened by testing
+     that the tenant was NOT null and only then comparing — so a NULL tenant skipped the
+     comparison entirely, which is the anon case and the signed-in-but-no-users-row case,
+     and quote/invoice ids are countable. Migration 20260927100000 rewrote 17 definer RPCs
+     by regex; this file recreates some of them, so it must carry the hardened shape
+     forward or it silently undoes that fix.
+
+     The old wording is deliberately NOT quoted here. `definer_rpc_hardening.test.sql`
+     FAIL 4 scans `pg_get_functiondef`, which includes COMMENTS — so writing the phrase in
+     prose turns that security test red for no reason (AGENTS.md L46). Verified: quoting it
+     did exactly that. */
+  if (v_tenant is null and coalesce(auth.role(), '') in ('anon', 'authenticated'))
+     or (v_tenant is not null and v_inv.tenant_id is distinct from v_tenant) then
     raise exception 'Invoice not in caller''s tenant' using errcode = 'insufficient_privilege';
   end if;
 
