@@ -21,7 +21,7 @@ const page  = strip("src/app/(app)/invoices/page.tsx");
 const hooks = strip("src/lib/queries/invoices.ts");
 
 /** SQL comments nest and use two spellings — strip both, same reason (L46). */
-const sql = readFileSync("supabase/migrations/20260929130000_invoices_no_delete_once_issued.sql", "utf8");
+const sql = readFileSync("supabase/migrations/20260929135000_invoices_no_delete_once_issued.sql", "utf8");
 const sqlCode = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*--.*$/gm, "");
 
 describe("the menu only offers a delete that can succeed", () => {

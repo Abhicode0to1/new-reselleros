@@ -1,5 +1,5 @@
 -- Regression test: an ISSUED invoice cannot be deleted, and deleting a DRAFT one never
--- removes a payment. Migration 20260929130000 (R-014). Rolled back — safe on production.
+-- removes a payment. Migration 20260929135000 (R-014). Rolled back — safe on production.
 --
 -- Proves all four directions, because a guard is only half-tested by what it blocks:
 --
