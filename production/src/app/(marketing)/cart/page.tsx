@@ -9,7 +9,7 @@
 import Link from "@/site/components/ui/SiteLink";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
-import { rupee, cycleLabel, COUPONS, isSingleUnit, isTrialLine } from "@/site/lib/money";
+import { rupee, cycleLabel, COUPONS, isSingleUnit, isTrialLine, singleUnitNote } from "@/site/lib/money";
 
 export default function CartPage() {
   const cart = useCart();
@@ -47,13 +47,22 @@ export default function CartPage() {
                   {isTrialLine(l) ? `Free for 15 days · one trial per customer` : cycleLabel(l.cycle)}
                 </div>
               </div>
-              {!isSingleUnit(l) && (
-                <span style={{ display: "inline-flex", alignSelf: "center", border: "1px solid var(--border-strong)", borderRadius: 6 }}>
-                  <button onClick={() => cart.setQty(l.key, -1)} aria-label={`Fewer ${l.label}`} style={step}>−</button>
-                  <span style={{ padding: "6px 12px", fontSize: 15, minWidth: 30, textAlign: "center" }}>{l.qty}</span>
-                  <button onClick={() => cart.setQty(l.key, 1)} aria-label={`More ${l.label}`} style={step}>+</button>
-                </span>
-              )}
+              {/* Every line shows the quantity control; a single-unit line shows it LOCKED
+                  at 1, with the reason underneath (a locked control with no reason is the
+                  silent-disabled shape guarded by src/site/silent-disabled-buttons.test.ts). */}
+              {(() => {
+                const locked = isSingleUnit(l);
+                return (
+                  <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", alignSelf: "center", gap: 3 }}>
+                    <span style={{ display: "inline-flex", border: "1px solid var(--border-strong)", borderRadius: 6, background: locked ? "var(--surface-muted, #F4F6F8)" : undefined }}>
+                      <button onClick={() => cart.setQty(l.key, -1)} disabled={locked} aria-label={`Fewer ${l.label}`} style={locked ? stepLocked : step}>−</button>
+                      <span style={{ padding: "6px 12px", fontSize: 15, minWidth: 30, textAlign: "center" }}>{locked ? 1 : l.qty}</span>
+                      <button onClick={() => cart.setQty(l.key, 1)} disabled={locked} aria-label={`More ${l.label}`} style={locked ? stepLocked : step}>+</button>
+                    </span>
+                    {locked && <span className="meta" style={{ fontSize: 12 }}>{singleUnitNote(l)}</span>}
+                  </span>
+                );
+              })()}
               <div style={{ alignSelf: "center", fontSize: 17, fontWeight: 700, minWidth: 90, textAlign: "right" }}>
                 {rupee(l.unitPrice * l.qty)}
               </div>
@@ -105,6 +114,7 @@ export default function CartPage() {
 }
 
 const step: React.CSSProperties = { background: "none", border: "none", width: 32, fontSize: 16, cursor: "pointer", color: "var(--text-secondary)" };
+const stepLocked: React.CSSProperties = { ...step, cursor: "not-allowed", opacity: 0.35 };
 
 function Row({ label, value, color }: { label: string; value: string; color?: string }) {
   return (

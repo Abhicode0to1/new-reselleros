@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cartTotals, cycleLabel, COUPONS, type CartLine } from "./money";
+import { cartTotals, cycleLabel, COUPONS, isSingleUnit, singleUnitNote, type CartLine } from "./money";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Cart ka hisaab — handoff ke formula, aur wahi order jo paisa sahi rakhta hai:
@@ -64,5 +64,20 @@ describe("cycle ke shabd", () => {
     expect(cycleLabel("monthly")).toBe("Recurring monthly");
     expect(cycleLabel("yearly")).toBe("Renews yearly");
     expect(cycleLabel("once")).toBe("One time");
+  });
+});
+
+describe("singleUnitNote — why a line's quantity is locked at 1 (30 Sep 2026)", () => {
+  it("names the reason for each single-unit kind", () => {
+    expect(singleUnitNote({ sku: "hosting-trial:starter" })).toBe("1 per customer");
+    expect(singleUnitNote({ sku: "hosting:plus" })).toBe("1 per order");
+    expect(singleUnitNote({ sku: "domain:in" })).toBe("1 per domain");
+  });
+  it("is null for a line whose quantity can change, and every single-unit line has a note", () => {
+    expect(singleUnitNote({ sku: "mail:pro" })).toBeNull();
+    for (const sku of ["hosting-trial:starter", "hosting:starter", "domain:com"]) {
+      expect(isSingleUnit({ sku })).toBe(true);
+      expect(singleUnitNote({ sku })).not.toBeNull();
+    }
   });
 });

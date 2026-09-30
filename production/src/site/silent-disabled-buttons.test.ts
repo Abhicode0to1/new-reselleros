@@ -44,6 +44,10 @@ const ALLOWED: Record<string, string> = {
     "the line below says \"This edition is priced for annual commitment only\"",
   "src/site/components/ssl/CertCards.tsx|c.cta === \"Included\"":
     "the button's own label reads \"Included\"",
+  "src/app/(marketing)/cart/page.tsx|locked":
+    "a single-unit line's quantity stepper, locked at 1 — singleUnitNote() prints why under it",
+  "src/site/components/cart/CartDrawer.tsx|locked":
+    "same locked stepper in the cart drawer, with singleUnitNote() beside it",
 };
 
 function walk(dir: string, out: string[] = []): string[] {
