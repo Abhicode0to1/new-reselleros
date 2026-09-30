@@ -89,8 +89,8 @@ export const MARKETING_TOOLS: readonly MarketingTool[] = [
     key: "indiamart", name: "IndiaMART", group: "listings", channel: "indiamart",
     why: "B2B buyers seedhe requirement bhejte hain. Paid package — isliye kitni leads aur kitni deal, dono naapna zaroori.",
     homeUrl: "https://seller.indiamart.com",
-    inApp: [{ href: "/leads", label: "Lead ka source \"IndiaMART\" chuno" }, { href: "/marketing/spend", label: "Package ka kharcha" }],
-    setup: ["Products: Google Workspace, Microsoft 365, custom software", "Har IndiaMART lead ka source \"IndiaMART\" rakho", "Package ki payment Expenses → Advertising → IndiaMART"],
+    inApp: [{ href: "/marketing/indiamart", label: "CRM key — leads apne aap" }, { href: "/marketing/spend", label: "Package ka kharcha" }],
+    setup: ["Products: Google Workspace, Microsoft 365, custom software", "Lead Manager ki CRM key Marketing Hub → IndiaMART leads par save karo — enquiries apne aap lead banengi", "Haath se daali IndiaMART lead ka source \"IndiaMART\" rakho", "Package ki payment Expenses → Advertising → IndiaMART"],
   },
   {
     key: "justdial", name: "JustDial", group: "listings", channel: "justdial",
@@ -104,7 +104,7 @@ export const MARKETING_TOOLS: readonly MarketingTool[] = [
     key: "whatsapp-business", name: "WhatsApp Business (API)", group: "messaging", channel: "whatsapp",
     why: "Lead se turant baat, quote bhejna, follow-up. App ka WhatsApp inbox isi se chalta hai.",
     homeUrl: "https://business.facebook.com/wa/manage",
-    inApp: [{ href: "/whatsapp", label: "WhatsApp inbox" }, { href: "/marketing/whatsapp", label: "Broadcast + templates" }, { href: "/automation", label: "Auto follow-up" }],
+    inApp: [{ href: "/whatsapp", label: "WhatsApp inbox" }, { href: "/marketing/whatsapp", label: "Broadcast + templates" }, { href: "/marketing/whatsapp/reminders", label: "Renewal / invoice reminders" }, { href: "/automation", label: "Auto follow-up" }],
     setup: ["Meta par WhatsApp Business number verify karo", "App mein connect karo (Settings) — Business Account ID bhi bharo", "Starter templates Meta par submit karo, approve hone par Sync from Meta", "Broadcast sirf un logon ko jo aapko jaante hain"],
   },
   // ── Email ────────────────────────────────────────────────────────────────

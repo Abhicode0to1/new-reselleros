@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn, rupee, formatDate, toWhatsAppDigits } from "@/lib/utils";
 import { useTasks } from "@/lib/queries/tasks";
-import { useLeads } from "@/lib/queries/leads";
+import { useRecentLeads } from "@/lib/queries/leads";
 import { useCelebrations } from "@/lib/queries/contacts";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/lib/queries/notifications";
 
@@ -58,7 +58,9 @@ export function NotificationPanel({
 }) {
   const router = useRouter();
   const { data: tasks } = useTasks("all");
-  const { data: leads } = useLeads();
+  /* Only the leads it shows: created in the last 7 days, 30 at most, five columns (S40).
+     This panel is mounted on every page and used to load every lead with select("*"). */
+  const { data: leads } = useRecentLeads();
   const { data: celebrations } = useCelebrations(7);
   /* Asli events — DB se (audit B4): payment/quote-accept/lead/ticket. Read-state
      row par hai, har device par ek. */

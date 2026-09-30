@@ -190,20 +190,23 @@ export function reminderComponents(values: string[]): unknown[] {
  * Starter UTILITY wording to submit to Meta under these names. Reminders about a bill the
  * customer already has are UTILITY, not MARKETING — which matters: utility templates are
  * cheaper and are not blocked by a marketing opt-out on Meta's side.
+ *
+ * No body may START or END with a {{n}} — Meta refuses such a template at submit time, which
+ * is why the signature reads "— {{n}} team" and not "— {{n}}" (S28 submit-from-app).
  */
 export const STARTER_REMINDER_TEMPLATES: readonly {
   kind: ReminderKind; name: string; body: string; param_map: ReminderParamField[];
 }[] = [
   { kind: "renewal_upcoming", name: "renewal_upcoming_v1", param_map: ["customer_name", "plan", "due_date", "amount", "link", "seller_name"],
-    body: "Hi {{1}}, your {{2}} renews on {{3}}. Renewal amount: {{4}}. To renew, use {{5}}.\n\n— {{6}}" },
+    body: "Hi {{1}}, your {{2}} renews on {{3}}. Renewal amount: {{4}}. To renew, use {{5}}.\n\n— {{6}} team" },
   { kind: "renewal_final", name: "renewal_today_v1", param_map: ["customer_name", "plan", "amount", "link", "seller_name"],
-    body: "Hi {{1}}, your {{2}} is due for renewal today. Amount: {{3}}. Renew here: {{4}} to avoid any interruption.\n\n— {{5}}" },
+    body: "Hi {{1}}, your {{2}} is due for renewal today. Amount: {{3}}. Renew here: {{4}} to avoid any interruption.\n\n— {{5}} team" },
   { kind: "renewal_grace", name: "renewal_grace_v1", param_map: ["customer_name", "plan", "days", "link", "seller_name"],
-    body: "Hi {{1}}, the renewal for your {{2}} is pending. Service continues for {{3}} more day(s) in the grace period. Renew here: {{4}}.\n\n— {{5}}" },
+    body: "Hi {{1}}, the renewal for your {{2}} is pending. Service continues for {{3}} more day(s) in the grace period. Renew here: {{4}}.\n\n— {{5}} team" },
   { kind: "invoice_due", name: "invoice_due_v1", param_map: ["customer_name", "invoice_id", "amount", "due_date", "seller_name"],
-    body: "Hi {{1}}, a reminder that invoice {{2}} for {{3}} is due on {{4}}. Please ignore if already paid.\n\n— {{5}}" },
+    body: "Hi {{1}}, a reminder that invoice {{2}} for {{3}} is due on {{4}}. Please ignore if already paid.\n\n— {{5}} team" },
   { kind: "invoice_overdue", name: "invoice_overdue_v1", param_map: ["customer_name", "invoice_id", "amount", "due_date", "seller_name"],
-    body: "Hi {{1}}, invoice {{2}} for {{3}} was due on {{4}} and is still unpaid. Please arrange payment, or reply here if something is wrong.\n\n— {{5}}" },
+    body: "Hi {{1}}, invoice {{2}} for {{3}} was due on {{4}} and is still unpaid. Please arrange payment, or reply here if something is wrong.\n\n— {{5}} team" },
   { kind: "invoice_final", name: "invoice_final_v1", param_map: ["customer_name", "invoice_id", "amount", "days", "seller_name"],
-    body: "Hi {{1}}, final reminder: invoice {{2}} for {{3}} is {{4}} days overdue. Please pay or call us today.\n\n— {{5}}" },
+    body: "Hi {{1}}, final reminder: invoice {{2}} for {{3}} is {{4}} days overdue. Please pay or call us today.\n\n— {{5}} team" },
 ];

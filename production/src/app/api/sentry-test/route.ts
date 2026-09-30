@@ -9,7 +9,9 @@
  *   → 500, error appears in Sentry within ~10 seconds
  */
 import { NextResponse } from "next/server";
-import "@/lib/sentry"; // side-effect import — guarantees Sentry init on Cloud Run
+// No `import "@/lib/sentry"` here any more (30 Sep 2026): Next 15 runs instrumentation.ts
+// register() at boot, and this route is the probe for exactly that — `clientReady=false`
+// in the log below means the hook did not initialise Sentry.
 import * as Sentry from "@sentry/nextjs";
 
 export const runtime = "nodejs";

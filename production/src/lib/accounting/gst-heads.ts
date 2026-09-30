@@ -33,6 +33,8 @@
  * jahan na ho wahan saaf kehti hai ki ye **maana hua** hai — chhupati nahi.
  */
 
+import { splitIntraStateTax } from "@/lib/gst/tax-split";
+
 export interface GstHeadsInput {
   /** Kul GST — hamesha maujood (`expenses.gst_paid`). */
   gst_paid?: number | null;
@@ -86,11 +88,12 @@ export function expenseGstHeads(e: GstHeadsInput | null | undefined): GstHeads {
   /* Yahan pahunchne ka matlab: ya to batwara hai hi nahi, ya wo kul se mel nahi khata.
      Doosri soorat bhi "maana hua" hai — aadha sach poore jhooth se kam khatarnak nahi hai
      jab wo sach jaisa dikhe. */
-  const half = Math.round(total / 2);
+  /* Shared CGST/SGST rule (lib/gst/tax-split.ts) — same split the invoice and GSTR-1 use. */
+  const half = splitIntraStateTax(total);
   return {
     igst: 0,
-    cgst: half,
-    sgst: total - half,
+    cgst: half.cgst,
+    sgst: half.sgst,
     measured: false,
     assumption:
       split > 0

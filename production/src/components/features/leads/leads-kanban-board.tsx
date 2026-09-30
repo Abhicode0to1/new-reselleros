@@ -11,17 +11,21 @@ import { LeadCard } from "@/components/features/leads/lead-card";
 import { Icon } from "@/components/ui/icon";
 import { rupee, cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
 import type { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { DEAL_STAGES, LEAD_STAGES } from "@/lib/leads/stage-meta";
+import { BOARD_COLUMN_CAP } from "@/lib/queries/leads";
 
 export interface LeadsKanbanBoardProps {
-  boardLeads: Lead[];
+  boardLeads: LeadListRow[];
+  /** Each column's server total (useLeadsBoard) — the board holds the newest BOARD_COLUMN_CAP. */
+  columnTotals?: Partial<Record<Lead["stage"], number>>;
   changeStage: ReturnType<typeof useChangeLeadStage>["changeStage"];
-  setSelected: (l: Lead) => void;
+  setSelected: (l: LeadListRow) => void;
   setAddOpen: (open: boolean) => void;
 }
 
-export function LeadsKanbanBoard({ boardLeads, changeStage, setSelected, setAddOpen }: LeadsKanbanBoardProps) {
+export function LeadsKanbanBoard({ boardLeads, columnTotals, changeStage, setSelected, setAddOpen }: LeadsKanbanBoardProps) {
   const router = useRouter();
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [overStage, setOverStage] = React.useState<Lead["stage"] | null>(null);
@@ -135,6 +139,14 @@ export function LeadsKanbanBoard({ boardLeads, changeStage, setSelected, setAddO
                   <div className="h-20 flex items-center justify-center border border-dashed border-hairline/60 rounded-md text-xs text-ink-3">
                     No deals in {stage.label.toLowerCase()}
                   </div>
+                )}
+
+                {/* WC-scale: a column holds its newest BOARD_COLUMN_CAP cards. Said out loud,
+                    so a capped column is not read as the whole stage. */}
+                {(columnTotals?.[stage.id] ?? 0) > BOARD_COLUMN_CAP && (
+                  <p className="px-1 py-1.5 text-3xs text-ink-3 tabular-nums">
+                    Newest {BOARD_COLUMN_CAP.toLocaleString("en-IN")} of {(columnTotals?.[stage.id] ?? 0).toLocaleString("en-IN")} · List view shows all
+                  </p>
                 )}
               </div>
 

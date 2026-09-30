@@ -69,7 +69,9 @@ export default function WhatsAppMarketingPage() {
         <p className="text-sm text-ink-3 mt-1 max-w-3xl">
           WhatsApp par pehla message sirf Meta se <b>approved template</b> se ja sakta hai. Template yahan likho, Meta par submit karo,
           approve hone par leads ko ek saath bhejo. STOP likhne wale ko dobara nahi jaata. Ek-ek se baat ke liye{" "}
-          <Link href="/whatsapp" className="text-amber-ink hover:underline">WhatsApp inbox</Link>.
+          <Link href="/whatsapp" className="text-amber-ink hover:underline">WhatsApp inbox</Link>. Renewal aur invoice ke
+          automatic reminder:{" "}
+          <Link href="/marketing/whatsapp/reminders" className="text-amber-ink hover:underline">WhatsApp reminders</Link>.
         </p>
       </header>
       <TabBar items={TABS} value={tab} onChange={setTab} />

@@ -29,8 +29,14 @@
  * jao. Par likhne ke liye ye host behtar hai: usme PROJECT NUMBER nahi hai, aur theek wahi
  * number aaj 10 minute kha gaya tha, kyunki purane project ka wahi shakl ka host 503 deta
  * hai aur dono ek jaise dikhte hain.
+ *
+ * 30 Sep 2026 (WC-ci): 5 Sep ko ye `https://anutech.in` kiya gaya tha, par 7 Sep (commit
+ * 23eecf13) app ka ghar `reselleros.anutech.in` ban gaya — anutech.in ab company ka darwaza
+ * hai jo yahan 301 karta hai. `NEXT_PUBLIC_APP_URL` (Dockerfile ARG), cloudbuild.yaml
+ * `_APP_URL` aur docs/ROLLBACK.md teeno yahi host kehte hain, aur upar ka paragraph bhi
+ * "jo NEXT_PUBLIC_APP_URL me set hai" kehta hai. Isliye wahi.
  */
-export const PROD_URL = "https://anutech.in";
+export const PROD_URL = "https://reselleros.anutech.in";
 
 /** 28 Aug 2026 tak zinda tha, ab 503 deta hai — dobara na likha jaye. */
 const DEAD_URL = "https://resellersos-490252291080.asia-south1.run.app";

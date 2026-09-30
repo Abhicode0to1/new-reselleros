@@ -3,8 +3,8 @@
  *
  * ─── WHY THIS IS A CONSTANT AND NOT A COLUMN ────────────────────────────────
  * Every SKU this product sells — Google Workspace, Microsoft 365, Zoho — is the same
- * thing to a tax officer: an online information and database access or retrieval service,
- * SAC 998313, taxed at 18%. There is no per-item variation to store, and adding an `hsn`
+ * thing on this invoice: SAC 998313, taxed at 18%. (See "WHAT 998313 ACTUALLY MEANS" below:
+ * the old wording here called it an online-information service, which it is not.) There is no per-item variation to store, and adding an `hsn`
  * column to `items` would create one place for the value to be wrong per SKU while
  * changing nothing about the invoice.
  *
@@ -22,11 +22,40 @@
  * from a missing one.
  */
 
-/** SAC 998313 — online information and database access or retrieval services. */
+/*
+ * ─── WHAT 998313 ACTUALLY MEANS (WC-gst, 30 Sep 2026) ───────────────────────
+ * In the SAC scheme (Notification 11/2017-CT(Rate), annexure) 998313 is
+ * "Information technology (IT) consulting and support services". The label below used to
+ * say "Online information & database access services": that is the OIDAR idea, which sits
+ * under heading 9984, not 998313. The label goes into GSTR-1 Table 12 "Description", so it
+ * must be the code's real description. The LABEL is fixed here.
+ *
+ * The CODE is deliberately NOT changed. Reselling a cloud-software licence / subscription
+ * (Google Workspace, Microsoft 365, Zoho) is more commonly classified as:
+ *   · 997331 — Licensing services for the right to use computer software and databases
+ *   · 998315 — Hosting and IT infrastructure provisioning services
+ * All are 18%, so the tax does not change. But the code on invoices already issued and
+ * filed cannot be rewritten by a deploy, and switching mid-year splits the HSN table across
+ * two codes. That is a CA's call, made once and applied from a date; until then SAAS_HSN
+ * stays 998313 and SAC_REVIEW records the open question.
+ */
+
+/** SAC 998313 — Information technology (IT) consulting and support services. */
 export const SAAS_HSN = "998313";
 
-/** What that code means, in the words a rep can repeat to a customer who asks. */
-export const SAAS_HSN_LABEL = "Online information & database access services";
+/** What that code means: the SAC scheme's own description (GSTR-1 Table 12 "Description"). */
+export const SAAS_HSN_LABEL = "Information technology (IT) consulting and support services";
+
+/** Open classification question for the CA. Kept beside the code so whoever changes
+ *  SAAS_HSN reads it first. Do not change SAAS_HSN without that sign-off. */
+export const SAC_REVIEW = {
+  current: "998313",
+  alternatives: {
+    "997331": "Licensing services for the right to use computer software and databases",
+    "998315": "Hosting and information technology (IT) infrastructure provisioning services",
+  },
+  note: "Cloud-software licence resale is more commonly 997331 (or 998315 for hosting). Same 18% rate. Existing invoices keep 998313; any switch needs CA confirmation and an effective date.",
+} as const;
 
 /** The standard rate on this SAC. */
 export const SAAS_GST_RATE = 18;

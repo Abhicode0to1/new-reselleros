@@ -23,6 +23,10 @@
  * the rep taps Call on the lead that was there a moment ago.
  */
 import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
+
+/** A queue row: the list's slim row (S40) — a full Lead is one too. */
+type QueueLead = LeadListRow;
 import { heatScore, type HeatScoreBreakdown } from "./heat-score";
 import { localDateISO } from "./outcomes";
 
@@ -30,7 +34,7 @@ import { localDateISO } from "./outcomes";
 const TERMINAL_STAGES: ReadonlySet<string> = new Set(["won", "lost"]);
 
 export interface QueueEntry {
-  lead: Lead;
+  lead: QueueLead;
   heat: HeatScoreBreakdown;
   /** 0 = due today, positive = that many days late. */
   daysOverdue: number;
@@ -42,7 +46,7 @@ export interface CallQueue {
   /** Everything due, before the top-N cut — so the bar can say "3 of 11". */
   dueCount: number;
   /** Due today but unreachable: no phone number on record. Reported, never hidden. */
-  dueWithoutPhone: Lead[];
+  dueWithoutPhone: QueueLead[];
   /** How many of `entries` are actually late rather than due today. */
   overdueCount: number;
 }
@@ -57,14 +61,14 @@ function daysBetweenISO(fromISO: string, toISO: string): number {
 }
 
 export function buildCallQueue(
-  leads: readonly Lead[],
+  leads: readonly QueueLead[],
   limit = 3,
   now: Date = new Date(),
 ): CallQueue {
   const today = localDateISO(now);
 
   const due: QueueEntry[] = [];
-  const dueWithoutPhone: Lead[] = [];
+  const dueWithoutPhone: QueueLead[] = [];
 
   for (const l of leads) {
     if (l.is_junk) continue;

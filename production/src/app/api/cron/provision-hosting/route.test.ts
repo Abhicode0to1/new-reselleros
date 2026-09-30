@@ -100,6 +100,24 @@ describe("what it sends and does", () => {
     });
     expect(prov.markProvisioningActivated).toHaveBeenCalledWith("R1", "acmeiab12c");
   });
+  it("R-036: two hosting requests on one order each provision their own plan and domain", async () => {
+    tables.quotes = { id: "Q1", lead_id: "L1", customer_name: "Acme", domain: null, line_items: [
+      { name: "Starter hosting (billed yearly)", hostingPlan: "starter", months: 12 },
+      { name: "Plus hosting (billed monthly)", hostingPlan: "plus", months: 1 },
+    ] };
+    prov.listReadyHostingRequests.mockResolvedValue([
+      { id: "RA", tenant_id: "T1", quote_id: "Q1", domain: "a.in", plan: "hosting-starter" },
+      { id: "RB", tenant_id: "T1", quote_id: "Q1", domain: "b.in", plan: "hosting-plus" },
+    ]);
+    engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { daUsername: "x" }, replayed: false });
+    await GET(req());
+    const sent = engine.sendEngineCommand.mock.calls.map((c) => ({ subject: c[0].subject, planId: c[0].payload.planId, months: c[0].payload.months }));
+    expect(sent).toEqual([
+      { subject: "a.in", planId: "starter", months: 12 },
+      { subject: "b.in", planId: "plus", months: 1 },
+    ]);
+  });
+
   it("lost response → note + owner alert, not failed", async () => {
     engine.sendEngineCommand.mockResolvedValue({ kind: "needs_reconciliation", reason: "no answer" });
     await GET(req());

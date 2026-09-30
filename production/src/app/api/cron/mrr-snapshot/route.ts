@@ -22,9 +22,13 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { reportCron } from "@/lib/ops/cron-report";
+import { fetchAllRows, errorMessage } from "@/lib/ops/fetch-all";
+import { chunk } from "@/lib/ops/p-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const UPSERT_CHUNK = 500;
 
 interface SnapshotResult {
   ran_at: string;
@@ -69,11 +73,20 @@ async function handle(req: Request): Promise<NextResponse<SnapshotResult | { err
     tenants: 0, customers: 0, total_mrr: 0, skipped_no_customer: 0, errors: [],
   };
 
-  const { data: subs, error } = await supabase
-    .from("subscriptions")
-    .select("tenant_id, customer_id, mrr")
-    .eq("status", "active");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  /* WC-scale: paged. One select stopped at PostgREST's 1000-row cap without saying so, and
+     every subscription past the thousandth was simply missing from the month — NRR then
+     reads that as churn. Ordered by id so the offset pages cannot overlap or skip. */
+  let subs: { tenant_id: string; customer_id: string | null; mrr: number | null }[];
+  try {
+    subs = await fetchAllRows((from, to) => supabase
+      .from("subscriptions")
+      .select("tenant_id, customer_id, mrr")
+      .eq("status", "active")
+      .order("id", { ascending: true })
+      .range(from, to));
+  } catch (e) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
+  }
 
   /* Aggregated per (tenant, customer). A customer with three subscriptions is ONE
      retention data point — see the migration header on why the grain is the
@@ -81,7 +94,7 @@ async function handle(req: Request): Promise<NextResponse<SnapshotResult | { err
   const byCustomer = new Map<string, { tenantId: string; customerId: string; mrr: number; count: number }>();
   const tenantIds = new Set<string>();
 
-  for (const s of subs ?? []) {
+  for (const s of subs) {
     if (!s.customer_id) {
       /* A subscription with no customer cannot be attributed, and guessing would put
          revenue against the wrong retention cohort. Counted so the gap is visible. */
@@ -110,10 +123,13 @@ async function handle(req: Request): Promise<NextResponse<SnapshotResult | { err
     subscription_count: x.count,
   }));
 
-  if (rows.length > 0) {
+  /* UPSERT_CHUNK rows a request — one body holding every customer grows with the business
+     until it hits the request-size limit. Each chunk is an idempotent upsert, so a failure
+     part-way is repaired by re-running the job. */
+  for (const part of chunk(rows, UPSERT_CHUNK)) {
     const { error: upErr } = await supabase
       .from("mrr_snapshots")
-      .upsert(rows, { onConflict: "tenant_id,customer_id,period" });
+      .upsert(part, { onConflict: "tenant_id,customer_id,period" });
     if (upErr) {
       result.errors.push(upErr.message);
       return NextResponse.json(result, { status: 500 });

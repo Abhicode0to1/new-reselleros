@@ -38,6 +38,73 @@ e2e/
 
 ---
 
+## Logged-in E2E (R-053) — "E2E Test Co" + W6–W13
+
+One test company, four users, and a spec per money workflow from `docs/QA-SYSTEM.md` §3.
+
+| Spec | Workflow | Logs in as |
+|---|---|---|
+| `w06-seats-add.spec.ts` | Add seats → same subscription grows; paying the add-seats quote makes no 2nd subscription; payment replay is a no-op | owner |
+| `w07-renewal.spec.ts` | Renewal due in 5 days → "Generate quote" → "Record payment" → renewal date +12 months | owner |
+| `w08-overdue-dunning.spec.ts` | Invoice 10 days past due → listed, Accounting "past due" → dunning engine **dry run** picks it (no email, no log row) | manager |
+| `w09-credit-note-refund.spec.ts` | Credit note in UI (net due + GST netted, over-credit refused); refund in UI; refund on an invoiced quote refused | owner |
+| `w10-expense-gst-input.spec.ts` | COGS bill + GST expense in UI → both claimable under "Input GST" | accountant |
+| `w11-gst-reports.spec.ts` | GSTR-1 row + footer = DB totals; GSTR-1 JSON HSN = same totals; 3B worksheet; sales is bounced | accountant, sales |
+| `w12-books-reports.spec.ts` | Day Book voucher, P&L revenue = DB, trial balance debit = credit | accountant |
+| `w13-payroll.spec.ts` | Add employee → pay last month's salary → salary register | owner |
+
+Fixtures: `fixtures/e2e-roles.mjs` (env names, production deny list), `fixtures/roles.ts`
+(`test.use({ role })` → logs in through the real /login once per role per worker and reuses
+the storageState; `db` = supabase-js signed in as the same user, so setup goes through RLS),
+`fixtures/seed-e2e-tenant.mjs` (the seed). The specs run on desktop Chromium only (the
+mobile project ignores `wNN-*`), and each run creates new "E2E …" documents — they are never
+deleted, which is fine on a test database and is why production is refused.
+
+### Env vars
+
+| Var | Needed by | Notes |
+|---|---|---|
+| `E2E_OWNER_PASSWORD`, `E2E_MANAGER_PASSWORD`, `E2E_SALES_PASSWORD`, `E2E_ACCOUNTANT_PASSWORD` | seed + specs | **No default.** A spec whose role password is missing skips with the variable name, and `suite-health` goes red. |
+| `E2E_OWNER_EMAIL`, `E2E_MANAGER_EMAIL`, `E2E_SALES_EMAIL`, `E2E_ACCOUNTANT_EMAIL` | seed + specs | Optional; default `e2e-<role>@example.test` (a `.test` address can never receive mail). |
+| `NEXT_PUBLIC_SUPABASE_URL` (or `SUPABASE_URL`), `NEXT_PUBLIC_SUPABASE_ANON_KEY` | specs | The Supabase the target app uses (test site or local). |
+| `SUPABASE_SERVICE_ROLE_KEY` | seed only | Creates the users. Never printed. |
+| `E2E_ALLOW_SEED=1` | seed only | The seed refuses to run without it. |
+| `PLAYWRIGHT_BASE_URL` | specs | Always set it (see `playwright.config.ts`). |
+| `E2E_CRON_SECRET` (or `CRON_SECRET`) | W8 step 3 | Optional; without it the dunning dry-run is noted as "not-checked" in the report, the rest of W8 still runs. |
+
+**Passwords sirf GitHub secrets / local `.env.test` mein — kabhi chat ya code mein nahi.**
+Not in a commit, a board card, a screenshot or a Claude chat. `.env.test` is gitignored;
+the seed and the specs print only variable names and ids, never a value.
+
+### Seed (idempotent — re-run any time)
+
+```bash
+# from production/, with the vars above in env or in .env.test
+E2E_ALLOW_SEED=1 node e2e/fixtures/seed-e2e-tenant.mjs
+```
+
+It creates or updates: tenant "E2E Test Co" (marker email `e2e-company@example.test`), the
+four users (an existing one gets its password reset to the env value), customer
+"E2E Customer Pvt Ltd", bank account "E2E Bank Current A/c", vendor "E2E Vendor Pvt Ltd"
+(synthetic GSTIN). It **refuses** production — `reselleros.anutech.in`, `anutech.in`,
+`api.anutech.in`, the old hosted Supabase project, the `resellsubsos-prod` / production
+Cloud Run hosts (hard-coded, no override) — and refuses an E2E email that already belongs to
+a user of another company.
+
+### Run locally (against the local Docker Supabase)
+
+```bash
+npm run db:start
+npx supabase status -o env        # API_URL / ANON_KEY / SERVICE_ROLE_KEY for your shell
+node scripts/dev-local.mjs -p 3014   # app on local Supabase only; live keys blanked
+# other terminal — same env + your own local-only E2E_*_PASSWORD values
+E2E_ALLOW_SEED=1 node e2e/fixtures/seed-e2e-tenant.mjs
+PLAYWRIGHT_BASE_URL=http://localhost:3014 CRON_SECRET=local-dev-cron-secret \
+  npx playwright test e2e/w0 e2e/w1 --project=chromium --workers=1
+```
+
+---
+
 ## Test data — seeding
 
 E2E tests rely on a known fixture roster: **2 tenants × 5 users + sample leads**. The seed is split across two files because Supabase auth schema is admin-only:

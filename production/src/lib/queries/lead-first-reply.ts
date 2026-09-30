@@ -15,31 +15,44 @@
  */
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { OUTBOUND_KINDS } from "@/lib/leads/waiting";
+import { fetchAllRowsIn, idsKey } from "@/lib/ops/fetch-all";
 
 /** `lead_id` → pehla outbound touch ka ISO timestamp. */
 export type FirstReplyMap = ReadonlyMap<string, string>;
 
-export function useLeadFirstReplies() {
+/**
+ * WC-scale (30 Sep 2026): for THESE leads only — the rows on screen. It read every outbound
+ * activity in the tenant, oldest first, and PostgREST's 1000-row cap kept the OLDEST
+ * thousand: every lead created after them read as "never replied to". Now 200 lead ids a
+ * request, every page read (lib/ops/fetch-all.ts); the (tenant_id, kind, created_at) index
+ * (migration 20260930110000) serves the kind + order.
+ */
+export function useLeadFirstReplies(leadIds: readonly string[]) {
+  const ids = idsKey(leadIds);
   return useQuery({
-    queryKey: ["lead-first-replies"],
+    queryKey: ["lead-first-replies", ids],
+    enabled: ids.length > 0,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<FirstReplyMap> => {
       const supabase = createClient();
       /* Sirf do column, aur sirf outbound kinds — RLS tenant khud sambhalta hai.
          `order` + pehla-jeeta wala reduce, `min()` group-by ke bajaye: PostgREST me
          aggregate ke liye ek view ya RPC chahiye hota, aur is naap par (aaj 10 rows, saal
          bhar me hazaar) do column ka select usse sasta hai. */
-      const { data, error } = await supabase
+      const data = await fetchAllRowsIn(ids, (chunkIds, from, to) => supabase
         .from("lead_activities")
         .select("lead_id, created_at")
+        .in("lead_id", chunkIds)
         .in("kind", [...OUTBOUND_KINDS])
-        .order("created_at", { ascending: true });
-      if (error) throw error;
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to));
 
       const map = new Map<string, string>();
-      for (const row of data ?? []) {
+      for (const row of data) {
         const id = row.lead_id;
         /* Pehla jeeta: list `created_at` ke kram me hai, to jo pehle mila wahi sabse
            purana hai. `has` ki jaanch zaroori hai — bina uske aakhri wala jeet jata aur

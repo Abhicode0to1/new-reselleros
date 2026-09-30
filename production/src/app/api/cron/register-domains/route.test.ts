@@ -95,6 +95,22 @@ describe("what it sends", () => {
     expect(cmd.commandId).toMatch(/^rsos-domreg-R1-\d{4}-\d{2}-\d{2}$/);
     expect(cmd.payload).toMatchObject({ years: 1, registrant, coverRupees: 600, paymentMode: "live", sourceRef: "Q1" });
   });
+
+  it("R-035: a row paid for 3 years registers for 3; a row without years (older) for 1", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { orderId: "RC-9" }, replayed: false });
+    prov.listReadyDomainRequests.mockResolvedValue([{ ...row, id: "R3", years: 3 }, { ...row, id: "R0" }]);
+    await GET(req());
+    expect(engine.sendEngineCommand.mock.calls.map((c) => c[0].payload.years)).toEqual([3, 1]);
+  });
+
+  it("R-035: an out-of-range or broken years never registers for more than 1", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { orderId: "RC-9" }, replayed: false });
+    prov.listReadyDomainRequests.mockResolvedValue([
+      { ...row, id: "Ra", years: 11 }, { ...row, id: "Rb", years: 0 }, { ...row, id: "Rc", years: 2.5 }, { ...row, id: "Rd", years: "3" },
+    ]);
+    await GET(req());
+    expect(engine.sendEngineCommand.mock.calls.map((c) => c[0].payload.years)).toEqual([1, 1, 1, 3]);
+  });
 });
 
 describe("what it does with the answer", () => {

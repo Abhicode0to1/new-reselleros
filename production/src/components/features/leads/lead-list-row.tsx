@@ -21,7 +21,7 @@ import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/lead
 import { leadDisplayName, leadContactLines, leadCompanyCell } from "@/lib/leads/display-name";
 import { Icon } from "@/components/ui/icon";
 import { rupee, formatDate, cn } from "@/lib/utils";
-import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow } from "@/lib/leads/list-page";
 import { STAGE_DOT, STAGE_LABEL } from "@/lib/leads/stage-meta";
 import { daysSince, type OpenTaskChip } from "@/lib/leads/list-selectors";
 import {
@@ -32,12 +32,12 @@ import { RowActions } from "@/components/features/leads/lead-row-actions";
 type TeamMember = NonNullable<ReturnType<typeof useTeamMembers>["data"]>[number];
 
 export interface LeadListRowProps {
-  lead: Lead;
+  lead: LeadListRow;
   rowIndex: number;
   selectedIds: ReadonlySet<string>;
   leadKeys: { index: number };
   selectedLeadRef: React.MutableRefObject<HTMLTableRowElement | null>;
-  onRowClick: (l: Lead) => void;
+  onRowClick: (l: LeadListRow) => void;
   toggleId: (id: string) => void;
   openTaskByLead: ReadonlyMap<string, OpenTaskChip>;
   firstReplies: ReadonlyMap<string, string>;
@@ -47,10 +47,10 @@ export interface LeadListRowProps {
   updateLead: ReturnType<typeof useUpdateLead>;
   ownerById: ReadonlyMap<string, TeamMember>;
   dupIds: ReadonlySet<string>;
-  onMerge: (l: Lead) => void;
-  onSendQuote: (l: Lead) => void;
-  onFollowUp: (l: Lead) => void;
-  onWhatsApp?: (l: Lead) => void;
+  onMerge: (l: LeadListRow) => void;
+  onSendQuote: (l: LeadListRow) => void;
+  onFollowUp: (l: LeadListRow) => void;
+  onWhatsApp?: (l: LeadListRow) => void;
 }
 
 export function LeadListRow({

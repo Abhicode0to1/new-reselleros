@@ -28,4 +28,12 @@ describe("summarizeDayBook", () => {
   it("CSV keeps blanks blank, not the word null", () => {
     expect(dayBookCsvRows(rows)[4]).toEqual(["2026-07-18", "Payment", "SW-7 · paid", "", "card", 1200]);
   });
+  it("a salary Journal sits last in Tally order and is not cash (its Payment is)", () => {
+    const withSalary = summarizeDayBook([
+      ...rows,
+      { date: "2026-07-31", voucher: "Journal", reference: "SAL-7", party: "Employee", narration: "Salaries", amount: 30000 },
+    ]);
+    expect(withSalary.byVoucher.at(-1)).toEqual({ voucher: "Journal", count: 1, amount: 30000 });
+    expect(withSalary.netCash).toBe(s.netCash);
+  });
 });

@@ -29,7 +29,7 @@ name: Money check
 
 # ⚠️ 1 Sep 2026 tak ye workflow KABHI nahi chala tha: trigger sirf pull_request
 # tha, aur is repo me kul 2 PR hain — dono is file ke BANNE se pehle merge ho
-# chuke the. Ship ka asli raasta `git push anutech HEAD:deploy` hai, isliye ab
+# chuke the. Ship ka asli raasta `git push origin HEAD:deploy` hai (purane notes me remote ka naam `anutech`), isliye ab
 # push par bhi chalta hai — wahi raasta jo asli me istemal hota hai.
 on:
   push:

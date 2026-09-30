@@ -91,6 +91,24 @@ async function alertOwner(tenantId: string, subject: string, text: string) {
   );
 }
 
+/**
+ * R-036 (29 Sep 2026): the hosting line THIS request paid for. hostingLineFor returns the
+ * order's FIRST hosting line, so on an order with Starter on a.in and Plus on b.in both
+ * requests would have provisioned Starter. Each request carries its own plan
+ * ("hosting-<tier>"), so the line with that tier is the one; with no match (an older
+ * order, or a plan label written another way) it falls back to the old reading.
+ * Two lines of the SAME tier for two domains still cannot be told apart from the line
+ * alone — that needs R-032's per-request domain on the line.
+ */
+function lineForRequest(lineItems: unknown, requestPlan: string | null) {
+  const tier = (requestPlan ?? "").replace(/^hosting-/, "").trim().toLowerCase();
+  if (tier && Array.isArray(lineItems)) {
+    const mine = lineItems.filter((l) => String((l as { hostingPlan?: unknown } | null)?.hostingPlan ?? "").toLowerCase() === tier);
+    if (mine.length) return hostingLineFor(mine, requestPlan);
+  }
+  return hostingLineFor(lineItems, requestPlan);
+}
+
 async function handle(req: Request) {
   if (!(await authorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -138,7 +156,7 @@ async function handle(req: Request) {
 
     const domain = (row.domain || quote.domain || "").toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
     const email = (lead?.contact_email ?? "").trim().toLowerCase();
-    const plan = hostingLineFor(quote.line_items, row.plan);
+    const plan = lineForRequest(quote.line_items, row.plan);
     const missing = [!domain && "a domain", !email && "the buyer's email", !plan && "a plan"].filter(Boolean);
     if (missing.length) {
       await noteProvisioning(row.id, `Held: the order has no ${missing.join(", ")}, so the account cannot be created automatically. Contact the customer and set it up by hand.`);

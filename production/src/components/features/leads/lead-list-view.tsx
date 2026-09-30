@@ -13,10 +13,11 @@ import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { useDeleteLead, useSetLeadJunk, useUpdateLead, useLeadQuotes } from "@/lib/queries/leads";
 import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
-import { useTasks } from "@/lib/queries/tasks";
+import { useOpenTasksForLeads } from "@/lib/queries/tasks";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { useLeadFirstReplies } from "@/lib/queries/lead-first-reply";
 import { useTeamMembers } from "@/lib/queries/team";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useCallLog } from "@/components/features/leads/call-log-dialog";
 import { buildPlanCostIndex } from "@/lib/leads/deal-margin";
 import { useItems } from "@/lib/queries/items";
@@ -24,6 +25,7 @@ import { SwipeLeadCard } from "@/components/features/leads/swipe-lead-card";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import type { LeadListRow as LeadRowData } from "@/lib/leads/list-page";
 import { STAGE_LABEL } from "@/lib/leads/stage-meta";
 import { openTaskIndex, sortLeads, type SortCol } from "@/lib/leads/list-selectors";
 import {
@@ -36,8 +38,46 @@ import { LeadListFooter } from "@/components/features/leads/lead-list-footer";
 
 export type { SortCol };
 
+/** The list is paged (S40): how many rows the view holds, and how to load the next page. */
+export interface LeadListPaging {
+  /** Rows the whole view holds — lead_counts().list.matching. */
+  total: number;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}
+
+/* "Showing 50 of 1,240 · Load 50 more". The count is the server's, so the rep knows how
+   much of the view is on screen — a paged list that does not say so reads as the whole
+   list, which is the same mistake as a chip counting a window. When the rows were sorted
+   in the browser (any column but Wait / Created), it also says the sort covers only the
+   rows loaded so far. */
+function LeadListPager({ paging, shown, sortedLocally }: { paging: LeadListPaging; shown: number; sortedLocally: boolean }) {
+  if (!paging.hasMore && shown >= paging.total) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-3 py-2 text-xs text-ink-3">
+      <span className="tabular-nums">
+        Showing {shown.toLocaleString("en-IN")} of {paging.total.toLocaleString("en-IN")}
+        {sortedLocally && paging.hasMore ? " · this sort covers only the loaded rows" : ""}
+      </span>
+      {paging.hasMore && (
+        <button
+          type="button"
+          onClick={paging.onLoadMore}
+          disabled={paging.loadingMore}
+          className="rounded border border-hairline px-2 py-0.5 font-semibold text-ink-2 hover:bg-paper-2 disabled:opacity-60"
+        >
+          {paging.loadingMore ? "Loading…" : "Load 50 more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function LeadListView({
   leads,
+  serverSorted = false,
+  paging,
   sortBy,
   sortDir,
   onSort,
@@ -48,19 +88,28 @@ export function LeadListView({
   onMerge,
   dupIds,
 }: {
-  leads: Lead[];
+  leads: LeadRowData[];
+  /** The rows already arrive in the chosen order (the server's wait / created order) —
+   *  re-sorting them in the browser could only disagree with the next page. */
+  serverSorted?: boolean;
+  paging?: LeadListPaging;
   sortBy: SortCol;
   sortDir: "asc" | "desc";
   onSort: (col: SortCol) => void;
-  onRowClick: (l: Lead) => void;
-  onSendQuote: (l: Lead) => void;
-  onFollowUp: (l: Lead) => void;
-  onWhatsApp?: (l: Lead) => void;
-  onMerge: (l: Lead) => void;
+  onRowClick: (l: LeadRowData) => void;
+  onSendQuote: (l: LeadRowData) => void;
+  onFollowUp: (l: LeadRowData) => void;
+  onWhatsApp?: (l: LeadRowData) => void;
+  onMerge: (l: LeadRowData) => void;
   dupIds: Set<string>;
 }) {
+  /* WC-scale: the three per-row lookups below (quote pill, task chip, first reply) read
+     only the leads ON SCREEN — they used to read whole tables, which PostgREST cut at 1000
+     rows, so rows past that silently lost their pill / chip / wait time. */
+  const leadIds = React.useMemo(() => leads.map((l) => l.id), [leads]);
+
   /* Har lead ki quote — PLAN cell ka pill isi se banta hai. Ek map, ek query. */
-  const { data: leadQuotes } = useLeadQuotes();
+  const { data: leadQuotes } = useLeadQuotes(leadIds);
 
   /* Stage options now come from the LEAD, not from the page — rowStageOptions() in
      lib/leads/stage-options.ts (17 tests), which is where the quote-first gate and the
@@ -94,7 +143,7 @@ export function LeadListView({
 
   // Open follow-up tasks per lead — surfaced as a chip on the row so the rep
   // sees at a glance which leads have a pending task (earliest/most-overdue).
-  const { data: allTasks = [] } = useTasks("all");
+  const { data: allTasks = [] } = useOpenTasksForLeads(leadIds);
   const openTaskByLead = React.useMemo(() => openTaskIndex(allTasks, Date.now()), [allTasks]);
 
 
@@ -154,12 +203,14 @@ export function LeadListView({
   /* Pehla jawab, poori list ke liye ek query me — dekho queries/lead-first-reply.ts.
      Ek hi `now` sab rows par: har row apna `new Date()` lene par ek hi render me do rows
      ka intezaar ek-do second alag nikalta, aur wo sort ko hila deta. */
-  const { data: firstReplies = new Map<string, string>() } = useLeadFirstReplies();
+  const { data: firstReplies = new Map<string, string>() } = useLeadFirstReplies(leadIds);
 
   /* Owner ka naam — `useTeamMembers` isi ke liye hai ("show who owns what", team.ts:3).
      Map isliye ki har row par `.find()` chalana 50 leads × 10 members = 500 chakkar hai
      har render me. */
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: me } = useCurrentUser();
+  const meId = me?.userId ?? null;
   const ownerById = React.useMemo(
     () => new Map(teamMembers.map((m) => [m.id, m])),
     [teamMembers],
@@ -169,12 +220,12 @@ export function LeadListView({
   /* The sort itself is lib/leads/list-selectors.ts#sortLeads (tested). The dependency
      list is the one this memo always had. */
   const sorted = React.useMemo(
-    () => sortLeads(leads, sortBy, sortDir, {
+    () => serverSorted ? leads : sortLeads(leads, sortBy, sortDir, {
       firstReplies,
       now: nowForWait,
       ownerName: (id) => ownerById.get(id)?.full_name,
     }),
-    [leads, sortBy, sortDir, firstReplies, nowForWait],
+    [leads, serverSorted, sortBy, sortDir, firstReplies, nowForWait],
   );
 
 
@@ -266,6 +317,9 @@ export function LeadListView({
             lead={lead}
             quoteRef={leadQuotes?.[lead.id]}
             task={openTaskByLead.get(lead.id)}
+            ownerName={lead.owner_id && lead.owner_id !== meId
+              ? ownerById.get(lead.owner_id)?.full_name || ownerById.get(lead.owner_id)?.email || "Unknown user"
+              : null}
             onTap={onRowClick}
             onChangeStage={(s) => void changeStage(lead, s)}
             onSendQuote={onSendQuote}
@@ -275,6 +329,9 @@ export function LeadListView({
       })}
       {sorted.length === 0 && (
         <li className="py-8 text-center text-sm text-ink-3">No leads match.</li>
+      )}
+      {paging && (
+        <li><LeadListPager paging={paging} shown={sorted.length} sortedLocally={!serverSorted} /></li>
       )}
     </ul>
     {/* ─── End of mobile list — old inline card markup retired ─── */}
@@ -438,6 +495,7 @@ export function LeadListView({
       {sorted.length === 0 && (
         <div className="p-8 text-center text-sm text-ink-3 italic">No leads match.</div>
       )}
+      {paging && <LeadListPager paging={paging} shown={sorted.length} sortedLocally={!serverSorted} />}
       <LeadListFooter
         density={density}
         setDensity={setDensity}

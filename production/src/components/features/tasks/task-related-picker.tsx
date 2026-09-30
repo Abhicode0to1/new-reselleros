@@ -11,7 +11,7 @@ import * as React from "react";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { useCustomers } from "@/lib/queries/customers";
-import { useLeads } from "@/lib/queries/leads";
+import { useLeadLabel, useLeadSearch } from "@/lib/queries/leads";
 import { useQuotes } from "@/lib/queries/quotes";
 
 export type RelatedKind = "customer" | "lead" | "deal" | "subscription";
@@ -33,10 +33,19 @@ export function TaskRelatedPicker({
   onChange: (v: RelatedValue | null) => void;
 }) {
   const { data: customers } = useCustomers();
-  const { data: leads } = useLeads();
   const { data: quotes } = useQuotes();
   const [query, setQuery] = React.useState("");
   const [open, setOpen] = React.useState(false);
+  /* Leads are searched on the server as you type (S40) — this picker sits in every "Add
+     task" dialog, including the leads page's row Follow-up, and it used to load every lead
+     with select("*") to offer eight. The chosen lead's name is read by its id. */
+  const [leadQuery, setLeadQuery] = React.useState("");
+  React.useEffect(() => {
+    const t = setTimeout(() => setLeadQuery(query), 200);
+    return () => clearTimeout(t);
+  }, [query]);
+  const { data: leads } = useLeadSearch(leadQuery, open);
+  const { data: chosenLead } = useLeadLabel(value?.kind === "lead" ? value.id : null);
 
   const options = React.useMemo<Opt[]>(() => {
     const out: Opt[] = [];
@@ -54,7 +63,10 @@ export function TaskRelatedPicker({
 
   // Selected chip (resolve the label from the loaded lists; fall back to a generic tag).
   if (value) {
-    const sel = options.find((o) => o.kind === value.kind && o.id === value.id);
+    const sel = options.find((o) => o.kind === value.kind && o.id === value.id)
+      ?? (value.kind === "lead" && chosenLead
+        ? { kind: "lead" as const, id: chosenLead.id, label: chosenLead.company || chosenLead.contact_name || "Lead" }
+        : undefined);
     return (
       <div className="flex items-center gap-2 rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
         <span className={`text-3xs px-1.5 py-0.5 rounded ${TAG[value.kind].cls}`}>{TAG[value.kind].label}</span>

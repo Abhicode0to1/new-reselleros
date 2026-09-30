@@ -125,6 +125,18 @@ async function tellCustomer(tenantId: string, to: string, firstName: string, dom
   }
 }
 
+/**
+ * R-035 (29 Sep 2026): how many years the customer paid for. The cron always sent
+ * `years: 1`, so a 3-year domain was registered for one year. The count lives on the
+ * queued row (provisioning_requests.years, R-031 — Abhishek's column and select); read it
+ * defensively so this ships before that column does: absent, not a whole number, or
+ * outside DMS's 1–10 → 1, never a guess upward that would spend more than was paid.
+ */
+function yearsFor(row: unknown): number {
+  const y = Number((row as { years?: unknown } | null)?.years);
+  return Number.isInteger(y) && y >= 1 && y <= 10 ? y : 1;
+}
+
 async function handle(req: Request) {
   if (!(await authorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -178,7 +190,7 @@ async function handle(req: Request) {
       subject: domain,
       mode: "live",
       payload: {
-        years: 1,
+        years: yearsFor(row),
         registrant,
         coverRupees: coverFromPaid(Number(row.amount_paid) || 0),
         paymentMode: "live",
