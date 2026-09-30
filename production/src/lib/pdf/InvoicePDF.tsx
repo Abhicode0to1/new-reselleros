@@ -23,6 +23,7 @@ import { pdfRupee } from "./pdf-money";
 import { pdfText } from "./pdf-text";
 import { isRenderableLogo } from "./logo";
 import { splitTaxHeads } from "@/lib/gst/tax-split";
+import { SAAS_HSN, SAAS_HSN_LABEL } from "@/lib/gst/hsn";
 import type { PayMethods } from "./pay-methods";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
@@ -422,6 +423,17 @@ export function InvoicePDF(props: InvoicePDFProps) {
      heads and the note reverses CGST/SGST differently from the invoice it credits. Six
      copies of this arithmetic existed; this is the one the statutory documents use. */
   const { cgst, sgst, igst } = splitTaxHeads(tax, interState);
+
+  /* R-010. The codes this invoice actually carries, for the footer summary. Derived, so
+     it cannot say one thing while the table above says another — which is exactly what
+     the old hardcoded 998313 did on a project invoice. The SaaS code keeps its GSTR-1
+     Table 12 description; a project's SAC has none here, and printing a borrowed label
+     would be worse than printing the bare code. */
+  const sacs = Array.from(new Set(lineItems.map((li) => li.hsn ?? SAAS_HSN)));
+  const sacSummary = sacs.length === 1 && sacs[0] === SAAS_HSN
+    ? `${SAAS_HSN} (${SAAS_HSN_LABEL})`
+    : sacs.join(" · ");
+
   // Export supply (recipient outside India) → zero-rated under LUT, no GST.
   const isExport = isExportSupply(customerCountry);
   const isForeign = isForeignCurrency(currency);
@@ -509,7 +521,14 @@ export function InvoicePDF(props: InvoicePDFProps) {
             <Text style={s.thAmt}>Amount</Text>
           </View>
           {lineItems.length === 0 ? (
-            <Text style={s.emptyRow}>No line items recorded on the parent quote.</Text>
+            /* R-010. Named the wrong cause — a project invoice has no parent quote — and
+               said nothing about what it means. A tax invoice with no description is
+               defective under CGST Rule 46(g), and it is the BUYER's input credit that is
+               at risk, so the document says so rather than looking merely untidy. */
+            <Text style={s.emptyRow}>
+              No description recorded. This invoice does not meet CGST Rule 46(g) — raise a
+              credit note and issue it again with line items.
+            </Text>
           ) : (
             lineItems.map((li, i) => (
               <View
@@ -526,7 +545,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
                     </Text>
                   )}
                 </View>
-                <Text style={s.tdHsn}>998313</Text>
+                <Text style={s.tdHsn}>{li.hsn ?? SAAS_HSN}</Text>
                 <Text style={s.tdQty}>{li.qty}</Text>
                 <Text style={s.tdRate}>{money(li.rate)}</Text>
                 <Text style={s.tdAmt}>{money(li.qty * li.rate)}</Text>
@@ -622,9 +641,15 @@ export function InvoicePDF(props: InvoicePDFProps) {
           <Text style={s.reverseCharge}>
             Whether tax is payable under reverse charge: <Text style={{ fontFamily: PDF_FONT }}>No</Text>
           </Text>
+          {/* R-010. Was the literal "998313 (Software licensing / SaaS)" — a fourth copy of
+              the code, and on a PROJECT invoice it contradicted the 998314 printed one
+              table above. It is now whatever the lines actually carry. The bracketed
+              wording was wrong too: lib/gst/hsn.ts records that 998313 is IT consulting
+              and support, not software licensing, and that this string goes into GSTR-1
+              Table 12 as the Description. */}
           <Text style={[s.footerLine, { marginTop: 6 }]}>
             <Text style={s.footerBold}>HSN/SAC: </Text>
-            998313 (Software licensing / SaaS) · <Text style={s.footerBold}>GSTR-1 month: </Text>
+            {sacSummary} · <Text style={s.footerBold}>GSTR-1 month: </Text>
             {formatDate(invoice.invoice_date)}
           </Text>
           {/* R-038. The methods half of this line was the fixed string "UPI / NEFT /

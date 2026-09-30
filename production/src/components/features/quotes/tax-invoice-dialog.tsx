@@ -30,6 +30,7 @@ import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
 import type { Invoice, Payment, QuoteLineItem } from "@/lib/supabase/database.types";
 import { splitTaxHeads } from "@/lib/gst/tax-split";
+import { SAAS_HSN } from "@/lib/gst/hsn";
 
 /** Display-shape for advance rows in the dialog — works for both frozen + live data */
 interface DisplayAdvance {
@@ -425,8 +426,15 @@ export function TaxInvoiceDialog({
               <tbody>
                 {lineItems.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-3 text-center text-sm text-ink-3 italic">
-                      No line items recorded on the parent quote.
+                    {/* R-010 §24. This used to read "No line items recorded on the parent
+                        quote." on every project invoice, which named the wrong cause (a
+                        project invoice HAS no parent quote) and gave the operator nothing
+                        to do. A tax invoice without a description is defective under CGST
+                        Rule 46(g) and the buyer's credit is what is at risk, so the line
+                        says that and says the next step. */}
+                    <td colSpan={6} className="p-3 text-center text-sm text-rose italic">
+                      No description on this invoice — GST Rule 46 requires one.
+                      Raise a credit note and issue it again with line items.
                     </td>
                   </tr>
                 ) : (
@@ -439,7 +447,11 @@ export function TaxInvoiceDialog({
                           <p className="text-2xs text-ink-3 mt-0.5">{li.description}</p>
                         )}
                       </td>
-                      <td className="p-2.5 font-mono text-2xs text-ink-2">998313</td>
+                      {/* R-010. Was the literal 998313 on every line of every invoice —
+                          the third copy of a value lib/gst/hsn.ts exists to hold one copy
+                          of. A project line carries its own SAC (998314, IT design and
+                          development); a SaaS line carries none and falls back here. */}
+                      <td className="p-2.5 font-mono text-2xs text-ink-2">{li.hsn ?? SAAS_HSN}</td>
                       <td className="p-2.5 text-right tabular-nums text-sm">{li.qty}</td>
                       <td className="p-2.5 text-right tabular-nums text-sm">{money(li.rate)}</td>
                       <td className="p-2.5 text-right tabular-nums text-sm font-medium">

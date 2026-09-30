@@ -1247,7 +1247,12 @@ function InvoicePreviewContainer({
   const identity = supplierIdentity(me);
   const supplier = identity.ok ? identity.supplier : null;
 
-  const lineItems = quote?.line_items ?? [];
+  /* R-010. A project-milestone invoice has no quote — it is raised from a milestone — and
+     a subscription instalment deliberately leaves quote_id null. Both write their own
+     `invoices.line_items`, and this read of the quote alone is why the dialog and the PDF
+     printed "No line items recorded on the parent quote." over a correct ₹5,00,000 + GST:
+     right money, a document that did not say what was sold (CGST Rule 46(g)). */
+  const lineItems = quote?.line_items ?? invoice.line_items ?? [];
   /* R-066. This used to be `subtotal = quote?.subtotal ?? invoice.amount` and then 18%
      on top — but `invoice.amount` is the GST-INCLUSIVE gross, so a quote-less invoice
      was taxed on tax: ₹5,90,000 showed "Tax Total ₹1,06,200" instead of ₹90,000.

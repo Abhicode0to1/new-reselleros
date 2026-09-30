@@ -330,6 +330,16 @@ export type QuoteLineItem = {
   discount_pct?: number;
   /** Optional reason shown on quote PDF + accept page (e.g., "Loyalty discount", "Volume offer"). */
   discount_reason?: string;
+  /**
+   * HSN/SAC printed on this line of a tax invoice (R-010, CGST Rule 46(f)).
+   *
+   * OPTIONAL, and the default is the point: every SaaS line in this product is SAC 998313,
+   * so the documents fall back to `SAAS_HSN` and nothing has to carry it. A PROJECT
+   * invoice does — `raise_project_milestone_invoice` writes the project's own
+   * `project_sales.sac_code` (998314, IT design and development) here, because a
+   * development contract is not a SaaS subscription and must not inherit its code.
+   */
+  hsn?: string;
   /** BULK ORDER: when true, this one line expands into one subscription PER domain on payment. */
   bulk?: boolean;
   /** Per-domain breakdown for a bulk line. `qty` must equal the sum of these seats. */
