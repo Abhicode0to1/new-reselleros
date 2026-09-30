@@ -78,7 +78,7 @@ select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
 Phir haath se ek baar: signup → /welcome → join-approval flow (R-013 "done when").
 Migration fail ho to baaki mat lagao — Abhishek ko bulao.
 
-## Step 2 — S5: baaki 40 files, file-order me
+## Step 2 — S5: baaki 41 files, file-order me
 
 Har file ke liye Step 1 wala hi tareeka (`SET ROLE` → `\i` → `RESET ROLE`), ek-ek karke, order mat todo.
 Aakhir me ek baar `notify pgrst, 'reload schema';`. Error aaye → ruko, aage mat badho (forward-fix, `ROLLBACK.md`).
@@ -125,6 +125,7 @@ Aakhir me ek baar `notify pgrst, 'reload schema';`. Error aaye → ruko, aage ma
 | 20260929100000_revoke_anon_can_see_record | can_see_record anon se hata | **100000 (S13) ke baad hi** |
 | 20260929130000_lead_counts (S40) | lead_counts() + list_leads naye filter; 3 helper fn; 2 index | **app se pehle** (leads page inhe bulata hai); 2 plain CREATE INDEX on leads — chhoti table, theek |
 | 20260929185929_day_book_salary_journal | report_day_book: salary kharcha = Journal voucher | sirf function badla, data nahi; kabhi bhi |
+| 20260930110000_scale_indexes (S43) | pg_trgm + leads/lead_activities/subscriptions index | **prod par har CREATE INDEX ko CONCURRENTLY, transaction ke bahar, pehle chalao** (file header dekho); phir file |
 
 Order ka niyam: pehle saari migrations, phir app (expand → deploy, `ROLLBACK.md`). Beech ka waqt chhota rakho.
 

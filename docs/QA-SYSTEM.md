@@ -7,7 +7,7 @@ Pardeep ne 30 Sep 2026 ko tay kiya: testing ka zyadatar kaam machine/AI kare, 4 
 | Kab | Kya | Kahan | Haalat (30 Sep) |
 |---|---|---|---|
 | Har push | CI: typecheck, unit tests, lint, build, migration order; SQL tests (RLS, paise) | `.github/workflows/ci.yml` | S44 mein SQL job + teeno dev branches jud rahe hain |
-| Har push + raat | E2E (Playwright) — neeche ke 15 workflows, test company par, logged-in | `production/e2e/` | ~70 auth tests skip hote hain (test users/secrets nahi) — R-053 (Hitesh) |
+| Har push + raat | E2E (Playwright) — neeche ke 15 workflows, test company par, logged-in | `production/e2e/` | ~70 auth tests skip hote hain (test users/secrets nahi) — R-053 |
 | Roz 10:00 (Mon–Fri) | AI QA routine `reselleros-qa`: test site ke pages + flows, fail → bug card, fix ke baad auto retest | `production/e2e/qa/run.mjs` | Chal raha hai (abhi sirf public + buy pages) |
 | Roz 09:00 | Error routine `reselleros-errors`: production ke Cloud Run ERROR logs → group karke owner ke naam card | scheduled task | 30 Sep se |
 | Har minute | Uptime check "ResellerOS live" + alerts | Cloud Monitoring | S9 |
@@ -16,8 +16,9 @@ Pardeep ne 30 Sep 2026 ko tay kiya: testing ka zyadatar kaam machine/AI kare, 4 
 
 ## 2. Kaun kya karta hai
 
-- **Hitesh (QA)** — E2E suite ka malik; test company + test users sambhale; **har naye bug ke saath ek automatic test** (taaki wo wapas na aaye); fix ka retest; hafte mein ek baar phone par haath se ghoomna (docs/MANUAL-TEST-SCRIPT.md).
-- **Abhishek, Pawan** — har fix ke saath test; Done/Review se pehle push + CI green; apne area ke bug card.
+- **Pardeep (manager) + AI** — QA system ka malik (30 Sep se areas badle: Hitesh ab Accounting module): E2E suite, test company + test users, retest AI QA karta hai; hafte mein ek baar phone par haath se ghoomna (docs/MANUAL-TEST-SCRIPT.md).
+- **Hitesh (Accounts)** — Accounting/GST/payroll module ka malik; apne workflows (W10–W13) ke tests.
+- **Abhishek, Pawan, Hitesh** — **har fix ke saath test** (taaki bug wapas na aaye); Done/Review se pehle push + CI green; apne area ke bug card.
 - **Pardeep** — hafte mein 30 min: naye bugs + Team Pulse dekh kar priority; business ke number (accounting, GST, renewal amount) khud check — "sahi number kya hai" ye wahi jaante hain.
 - **Claude** — routines chalana, untested critical routes (webhooks, payments) ke tests likhna, errors ko sahi owner tak pahunchana, har hafte sudhaar ka prastav.
 
@@ -45,7 +46,7 @@ Pardeep ne 30 Sep 2026 ko tay kiya: testing ka zyadatar kaam machine/AI kare, 4 
 
 ## 4. Bug ka safar
 
-bug mila (AI QA / error routine / Hitesh / customer) → board par owner ke naam card (steps, expected, actual) → owner fix + **test** → push, CI green → Review → Hitesh (ya AI retest) pass → Done.
+bug mila (AI QA / error routine / team / customer) → board par owner ke naam card (steps, expected, actual) → owner fix + **test** → push, CI green → Review → AI retest (ya bug batane wala) pass → Done.
 
 ## 5. Har hafte sudhaar (system ko behtar karte rehna)
 

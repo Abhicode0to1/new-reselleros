@@ -30,18 +30,24 @@ person, or a fix on a page Hitesh reported (his retest still decides).
 Ownership of code is in [`OWNERS.json`](../OWNERS.json) (repo root). `node production/scripts/areas.mjs`
 tells you whose area a branch touched.
 
-## Testing (Hitesh, QA) — 28 Sep 2026
+## Team areas — re-split 30 Sep 2026
 
-Hitesh Baghel tests the app's user flows on the online **test** environment (never production)
-and files what he finds. His guide is [`docs/qa/README.md`](qa/README.md); his area is
-`production/e2e/` and `docs/qa/` on branch `hitesh-qa` — he does not change app code.
+Pardeep (manager) re-split the areas on 30 Sep 2026 (`OWNERS.json` is the truth):
+- **Pardeep** — manager; CRM/leads, deals, enquiries, referrals, partners, Marketing & Advertising, attendance/HR, reports, team docs, and the QA system (`production/e2e/`, `docs/qa/`).
+- **Hitesh** — Accounts: the app's Accounting module (books, GST, TDS, compliance, payroll, banking, expenses, purchases, vendor portal). Branch still `hitesh-qa`.
+- **Abhishek** — Billing & Subscriptions + technical/infra: deploy, `cloudbuild.yaml`, CI (`.github/`), crons, backups, ops scripts.
+- **Pawan** — website and everything customer-facing (public/marketing pages, auth, checkout, customer portal, `/api/v1`).
 
-- A bug is an `R-nnn` request: `owner` = the area owner of that page, `from: "hitesh"`,
-  title `Bug: …`, with URL, steps, expected, actual, screenshot.
-- The owner's agent fixes it like any request and sets `review`. Hitesh retests on the test
-  environment and posts `R-nnn retest pass` / `retest fail: …` in `#qa`. A human (Pardeep)
-  then sets `done`. **A fix that touches a page Hitesh reported is not `done` without his retest.**
-- Agents: when you move a `from: "hitesh"` task to `review`, say in `#qa` what to retest and where.
+## Testing — 30 Sep 2026
+
+Testing is automatic first: see [`docs/QA-SYSTEM.md`](QA-SYSTEM.md) (CI on every push, E2E, daily AI QA on the
+online **test** environment — never production — and the daily live-error routine).
+
+- A bug is an `R-nnn` request: `owner` = the area owner of that page, title `Bug: …`, with URL, steps,
+  expected, actual. (Cards from the AI QA routine carry `from: "hitesh"` and a `qaKey` for history.)
+- The owner fixes it **with a test** and sets `review`. The AI QA routine retests automatically and posts
+  `R-nnn retest pass` / `retest fail: …` in `#qa`; cards without a `qaKey` are retested by the person who
+  reported them. **A reported bug is not `done` before its retest passes.**
 
 ## Session start (every time, before any code)
 
