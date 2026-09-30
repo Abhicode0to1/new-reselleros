@@ -1,7 +1,8 @@
 /**
  * The trial confirm link (25 Sep 2026: the trial account is created by the DMS engine,
  * not by this app writing to DirectAdmin). Pinned: the engine command and its trial
- * payload; the gate; each engine answer lands on the right page with the owner told.
+ * payload; the gate; each engine answer lands on the right page. No owner email in any branch
+ * (owner, 30 Sep 2026); a setup that failed becomes a task on the lead instead.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -15,12 +16,13 @@ const mail = vi.hoisted(() => ({ sendEmail: vi.fn(), loadOwnerAlert: vi.fn() }))
 vi.mock("@/lib/email/send", () => ({ sendEmail: mail.sendEmail }));
 vi.mock("@/lib/email/owner-alert.server", () => ({ loadOwnerAlert: mail.loadOwnerAlert }));
 
-const db = vi.hoisted(() => ({ lead: null as unknown, updates: [] as Record<string, unknown>[] }));
+const db = vi.hoisted(() => ({ lead: null as unknown, updates: [] as Record<string, unknown>[], inserts: [] as { table: string; row: Record<string, unknown> }[] }));
 vi.mock("@/lib/supabase/server", () => ({
   createAdminClient: () => ({
-    from: () => ({
+    from: (table: string) => ({
       select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: db.lead, error: null }) }) }) }),
       update: (row: Record<string, unknown>) => { db.updates.push(row); return { eq: async () => ({ error: null }) }; },
+      insert: async (row: Record<string, unknown>) => { db.inserts.push({ table, row }); return { error: null }; },
     }),
   }),
 }));
@@ -36,7 +38,7 @@ const lead = {
 const ENV = { ...process.env };
 beforeEach(() => {
   for (const f of [token.verifyTrialToken, engine.sendEngineCommand, engine.commandsConfigured, mail.sendEmail, mail.loadOwnerAlert]) f.mockReset();
-  db.lead = { ...lead }; db.updates = [];
+  db.lead = { ...lead }; db.updates = []; db.inserts = [];
   process.env.HOSTING_TRIAL_LIVE = "1";
   token.verifyTrialToken.mockReturnValue({ ok: true, leadId: "L-T1" });
   engine.commandsConfigured.mockReturnValue(true);
@@ -91,12 +93,17 @@ describe("nothing is created while the switch is off, and a failure is never hid
     const res = await GET(req());
     expect(landed(res)).toBe("pending");
     expect(String(db.updates.at(-1)?.notes)).toContain("NOT created automatically (refused: already had a free trial)");
-    expect(mail.sendEmail.mock.calls[0][0].to).toBe("owner@example.invalid");
+    // No owner email (30 Sep 2026): the failure becomes a task on the lead.
+    expect(mail.sendEmail.mock.calls.map((c) => c[0].to)).not.toContain("owner@example.invalid");
+    const task = db.inserts.find((i) => i.table === "tasks")?.row;
+    expect(task).toMatchObject({ lead_id: "L-T1", kind: "followup" });
+    expect(String(task?.title)).toMatch(/NOT created automatically: Trial Co/);
   });
   it("a lost answer → the error page, and the owner is told to check DMS before creating by hand", async () => {
     engine.sendEngineCommand.mockResolvedValue({ kind: "needs_reconciliation", reason: "socket closed" });
     const res = await GET(req());
     expect(landed(res)).toBe("error");
-    expect(mail.sendEmail.mock.calls[0][0].text).toMatch(/check DMS/);
+    expect(mail.sendEmail.mock.calls.map((c) => c[0].to)).not.toContain("owner@example.invalid");
+    expect(String(db.inserts.find((i) => i.table === "tasks")?.row.notes)).toMatch(/Check DMS for a partly created account/);
   });
 });

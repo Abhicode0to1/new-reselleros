@@ -70,7 +70,7 @@ const SRC = join(ROOT, "src");
  *   trial-expiry              "Open the lead: …"           -> staff
  *   enquiry/general, enquiry/workspace, trial/hosting, trial/workspace,
  *   inbound/ingest            "Open the lead: …"           -> staff
- *   trial/hosting/confirm x3  owner alerts                  -> owner.to
+ *   trial/hosting/confirm x3  owner alerts — REMOVED 30 Sep 2026 (no trial owner email)
  *   support-email-inbound, support-whatsapp-inbound
  *                             -> support-dispatcher `${appUrl}/support`
  *                             -> alert.to, in a mail whose body ends
@@ -93,7 +93,6 @@ const KNOWN = [
   "app/api/public/enquiry/general/route.ts",
   "app/api/public/enquiry/workspace/route.ts",
   "app/api/public/trial/hosting/confirm/route.ts",
-  "app/api/public/trial/workspace/route.ts",
   "app/api/v1/integrations/support-email-inbound/route.ts",
   "app/api/v1/integrations/support-whatsapp-inbound/route.ts",
   "app/api/webhooks/razorpay/route.ts",

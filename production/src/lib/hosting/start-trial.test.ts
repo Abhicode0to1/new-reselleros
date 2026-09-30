@@ -137,7 +137,7 @@ describe("one trial per customer across BOTH apps — DMS is the shared record",
   });
 });
 
-describe("the customer is never kept waiting for the owner alert (30 Sep 2026)", () => {
+describe("trial emails: the customer only (30 Sep 2026)", () => {
   const ownerOk = { alert: { ok: true, to: "owner@example.invalid", ownerName: "Owner" }, tenant: { name: "T" } };
 
   it("the confirmation link is sent even when there is no owner alert address", async () => {
@@ -153,17 +153,13 @@ describe("the customer is never kept waiting for the owner alert (30 Sep 2026)",
     expect(r).toMatchObject({ ok: true, confirmationSent: false });
   });
 
-  it("a slow owner alert does not hold the answer: it resolves while the alert is still sending", async () => {
+  it("sends the owner NO email at all — only the customer's confirmation (owner, 30 Sep 2026)", async () => {
     loadOwnerAlert.mockResolvedValue(ownerOk);
-    let releaseOwner: () => void = () => {};
-    sendEmail.mockImplementation(async (m: { kind: string }) => {
-      if (m.kind === "buy_page_trial_owner") await new Promise<void>((res) => { releaseOwner = res; });
-      return { status: "sent", providerId: "m", errorMessage: null, provider: "smtp" };
-    });
     const r = await startHostingTrial(adminWith({}), input, req, {});
     expect(r).toMatchObject({ ok: true, confirmationSent: true });
     const kinds = sendEmail.mock.calls.map((c) => (c[0] as { kind: string }).kind);
-    expect(kinds).toEqual(["buy_page_trial_customer", "buy_page_trial_owner"]); // customer first
-    releaseOwner();
+    expect(kinds).toEqual(["buy_page_trial_customer"]);
+    // The owner's address is still used — as the reply-to on the customer's email.
+    expect(sendEmail.mock.calls[0][0]).toMatchObject({ replyTo: "owner@example.invalid" });
   });
 });

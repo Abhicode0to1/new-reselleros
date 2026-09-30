@@ -7,7 +7,7 @@
  * `hosting-trial:starter` line; nothing else does.
  *
  * Unchanged from the route it came from: it CAPTURES the request as a qualified
- * lead (stage='trial'), alerts the owner, emails the customer a confirmation
+ * lead (stage='trial'), emails the customer a confirmation
  * link, and schedules follow-up tasks. It does NOT create a cPanel account —
  * that happens only after the customer confirms their email
  * (api/public/trial/hosting/confirm), behind HOSTING_TRIAL_LIVE.
@@ -22,7 +22,6 @@ import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { makeTrialToken } from "@/lib/hosting/trial-token";
 import { TRIAL_PLAN_ID, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 import { checkTrialHistory, recordTrialInDms } from "@/lib/dms-engine/trials";
-import { afterResponse } from "@/lib/server/after-response";
 
 const FROM_EMAIL = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const BUY_PAGE_TENANT_ID =
@@ -344,35 +343,8 @@ ${signOff}`;
     console.error(`[trial/hosting] lead ${leadId}: the confirmation link did NOT reach ${email}: ${confirmation.errorMessage ?? confirmation.status}`);
   }
 
-  /* ── The owner alert: internal, so it goes AFTER the response (lib/server/after-response). */
-  if (owner.ok) {
-    afterResponse(async () => {
-      const r = await sendEmail({
-        to: owner.to,
-        from: FROM_EMAIL,
-        kind: "buy_page_trial_owner",
-        route: { tenantId: BUY_PAGE_TENANT_ID },
-        replyTo: email,
-        subject: `🎯 HOSTING TRIAL — ${companyName} · ${tierName} · ${cleanDomain || (domainStatus === "need" ? "needs domain" : "no domain")}`,
-        text:
-`A new hosting trial request just landed. The customer wants to try the
-${tierName} plan for ${TRIAL_DAYS} days, no card.
-
-COMPANY     ${companyName}
-CONTACT     ${fullName} <${email}>
-PHONE       ${phone}
-PLAN        ${tierName} hosting (cPanel on Google Cloud)
-DOMAIN      ${cleanDomain || (domainStatus === "need" ? "needs a new domain" : "not specified")}
-TRIAL ENDS  ${trialEndsFmt} (${TRIAL_DAYS} days from today)
-To start the trial, provision the cPanel account, then send the login.
-Open the lead:
-${new URL(`/leads/${leadId}`, request.url).toString()}
-
-— ResellerOS`,
-      });
-      if (r.status === "failed") console.error(`[trial/hosting] owner alert failed: ${r.errorMessage}`);
-    }, "trial owner alert");
-  }
-
+  /* No owner email for a trial (owner, 30 Sep 2026: "remove this feature completely — that
+     will just annoy the owner"). The trial is on the lead (stage trial) with its follow-up
+     tasks, which is where staff see it. */
   return { ok: true, leadId, trialEnds: trialExpiresAt.toISOString(), confirmationSent };
 }
