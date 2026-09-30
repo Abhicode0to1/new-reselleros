@@ -50,6 +50,8 @@ const enquirySchema = z.object({
   seats:       z.coerce.number().int().min(1).max(100000).optional(),
   subscriptionType: z.enum(["fresh", "switch"]).optional(),
   message:     z.string().min(5, "Please describe what you need").max(2000),
+  /** A free-trial request from the site's trial form: no owner alert (owner, 30 Sep 2026). */
+  trial:       z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { fullName, companyName, email, phone, product, seats, subscriptionType, message } = parsed.data;
+    const { fullName, companyName, email, phone, product, seats, subscriptionType, message, trial } = parsed.data;
 
     const admin = createAdminClient();
     const tenantId = BUY_PAGE_TENANT_ID;
@@ -130,8 +132,10 @@ export async function POST(request: NextRequest) {
     const firstName  = fullName.split(" ")[0];
 
     const settled = await Promise.allSettled([
-      // 1. Reseller alert
-      ownerEmail
+      /* 1. Reseller alert — not for a trial request. Owner, 30 Sep 2026, on trial alerts:
+         "Remove this feature completely. That will just annoy the owner." Staff still see
+         the trial as a lead. */
+      ownerEmail && !trial
         ? sendEmail({
             /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
                   me hai. Tenant ne Gmail chuna hai to mail wahi se jaye. */

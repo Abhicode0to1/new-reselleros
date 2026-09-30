@@ -78,6 +78,8 @@ const enquirySchema = z.object({
   // converts to a customer (state copied through accept_quote / record_payment).
   stateCode:   z.string().regex(/^\d{2}$/, "state code must be 2 digits").optional(),
   state:       z.string().max(60).optional(),
+  /** A free-trial request from the site's trial form: no owner alert (owner, 30 Sep 2026). */
+  trial:       z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -92,7 +94,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { fullName, companyName, email, phone, seats, tierId, billing, message, stateCode, state } = parsed.data;
+    const { fullName, companyName, email, phone, seats, tierId, billing, message, stateCode, state, trial } = parsed.data;
 
     const admin = createAdminClient();
 
@@ -339,8 +341,10 @@ export async function POST(request: NextRequest) {
     }
 
     const settled = await Promise.allSettled([
-      // ── EMAIL 1: owner alert ──────────────────────────────────────────
-      owner.ok && sendEmail({
+      /* ── EMAIL 1: owner alert — not for a trial request (owner, 30 Sep 2026: "Remove
+         this feature completely. That will just annoy the owner."). Staff still see the
+         trial as a lead. ─────────────────────────────────────────────────── */
+      owner.ok && !trial && sendEmail({
         to:      owner.to,
         from:    FROM_EMAIL,
         kind:    "buy_page_lead_alert",

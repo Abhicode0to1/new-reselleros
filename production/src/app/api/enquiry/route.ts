@@ -41,6 +41,8 @@ interface EnquiryBody {
   edition?: string;
   /** annual | monthly — the workspace endpoint's `billing`. */
   term?: string;
+  /** Sent by the trial form: the app then emails the customer but not the owner. */
+  trial?: boolean;
 }
 
 const PRODUCTS = new Set(["google-workspace", "microsoft-365", "zoho", "other"]);
@@ -73,6 +75,7 @@ export async function POST(req: NextRequest) {
       : "Quote request from the website form.";
 
   const tier = typeof body.edition === "string" ? gwTierFor(body.edition) : null;
+  const trial = body.trial === true;
 
   const fail = () =>
     NextResponse.json(
@@ -105,6 +108,7 @@ export async function POST(req: NextRequest) {
         tierId: tier,
         billing: body.term === "monthly" ? "monthly" : "annual",
         message,
+        ...(trial ? { trial: true } : {}),
       });
       if (!res.ok) {
         console.error("[enquiry-proxy] workspace upstream refused:", res.status, await res.text().catch(() => ""));
@@ -120,6 +124,7 @@ export async function POST(req: NextRequest) {
     const payload: Record<string, unknown> = { fullName, companyName, email, phone, message };
     if (typeof body.product === "string" && PRODUCTS.has(body.product)) payload.product = body.product;
     if (seats) payload.seats = seats;
+    if (trial) payload.trial = true;
 
     const res = await post(ENQUIRY_API, payload);
     if (!res.ok) {

@@ -41,6 +41,20 @@ describe("/api/enquiry — honest answers for the site forms", () => {
     expect(await res.json()).toMatchObject({ ok: false, error: expect.stringMatching(/could not record your request.*nothing was saved/i) });
   });
 
+  it("a trial request tells the app it is a trial, on both paths (no owner alert there)", async () => {
+    fetchMock.mockResolvedValue(upstream(200, { success: true, ackSent: true }));
+    await POST(req({ ...body, trial: true }));
+    await POST(req({ ...body, trial: true, edition: "GW Business Starter", seats: 5 }));
+    for (const call of fetchMock.mock.calls) expect(JSON.parse(call[1].body)).toMatchObject({ trial: true });
+  });
+
+  it("an ordinary enquiry is not marked a trial, so the owner is still alerted", async () => {
+    fetchMock.mockResolvedValue(upstream(200, { success: true, ackSent: true }));
+    await POST(req(body));
+    await POST(req({ ...body, edition: "GW Business Starter", seats: 5 }));
+    for (const call of fetchMock.mock.calls) expect(JSON.parse(call[1].body)).not.toHaveProperty("trial");
+  });
+
   it("an unreachable upstream is ok:false too", async () => {
     fetchMock.mockRejectedValue(new Error("ECONNREFUSED"));
     const res = await POST(req(body));

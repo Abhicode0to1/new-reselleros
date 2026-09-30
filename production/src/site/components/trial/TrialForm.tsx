@@ -200,7 +200,7 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
       const res = await fetch("/api/enquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName: company, companyName: company, email, phone, product: `Trial — ${labelOf(ed)}`, seats, requirement, edition: ed, term: "annual" }),
+        body: JSON.stringify({ fullName: company, companyName: company, email, phone, product: `Trial — ${labelOf(ed)}`, seats, requirement, edition: ed, term: "annual", trial: true }),
       });
       const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; ackSent?: boolean };
       if (!res.ok || !json.ok) {
