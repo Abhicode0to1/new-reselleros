@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 import { PortalDock } from "@/components/shared/portal-dock";
 import { Reorder, useDragControls } from "framer-motion";
 
-import { useLeads } from "@/lib/queries/leads";
+import { useDashboardLeads, useLeadStageTotals } from "@/lib/queries/leads";
 import { useCustomers } from "@/lib/queries/customers";
 import { useQuotes } from "@/lib/queries/quotes";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
@@ -91,7 +91,10 @@ export default function DashboardPage() {
   const router = useRouter();
 
   // Real data
-  const { data: leads }         = useLeads();
+  /* WC-scale: server counts + the few rows each card lists, not useLeads() (every lead, cut
+     at PostgREST's 1000 rows — past that every lead number here was the newest thousand's). */
+  const { data: leads }         = useLeadStageTotals();
+  const { data: dashLeads }     = useDashboardLeads();
   const { data: customers }     = useCustomers();
   const { data: quotes }        = useQuotes();
   const { data: subscriptions } = useSubscriptions();
@@ -130,12 +133,11 @@ export default function DashboardPage() {
   const workspaceName = currentUser?.tenantName ?? "your workspace";
 
   // Aggregates from real data
-  const activeLeads     = (leads ?? []).filter((l) => l.stage !== "won" && l.stage !== "lost");
-  const totalPipeline   = activeLeads.reduce((s, l) => s + (l.value ?? 0), 0);
-  const newToday        = (leads ?? []).filter((l) => {
-    const d = new Date(l.created_at);
-    return d.toDateString() === new Date().toDateString();
-  }).length;
+  /* Open = not won, not lost (junk excluded — useLeadStageTotals). */
+  const openStageTotals = LEAD_STAGES.filter((s) => s.id !== "won").map((s) => leads?.[s.id]);
+  const activeCount     = openStageTotals.reduce((n, t) => n + (t?.count ?? 0), 0);
+  const totalPipeline   = openStageTotals.reduce((n, t) => n + (t?.value ?? 0), 0);
+  const newToday        = dashLeads?.newToday ?? 0;
   const totalCustomers  = customers?.length ?? 0;
   const acceptedQuotes  = (quotes ?? []).filter((q) => q.status === "accepted");
   const acceptedValue   = acceptedQuotes.reduce((s, q) => s + (q.amount ?? 0), 0);
@@ -157,11 +159,7 @@ export default function DashboardPage() {
   const subsOutstanding = (subscriptions ?? []).reduce((s, x) => s + (x.outstanding_amount ?? 0), 0);
   const projectReceivable = Object.values(projRecv).reduce((s, v) => s + v, 0);
   const toCollect = subsOutstanding + projectReceivable;
-  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-  const overdueFollowups = (leads ?? []).filter(
-    (l) => l.follow_up_date && l.stage !== "won" && l.stage !== "lost"
-      && new Date(l.follow_up_date).getTime() < todayStart.getTime(),
-  ).length;
+  const overdueFollowups = dashLeads?.overdueFollowups ?? 0;
 
   // Subscription aggregates — sum MRR across active subs only
   const activeSubs    = (subscriptions ?? []).filter((s) => s.status === "active");
@@ -206,9 +204,9 @@ export default function DashboardPage() {
       note: `${rupee(urgentRenewals.reduce((s, r) => s + (r.sub.mrr ?? 0) * 12, 0), { compact: true })} ARR · call or send the quote`,
       action: "Open", cta: "/renewals",
     },
-    activeLeads.length > 0 && {
+    activeCount > 0 && {
       icon: "target", tone: "indigo",
-      title: `${activeLeads.length} active leads in pipeline`,
+      title: `${activeCount} active leads in pipeline`,
       note: `${rupee(totalPipeline, { compact: true })} pipeline value`,
       action: "View", cta: "/leads",
     },
@@ -249,7 +247,7 @@ export default function DashboardPage() {
     const items: Array<{ icon: string; tone: string; title: string; time: string; ts: number }> = [];
 
     // Recent leads (created in last 24h)
-    (leads ?? []).forEach((l) => {
+    (dashLeads?.recent ?? []).forEach((l) => {
       const ts = new Date(l.created_at).getTime();
       if (now - ts <= HRS_24) {
         items.push({
@@ -282,7 +280,7 @@ export default function DashboardPage() {
 
     // Sort newest first, take top 6
     return items.sort((a, b) => b.ts - a.ts).slice(0, 6);
-  }, [leads, quotes]);
+  }, [dashLeads, quotes]);
 
   const leaderboard = [
     { rank: 1, name: `${currentUser?.fullName ?? "You"} (you)`, amount: closedThisMonthValue, deals: closedThisMonth.length, color: "amber" },
@@ -294,7 +292,7 @@ export default function DashboardPage() {
   const upcoming = React.useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-    return (leads ?? [])
+    return (dashLeads?.upcoming ?? [])
       .filter((l) => l.follow_up_date && l.stage !== "won" && l.stage !== "lost")
       .map((l) => {
         const dueTs = new Date(l.follow_up_date!).getTime();
@@ -318,7 +316,7 @@ export default function DashboardPage() {
       .filter((u) => u.ts - today.getTime() < SEVEN_DAYS)  // within next week
       .sort((a, b) => a.ts - b.ts)
       .slice(0, 5);
-  }, [leads]);
+  }, [dashLeads]);
 
   const integrations = [
     { name: "Supabase Auth + DB",         status: "Live",       tone: "ok" as const },
@@ -361,22 +359,21 @@ export default function DashboardPage() {
     ),
     pipeline: (
       <Card title="Pipeline by Stage"
-        sub={activeLeads.length > 0
-          ? `${rupee(totalPipeline, { compact: true })} across ${activeLeads.length} deal${activeLeads.length === 1 ? "" : "s"}`
+        sub={activeCount > 0
+          ? `${rupee(totalPipeline, { compact: true })} across ${activeCount} deal${activeCount === 1 ? "" : "s"}`
           : "No active deals yet"}>
         {!leads ? (
           <div className="space-y-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-6" />)}</div>
-        ) : activeLeads.length === 0 ? (
+        ) : activeCount === 0 ? (
           <div className="py-6 text-center text-sm text-ink-3">
             Add your first lead at <Link href={"/leads" as any} className="text-amber-ink underline">/leads</Link>
           </div>
         ) : (
           <div className="space-y-3">
             {LEAD_STAGES.map((s) => {
-              const stageLeads = (leads ?? []).filter((l) => l.stage === s.id);
-              const value = stageLeads.reduce((sum, l) => sum + (l.value ?? 0), 0);
-              const maxValue = Math.max(1, ...LEAD_STAGES.map((stg) =>
-                (leads ?? []).filter((l) => l.stage === stg.id).reduce((s, l) => s + (l.value ?? 0), 0)));
+              const stageCount = leads?.[s.id]?.count ?? 0;
+              const value = leads?.[s.id]?.value ?? 0;
+              const maxValue = Math.max(1, ...LEAD_STAGES.map((stg) => leads?.[stg.id]?.value ?? 0));
               const pct = (value / maxValue) * 100;
               return (
                 <div key={s.id} className="grid grid-cols-[120px_1fr_90px_36px] items-center gap-3">
@@ -387,7 +384,7 @@ export default function DashboardPage() {
                     <div className={cn("h-full rounded-full transition-all", s.color)} style={{ width: `${pct}%` }} />
                   </div>
                   <div className="text-right tabular-nums text-sm text-ink-2">{value > 0 ? rupee(value, { compact: true }) : "—"}</div>
-                  <div className="text-right tabular-nums text-xs text-ink-3">{stageLeads.length}</div>
+                  <div className="text-right tabular-nums text-xs text-ink-3">{stageCount}</div>
                 </div>
               );
             })}
@@ -620,7 +617,7 @@ export default function DashboardPage() {
         <KPI
           label="Pipeline"
           value={rupee(totalPipeline, { compact: true })}
-          trend={`${activeLeads.length} active deals`}
+          trend={`${activeCount} active deals`}
           trendKind="up"
           trendIcon="trending_up"
           icon="target"

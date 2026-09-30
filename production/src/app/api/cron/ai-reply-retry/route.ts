@@ -33,6 +33,7 @@ import { createClient as createBareClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { reportCron } from "@/lib/ops/cron-report";
+import { fetchAllRows, fetchAllRowsIn, errorMessage } from "@/lib/ops/fetch-all";
 import { shouldRetryReply, GIVE_UP_AFTER_HOURS, type RetryCandidate } from "@/lib/ai/reply-retry";
 import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
@@ -76,7 +77,12 @@ async function handle(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(), process.env.SUPABASE_SERVICE_ROLE_KEY!.trim(),
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
-  const { data: actions, error } = await bare
+  /* WC-scale: paged (lib/ops/fetch-all.ts) — a busy day has more than PostgREST's 1000-row
+     cap of reply.send events, and the newest ones (the ones that decide a retry) were the ones
+     cut off. */
+  let actions: { tenant_id: string; entity_id: string | null; outcome: string; created_at: string }[];
+  try {
+    actions = await fetchAllRows((from, to) => bare
     .from("ai_action_log")
     .select("tenant_id, entity_id, outcome, created_at")
     .eq("action", "reply.send")
@@ -90,12 +96,16 @@ async function handle(req: NextRequest) {
        rather than a customer's patience. An allow-list of outcomes is a bet that no third
        one matters; this is the bet losing. */
     .gte("created_at", since)
-    .order("created_at", { ascending: true });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .range(from, to));
+  } catch (e) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
+  }
 
   type Seen = { tenantId: string; failedAt: string | null; failures: number; resolvedAt: string | null };
   const byLead = new Map<string, Seen>();
-  for (const a of (actions ?? []) as { tenant_id: string; entity_id: string | null; outcome: string; created_at: string }[]) {
+  for (const a of actions) {
     if (!a.entity_id) continue;
     const s = byLead.get(a.entity_id) ?? { tenantId: a.tenant_id, failedAt: null, failures: 0, resolvedAt: null };
     if (a.outcome === "failed") {
@@ -119,13 +129,23 @@ async function handle(req: NextRequest) {
   }
 
   const leadIds = failing.map(([id]) => id);
-  const [{ data: leads }, { data: mails }] = await Promise.all([
-    admin.from("leads").select("id, tenant_id, stage, is_junk, contact_email").in("id", leadIds),
-    admin.from("inbound_emails")
-      .select("lead_id, body_text, created_at, from_email")
-      .in("lead_id", leadIds).not("from_email", "is", null)
-      .order("created_at", { ascending: false }),
-  ]);
+  /* 200 lead ids a request, every page read (lib/ops/fetch-all.ts). */
+  let leads: { id: string; tenant_id: string; stage: string | null; is_junk: boolean | null; contact_email: string | null }[];
+  let mails: { lead_id: string | null; body_text: string | null; created_at: string; from_email: string | null }[];
+  try {
+    [leads, mails] = await Promise.all([
+      fetchAllRowsIn(leadIds, (ids, from, to) => admin
+        .from("leads").select("id, tenant_id, stage, is_junk, contact_email")
+        .in("id", ids).order("id", { ascending: true }).range(from, to)),
+      fetchAllRowsIn(leadIds, (ids, from, to) => admin.from("inbound_emails")
+        .select("lead_id, body_text, created_at, from_email")
+        .in("lead_id", ids).not("from_email", "is", null)
+        .order("created_at", { ascending: false }).order("id", { ascending: false })
+        .range(from, to)),
+    ]);
+  } catch (e) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
+  }
 
   const leadById = new Map(((leads ?? []) as { id: string; tenant_id: string; stage: string | null; is_junk: boolean | null; contact_email: string | null }[]).map((l) => [l.id, l]));
   /* Newest first from the query, so the FIRST hit per lead is the latest message — which is

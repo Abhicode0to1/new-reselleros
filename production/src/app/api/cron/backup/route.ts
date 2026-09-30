@@ -32,6 +32,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows, errorMessage } from "@/lib/ops/fetch-all";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { runSweepWithRetry } from "@/lib/backup/sweep-retry";
 import { runPerTenantBackup, type TenantBackupInfo } from "@/lib/backup/per-tenant";
@@ -221,8 +222,14 @@ export async function GET(req: NextRequest) {
       now: new Date(),
       projectRef: projectRef(),
       listTenants: async () => {
-        const { data, error } = await admin.from("tenants").select("id, name").order("created_at");
-        return error ? { ok: false, message: error.message } : { ok: true, data: data ?? [] };
+        /* WC-scale: paged — tenant 1001 was silently never backed up. */
+        try {
+          const data = await fetchAllRows((from, to) => admin
+            .from("tenants").select("id, name").order("created_at").order("id").range(from, to));
+          return { ok: true, data };
+        } catch (e) {
+          return { ok: false, message: errorMessage(e) };
+        }
       },
       backupTenant: async (tenantId) => {
         const { data, error } = await admin.rpc("backup_tenant", { p_tenant: tenantId, p_label: null });

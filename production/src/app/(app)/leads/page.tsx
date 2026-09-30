@@ -366,10 +366,11 @@ function LeadsPageInner() {
   const countsQ = useLeadCounts(listFilters);
   const counts  = countsQ.data;
   const pagesQ  = useLeadsInfinite(listFilters, 50, { enabled: viewKnown && isList });
-  /* The Kanban board still reads its rows in one go and cuts them in the browser — a
-     column needs every open deal in its stage. It reads slim columns now, not select("*"),
-     and only while the board is on screen. Its chips are server counts like the list's. */
-  const boardQ  = useLeadsBoard(viewKnown && !isList);
+  /* The Kanban board reads each column on its own (WC-scale): the stage, the team cut and
+     junk are filtered on the server, the newest BOARD_COLUMN_CAP cards per column come back
+     with the column's true total, and the browser cuts the rest as before. Slim columns,
+     only while the board is on screen. Its chips are server counts like the list's. */
+  const boardQ  = useLeadsBoard(viewKnown && !isList, { ownerIds: teamIds, junk: smartView === "junk" });
   /* The call queue and the loss card read their own small slices. */
   const dueQ    = useDueLeads(teamIds, search.trim() === "");
   const lostQ   = useLostLeads(teamIds, isDealsPage);
@@ -399,7 +400,7 @@ function LeadsPageInner() {
   const folderToday = React.useMemo(() => localDateISO(new Date()), []);
   const boardLeads = React.useMemo<LeadListRow[]>(() => {
     if (isList) return [];
-    const rows = boardQ.data ?? [];
+    const rows = boardQ.data?.rows ?? [];
     const workspace = teamIds === null ? rows : inWorkspace(rows, teamIds);
     const dup = computeDuplicates(workspace);
     const searched = searchLeads(workspace, {
@@ -655,6 +656,7 @@ function LeadsPageInner() {
       {!isLoading && !error && (totalLeads ?? 0) > 0 && effectiveView === "kanban" && (
         <LeadsKanbanBoard
           boardLeads={boardLeads}
+          columnTotals={boardQ.data?.totals}
           changeStage={changeStage}
           setSelected={setSelected}
           setAddOpen={setAddOpen}

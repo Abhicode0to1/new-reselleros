@@ -7,7 +7,8 @@
  */
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchAllRowsIn, idsKey } from "@/lib/ops/fetch-all";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { Database, Task } from "@/lib/supabase/database.types";
@@ -86,6 +87,33 @@ export function useTasks(bucket: TaskBucket = "all") {
       const { data, error } = await q.order("due_at", order);
       if (error) throw error;
       return (data ?? []) as unknown as TaskWithLink[];
+    },
+  });
+}
+
+/**
+ * Open (pending / snoozed) tasks for THESE leads — the leads list's task chip
+ * (list-selectors.ts#openTaskIndex). WC-scale (30 Sep 2026): the list used useTasks("all"),
+ * every task in the tenant with three embeds, cut at PostgREST's 1000 rows — so a lead whose
+ * task was not among them showed no chip. Only the columns the chip reads, 200 lead ids a
+ * request, every page read (lib/ops/fetch-all.ts). Under ["tasks"], so every task
+ * mutation's invalidation reaches it.
+ */
+export function useOpenTasksForLeads(leadIds: readonly string[]) {
+  const ids = idsKey(leadIds);
+  return useQuery({
+    queryKey: ["tasks", "open-for-leads", ids],
+    enabled: ids.length > 0,
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<Pick<Task, "id" | "lead_id" | "status" | "due_at">[]> => {
+      const supabase = createClient();
+      return fetchAllRowsIn(ids, (chunkIds, from, to) => supabase
+        .from("tasks")
+        .select("id, lead_id, status, due_at")
+        .in("lead_id", chunkIds)
+        .in("status", ["pending", "snoozed"])
+        .order("id", { ascending: true })
+        .range(from, to));
     },
   });
 }

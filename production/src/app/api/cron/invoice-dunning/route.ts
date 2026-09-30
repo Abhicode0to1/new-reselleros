@@ -33,11 +33,28 @@ import { primaryContactEmail } from "@/lib/contacts/primary";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { rupee, formatDate } from "@/lib/utils";
 import { reportCron } from "@/lib/ops/cron-report";
+import { fetchAllRows, fetchAllRowsIn, errorMessage } from "@/lib/ops/fetch-all";
+import type { Invoice, Tenant } from "@/lib/supabase/database.types";
 import { createReminderSender } from "@/lib/marketing/whatsapp-reminders.server";
 import { dunningReminderKind } from "@/lib/marketing/whatsapp-reminders";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/**
+ * quote_id → the ONE subscription billed from it. Same answer the old per-invoice
+ * `.eq("quote_id", …).maybeSingle()` gave: a quote with two subscriptions made maybeSingle
+ * error, `data` came back null, and the invoice was treated as having no subscription to
+ * suspend. Ambiguous stays "none" here — suspending the wrong one of two is worse.
+ */
+function subscriptionIdByQuote(subs: readonly { id: string; quote_id: string | null }[]): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  for (const s of subs) {
+    if (!s.quote_id) continue;
+    out.set(s.quote_id, out.has(s.quote_id) ? null : s.id);
+  }
+  return out;
+}
 
 interface DunningResult {
   ran_at: string;
@@ -96,35 +113,58 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
   /* Only invoices that could possibly be chased. 'paid'/'void'/'draft' and
      due-date-less rows are excluded in SQL rather than filtered in JS, so a tenant
      with thousands of settled invoices does not pay to load them. */
-  const { data: invoices, error: invErr } = await supabase
-    .from("invoices")
-    .select("id, tenant_id, customer_id, customer_name, amount, paid_amount, status, due_date, quote_id")
-    .in("status", ["pending", "overdue"])
-    .not("due_date", "is", null);
+  /* WC-scale: every read below is PAGED (lib/ops/fetch-all.ts) and every `.in()` list is
+     sent 200 ids a request. Before, the invoice select stopped at PostgREST's 1000-row cap
+     without a word — invoice 1001 was never chased — and the log read sent every invoice id
+     in ONE url. Worse, a dunning-log read that came back short or failed (its error was
+     never checked) made steps that already went out look unsent, so they went out again.
+     A failed prefetch now stops the run with a 500 instead of emailing on partial history. */
+  type InvoiceRow = Pick<Invoice, "id" | "tenant_id" | "customer_id" | "customer_name" | "amount" | "paid_amount" | "status" | "due_date" | "quote_id">;
+  let invoices: InvoiceRow[];
+  let tenants: Pick<Tenant, "id" | "name" | "email" | "auto_suspend_on_overdue" | "upi_vpa" | "upi_payee_name">[];
+  let logs: { invoice_id: string | null; dunning_step: string }[];
+  let subs: { id: string; quote_id: string | null }[];
+  try {
+    invoices = await fetchAllRows<InvoiceRow>((from, to) => supabase
+      .from("invoices")
+      .select("id, tenant_id, customer_id, customer_name, amount, paid_amount, status, due_date, quote_id")
+      .in("status", ["pending", "overdue"])
+      .not("due_date", "is", null)
+      .order("id", { ascending: true })
+      .range(from, to));
 
-  if (invErr) return NextResponse.json({ error: invErr.message }, { status: 500 });
+    /* Tenant settings, the per-invoice dunning history and the subscription behind each
+       invoice, fetched once. A query per invoice would turn a 200-invoice pass into 600
+       round trips. */
+    [tenants, logs, subs] = await Promise.all([
+      fetchAllRowsIn(invoices.map((i) => i.tenant_id), (ids, from, to) => supabase
+        /* R-018: the UPI details come along so the reminder can carry a way to pay. They
+           were already on the tenant for the invoice QR — the dunning cron simply never
+           read them, and sent "pay using the link below" with no link, every run. */
+        .from("tenants").select("id, name, email, auto_suspend_on_overdue, upi_vpa, upi_payee_name")
+        .in("id", ids).order("id", { ascending: true }).range(from, to)),
+      fetchAllRowsIn(invoices.map((i) => i.id), (ids, from, to) => supabase
+        .from("invoice_dunning_log")
+        .select("invoice_id, dunning_step")
+        .in("invoice_id", ids).order("id", { ascending: true }).range(from, to)),
+      /* Was one `maybeSingle()` per invoice inside the loop below (the N+1). */
+      fetchAllRowsIn(invoices.map((i) => i.quote_id), (ids, from, to) => supabase
+        .from("subscriptions").select("id, quote_id")
+        .in("quote_id", ids).order("id", { ascending: true }).range(from, to)),
+    ]);
+  } catch (e) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
+  }
+  const tenantById = new Map(tenants.map((t) => [t.id, t]));
+  const subscriptionByQuote = subscriptionIdByQuote(subs);
 
-  /* Tenant settings and the per-invoice dunning history, fetched once. A query per
-     invoice would turn a 200-invoice pass into 400 round trips. */
-  const tenantIds = [...new Set((invoices ?? []).map((i) => i.tenant_id))];
-  const { data: tenants } = await supabase
-    /* R-018: the UPI details come along so the reminder can carry a way to pay. They
-       were already on the tenant for the invoice QR — the dunning cron simply never
-       read them, and sent "pay using the link below" with no link, every run. */
-    .from("tenants").select("id, name, email, auto_suspend_on_overdue, upi_vpa, upi_payee_name").in("id", tenantIds);
-  const tenantById = new Map((tenants ?? []).map((t) => [t.id, t]));
-
-  const { data: logs } = await supabase
-    .from("invoice_dunning_log")
-    .select("invoice_id, dunning_step")
-    .in("invoice_id", (invoices ?? []).map((i) => i.id));
   /* dunningRank() is IMPORTED, not redeclared. This block used to keep its own copy of
      the ordering, and the copy is exactly how adding `pre_due` would have broken it:
      an unknown key returns undefined, `undefined > 0` is false, so a nudge already in
      the log looks unsent and goes out again every morning until the invoice falls due.
      One definition, in the module that owns the ladder. */
   const lastStepByInvoice = new Map<string, DunningStep>();
-  for (const l of logs ?? []) {
+  for (const l of logs) {
     /* `invoice_id` became nullable on 10 Sep 2026 (migration 20260910070000) so the
        same log can record a POSTPAID SUBSCRIPTION chase, which has no invoice. Those
        rows are skipped here rather than coerced: keying a subscription chase into the
@@ -141,18 +181,13 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
   /* S28: ek sender poore run ke liye — tenant ka switch/template ek hi baar padha jaata hai. */
   const wa = createReminderSender();
 
-  for (const inv of invoices ?? []) {
+  for (const inv of invoices) {
     result.considered++;
     const tenant = tenantById.get(inv.tenant_id);
 
     /* A subscription is found through the invoice's source quote. No quote means no
        subscription, which decideDunning treats as "nothing to suspend". */
-    let subscriptionId: string | null = null;
-    if (inv.quote_id) {
-      const { data: sub } = await supabase
-        .from("subscriptions").select("id").eq("quote_id", inv.quote_id).maybeSingle();
-      subscriptionId = sub?.id ?? null;
-    }
+    const subscriptionId: string | null = inv.quote_id ? subscriptionByQuote.get(inv.quote_id) ?? null : null;
 
     const amountDue = Math.max(0, (inv.amount ?? 0) - (inv.paid_amount ?? 0));
     const decision = decideDunning({

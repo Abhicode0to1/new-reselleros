@@ -49,6 +49,7 @@ import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
 import { reportCron } from "@/lib/ops/cron-report";
 import { mapLimit, chunk, uniq } from "@/lib/ops/p-limit";
+import { fetchAllRows, fetchAllRowsIn, errorMessage } from "@/lib/ops/fetch-all";
 import { createReminderSender } from "@/lib/marketing/whatsapp-reminders.server";
 import { renewalReminderKind } from "@/lib/marketing/whatsapp-reminders";
 import { rupee } from "@/lib/utils";
@@ -61,6 +62,21 @@ export const runtime = "nodejs";
 const RENEWALS_CONCURRENCY = 5;
 /** S22: ids per `.in()` prefetch — keeps each request URL and response well bounded. */
 const PREFETCH_CHUNK = 200;
+
+/** Every subscription the live pass may remind about — paged past PostgREST's 1000-row cap. */
+function readRenewableSubs(supabase: ReturnType<typeof createAdminClient>) {
+  return fetchAllRows((from, to) => supabase
+    .from("subscriptions")
+    .select(`
+      id, tenant_id, customer_id, customer_name, plan, item_id, vendor, seats, mrr,
+      renewal_date, status, renewal_state, reminder_count, renewal_quote_id, term_months, domain
+    `)
+    .eq("status", "active")
+    .eq("auto_renew", true)
+    .not("renewal_date", "is", null)
+    .order("id", { ascending: true })
+    .range(from, to));
+}
 
 /** Body shape returned to the caller — useful for ad-hoc inspection. */
 interface CronResult {
@@ -166,21 +182,15 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
 
   // ── Fetch all active subscriptions across tenants with a renewal_date ─
   // Filters out auto_renew=false — customer chose to let it expire.
-  const { data: subs, error: subsErr } = await supabase
-    .from("subscriptions")
-    .select(`
-      id, tenant_id, customer_id, customer_name, plan, item_id, vendor, seats, mrr,
-      renewal_date, status, renewal_state, reminder_count, renewal_quote_id, term_months, domain
-    `)
-    .eq("status", "active")
-    .eq("auto_renew", true)
-    .not("renewal_date", "is", null);
-
-  if (subsErr) {
-    return NextResponse.json({ error: `subs fetch failed: ${subsErr.message}` }, { status: 500 });
+  /* WC-scale: paged (lib/ops/fetch-all.ts). One select stopped at PostgREST's 1000-row cap
+     without saying so — subscription 1001 never got a renewal reminder. */
+  let allSubs: Awaited<ReturnType<typeof readRenewableSubs>>;
+  try {
+    allSubs = await readRenewableSubs(supabase);
+  } catch (e) {
+    return NextResponse.json({ error: `subs fetch failed: ${errorMessage(e)}` }, { status: 500 });
   }
-  result.total_active = subs?.length ?? 0;
-  const allSubs = subs ?? [];
+  result.total_active = allSubs.length;
 
   /* ── S22: look-ups fetched ONCE, not three round trips per subscription ──
      This loop used to read the tenant, the tenant's ingest mailboxes and the customer
@@ -649,26 +659,33 @@ async function planOnly(
     if (Number.isNaN(asOf.getTime())) return { error: "`on` is not a real date" };
   }
 
-  const { data: allSubs } = await supabase
+  /* WC-scale: the dry run read EVERY subscription (any status) in one select and filtered
+     in JS — past 1000 rows it planned for whichever thousand came back. Filtered in SQL and
+     paged now, and the look-ups read 200 ids a request. */
+  const eligible = (await fetchAllRows((from, to) => supabase
     .from("subscriptions")
-    .select("id, tenant_id, customer_id, customer_name, renewal_date, status, renewal_state, auto_renew, term_months");
-  const subs = allSubs ?? [];
-
-  const eligible = subs.filter(
+    .select("id, tenant_id, customer_id, customer_name, renewal_date, status, renewal_state, auto_renew, term_months")
+    .eq("status", "active")
+    .eq("auto_renew", true)
+    .not("renewal_date", "is", null)
+    .order("id", { ascending: true })
+    .range(from, to))).filter(
     (s) => s.status === "active" && s.auto_renew === true && s.renewal_date,
   );
 
-  const { data: tenants } = await supabase.from("tenants").select("id, grace_period_days");
-  const graceByTenant = new Map((tenants ?? []).map((t) => [t.id, t.grace_period_days ?? 0]));
+  /* "Seen" meant every subscription, any status — a count, not a download. */
+  const { count: subsSeen } = await supabase.from("subscriptions").select("id", { count: "exact", head: true });
+
+  const tenants = await fetchAllRowsIn(eligible.map((s) => s.tenant_id), (ids, from, to) => supabase
+    .from("tenants").select("id, grace_period_days").in("id", ids).order("id", { ascending: true }).range(from, to));
+  const graceByTenant = new Map(tenants.map((t) => [t.id, t.grace_period_days ?? 0]));
 
   // One fetch for every customer involved, rather than per-subscription — a dry
   // run should be cheap enough that nobody hesitates to use it.
-  const customerIds = [...new Set(eligible.map((s) => s.customer_id).filter(Boolean))] as string[];
-  const { data: customers } = customerIds.length
-    ? await supabase.from("customers").select("id, contact_email").in("id", customerIds)
-    : { data: [] };
+  const customers = await fetchAllRowsIn(eligible.map((s) => s.customer_id), (ids, from, to) => supabase
+    .from("customers").select("id, contact_email").in("id", ids).order("id", { ascending: true }).range(from, to));
   const emailByCustomer = new Map(
-    (customers ?? []).map((c) => [c.id, (c as { contact_email?: string | null }).contact_email ?? null]),
+    customers.map((c) => [c.id, (c as { contact_email?: string | null }).contact_email ?? null]),
   );
 
   const actions: PlannedAction[] = [];
@@ -731,7 +748,7 @@ async function planOnly(
     dry_run:            true,
     evaluated_for:      toIstDate(asOf),
     email_mode:         isEmailConfigured() ? "real" : "stub",
-    subscriptions_seen: subs.length,
+    subscriptions_seen: subsSeen ?? eligible.length,
     eligible:           eligible.length,
     would_email:        actions.filter((a) => a.action === "email").length,
     would_suspend:      actions.filter((a) => a.action === "suspend").length,

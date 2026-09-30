@@ -31,6 +31,7 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows, fetchAllRowsIn, errorMessage } from "@/lib/ops/fetch-all";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { istNow, decideAttendanceReminder } from "@/lib/attendance/reminders";
 import { isWorkingDay, SIX_DAY_WEEK_SUNDAY_OFF } from "@/lib/attendance/working-day";
@@ -67,28 +68,40 @@ async function handle(req: Request) {
   /* Only people who could actually act on it: reminders on, and linked to an employee
      record. Nagging a login that cannot punch is how a reminder becomes something people
      close without reading. */
-  const { data: users, error: usersErr } = await admin
-    .from("users")
-    .select("id, tenant_id, full_name, employee_id, attendance_reminders_enabled, attendance_checkout_reminder_at")
-    .eq("attendance_reminders_enabled", true)
-    .not("employee_id", "is", null);
-
-  if (usersErr) {
-    return NextResponse.json({ error: `could not read users: ${usersErr.message}` }, { status: 500 });
+  /* WC-scale: paged (lib/ops/fetch-all.ts). One select stopped at PostgREST's 1000-row cap
+     — across every tenant, user 1001 was never reminded. */
+  let users: { id: string; tenant_id: string; full_name: string | null; employee_id: string | null; attendance_reminders_enabled: boolean | null; attendance_checkout_reminder_at: string | null }[];
+  try {
+    users = await fetchAllRows((from, to) => admin
+      .from("users")
+      .select("id, tenant_id, full_name, employee_id, attendance_reminders_enabled, attendance_checkout_reminder_at")
+      .eq("attendance_reminders_enabled", true)
+      .not("employee_id", "is", null)
+      .order("id", { ascending: true })
+      .range(from, to));
+  } catch (e) {
+    return NextResponse.json({ error: `could not read users: ${errorMessage(e)}` }, { status: 500 });
   }
 
-  const employeeIds = (users ?? []).map((u) => u.employee_id).filter((x): x is string => Boolean(x));
+  const employeeIds = users.map((u) => u.employee_id).filter((x): x is string => Boolean(x));
   /* One query for the whole tenant's day rather than one per person: this runs every
-     half hour and a per-user round trip would be the slow kind of correct. */
-  const { data: today } = employeeIds.length
-    ? await admin
-        .from("attendance")
-        .select("employee_id, check_in, check_out")
-        .eq("work_date", now.date)
-        .in("employee_id", employeeIds)
-    : { data: [] as { employee_id: string; check_in: string | null; check_out: string | null }[] };
+     half hour and a per-user round trip would be the slow kind of correct. 200 ids a
+     request so the url stays bounded. A failed read is loud now — read as "nobody checked
+     in", it would have nagged everybody who had. */
+  let today: { employee_id: string; check_in: string | null; check_out: string | null }[];
+  try {
+    today = await fetchAllRowsIn(employeeIds, (ids, from, to) => admin
+      .from("attendance")
+      .select("employee_id, check_in, check_out")
+      .eq("work_date", now.date)
+      .in("employee_id", ids)
+      .order("id", { ascending: true })
+      .range(from, to));
+  } catch (e) {
+    return NextResponse.json({ error: `could not read attendance: ${errorMessage(e)}` }, { status: 500 });
+  }
 
-  const byEmployee = new Map((today ?? []).map((r) => [r.employee_id, r]));
+  const byEmployee = new Map(today.map((r) => [r.employee_id, r]));
 
   /* ── Is anybody due a check-in today at all? ──────────────────────────────
      Reported 23 Aug 2026, a Sunday: nothing in this path knew what a working day was, so
@@ -104,14 +117,14 @@ async function handle(req: Request) {
      Scheduler hit must cover all of them — so a single working-day answer would apply one
      company's holiday calendar to another company's staff. One query for every tenant's
      holidays today, then a lookup per person. */
-  const tenantIds = [...new Set((users ?? []).map((u) => u.tenant_id).filter(Boolean))];
-  const { data: holidayRows } = tenantIds.length
-    ? await admin
-        .from("holidays")
-        .select("tenant_id, holiday_date")
-        .in("tenant_id", tenantIds)
-        .eq("holiday_date", now.date)
-    : { data: [] as { tenant_id: string; holiday_date: string }[] };
+  const tenantIds = [...new Set(users.map((u) => u.tenant_id).filter(Boolean))];
+  const holidayRows = await fetchAllRowsIn(tenantIds, (ids, from, to) => admin
+    .from("holidays")
+    .select("tenant_id, holiday_date")
+    .in("tenant_id", ids)
+    .eq("holiday_date", now.date)
+    .order("id", { ascending: true })
+    .range(from, to)).catch(() => [] as { tenant_id: string; holiday_date: string }[]);
 
   const holidaysByTenant = new Map<string, string[]>();
   for (const h of (holidayRows ?? []) as { tenant_id: string; holiday_date: string }[]) {
@@ -131,7 +144,7 @@ async function handle(req: Request) {
   const due: Due[] = [];
   const skipped: { userId: string; reason: string }[] = [];
 
-  for (const u of users ?? []) {
+  for (const u of users) {
     const row = u.employee_id ? byEmployee.get(u.employee_id) : undefined;
     const decision = decideAttendanceReminder({
       now,
@@ -157,18 +170,20 @@ async function handle(req: Request) {
        1, this output invited exactly the wrong conclusion, which was noticed by running
        the two back to back. So the log is read here too, and the dry run splits the list
        the same way the live path does. */
-    const { data: alreadyRows } = await admin
+    const alreadyRows = await fetchAllRows((from, to) => admin
       .from("attendance_reminder_log")
       .select("user_id, kind")
-      .eq("work_date", now.date);
-    const alreadyKeys = new Set((alreadyRows ?? []).map((r) => `${r.user_id}:${r.kind}`));
+      .eq("work_date", now.date)
+      .order("id", { ascending: true })
+      .range(from, to)).catch(() => [] as { user_id: string; kind: string }[]);
+    const alreadyKeys = new Set(alreadyRows.map((r) => `${r.user_id}:${r.kind}`));
     const wouldPush = due.filter((d) => !alreadyKeys.has(`${d.userId}:${d.kind}`));
     const alreadyReminded = due.filter((d) => alreadyKeys.has(`${d.userId}:${d.kind}`));
 
     return NextResponse.json({
       dryRun: true,
       istNow: { date: now.date, minutes: now.minutes },
-      considered: (users ?? []).length,
+      considered: users.length,
       wouldPush,
       alreadyRemindedToday: alreadyReminded,
       skipped,
@@ -223,7 +238,7 @@ async function handle(req: Request) {
 
   return NextResponse.json(reportCron("attendance-reminders", {
     istDate: now.date,
-    considered: (users ?? []).length,
+    considered: users.length,
     due: due.length,
     pushed,
     alreadyRemindedToday: alreadyDone,

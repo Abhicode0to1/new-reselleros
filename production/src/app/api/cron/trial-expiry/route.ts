@@ -20,6 +20,7 @@
 import { reportCron } from "@/lib/ops/cron-report";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows, fetchAllRowsIn, errorMessage } from "@/lib/ops/fetch-all";
 import { sendEmail } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { resolveOwnerAlert, type TenantContact } from "@/lib/email/owner-alert";
@@ -78,16 +79,22 @@ async function handle(req: Request) {
   };
 
   // Pull trials past their expiry that haven't been marked yet
-  const { data: leads, error } = await admin
-    .from("leads")
-    .select("id, tenant_id, company, contact_name, contact_email, contact_phone, plan, domain, source, trial_expires_at, trial_started_at")
-    .eq("stage", "trial")
-    .is("trial_converted_at", null)
-    .is("trial_expired_at", null)
-    .lte("trial_expires_at", today.toISOString());
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  /* WC-scale: paged (lib/ops/fetch-all.ts) — every expired trial in one pass, not the first
+     1000 PostgREST hands back. All rows are read BEFORE any is stamped, so the stamping
+     cannot shift the pages. */
+  let leads: { id: string; tenant_id: string; company: string; contact_name: string | null; contact_email: string | null; contact_phone: string | null; plan: string | null; domain: string | null; source: string | null; trial_expires_at: string | null; trial_started_at: string | null }[];
+  try {
+    leads = await fetchAllRows((from, to) => admin
+      .from("leads")
+      .select("id, tenant_id, company, contact_name, contact_email, contact_phone, plan, domain, source, trial_expires_at, trial_started_at")
+      .eq("stage", "trial")
+      .is("trial_converted_at", null)
+      .is("trial_expired_at", null)
+      .lte("trial_expires_at", today.toISOString())
+      .order("id", { ascending: true })
+      .range(from, to));
+  } catch (e) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
 
   /* ── Whose trial is this? ──────────────────────────────────────────────────
@@ -100,10 +107,18 @@ async function handle(req: Request) {
   const tenantIds = [...new Set((leads ?? []).map((l) => l.tenant_id).filter(Boolean))];
   const tenantById = new Map<string, TenantContact>();
   if (tenantIds.length) {
-    const { data: tenantRows, error: tErr } = await admin
-      .from("tenants")
-      .select("id, name, email, phone, contact_name")
-      .in("id", tenantIds);
+    let tenantRows: { id: string; name: string; email: string | null; phone: string | null; contact_name: string | null }[] = [];
+    let tErr: { message: string } | null = null;
+    try {
+      tenantRows = await fetchAllRowsIn(tenantIds, (ids, from, to) => admin
+        .from("tenants")
+        .select("id, name, email, phone, contact_name")
+        .in("id", ids)
+        .order("id", { ascending: true })
+        .range(from, to));
+    } catch (e) {
+      tErr = { message: errorMessage(e) };
+    }
     if (tErr) {
       /* A failed lookup must not become a send to the wrong inbox (rule 5: no
          failsafe fallback). Refuse the whole run — the trials are unstamped, so
@@ -114,10 +129,10 @@ async function handle(req: Request) {
         { status: 500 },
       );
     }
-    for (const t of tenantRows ?? []) tenantById.set(t.id, t as TenantContact);
+    for (const t of tenantRows) tenantById.set(t.id, t as TenantContact);
   }
 
-  for (const lead of leads ?? []) {
+  for (const lead of leads) {
     try {
       // Stamp expiry
       const { error: updErr } = await admin
