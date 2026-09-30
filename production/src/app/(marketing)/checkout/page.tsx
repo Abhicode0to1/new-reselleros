@@ -412,7 +412,10 @@ export default function CheckoutPage() {
               <label style={{ display: "flex", gap: 10, alignItems: "flex-start", margin: "16px 0", cursor: "pointer" }}>
                 <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ marginTop: 3, accentColor: "var(--primary)" }} />
                 <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>
-                  I have read the terms of service and the refund policy, including that domain
+                  I have read the{" "}
+                  <a href="/terms-and-conditions" target="_blank" rel="noopener" style={{ color: "var(--primary)", fontWeight: 600 }}>terms and conditions</a>{" "}
+                  and the{" "}
+                  <a href="/refund" target="_blank" rel="noopener" style={{ color: "var(--primary)", fontWeight: 600 }}>refund policy</a>, including that domain
                   registrations are non-refundable once submitted to the registry.
                 </span>
               </label>
