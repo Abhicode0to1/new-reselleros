@@ -14,6 +14,7 @@
  * Like Gmail, SMTP reports no bounces: "sent" means the server accepted the message.
  */
 import nodemailer from "nodemailer";
+import { lookup } from "node:dns/promises";
 import type { EmailAttachment } from "./send";
 
 export interface SmtpConfig {
@@ -56,27 +57,53 @@ export type SmtpResult = { ok: true; messageId: string | null } | { ok: false; d
 
 type Transport = Pick<nodemailer.Transporter, "sendMail">;
 
-let cached: { key: string; transport: Transport } | null = null;
+let cached: { key: string; transport: Transport; at: number } | null = null;
+/** Re-resolve the SMTP host this often, so a moved server is followed. */
+const TRANSPORT_TTL_MS = 10 * 60 * 1000;
 
-function transportFor(cfg: SmtpConfig): Transport {
+/**
+ * Connect over IPv4, found 30 Sep 2026. nodemailer resolved smtp.gmail.com to an IPv6
+ * address first; this machine (and Cloud Run, which has no IPv6 egress by default) cannot
+ * reach it, so the first send of every server process hung for 21 s — the TCP connect
+ * timeout — before nodemailer fell back to IPv4. That was the 25-second "Starting your
+ * trial…" wait. The IPv4 address is resolved here and the TLS certificate is still checked
+ * against the real host name (`servername`). If the IPv4 lookup itself fails, the name is
+ * handed to nodemailer as before.
+ */
+export async function ipv4For(host: string, resolve = lookup): Promise<string | null> {
+  try {
+    const a = await resolve(host, { family: 4 });
+    return a.address;
+  } catch {
+    return null;
+  }
+}
+
+async function transportFor(cfg: SmtpConfig): Promise<Transport> {
   const key = `${cfg.host}:${cfg.port}:${cfg.user}`;
-  if (cached?.key === key) return cached.transport;
+  if (cached?.key === key && Date.now() - cached.at < TRANSPORT_TTL_MS) return cached.transport;
+  const ip = await ipv4For(cfg.host);
   const transport = nodemailer.createTransport({
-    host: cfg.host, port: cfg.port, secure: cfg.secure,
+    host: ip ?? cfg.host, port: cfg.port, secure: cfg.secure,
+    tls: { servername: cfg.host },
     auth: { user: cfg.user, pass: cfg.pass },
+    // SMTP_DEBUG=1 logs every step of the SMTP conversation with timestamps, for
+    // diagnosing a slow or failing send.
+    ...(process.env.SMTP_DEBUG === "1" ? { logger: true, debug: true } : {}),
   });
-  cached = { key, transport };
+  cached = { key, transport, at: Date.now() };
   return transport;
 }
 
 export async function sendViaSmtp(
   msg: SmtpMessage,
   cfg: SmtpConfig,
-  transport: Transport = transportFor(cfg),
+  transport?: Transport,
 ): Promise<SmtpResult> {
   const from = cfg.fromName ? `"${cfg.fromName}" <${cfg.fromEmail}>` : cfg.fromEmail;
   try {
-    const info = await transport.sendMail({
+    const t = transport ?? (await transportFor(cfg));
+    const info = await t.sendMail({
       from,
       to: msg.to,
       subject: msg.subject,

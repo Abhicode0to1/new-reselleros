@@ -69,3 +69,22 @@ describe("sendViaSmtp", () => {
     expect(r).toEqual({ ok: false, detail: "EAUTH: 535 5.7.8 Username and Password not accepted" });
   });
 });
+
+describe("ipv4For — connect over IPv4 (30 Sep 2026: the IPv6 attempt hung 21 s)", () => {
+  it("asks the resolver for an IPv4 address only", async () => {
+    const resolve = vi.fn().mockResolvedValue({ address: "192.178.158.108", family: 4 });
+    const { ipv4For } = await import("./smtp-transport");
+    expect(await ipv4For("smtp.gmail.com", resolve as never)).toBe("192.178.158.108");
+    expect(resolve).toHaveBeenCalledWith("smtp.gmail.com", { family: 4 });
+  });
+  it("a failed lookup falls back to the host name (null), never throws", async () => {
+    const { ipv4For } = await import("./smtp-transport");
+    expect(await ipv4For("x.invalid", (async () => { throw new Error("ENOTFOUND"); }) as never)).toBeNull();
+  });
+  it("the transport keeps the real host name for the TLS certificate check", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/lib/email/smtp-transport.ts", "utf8");
+    expect(src).toMatch(/host: ip \?\? cfg\.host/);
+    expect(src).toMatch(/tls: \{ servername: cfg\.host \}/);
+  });
+});
