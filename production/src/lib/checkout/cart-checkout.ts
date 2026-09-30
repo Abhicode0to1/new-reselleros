@@ -53,7 +53,7 @@ import { normalisePhone, splitName, type Registrant } from "@/lib/provisioning/d
 import { isTrialPlan, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 import { startHostingTrial } from "@/lib/hosting/start-trial";
 import { hostingLimitProblem } from "./hosting-limit";
-import { hostingDomain, BUY_A_DOMAIN_HREF } from "./hosting-domain";
+import { hostingDomain, planDomains, BUY_A_DOMAIN_HREF } from "./hosting-domain";
 import { hostingRate } from "./hosting-prices";
 
 export const BUY_PAGE_TENANT_ID =
@@ -68,6 +68,12 @@ const lineSchema = z.object({
   cycle: z.enum(["monthly", "yearly", "once"]).optional(),
   /** The full domain name, required on a `domain:<tld>` line — it is what gets registered. */
   domain: z.string().max(253).optional(),
+  /**
+   * Hosting lines only: the domain THIS plan is set up on (30 Sep 2026, one domain per plan).
+   * Its own field, never `domain`: provisioning reads a line's `domain` as a name to REGISTER.
+   * Absent on the first plan, the top-level `domain` is used, as before.
+   */
+  hostingDomain: z.string().max(253).optional(),
 });
 const cartSchema = z.object({
   fullName: z.string().min(2).max(120),
@@ -108,6 +114,13 @@ interface QuoteLine {
   registrant?: Registrant;
   /** Hosting lines only: the tier and the months paid for, read by the provisioning worker. */
   hostingPlan?: string;
+  /**
+   * Hosting lines only: the domain this plan's account is set up on (30 Sep 2026). With
+   * several plans in one order, each line says which domain is its own, so provisioning can
+   * queue one hosting request per line (board R-032). Deliberately not `domain`, which
+   * provisioning reads as a domain to register.
+   */
+  hostingDomain?: string;
   months?: 1 | 12;
   /**
    * Hosting lines only: how the plan renews. `record_payment` creates a subscription ONLY
@@ -345,6 +358,8 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
     const bundleEligible: QuoteLine[] = []; // domain + mailbox lines that go ₹0 with a yearly plan
     const domainPricing = await priceDomainLines(lines);
     const domainNames: string[] = [];
+    /* Each hosting line with what was typed for it, in cart order (one domain per plan). */
+    const hostingItems: { line: QuoteLine; typed: string | undefined }[] = [];
     for (const [idx, l] of lines.entries()) {
       const dp = domainPricing.get(idx);
       if (dp) {
@@ -357,7 +372,10 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       const r = repriceLine(l.sku, l.cycle, l.qty);
       if (!r) { unpriced.push(l.label || l.sku || "an item"); continue; }
       items.push(r.line);
-      if (r.kind === "hosting") { hasHosting = true; if (r.yearly) hasYearlyHosting = true; hostingTier = hostingTier ?? r.tier ?? null; }
+      if (r.kind === "hosting") {
+        hasHosting = true; if (r.yearly) hasYearlyHosting = true; hostingTier = hostingTier ?? r.tier ?? null;
+        hostingItems.push({ line: r.line, typed: l.hostingDomain ?? (hostingItems.length === 0 ? domain : undefined) });
+      }
       if (r.kind === "domain" || r.kind === "mailbox") bundleEligible.push(r.line);
     }
     // THE bundle rule, enforced server-side: the domain (and its mailbox) are ₹0
@@ -407,21 +425,30 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       for (const line of items) if (line.domain) line.registrant = registrant;
     }
 
-    // The hosting account is set up on the typed domain, or — when the customer is
-    // buying exactly one domain in the same cart and typed nothing — on that domain.
-    const typedDomain = (domain || "").trim() ? hostingDomain(domain) : "";
-    const cleanDomain = typedDomain || (hasHosting && domainNames.length === 1 ? domainNames[0] : "");
-    if (hasHosting && (typedDomain === null || !cleanDomain)) {
-      return NextResponse.json(
-        {
-          error:
-            "Please enter the domain your hosting should be set up on, like yourcompany.in. Nothing was charged. " +
-            "Don't have a domain yet? Add one to this order — it is free with yearly hosting.",
-          next: BUY_A_DOMAIN_HREF,
-          needDomain: true,
-        },
-        { status: 400 },
+    // Each hosting plan is set up on its own domain (30 Sep 2026): the one typed for it, or —
+    // with a single plan and nothing typed — the one domain being bought in the same cart.
+    // The same rule as the checkout form (planDomains in lib/checkout/hosting-domain.ts).
+    let cleanDomain = "";
+    if (hasHosting) {
+      const resolved = planDomains(
+        hostingItems.map((h) => ({ label: h.line.name.replace(/ \(billed .*\)$/, ""), typed: h.typed })),
+        domainNames,
       );
+      if (!resolved.ok) {
+        return NextResponse.json(
+          {
+            error:
+              `Please add ${resolved.problems.join("; ")}. Nothing was charged. ` +
+              "Don't have a domain yet? Add one to this order — it is free with yearly hosting.",
+            next: BUY_A_DOMAIN_HREF,
+            needDomain: true,
+          },
+          { status: 400 },
+        );
+      }
+      hostingItems.forEach((h, i) => { h.line.hostingDomain = resolved.domains[i]; });
+      // The quote's own domain stays the first plan's, so everything that reads it is unchanged.
+      cleanDomain = resolved.domains[0];
     }
 
     /* Coupon, exactly as the cart page shows it (cartTotals in site/lib/money):
@@ -501,7 +528,11 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       `DIRECT BUY (${panel ? "DMS panel" : "cart"}) · ${items.length} line(s) · ₹${amount.toLocaleString("en-IN")} incl 18% GST`,
       panel ? `Bought inside the DMS customer panel, DMS account ${panel.dmsUserId}` : null,
       discountRate ? `Coupon ${couponCode}: ${Math.round(discountRate * 100)}% off ₹${gross.toLocaleString("en-IN")}` : null,
-      hasHosting ? `Hosting domain: ${cleanDomain}` : null,
+      hasHosting
+        ? hostingItems.length > 1
+          ? `Hosting domains: ${hostingItems.map((h) => `${h.line.hostingDomain} (${h.line.hostingPlan})`).join(", ")}`
+          : `Hosting domain: ${cleanDomain}`
+        : null,
       domainNames.length ? `Domains to register: ${domainNames.join(", ")}` : null,
       gstin ? `GSTIN: ${gstin}` : null,
       ...items.map((i) => `  • ${i.name} × ${i.qty} @ ₹${i.rate}`),

@@ -68,3 +68,16 @@ describe("the payment picker", () => {
     expect(c).toMatch(/contact: razorpayContact\(phone\)/);
   });
 });
+
+describe("the several-plans switch", () => {
+  it("stays OFF until provisioning queues one request per hosting line (board R-032)", async () => {
+    const { SEVERAL_HOSTING_PLANS_READY } = await import("./hosting-limit");
+    expect(SEVERAL_HOSTING_PLANS_READY).toBe(false);
+  });
+  it("on: two plans pass, a quantity above one is still refused", () => {
+    const two = [{ sku: "hosting:starter", qty: 1 }, { sku: "hosting:plus", qty: 1 }];
+    expect(hostingLimitProblem(two, true)).toBeNull();
+    expect(hostingLimitWarning(two, true)).toBeNull();
+    expect(hostingLimitProblem([{ sku: "hosting:starter", qty: 2 }], true)).toMatch(/add the plan once for each website/);
+  });
+});

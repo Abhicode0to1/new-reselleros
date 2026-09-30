@@ -13,7 +13,7 @@
  * (lib/checkout/hosting-domain.ts).
  * These rules must stay in step with `cartSchema` in lib/checkout/cart-checkout.ts.
  */
-import { hostingDomain } from "@/lib/checkout/hosting-domain";
+import { planDomains, type PlanDomainInput } from "@/lib/checkout/hosting-domain";
 
 export interface CheckoutDetails {
   name: string;
@@ -22,6 +22,11 @@ export interface CheckoutDetails {
   domain: string;
   /** Paid hosting or a hosting trial is in the cart, so a domain is needed. */
   hasHosting: boolean;
+  /**
+   * With more than one hosting plan: each plan and the domain typed for it, in cart order
+   * (30 Sep 2026, one domain per plan). Left out, the single `domain` above is the one plan's.
+   */
+  plans?: PlanDomainInput[];
   hasDomain: boolean;
   address: { line1: string; city: string; state: string; pin: string };
 }
@@ -31,10 +36,10 @@ export function missingCheckoutDetails(d: CheckoutDetails): string[] {
   if (d.name.trim().length < 2) missing.push("your name");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) missing.push("a valid email address");
   if (d.phone.replace(/\D/g, "").length < 10) missing.push("your mobile number (10 digits)");
-  if (d.hasHosting && !hostingDomain(d.domain)) {
-    missing.push(d.domain.trim()
-      ? "a valid domain for your hosting (like yourcompany.in)"
-      : "the domain for your hosting (like yourcompany.in)");
+  if (d.hasHosting) {
+    // The same rule the server applies (planDomains): a real domain for every plan, none shared.
+    const r = planDomains(d.plans && d.plans.length ? d.plans : [{ label: "hosting", typed: d.domain }]);
+    if (!r.ok) missing.push(...r.problems);
   }
   if (d.hasDomain) {
     const a = d.address;

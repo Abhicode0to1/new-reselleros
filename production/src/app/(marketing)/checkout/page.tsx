@@ -70,6 +70,9 @@ export default function CheckoutPage() {
   const [gstin, setGstin] = useState("");
   const [phone, setPhone] = useState("");
   const [domain, setDomain] = useState("");
+  /* The domain for each hosting plan after the first, by cart line (30 Sep 2026: one domain
+     per plan). The first plan keeps using `domain`, so a one-plan cart is exactly as before. */
+  const [planDomain, setPlanDomain] = useState<Record<string, string>>({});
   // Registrant address — asked only when the cart holds a domain (owner decision 22).
   const [addrLine1, setAddrLine1] = useState("");
   const [addrCity, setAddrCity] = useState("");
@@ -94,6 +97,10 @@ export default function CheckoutPage() {
   } | null>(null);
 
   const hasHosting = cart.lines.some((l) => (l.sku || "").startsWith("hosting:"));
+  /* Paid hosting plans in cart order. Each is its own account on its own domain. */
+  const hostingLines = cart.lines.filter((l) => (l.sku || "").startsWith("hosting:"));
+  const typedFor = (key: string, i: number) => (i === 0 ? domain : planDomain[key] ?? "");
+  const plans = hostingLines.length > 1 ? hostingLines.map((l, i) => ({ label: l.label, typed: typedFor(l.key, i) })) : undefined;
   const hasDomain = cart.lines.some((l) => (l.sku || "").startsWith("domain:"));
   /* A free hosting trial (24 Sep 2026: "Start free trial" goes straight to the cart,
      no form in between). It checks out on its own, with no payment step: the
@@ -114,6 +121,7 @@ export default function CheckoutPage() {
       if (typeof s.gstin === "string") setGstin(s.gstin);
       if (typeof s.phone === "string") setPhone(s.phone);
       if (typeof s.domain === "string") setDomain(s.domain);
+      if (s.planDomain && typeof s.planDomain === "object") setPlanDomain(s.planDomain as Record<string, string>);
       if (typeof s.addrLine1 === "string") setAddrLine1(s.addrLine1);
       if (typeof s.addrCity === "string") setAddrCity(s.addrCity);
       if (typeof s.addrState === "string") setAddrState(s.addrState);
@@ -128,9 +136,9 @@ export default function CheckoutPage() {
   }, [hasHosting, cartDomain]);
   useEffect(() => {
     try {
-      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain, addrLine1, addrCity, addrState, addrPin }));
+      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain, planDomain, addrLine1, addrCity, addrState, addrPin }));
     } catch { /* ignore */ }
-  }, [name, company, email, gstin, phone, domain, addrLine1, addrCity, addrState, addrPin]);
+  }, [name, company, email, gstin, phone, domain, planDomain, addrLine1, addrCity, addrState, addrPin]);
 
   if (cart.lines.length === 0) {
     return (
@@ -147,7 +155,7 @@ export default function CheckoutPage() {
      The buttons are never silently disabled for missing details any more — pressing one
      says what is still needed (lib/checkout-details). */
   const missing = missingCheckoutDetails({
-    name, email, phone, domain, hasHosting: hasHosting || hasTrial, hasDomain,
+    name, email, phone, domain, plans, hasHosting: hasHosting || hasTrial, hasDomain,
     address: { line1: addrLine1, city: addrCity, state: addrState, pin: addrPin },
   });
   const missingMsg = missingDetailsMessage(missing);
@@ -217,7 +225,10 @@ export default function CheckoutPage() {
           phone: phone.trim(),
           gstin: gstin.trim() || undefined,
           domain: hasHosting ? domain.trim() : undefined,
-          lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain })),
+          lines: cart.lines.map((l) => {
+            const i = hostingLines.findIndex((h) => h.key === l.key);
+            return { sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain, ...(i >= 0 ? { hostingDomain: typedFor(l.key, i).trim() || undefined } : {}) };
+          }),
           coupon: cart.coupon.trim() || undefined,
           address: hasDomain
             ? { line1: addrLine1.trim(), city: addrCity.trim(), state: addrState.trim(), zipcode: addrPin.trim(), country: "IN" }
@@ -322,7 +333,20 @@ export default function CheckoutPage() {
               <Field label="MOBILE" value={phone} onChange={setPhone} type="tel" />
               {(hasHosting || hasTrial) && (
                 <>
-                  <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
+                  {hostingLines.length > 1 ? (
+                    /* One box per plan: two plans cannot share a domain (planDomains says so). */
+                    hostingLines.map((l, i) => (
+                      <Field
+                        key={l.key}
+                        label={`DOMAIN FOR ${l.label.toUpperCase()} (e.g. yourcompany.in)`}
+                        value={typedFor(l.key, i)}
+                        onChange={(v) => (i === 0 ? setDomain(v) : setPlanDomain((m) => ({ ...m, [l.key]: v })))}
+                        mono
+                      />
+                    ))
+                  ) : (
+                    <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
+                  )}
                   {/* Required for hosting and the trial alike (owner, 30 Sep 2026), so a buyer
                       without one is shown where to get one rather than left stuck. */}
                   {!cartDomain && (
