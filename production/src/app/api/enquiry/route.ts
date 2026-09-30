@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   const fail = () =>
     NextResponse.json(
-      { ok: false, error: "Could not record the enquiry right now. WhatsApp us and we will price it by hand." },
+      { ok: false, error: "We could not record your request just now, so nothing was saved. Please try again in a moment." },
       { status: 502 },
     );
 
@@ -110,10 +110,10 @@ export async function POST(req: NextRequest) {
         console.error("[enquiry-proxy] workspace upstream refused:", res.status, await res.text().catch(() => ""));
         return fail();
       }
-      const data = (await res.json()) as { success?: boolean; draftQuoteId?: string | null; autoSent?: boolean };
+      const data = (await res.json()) as { success?: boolean; draftQuoteId?: string | null; autoSent?: boolean; ackSent?: boolean };
       /* draftQuoteId can be null (doc-number retries exhausted) — the lead still exists
          and the operator was alerted, so that is a success with no number to show. */
-      return NextResponse.json({ ok: true, quoteId: data.draftQuoteId ?? null, sent: data.autoSent === true });
+      return NextResponse.json({ ok: true, quoteId: data.draftQuoteId ?? null, sent: data.autoSent === true, ackSent: data.ackSent === true });
     }
 
     /* ── GENERAL PATH: everything else ────────────────────────────────────── */
@@ -126,7 +126,8 @@ export async function POST(req: NextRequest) {
       console.error("[enquiry-proxy] general upstream refused:", res.status, await res.text().catch(() => ""));
       return fail();
     }
-    return NextResponse.json({ ok: true, quoteId: null, sent: false });
+    const general = (await res.json().catch(() => ({}))) as { ackSent?: boolean };
+    return NextResponse.json({ ok: true, quoteId: null, sent: false, ackSent: general.ackSent === true });
   } catch (err) {
     console.error("[enquiry-proxy] upstream unreachable:", err);
     return fail();

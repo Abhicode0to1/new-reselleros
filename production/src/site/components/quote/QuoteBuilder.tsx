@@ -58,6 +58,12 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
   // submit / doc
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "done" | "failed">("idle");
   const [err, setErr] = useState("");
+  /* Did the requirement reach our team? The quote is shown either way (it is built here and
+     is valid to send by hand), but it must not look sent when it was not (30 Sep 2026: this
+     used to clear the error and show the quote as if the team had it). */
+  const [teamHasIt, setTeamHasIt] = useState<boolean | null>(null);
+  const [teamErr, setTeamErr] = useState("");
+  const [ackSent, setAckSent] = useState(false);
   const [quoteNo, setQuoteNo] = useState("");
   const [quoteAt, setQuoteAt] = useState<Date | null>(null);
   const [delivered, setDelivered] = useState<"email" | "wa" | "">("");
@@ -151,13 +157,15 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
           edition: primary?.name, term,
         }),
       });
-      const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!data.ok) throw new Error(data.error || "refused");
+      const data = (await res.json().catch(() => ({ ok: false }))) as { ok: boolean; error?: string; ackSent?: boolean };
+      if (!res.ok || !data.ok) throw new Error(data.error || "Our team did not receive it.");
+      setTeamHasIt(true); setTeamErr(""); setAckSent(data.ackSent === true);
       setQuoteNo(no); setQuoteAt(now); setSubmitState("done");
     } catch (e) {
-      // The quote is still valid to hand off manually even if the lead POST failed.
+      // The quote is still valid to hand off manually — shown, and marked NOT received.
+      setTeamHasIt(false);
+      setTeamErr(e instanceof Error ? e.message : "We could not reach our server.");
       setQuoteNo(no); setQuoteAt(now); setSubmitState("done");
-      setErr(e instanceof Error && e.message !== "refused" ? "" : "");
     }
   }
 
@@ -323,6 +331,24 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
             <p className="meta" style={{ marginTop: 8, textAlign: "center" }}>Sends the requirement to our sales system; you then send the quote by email or WhatsApp — one tap each.</p>
           </>
         ) : (
+          <>
+          {teamHasIt === false && (
+            <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+              Your quotation is below, but it did <b>not</b> reach our team ({teamErr}). Send it to us
+              with the email or WhatsApp button, or{" "}
+              <button type="button" onClick={() => { setSubmitState("idle"); setTeamHasIt(null); }} style={{ background: "none", border: "none", padding: 0, color: "#991B1B", fontWeight: 700, textDecoration: "underline", cursor: "pointer", font: "inherit" }}>
+                go back and try again
+              </button>.
+            </div>
+          )}
+          {teamHasIt === true && (
+            <div role="status" style={{ background: "#EEF7F0", border: "1px solid #B7DFC4", color: "#1E5C33", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+              Our team has your requirement.{" "}
+              {ackSent
+                ? <>We have emailed you a copy at <b>{email}</b> — check your inbox, and the spam folder if it is not there in a few minutes.</>
+                : <>We could not email you a copy, so we will call or WhatsApp you on <b>{phone}</b>.</>}
+            </div>
+          )}
           <div data-quote-doc>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 6 }}>
               <span style={{ fontSize: 16, fontWeight: 700 }}>{COMPANY.name}</span>
@@ -359,6 +385,7 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
               {delivered && <p className="meta" style={{ textAlign: "center", color: "var(--success)" }}>{delivered === "email" ? "Opened your email app with the quote." : "Opened WhatsApp with the quote."}</p>}
             </div>
           </div>
+          </>
         )}
       </div>
     </div>

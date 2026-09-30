@@ -338,7 +338,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await Promise.allSettled([
+    const settled = await Promise.allSettled([
       // ── EMAIL 1: owner alert ──────────────────────────────────────────
       owner.ok && sendEmail({
         to:      owner.to,
@@ -405,9 +405,10 @@ Just reply to this email if anything above is wrong, or if you'd like to add det
     : ""
 }`,
       }),
-    ]).then((results) => {
+    ]);
+    {
       const labels = ["owner alert", "customer acknowledgement"];
-      results.forEach((r, i) => {
+      settled.forEach((r, i) => {
         /* `owner.ok && sendEmail(...)` yields the literal `false` when unaddressed,
            so a settled value is not necessarily a send result. Checked before it is
            read as one — otherwise a skipped send reads as a successful send. */
@@ -417,11 +418,15 @@ Just reply to this email if anything above is wrong, or if you'd like to add det
           console.error(`[enquiry/workspace] ${labels[i]} failed:`, r.value.errorMessage);
         }
       });
-    });
+    }
+    /* Did the customer's copy really go? false when it was skipped (no owner address) or
+       failed — the form says "check your inbox" only when this is true (30 Sep 2026). */
+    const ack = settled[1];
+    const ackSent = ack.status === "fulfilled" && !!ack.value && ack.value.status === "sent";
 
     /* autoSent, taki website ka confirmation sach bole — "emailed with the PDF" sirf
        tab jab sach me gaya ho, warna "drafted, review ke baad". */
-    return NextResponse.json({ success: true, leadId, draftQuoteId, autoSent });
+    return NextResponse.json({ success: true, leadId, draftQuoteId, autoSent, ackSent });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[/api/public/enquiry/workspace] crashed:", message);

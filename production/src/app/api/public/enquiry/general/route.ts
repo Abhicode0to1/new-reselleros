@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     const ownerEmail = tenant?.email;
     const firstName  = fullName.split(" ")[0];
 
-    await Promise.allSettled([
+    const settled = await Promise.allSettled([
       // 1. Reseller alert
       ownerEmail
         ? sendEmail({
@@ -179,15 +179,18 @@ If it's urgent, just reply to this email.
 
 — Team${tenant?.name ? ` ${tenant.name}` : ""}`,
       }),
-    ]).then((results) => {
-      results.forEach((r, i) => {
-        if (r.status === "rejected") {
-          console.error(`[enquiry/general] email ${i === 0 ? "to owner" : "to customer"} failed:`, r.reason);
-        }
-      });
+    ]);
+    settled.forEach((r, i) => {
+      if (r.status === "rejected") {
+        console.error(`[enquiry/general] email ${i === 0 ? "to owner" : "to customer"} failed:`, r.reason);
+      }
     });
+    /* Did the customer's copy really go? Returned so the form can say "check your inbox"
+       only when it is true (30 Sep 2026). */
+    const ack = settled[1];
+    const ackSent = ack.status === "fulfilled" && ack.value.status === "sent";
 
-    return NextResponse.json({ success: true, leadId });
+    return NextResponse.json({ success: true, leadId, ackSent });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[/api/public/enquiry/general] crashed:", message);
