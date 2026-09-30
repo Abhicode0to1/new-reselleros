@@ -1,0 +1,99 @@
+# SQL regression tests — production/supabase/tests/*.test.sql against a throwaway database
+#
+# ─── WHY (WC-ci, 30 Sep 2026) ───────────────────────────────────────────────
+# These tests guard the money path (record_payment idempotency, immutable issued invoices,
+# serial numbers never reused) and tenant isolation. CLAUDE.md §25.2 said they were "not
+# in CI and not in the hook" — the only way they ran was somebody remembering to run
+# `npm run test:sql` by hand. Now every push / PR that touches the database folder runs
+# them against a local Supabase stack inside the runner. No secret, no production access.
+#
+# ─── HOW THE DATABASE IS BUILT (same as `npm run setup`) ─────────────────────
+# The schema comes from supabase/baseline.sql (a production snapshot, 15 Aug 2026), NOT
+# from `supabase start` running supabase/migrations/ on an empty database — those files
+# ALTER tables only the baseline creates, so the first one would fail (see
+# scripts/rebuild-db.mjs and supabase/migrations-archive/README.md). So:
+#   1. `supabase start` with the migrations folder moved aside  → empty Postgres + auth/storage
+#   2. scripts/rebuild-db.mjs --local                           → baseline + storage + seed
+#   3. every file in supabase/migrations/, in name order        → today's schema
+#   4. npm run test:sql:local                                   → the suite (canary first)
+# Step 4 uses `test:sql:local`, not plain `test:sql`: the plain script targets the LINKED
+# (remote) project, which a CI runner must never do.
+#
+# ─── BLOCKING ───────────────────────────────────────────────────────────────
+# A red test fails the run. To make it gate merges, add `sql-tests` as a required status
+# check in branch protection — but note the `paths` filter: a PR that does not touch the
+# database never runs this workflow, and GitHub then waits forever for a required check
+# that will not come. Either leave it non-required (it still shows red on the PR/commit)
+# or require it only on branches where every PR touches supabase/.
+name: SQL tests
+
+on:
+  push:
+    branches: [main, deploy, 'session/**', pardeep-sir, abhishek-pre-merge, pawan-api-system, hitesh-qa]
+    paths:
+      - "production/supabase/**"
+      - "production/scripts/test-sql.mjs"
+      - "production/scripts/rebuild-db.mjs"
+      - ".github/workflows/sql-tests.yml"
+  pull_request:
+    paths:
+      - "production/supabase/**"
+      - "production/scripts/test-sql.mjs"
+      - "production/scripts/rebuild-db.mjs"
+      - ".github/workflows/sql-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sql-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sql-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The scripts below use only Node built-ins + the `supabase` CLI + docker — no npm ci.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase (schema-less — migrations moved aside)
+        run: |
+          set -euo pipefail
+          mv supabase/migrations "$RUNNER_TEMP/migrations"
+          mkdir supabase/migrations
+          # Studio, edge runtime, analytics and image proxy are not needed for SQL tests.
+          supabase start -x studio,edge-runtime,logflare,vector,imgproxy
+          rmdir supabase/migrations
+          mv "$RUNNER_TEMP/migrations" supabase/migrations
+
+      - name: Load the production baseline (baseline.sql + storage + seed)
+        run: node scripts/rebuild-db.mjs --local
+
+      - name: Apply supabase/migrations/ in order
+        run: |
+          set -euo pipefail
+          DB="supabase_db_$(sed -n 's/^project_id *= *"\([^"]*\)".*/\1/p' supabase/config.toml)"
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "::group::$f"
+            docker exec -i "$DB" psql -v ON_ERROR_STOP=1 -q -U postgres -d postgres < "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Run the SQL test suite
+        run: npm run test:sql:local
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop --no-backup || true

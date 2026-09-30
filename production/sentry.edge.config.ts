@@ -7,7 +7,7 @@ import * as Sentry from "@sentry/nextjs";
 
 const DSN = process.env.SENTRY_DSN;
 
-if (DSN) {
+if (DSN && !Sentry.getClient()) {
   Sentry.init({
     dsn:              DSN,
     environment:      process.env.NODE_ENV,
