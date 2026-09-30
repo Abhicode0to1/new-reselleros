@@ -15,6 +15,7 @@
 
 import * as React from "react";
 import { useParams } from "next/navigation";
+import { BusyPanel } from "@/components/ui/busy-panel";
 
 import type { PublicQuestion, Grade } from "@/lib/assessments/grade";
 
@@ -240,6 +241,7 @@ export default function TakeAssessmentPage() {
       </ol>
 
       {err && <p className="text-[12px] text-rose mt-3">{err}</p>}
+      <BusyPanel active={submitting} title="Submitting your test" steps={["Saving your answers", "Scoring the test"]} />
       <button type="button" onClick={submit} disabled={submitting}
         className="mt-4 w-full rounded-md bg-amber text-paper font-medium py-2.5 text-sm hover:bg-amber/90 disabled:opacity-60">
         {submitting ? "Submitting…" : "Submit test"}

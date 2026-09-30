@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { QUOTE_PRODUCTS, QUOTE_CATEGORIES, QUOTE_TLDS, type QuoteProduct } from "@/site/lib/data/quote-catalog";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
+import { BusyPanel } from "@/components/ui/busy-panel";
 import type { MergedEdition } from "@/site/lib/live-catalog";
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -311,6 +312,11 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
               </div>
             )}
             {err && <p style={{ fontSize: 13, color: "var(--warning)", marginTop: 10 }}>{err}</p>}
+            <BusyPanel
+              active={submitState === "sending"}
+              title="Preparing your quotation"
+              steps={["Sending your requirement to our sales team", "Preparing the quotation with today's prices"]}
+            />
             <button onClick={generate} disabled={submitState === "sending"} className="btn btn-primary" style={{ width: "100%", marginTop: 14, opacity: submitState === "sending" ? 0.7 : 1 }}>
               {submitState === "sending" ? "Generating…" : "Generate quotation"}
             </button>

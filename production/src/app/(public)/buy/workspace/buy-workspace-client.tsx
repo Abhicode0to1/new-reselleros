@@ -28,6 +28,7 @@ import { Icon } from "@/components/ui/icon";
 import { GST_STATE_BY_CODE } from "@/lib/utils";
 import type { SitePromoRow, SitePromoBannerStyle } from "@/lib/supabase/database.types";
 import { thanksUrl } from "./thanks/thanks-url";
+import { BusyPanel } from "@/components/ui/busy-panel";
 import { COMPANY, WHATSAPP_NUMBER, WHATSAPP_READY, whatsappDisplay } from "@/site/lib/config";
 
 // ──────────────────────────────────────────────────────────────────────
@@ -2451,6 +2452,7 @@ function TrialDialog({
               <Input id="trial-message" placeholder="Migration from M365, urgent..." {...register("message")} />
             </FormField>
 
+            <BusyPanel active={isSubmitting} title="Starting your Google Workspace trial" steps={["Saving your trial request", "Letting our team know, so we can set it up"]} />
             <Button
               type="submit"
               variant="primary"
@@ -2581,6 +2583,7 @@ function EnquiryDialog({
               <Input id="message" placeholder="Migration from Microsoft 365, need help..." {...register("message")} />
             </FormField>
 
+            <BusyPanel active={isSubmitting} title="Sending your enquiry" steps={["Sending your details to our team", "Preparing a GST quote for you"]} />
             <Button
               type="submit"
               variant="primary"
@@ -3327,6 +3330,7 @@ function BuyNowDialog({
               </p>
             </FormField>
 
+            <BusyPanel active={isSubmitting} title="Preparing your secure payment" steps={["Re-checking the price on our server", "Creating your order", "Opening the Razorpay payment window"]} />
             <Button
               type="submit"
               variant="primary"

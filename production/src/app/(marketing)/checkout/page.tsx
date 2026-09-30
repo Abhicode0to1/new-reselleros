@@ -16,6 +16,7 @@ import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, cycleLabel } from "@/site/lib/money";
 import { missingCheckoutDetails, missingDetailsMessage } from "@/site/lib/checkout-details";
 import { BUY_A_DOMAIN_HREF } from "@/lib/checkout/hosting-domain";
+import { BusyPanel } from "@/components/ui/busy-panel";
 
 const METHODS = [
   { label: "UPI", note: "GPay, PhonePe, Paytm — instant" },
@@ -72,6 +73,9 @@ export default function CheckoutPage() {
   const [method, setMethod] = useState<string>("UPI");
   const [agreed, setAgreed] = useState(false);
   const [paying, setPaying] = useState(false);
+  /* True while the server prepares a PAID order, until Razorpay's own window opens — the
+     progress panel must not keep counting behind Razorpay (30 Sep 2026). */
+  const [preparingPayment, setPreparingPayment] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* Set once the buyer presses Continue / Start trial with something missing, so the list
      of what is missing shows from then on and shrinks as they type. */
@@ -178,6 +182,7 @@ export default function CheckoutPage() {
       router.push("/done" as never);
     } catch (err) {
       setError((err as Error).message);
+      setPreparingPayment(false);
       setPaying(false);
     }
   }
@@ -191,6 +196,7 @@ export default function CheckoutPage() {
     if (!agreed || paying) return;
     setPriceCheck(null);
     setPaying(true);
+    setPreparingPayment(true);
     setError(null);
     try {
       const res = await fetch("/api/public/checkout/cart", {
@@ -238,12 +244,14 @@ export default function CheckoutPage() {
       const shown = Math.round(t.payable);
       if (typeof order.totalRupees === "number" && Math.abs(order.totalRupees - shown) > 1) {
         setPriceCheck({ server: order.totalRupees, shown, order });
+        setPreparingPayment(false);
         setPaying(false);
         return;
       }
       await openPayment(order);
     } catch (err) {
       setError((err as Error).message);
+      setPreparingPayment(false);
       setPaying(false);
     }
   }
@@ -275,8 +283,10 @@ export default function CheckoutPage() {
         setPaying(false);
       });
       rzp.open();
+      setPreparingPayment(false); // Razorpay's window now shows its own progress
     } catch (err) {
       setError((err as Error).message);
+      setPreparingPayment(false);
       setPaying(false);
     }
   }
@@ -352,6 +362,15 @@ export default function CheckoutPage() {
               )}
               {isTrialCart ? (
                 <>
+                  <BusyPanel
+                    active={paying}
+                    title="Starting your free trial"
+                    steps={[
+                      "Saving your trial request",
+                      "Checking this is your first trial with us",
+                      "Emailing your confirmation link",
+                    ]}
+                  />
                   <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={paying || trialMixed} onClick={() => proceed(() => void startTrial())}>
                     {paying ? "Starting your trial…" : "Start my 15-day free trial"}
                   </button>
@@ -421,6 +440,16 @@ export default function CheckoutPage() {
                 </div>
               )}
 
+              <BusyPanel
+                active={preparingPayment}
+                title="Preparing your secure payment"
+                steps={[
+                  "Re-checking every price on our server",
+                  ...(hasDomain ? ["Checking the live price of your domain with the registry"] : []),
+                  "Creating your order",
+                  "Opening the Razorpay payment window",
+                ]}
+              />
               {/* Not disabled until the box is ticked: a press says why (29 Sep 2026). */}
               <button
                 className="btn"

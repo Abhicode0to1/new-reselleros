@@ -6,6 +6,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
+import { BusyPanel } from "@/components/ui/busy-panel";
 
 export function AcceptQuoteButton({ projectId, token }: { projectId: string; token: string }) {
   const [loading, setLoading] = React.useState(false);
@@ -33,6 +34,7 @@ export function AcceptQuoteButton({ projectId, token }: { projectId: string; tok
 
   return (
     <div>
+      <BusyPanel active={loading} title="Accepting your quotation" steps={["Recording your acceptance", "Updating the project"]} />
       <Button variant="primary" size="lg" icon="check" loading={loading} onClick={accept}>
         Accept quotation
       </Button>

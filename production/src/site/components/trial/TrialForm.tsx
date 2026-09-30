@@ -25,6 +25,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { LICENCE_EDITIONS, type LicenceEdition } from "@/site/lib/data/catalog";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
+import { BusyPanel } from "@/components/ui/busy-panel";
 import type { MergedEdition } from "@/site/lib/live-catalog";
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -380,6 +381,7 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
                 <button onClick={() => setCardInfo((s) => !s)} style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "9px 14px", borderRadius: 8, border: "1px solid #E4C98C", background: "#B7791F", color: "#fff", fontFamily: "inherit" }}>{cardLive ? "Verify card — ₹1, refunded" : "How the ₹1 link works"}</button>
                 {cardInfo && !cardLive && <p style={{ fontSize: 12.5, color: "#6B4A18", lineHeight: 1.5, margin: "10px 0 0" }}>Send the request and we WhatsApp you a secure ₹1 Razorpay link — the trial starts once you tap it, and the ₹1 is refunded the same day. No card details are entered on this page.</p>}
               </div>
+              <BusyPanel active={sending} title="Sending your trial request" steps={["Sending your details to our team", "Preparing your request reference"]} />
               <button onClick={submit} disabled={sending} className="btn btn-primary" style={{ width: "100%", marginTop: 16, opacity: sending ? 0.7 : 1 }}>
                 {sending ? "Requesting…" : cardLive ? (cardOk ? "Request the trial" : "Verify the card to continue") : "Request the trial — we send a ₹1 link"}
               </button>
@@ -432,6 +434,7 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
           <p className="meta" style={{ marginTop: 8 }}>If any of it does not work the way you need, tell us during the trial — that is what it is for.</p>
         </div>
 
+        <BusyPanel active={sending} title="Sending your trial request" steps={["Sending your details to our team", "Preparing your request reference"]} />
         <button onClick={submit} disabled={sending} className="btn btn-primary" style={{ width: "100%", marginTop: 14, opacity: sending ? 0.7 : 1 }}>
           {sending ? "Requesting…" : cardLive ? (cardOk ? "Request the trial" : "Verify the card to continue") : "Request the trial — we send a ₹1 link"}
         </button>
