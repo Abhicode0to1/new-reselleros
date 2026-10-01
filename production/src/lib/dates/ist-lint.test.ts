@@ -35,9 +35,14 @@ describe("naive-UTC-date lint rule scope", () => {
     const want = owners.areas.pardeep.paths.filter((p) => p.startsWith("production/src/")).map(glob);
     for (const w of want) expect(ov!.files).toContain(w);
   });
+  /* 1 Oct 2026: one builder owns "production/" as a prefix, so "owned" means some owner's path
+     is a prefix of the glob (longest prefix wins in OWNERS.json), not an exact match. */
   it("covers only paths some owner in OWNERS.json has", () => {
-    const all = Object.values(owners.areas).flatMap((a) => a.paths).filter((p) => p.startsWith("production/src/")).map(glob);
-    for (const f of ov!.files) expect(all).toContain(f);
+    const all = Object.values(owners.areas).flatMap((a) => a.paths);
+    for (const f of ov!.files) {
+      const path = `production/${f.replace(/\*\*$/, "")}`;
+      expect(all.some((o) => path.startsWith(o)), f).toBe(true);
+    }
   });
 
   it("touches no other owner's area (no sub-path of these is carved out for someone else)", () => {

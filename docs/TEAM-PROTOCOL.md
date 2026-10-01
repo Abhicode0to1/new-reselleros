@@ -30,25 +30,18 @@ person, or a fix on a page Hitesh reported (his retest still decides).
 Ownership of code is in [`OWNERS.json`](../OWNERS.json) (repo root). `node production/scripts/areas.mjs`
 tells you whose area a branch touched.
 
-## Team areas — split by customer journey, 1 Oct 2026 (R-074)
+## Team model — one builder, 1 Oct 2026
 
-Team agreed on 1 Oct 2026 (`OWNERS.json` is the truth). Each person owns one stretch of the customer's journey, so one change rarely needs another person:
+Pardeep decided on 1 Oct 2026: four people writing code in parallel made the work slow and confusing (merges, cross-area cards, waiting). Code is now written by AI, so the app is built from **one branch** and the others do what only they can do. `OWNERS.json` is the truth.
 
-```
-Lead → Deal → Quote sent/accepted   Subscription → Renewal → Provisioning   Invoice → Payment → GST → Books
-└──────── PARDEEP (Sell) ─────────┘ └──────── ABHISHEK (Customer) ───────┘ └─────── HITESH (Money) ───────┘
-            Website + login + checkout + portal = PAWAN      App shell + deploy + CI = ABHISHEK
-```
+| Who | Does | Writes app code? |
+|---|---|---|
+| **Pardeep + AI** | Builds the whole app on `manager-pardeep`: Sell, Customer, Money, app shell, crons, tests, docs | Yes — the only app branch |
+| **Hitesh** | Checks money numbers (GST, invoices, books) on localhost / test site, talks to the CA, writes what is wrong as a card | No |
+| **Abhishek** | Weekly deploy (migrations first, then app), Cloud Run / Supabase / GitHub logins, CI settings, backups | Only `cloudbuild.yaml`, `.github/` |
+| **Pawan** | Website: public & marketing pages, login/signup, checkout, customer portal, public API | Only the website paths |
 
-- **Pardeep — Sell:** leads, deals, enquiries, **quotes**, referrals, partners, Marketing & Advertising, dashboard, today, reports, attendance/HR, team docs, QA system (`production/e2e/`, `docs/qa/`).
-- **Hitesh — Money:** **invoices, payments**, GST, TDS, books, compliance, payroll, banking, expenses, purchases, vendor portal. Branch `accounts-hitesh`.
-- **Abhishek — Customer + Platform:** customers, subscriptions, renewals, projects delivery, provisioning, Razorpay, items/catalog; **app shell** (workspace tabs `lib/workspace`, layout, providers, `nav.ts`); deploy, CI, cron runner, backups, ops scripts; keeps the migration order.
-- **Pawan — Website:** public & marketing pages, login/signup, checkout, customer portal, `/api/public`, `/api/v1`, online orders.
-
-**Three rules so areas don't collide:**
-1. **Call, don't edit.** Need another area's behaviour? Use its function / RPC (e.g. Hitesh's "create invoice"); if it doesn't exist, card the owner. Never edit their file.
-2. **Shared files (migrations, `lib/queries`): add, don't rewrite.** New query file or new migration is fine; changing someone's existing query/table needs their card. Abhishek checks migration order before deploy.
-3. **A cron lives with its feature** (`app/api/cron/<name>/` is listed under the feature owner in `OWNERS.json`); Abhishek only runs the scheduler.
+**Board = 2 lists:** "🐞 Bug / idea" (anyone writes one line; Pardeep's AI picks it up) and "🔎 Ye check karo" (what the AI built that a person should check — e.g. GST numbers → Hitesh). Old branches (`billing-abhishek`, `accounts-hitesh`) were merged into `manager-pardeep` on 1 Oct and are no longer worked on.
 
 ## Testing — 30 Sep 2026
 

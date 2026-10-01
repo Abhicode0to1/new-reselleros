@@ -12,16 +12,15 @@ On the user's FIRST message of a new session (even just "hi"), before doing anyt
 4. Offer to start the TOP item of their "📋 Aaj ke kaam" right away ("R-0xx abhi karoon?") — one question, not a menu.
 5. Then answer their message / wait for what they want to do.
 
-## AI ↔ AI coordination (30 Sep 2026 — "AI AI milkar kaam fast ho, confusion kam")
+## Team model — one builder (1 Oct 2026, Pardeep)
 
-Four people each run their own Claude on their own branch. The board is how the AIs talk to each other, so the humans don't have to relay:
+App code is written ONLY on `manager-pardeep` (Pardeep + AI). Find your person's role in `docs/TEAM-PROTOCOL.md` → "Team model":
+- **Hitesh** — no code. Help him check money numbers (GST, invoices, books) on localhost / the test site and write each wrong thing as a board card for Pardeep (where, steps, expected, actual). Never commit app code.
+- **Abhishek** — deploy and server only (`cloudbuild.yaml`, `.github/`, logins, backups, weekly deploy: migrations first, then app). Any app code change → board card for Pardeep.
+- **Pawan** — website paths only (see `OWNERS.json`). Anything inside the app → board card for Pardeep. Merge `origin/manager-pardeep` at session start.
+- **Pardeep** — builds everything else; picks up every "🐞 Bug / idea" card.
 
-1. **Need something from another area?** Don't edit it and don't ask your human to pass a message — create an `R-` card for that owner on the board with where/why/fix/doneWhen, and (if it blocks you) a 📣 notice `{notice:true, to:[owner], tasks:[id]}`. Their AI picks it up at their next session start / night run.
-2. **Before a NEW migration:** `git fetch origin` and take a timestamp newer than the newest migration on ALL `origin/*` branches (not just yours) — two branches with interleaved timestamps is what blocked the 30 Sep deploy. Run `node production/scripts/migration-order-check.mjs --base origin/manager-pardeep` before pushing.
-3. **Merge `origin/manager-pardeep` into your branch at the start of every working session** (it carries the shared rules, OWNERS.json and fixes). Resolve, run the gate, push.
-4. **Finishing a card someone else asked for:** status `review` (never `done` — the asker closes it after the 🤖 AI check), commits + outcome on the card, and one line in `#general`. If you touched another person's file, add a `changes` doc naming them.
-
-If the ArtifactData tool is not available, say so in one line and continue with their message.
+Old `billing-abhishek` / `accounts-hitesh` work was merged into `manager-pardeep` on 1 Oct; don't continue on them. Before a NEW migration: timestamp newer than every migration on all `origin/*` branches, then `node production/scripts/migration-order-check.mjs --base origin/main`. The person who asked for a card closes it after the AI check.
 
 ## Branch names changed on 30 Sep 2026
 
