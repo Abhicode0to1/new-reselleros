@@ -48,7 +48,7 @@ import { FAB } from "@/components/ui/fab";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { DataTable, type DataTableColumn, type RowCtx } from "@/components/ui/data-table";
 import { BulkActionBar, BulkBarButton } from "@/components/ui/bulk-action-bar";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -62,12 +62,19 @@ import { getInvoiceWhatsAppUrl } from "@/lib/whatsapp";
 import { useWhatsAppSender } from "@/lib/hooks/useWhatsAppSender";
 import type { Invoice, Payment } from "@/lib/supabase/database.types";
 
-const INV_COL_ORDER = ["select", "invoice", "customer", "date", "due", "amount", "status", "action"];
-// Fluid percentage widths (sum = 100) so the table always fits the viewport —
-// no fixed-pixel widths, no horizontal scroll. table-fixed keeps them honest.
-const INV_COL_WIDTHS: Record<string, string> = {
-  select: "3%", invoice: "15%", customer: "19%", date: "10%", due: "10%", amount: "13%", status: "11%", action: "19%",
-};
+/* R-085: on the shared DataTable. Widths are fluid percentages (with the 3% checkbox
+   column they sum to 100) so the table always fits — no horizontal scroll. Clicking a
+   header with a sortValue sorts by it; status sorts by the same bucket the tabs use. */
+const BUCKET_ORDER: Record<string, number> = { overdue: 0, pending: 1, draft: 2, paid: 3, void: 4 };
+const INVOICE_COLUMNS: DataTableColumn<Invoice>[] = [
+  { id: "invoice",  header: "Invoice #", width: "15%", sortValue: (i) => i.id },
+  { id: "customer", header: "Customer",  width: "19%", sortValue: (i) => cleanDisplayName(i.customer_name) },
+  { id: "date",     header: "Date",      width: "10%", sortValue: (i) => i.invoice_date },
+  { id: "due",      header: "Due date",  width: "10%", sortValue: (i) => i.due_date },
+  { id: "amount",   header: "Amount",    width: "13%", align: "right", sortValue: (i) => i.amount },
+  { id: "status",   header: "Status",    width: "11%", sortValue: (i) => BUCKET_ORDER[invoiceBucket(i)] ?? 9 },
+  { id: "action",   header: "Action",    width: "19%", align: "right" },
+];
 
 function InvoicesPageInner() {
   const router       = useRouter();
@@ -257,19 +264,14 @@ function InvoicesPageInner() {
     ? Math.round(paidInvoices.reduce((s, i) => s + daysBetween(i.invoice_date, i.paid_date!), 0) / paidInvoices.length)
     : 0;
 
-  // Toggle selection
-  const toggleAll = () => {
-    if (selected.size === rows.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(rows.map((r) => r.id)));
-    }
-  };
-  const toggleOne = (id: string) => {
-    const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelected(next);
+  /* Saved views (R-085): the filters this page owns, as plain JSON. */
+  const viewState = { view, tab, dateRange, search };
+  const applyView = (v: Record<string, unknown>) => {
+    if (v.view === "all" || v.view === "subscription" || v.view === "project") setView(v.view);
+    if (typeof v.tab === "string") setTab(v.tab);
+    if (v.dateRange === "all" || v.dateRange === "this_month" || v.dateRange === "last_30" || v.dateRange === "this_quarter") setDateRange(v.dateRange);
+    setSearch(typeof v.search === "string" ? v.search : "");
+    setSelected(new Set());
   };
 
   return (
@@ -579,33 +581,8 @@ function InvoicesPageInner() {
 
       {/* Tabs, Date Range Filter & Search */}
       {!isLoading && invoices && invoices.length > 0 && (
-        <div className="mb-4 space-y-3">
+        <div className="mb-4">
           <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
-          <div className="flex justify-between items-center gap-3 flex-wrap">
-            <div className="text-xs text-ink-3">
-              Showing {rows.length} of {viewInvoices.length} invoice{viewInvoices.length === 1 ? "" : "s"}
-            </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <select
-                value={dateRange}
-                onChange={(e: any) => setDateRange(e.target.value)}
-                className="bg-paper border border-hairline rounded-md text-xs px-2.5 py-1.5 font-medium text-ink focus:outline-none focus:border-amber cursor-pointer"
-              >
-                <option value="all">All Time</option>
-                <option value="this_month">This Month</option>
-                <option value="last_30">Last 30 Days</option>
-                <option value="this_quarter">This Quarter</option>
-              </select>
-              <div className="w-full sm:w-64">
-                <Input
-                  prefix={<Icon name="search" size={14} />}
-                  placeholder="Invoice #, customer, status…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -704,79 +681,73 @@ function InvoicesPageInner() {
         />
       )}
 
-      {/* Filtered empty */}
-      {!isLoading && !error && invoices && invoices.length > 0 && rows.length === 0 && (
-        search.trim() ? (
-          <EmptyState
-            icon="search"
-            title="No invoices match"
-            body={`No results for "${search}". Try a different term.`}
-            action={<Button icon="x" onClick={() => setSearch("")}>Clear search</Button>}
-            compact
-          />
-        ) : (
-          <EmptyState
-            icon="receipt"
-            title={`No ${tab} invoices`}
-            body={tab === "overdue" ? "🎉 All clear! No overdue invoices." : `No invoices in "${tab}" status right now.`}
-            action={tab !== "all" ? <Button icon="x" onClick={() => setTab("all")}>Show all</Button> : undefined}
-            compact
-          />
-        )
-      )}
-
-      {/* Mobile & tablet card list — viewports < 1280px */}
-      {!isLoading && !error && rows.length > 0 && (
-        <ul className="xl:hidden space-y-2 mb-3">
-          {rows.map((inv) => (
-            <li key={inv.id}>
-              <MobileInvoiceCard
-                inv={inv}
-                isProject={projectInvoiceIds?.has(inv.id) ?? false}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Desktop table — large viewports >= 1280px */}
-      {!isLoading && !error && rows.length > 0 && (
-        <Card flush className="hidden xl:block">
-          <table className="w-full table-fixed">
-            <colgroup>
-              {INV_COL_ORDER.map((id) => <col key={id} style={{ width: INV_COL_WIDTHS[id] }} />)}
-            </colgroup>
-            <thead className="bg-paper-2 border-b border-hairline-strong">
-              <tr>
-                <th className="px-3 py-2.5">
-                  <Checkbox
-                    checked={selected.size === rows.length && rows.length > 0}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
-                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Invoice #</th>
-                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Customer</th>
-                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Date</th>
-                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Due date</th>
-                <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Amount</th>
-                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
-                <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((inv) => (
-                <InvoiceRow
-                  key={inv.id}
-                  inv={inv}
-                  checked={selected.has(inv.id)}
-                  onToggle={() => toggleOne(inv.id)}
-                  autoOpen={inv.id === openInvoiceId}
-                  isProject={projectInvoiceIds?.has(inv.id) ?? false}
+      {/* The list — shared DataTable (R-085): header sort, saved views, select on phone too.
+          Cards below 1280px (the row has eight columns), table above. */}
+      {!isLoading && !error && invoices && invoices.length > 0 && (
+        <DataTable
+          rows={rows}
+          columns={INVOICE_COLUMNS}
+          getRowId={(i) => i.id}
+          totalCount={viewInvoices.length}
+          noun="invoice"
+          selected={selected}
+          onSelectedChange={setSelected}
+          cardsBelow="xl"
+          views={{ storageKey: "invoices", current: viewState, apply: applyView }}
+          toolbar={
+            <>
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value as typeof dateRange)}
+                aria-label="Date range"
+                className="bg-paper border border-hairline rounded-md text-xs px-2.5 py-1.5 font-medium text-ink focus:outline-none focus:border-amber cursor-pointer"
+              >
+                <option value="all">All time</option>
+                <option value="this_month">This month</option>
+                <option value="last_30">Last 30 days</option>
+                <option value="this_quarter">This quarter</option>
+              </select>
+              <div className="w-full sm:w-64">
+                <Input
+                  prefix={<Icon name="search" size={14} />}
+                  placeholder="Invoice #, customer, status…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                 />
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </div>
+            </>
+          }
+          mobileCard={(inv) => (
+            <MobileInvoiceCard inv={inv} autoOpen={inv.id === openInvoiceId} />
+          )}
+          renderRow={(inv, ctx) => (
+            <InvoiceRow
+              inv={inv}
+              ctx={ctx}
+              autoOpen={inv.id === openInvoiceId}
+              isProject={projectInvoiceIds?.has(inv.id) ?? false}
+            />
+          )}
+          empty={
+            search.trim() ? (
+              <EmptyState
+                icon="search"
+                title="No invoices match"
+                body={`No results for "${search}". Try a different term.`}
+                action={<Button icon="x" onClick={() => setSearch("")}>Clear search</Button>}
+                compact
+              />
+            ) : (
+              <EmptyState
+                icon="receipt"
+                title={`No ${tab} invoices`}
+                body={tab === "overdue" ? "🎉 All clear! No overdue invoices." : `No invoices in "${tab}" status right now.`}
+                action={tab !== "all" ? <Button icon="x" onClick={() => setTab("all")}>Show all</Button> : undefined}
+                compact
+              />
+            )
+          }
+        />
       )}
 
       {/* Mobile primary — the header "New invoice" scrolls away on a phone. */}
@@ -815,8 +786,18 @@ function InvoicesPageInner() {
 // ============================================================
 // Mobile Invoice Card — phones only
 // ============================================================
-function MobileInvoiceCard({ inv }: { inv: Invoice; isProject?: boolean }) {
+function MobileInvoiceCard({ inv, autoOpen = false }: { inv: Invoice; autoOpen?: boolean }) {
   const [previewOpen, setPreviewOpen] = React.useState(false);
+  /* R-085: `?open=INV-…` used to open the dialog only from the desktop row, so below
+     1280px (most laptops, every phone) the shared link landed on the list and nothing
+     opened. Same once-only guard as InvoiceRow. */
+  const autoOpenFired = React.useRef(false);
+  React.useEffect(() => {
+    if (autoOpen && !autoOpenFired.current) {
+      autoOpenFired.current = true;
+      setPreviewOpen(true);
+    }
+  }, [autoOpen]);
 
   return (
     <>
@@ -834,14 +815,18 @@ function MobileInvoiceCard({ inv }: { inv: Invoice; isProject?: boolean }) {
           </div>
           <div className="text-right shrink-0">
             <p className="font-serif text-base tabular-nums text-ink">{rupee(inv.amount)}</p>
-            {inv.net_payable && inv.net_payable !== inv.amount && (
-              <p className="text-3xs text-ink-3 tabular-nums">Net: {rupee(inv.net_payable)}</p>
+            {/* Same rule as the desktop row. `net_payable && …` printed a bare "0" when
+                advances covered the whole invoice (net 0). */}
+            {inv.net_payable !== null && inv.net_payable < inv.amount && inv.status !== "paid" && (
+              <p className="text-3xs text-ink-3 tabular-nums">Net due {rupee(inv.net_payable)}</p>
             )}
           </div>
         </div>
         <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-hairline/60 text-xs">
           <span className="text-ink-3">
-            {inv.created_at ? formatDate(inv.created_at) : "—"}
+            {/* The invoice's own date (what the desktop row and the PDF show), not the
+                row's insert time. */}
+            {formatDate(inv.invoice_date)}
           </span>
           <div className="flex items-center gap-1.5">
             {/* Mobile card. Same derived bucket as the desktop row, or the phone and the
@@ -878,14 +863,13 @@ function MobileInvoiceCard({ inv }: { inv: Invoice; isProject?: boolean }) {
 // ============================================================
 function InvoiceRow({
   inv,
-  checked,
-  onToggle,
+  ctx,
   autoOpen = false,
   isProject = false,
 }: {
   inv: Invoice;
-  checked: boolean;
-  onToggle: () => void;
+  /** From DataTable — carries the selection checkbox cell. */
+  ctx: RowCtx;
   /** When true (set by `?open=INV-XX` deep link), opens the preview dialog
    *  immediately. Fires once via a ref guard so re-renders don't re-open. */
   autoOpen?: boolean;
@@ -924,9 +908,7 @@ function InvoiceRow({
       onClick={() => setPreviewOpen(true)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPreviewOpen(true); } }}
     >
-      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-        <Checkbox checked={checked} onCheckedChange={onToggle} />
-      </td>
+      {ctx.checkboxCell}
       {/* Full invoice number (mono) + type badge — never truncated. */}
       <td className="px-3 py-2.5 align-top">
         <div className="font-mono text-[12px] font-semibold text-ink break-all leading-snug">{inv.id}</div>
@@ -948,7 +930,7 @@ function InvoiceRow({
           <span className="font-serif text-[15px] font-semibold text-ink tabular-nums">{rupee(inv.amount)}</span>
           {/* Net payable when advances were adjusted at issue (CGST Rule 53).
               Clean single line; the advance breakdown rides in the tooltip. */}
-          {inv.net_payable !== null && inv.net_payable < inv.amount && (
+          {inv.net_payable !== null && inv.net_payable < inv.amount && inv.status !== "paid" && (
             <span
               className="text-3xs font-medium tabular-nums leading-tight text-ink-3 cursor-help"
               title={`Net payable ${rupee(inv.net_payable)} · advance adjusted ${rupee(inv.amount - inv.net_payable)}`}

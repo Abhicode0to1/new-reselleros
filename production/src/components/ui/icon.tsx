@@ -20,7 +20,7 @@ import {
   IndianRupee, ShoppingCart, Award, Database, Layers, PaintBucket,
   Rocket, HelpCircle, Ticket, BookOpen, Smile, TrendingUp, TrendingDown,
   Smartphone, Sun, Moon, Building2, Briefcase, SlidersHorizontal,
-  List, Grid3x3, Send,
+  List, Grid3x3, Send, ArrowUpDown, Bookmark,
   Eye, Bug, Wallet, Printer, Laptop, Camera, Menu, Circle, Image as ImageIcon,
   Mic, MicOff, Square, MapPin,
   type LucideIcon,
@@ -98,6 +98,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   paint: PaintBucket,
   sliders: SlidersHorizontal,
   list: List,
+  sort: ArrowUpDown,
+  bookmark: Bookmark,
   grid: Grid3x3,
   grip: GripVertical,
 
