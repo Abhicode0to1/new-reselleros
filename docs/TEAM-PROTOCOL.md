@@ -53,13 +53,13 @@ Pardeep (manager): "hum AI se custom software banate hain — 4 logon ka role si
 | **Abhishek** | Delivery & Support | Every release + after go-live | Logins to the client's server / domain / accounts, weekly deploy (**every Thursday 4 pm IST** for ResellerOS: backup → migrations in order → app → version check), live check, handover + training, support tickets, AMC; repo `cloudbuild.yaml`, `.github/` |
 
 ### One client project, seven steps
-1. **Lead → meeting (Pawan).** The AI turns the call notes into `REQUIREMENTS.md`, screen sketches and an estimate draft (`docs/project-template/`).
-2. **Scope + price (Pardeep + Hitesh).** Pardeep fixes scope, Hitesh the price and milestones; the AI writes the quote → Pawan gets it signed + advance (Hitesh invoices).
+1. **Lead → meeting (Pawan).** Pawan pastes the raw notes into `docs/meeting-notes/` (or the board form); the AI turns them into `REQUIREMENTS.md`, screen sketches and an `ESTIMATE.md` draft (`docs/project-template/`).
+2. **Scope + price (Pardeep + Hitesh).** Pardeep fixes scope, Hitesh the price and milestones; the AI writes the quote → Pawan gets it signed (`docs/signoff/M0-…`) + advance (Hitesh invoices).
 3. **Build (Pardeep + AI).** Code + tests on the project's one branch; the AI writes a daily progress note (also for the client). Pardeep checks on localhost daily.
-4. **Demo (Pawan).** At each milestone; changes go into `REQUIREMENTS.md` by the AI; new work = new price → Hitesh.
+4. **Demo (Pawan).** At each milestone (`DEMO-M#.md`); the client's written yes goes into `docs/signoff/` and the AI opens the invoice card for Hitesh; new asks become rows in `CHANGES.md` (Pardeep scope + Hitesh price + client yes before building).
 5. **Go live (Abhishek).** Deploy day: login + "yes"; the AI runs the steps; Abhishek checks live.
 6. **Handover (Abhishek + Hitesh).** Training, logins to the client (`HANDOVER.md`); final invoice + payment.
-7. **Support / AMC (Abhishek).** Tickets; the AI drafts the first reply and the bug card; Pardeep's AI fixes.
+7. **Support / AMC (Abhishek).** Tickets; the AI drafts the reply in `docs/support/T-nnn.md` and the bug card; Abhishek sends; Pardeep's AI fixes; AMC tickets beyond the agreed number → Hitesh prices them.
 
 ### Board — only this (all projects on one board)
 - Every card names its **project** ("ResellerOS", "Client X ERP"); a project filter at the top.
