@@ -25,6 +25,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LoadError } from "@/components/shared/load-error";
 import { useBankAccounts, type BankAccountRow } from "@/lib/queries/bank";
 import { rupee } from "@/lib/utils";
 import { AddBankAccountForm } from "@/components/features/banking/add-bank-account-form";
@@ -33,7 +34,7 @@ import { TransferDialog } from "@/components/features/banking/transfer-dialog";
 
 export default function BankingPage() {
   const router = useRouter();
-  const { data: accounts, isLoading } = useBankAccounts();
+  const { data: accounts, isLoading, isError, refetch } = useBankAccounts();
   const [addOpen, setAddOpen] = React.useState(false);
   const [editAccount, setEditAccount] = React.useState<BankAccountRow | null>(null);
   const [deleteAccount, setDeleteAccount] = React.useState<BankAccountRow | null>(null);
@@ -82,7 +83,7 @@ export default function BankingPage() {
       </div>
 
       {/* Summary strip */}
-      {!isLoading && accounts && accounts.length > 0 && (
+      {!isLoading && !isError && accounts && accounts.length > 0 && (
         <Card className="mb-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
@@ -113,6 +114,8 @@ export default function BankingPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
         </div>
+      ) : isError ? (
+        <LoadError what="Bank accounts" onRetry={() => refetch()} />
       ) : !accounts || accounts.length === 0 ? (
         <Card>
           <EmptyState

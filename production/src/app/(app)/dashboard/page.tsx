@@ -49,6 +49,7 @@ import { summarizeDealStrip } from "@/lib/deals/pipeline-summary";
 import { canSeeDeals } from "@/lib/deals/access";
 import { PendingJoinRequestsCard } from "@/components/features/team/pending-join-requests-card";
 import { Badge } from "@/components/ui/badge";
+import { LoadErrorBanner } from "@/components/shared/load-error";
 
 // ============================================================
 // Helpers
@@ -98,12 +99,22 @@ export default function DashboardPage() {
   // Real data
   /* WC-scale: server counts + the few rows each card lists, not useLeads() (every lead, cut
      at PostgREST's 1000 rows — past that every lead number here was the newest thousand's). */
-  const { data: leads }         = useLeadStageTotals();
-  const { data: dashLeads }     = useDashboardLeads();
-  const { data: customers }     = useCustomers();
-  const { data: quotes }        = useQuotes();
-  const { data: subscriptions } = useSubscriptions();
-  const { data: projRecv = {} } = useProjectReceivablesByCustomer();
+  const leadsQ = useLeadStageTotals();
+  const dashLeadsQ = useDashboardLeads();
+  const customersQ = useCustomers();
+  const quotesQ = useQuotes();
+  const subscriptionsQ = useSubscriptions();
+  const projRecvQ = useProjectReceivablesByCustomer();
+  const { data: leads } = leadsQ;
+  const { data: dashLeads } = dashLeadsQ;
+  const { data: customers } = customersQ;
+  const { data: quotes } = quotesQ;
+  const { data: subscriptions } = subscriptionsQ;
+  const { data: projRecv = {} } = projRecvQ;
+  /* S32: every money figure below falls back to [] — a failed query used to print ₹0
+     with no hint. One banner names it and retries just the failed ones. */
+  const moneyQueries = [leadsQ, dashLeadsQ, customersQ, quotesQ, subscriptionsQ, projRecvQ];
+  const failedQueries = moneyQueries.filter((q) => q.isError);
   const { data: tasksToday }    = useTasks("today");
   const { data: tasksOverdue }  = useTasks("overdue");
   const { data: currentUser }   = useCurrentUser();
@@ -582,6 +593,10 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {failedQueries.length > 0 && (
+        <LoadErrorBanner onRetry={() => failedQueries.forEach((q) => q.refetch())} />
+      )}
 
       {/* Deals — the pipeline's money at a glance, every tile links to /deals.
           Renders nothing for roles that cannot open /deals. */}

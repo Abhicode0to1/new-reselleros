@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LoadError } from "@/components/shared/load-error";
 import { FAB } from "@/components/ui/fab";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -60,14 +61,19 @@ export default function AssetsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
-        <KPI label="Asset value" value={rupee(assetValue)} />
-        <KPI label="EMI outstanding" value={rupee(outstanding)} tone="amber" />
-        <KPI label="Active" value={String(activeCount)} />
-      </div>
+      {/* A failed load must not print ₹0 tiles (S32). */}
+      {!q.isError && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
+          <KPI label="Asset value" value={rupee(assetValue)} />
+          <KPI label="EMI outstanding" value={rupee(outstanding)} tone="amber" />
+          <KPI label="Active" value={String(activeCount)} />
+        </div>
+      )}
 
       {q.isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+      ) : q.isError ? (
+        <LoadError what="Financed purchases" onRetry={() => q.refetch()} />
       ) : rows.length === 0 ? (
         <Card className="py-2">
           <EmptyState

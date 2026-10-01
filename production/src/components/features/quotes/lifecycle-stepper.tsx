@@ -53,7 +53,9 @@ export function LifecycleStepper({ steps, dead }: { steps: LifecycleStep[]; dead
               </div>
               <span
                 className={cn(
-                  "mt-1 truncate text-3xs font-semibold uppercase tracking-wider",
+                  /* max-w-full + tighter tracking on a phone: six uppercase labels in
+                     375px ran into each other ("PROVISIONEDINVOICED", S32). */
+                  "mt-1 max-w-full truncate text-3xs font-semibold uppercase tracking-tight sm:tracking-wider",
                   step.state === "done"    && "text-emerald",
                   step.state === "current" && "text-amber-ink",
                   step.state === "todo"    && "text-ink-3",

@@ -1059,7 +1059,29 @@ export default function QuoteDetailPage() {
 
       {/* Line items */}
       <Card title="Line items" sub={`${items.length} item${items.length === 1 ? "" : "s"}`} flush>
-        <table className="w-full">
+        {/* Phone (S32, 1 Oct 2026): this page opens from the WhatsApp link, so it is
+            read on a phone first. Five columns squeezed the item name to one word
+            per line; under md each line is a row of name + amount, qty × rate below. */}
+        <ul className="md:hidden divide-y divide-hairline">
+          {items.map((line) => {
+            const per = line.commitment ? (isAnnualTier(line.commitment) ? "/yr" : "/mo") : "";
+            return (
+              <li key={line.id} className="p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-sm font-medium min-w-0">{line.name}</div>
+                  <div className="text-sm font-medium tabular-nums whitespace-nowrap">
+                    {rupee(line.qty * line.rate)}<span className="text-ink-3 font-normal">{per}</span>
+                  </div>
+                </div>
+                <div className="text-xs text-ink-3 tabular-nums mt-0.5">
+                  {line.qty} × {rupee(line.rate)}{per}
+                  {line.commitment && (isAnnualTier(line.commitment) ? " · Annual commitment" : " · Monthly, flexible")}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <table className="w-full hidden md:table">
           <thead className="bg-paper-2 border-b border-hairline">
             <tr>
               <th className="text-left p-3 text-xs font-semibold text-ink-3 uppercase tracking-wider w-12">#</th>
@@ -1179,6 +1201,50 @@ export default function QuoteDetailPage() {
       {/* Payment history (installments) */}
       {paymentHistory && paymentHistory.length > 0 && (
         <Card title="Payment history" sub={`${paymentHistory.length} payment${paymentHistory.length === 1 ? "" : "s"} · ${rupee(totalReceivedSoFar)} of ${rupee(total)} received`}>
+          {/* Phone (S32): six columns pushed the page to 640px wide, so the whole
+              quote zoomed out. Under md each payment is one row. */}
+          <ul className="md:hidden -mx-1 divide-y divide-hairline">
+            {paymentHistory.map((p, idx) => (
+              <li key={p.id} className="px-1 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <span className="font-medium tabular-nums">{rupee(p.amount)}</span>{" "}
+                    <span className="text-ink-3 capitalize">· {p.method.replace("_", " ")}</span>
+                  </div>
+                  {p.status === "received" ? (
+                    <Badge kind="success" dot>received</Badge>
+                  ) : (
+                    <Badge kind="danger" dot>refunded</Badge>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-3 mt-0.5">
+                  <div className="text-xs text-ink-3 min-w-0 truncate">
+                    #{idx + 1} · {formatDate(p.received_at)}
+                    {p.reference ? <> · <span className="font-mono">{p.reference}</span></> : null}
+                  </div>
+                  {p.status === "received" && me && (
+                    <Button size="sm" variant="ghost" icon="file" onClick={() => setReceiptPayment(p)}>
+                      Receipt
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+            <li className="px-1 pt-2.5 flex items-baseline justify-between gap-3">
+              <span className="text-xs font-semibold text-ink-3 uppercase tracking-wider">Total received</span>
+              <span className="text-right">
+                <span className="font-serif text-lg tabular-nums text-emerald">{rupee(totalReceivedSoFar)}</span>
+                <span className="block text-xs text-ink-3">
+                  {totalReceivedSoFar >= total ? (
+                    <span className="text-emerald">✓ Fully paid</span>
+                  ) : (
+                    <>Remaining <b className="text-amber-ink">{rupee(total - totalReceivedSoFar)}</b></>
+                  )}
+                </span>
+              </span>
+            </li>
+          </ul>
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-paper-2 border-b border-hairline">
               <tr>
@@ -1243,6 +1309,7 @@ export default function QuoteDetailPage() {
               </tr>
             </tbody>
           </table>
+          </div>
         </Card>
       )}
 

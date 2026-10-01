@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
+import { LoadError } from "@/components/shared/load-error";
 import { useBankAccounts, useBankTransactions } from "@/lib/queries/bank";
 import { buildBrs, brsRows, type BrsLine } from "@/lib/banking/brs";
 import { downloadCSV } from "@/lib/csv";
@@ -24,14 +25,14 @@ function todayIso(): string {
 }
 
 export default function BrsPage() {
-  const { data: accounts, isLoading: accLoading } = useBankAccounts();
+  const { data: accounts, isLoading: accLoading, isError: accError, refetch: refetchAcc } = useBankAccounts();
   const bankAccounts = React.useMemo(() => (accounts ?? []).filter((a) => a.is_active && a.account_type !== "cash"), [accounts]);
   const [accountId, setAccountId] = React.useState("");
   const [asOf, setAsOf] = React.useState(todayIso());
   const [closing, setClosing] = React.useState("");
   React.useEffect(() => { if (!accountId && bankAccounts.length) setAccountId(bankAccounts[0].id); }, [bankAccounts, accountId]);
   const account = bankAccounts.find((a) => a.id === accountId) ?? null;
-  const { data: txns, isLoading: txLoading } = useBankTransactions(accountId || null);
+  const { data: txns, isLoading: txLoading, isError: txError, refetch: refetchTx } = useBankTransactions(accountId || null);
 
   const brs = React.useMemo(() => {
     if (!account) return null;
@@ -76,7 +77,7 @@ export default function BrsPage() {
             Har mahine ke end par ye <b>zero farq</b> par aana chahiye, phir books lock karo.
           </p>
         </div>
-        <Button variant="outline" size="sm" icon="download" onClick={exportCsv} disabled={!brs}>Export CSV (for CA)</Button>
+        <Button variant="outline" size="sm" icon="download" onClick={exportCsv} disabled={!brs || accError || txError}>Export CSV (for CA)</Button>
       </div>
 
       <Card className="mb-6 p-3 md:p-4">
@@ -100,6 +101,8 @@ export default function BrsPage() {
 
       {accLoading || txLoading ? (
         <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+      ) : accError || txError ? (
+        <LoadError what="Bank lines" onRetry={() => { refetchAcc(); if (accountId) refetchTx(); }} />
       ) : !account ? (
         <Card className="py-2"><EmptyState icon="rupee" title="Koi bank account nahi" body="Banking mein pehle account jodo aur statement import karo." /></Card>
       ) : brs ? (

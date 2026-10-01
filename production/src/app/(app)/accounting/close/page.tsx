@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadError } from "@/components/shared/load-error";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { useMonthClose, useSetManualCheck } from "@/lib/queries/month-close";
 import { useUpdateTenant } from "@/lib/queries/tenant";
@@ -39,7 +40,7 @@ const TONE: Record<CloseStep["status"], { icon: "check" | "alert" | "x" | "clock
 
 export default function MonthClosePage() {
   const [period, setPeriod] = React.useState(prevPeriod());
-  const { data, isLoading } = useMonthClose(period);
+  const { data, isLoading, isError, refetch } = useMonthClose(period);
   const tick = useSetManualCheck();
   const update = useUpdateTenant();
   const confirm = useConfirm();
@@ -79,7 +80,10 @@ export default function MonthClosePage() {
         </div>
       </div>
 
-      {isLoading || !close || !data ? (
+      {/* Before S32 a failed load stayed a skeleton forever. */}
+      {isError ? (
+        <LoadError what="Month-end checklist" onRetry={() => refetch()} />
+      ) : isLoading || !close || !data ? (
         <div className="space-y-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
       ) : (
         <>
