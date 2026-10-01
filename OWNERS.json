@@ -1,5 +1,6 @@
 {
-  "$comment": "Who edits which code. Read by production/scripts/areas.mjs and every Claude session. Longest matching prefix wins. 1 Oct 2026 (Pardeep): app code is written from ONE branch (manager-pardeep) by Pardeep + AI so nothing collides; Pawan keeps the website paths; Abhishek deploy/CI; Hitesh checks money numbers and writes no code. Need a change elsewhere? Card for Pardeep on the board.",
+  "$comment": "1 Oct 2026 trial (one week, Pardeep): work is split by CARD from one priority queue, not by area. Anyone may change any file; each person builds one small card end to end and merges it into manager-pardeep the same day. areas below = who knows a part best (ask them), not a boundary. scripts/areas.mjs exits 0 in queue mode.",
+  "mode": "queue",
   "board": "https://claude.ai/artifact/2E442MT5zCLxm2oE1Lipos",
   "areas": {
     "pardeep": {

@@ -67,11 +67,20 @@ Pardeep (manager): "hum AI se custom software banate hain — 4 logon ka role si
 - One line **"🤖 AI kar raha hai"**, one line **"⏳ Deploy din"**.
 - The form on top: **"🐞 Bug / idea / client ki baat"** — one line; the AI turns it into a card.
 
-### Code rule (no collisions)
-- Every client project has its **own repo with one working branch**, written by Pardeep's AI. Nobody else writes app code.
-- The company website is Pawan's (separate paths / repo), built with his own AI.
-- One fixed deploy day a week per project.
-- Old branches (`billing-abhishek`, `accounts-hitesh`) were merged into `manager-pardeep` on 1 Oct and are no longer worked on.
+### How we build ResellerOS — one queue (trial 1–8 Oct 2026)
+
+ResellerOS is too big for one builder, and splitting it by area (30 Sep) made people wait on each other. So for one week we split the work by **card**, not by area:
+
+1. **One list, "📋 Agla kaam".** Pardeep (owner) orders it every morning (`rank` on the card: 1 = next).
+2. **One card at a time per person.** Your AI takes the top unclaimed card (sets `claimedBy` = you, `status` = doing, `claimedAt`), and you build it **end to end** — any file it needs, Leads or Invoices or Website. Nobody asks anyone for code.
+3. **Cards are small — one day or less.** A bigger card is first split by the AI into small cards (same `rank` range).
+4. **Merged the same day.** Work on a short branch `<name>/<card>` from `origin/manager-pardeep`; when the gate is green, rebase on `origin/manager-pardeep`, run the gate again, merge into `manager-pardeep` and push (retry the rebase if someone pushed first). No branch lives past one day.
+5. **No two cards on the same files at once.** Each card lists the folders it will touch (`files`); the AI does not take a card whose `files` overlap a card someone else is doing — it takes the next one.
+6. **Done = verified.** Tests + gate green, and you opened it on localhost and checked it like the business owner. Then `status` = review with what you checked; Pardeep looks for 5 minutes and closes it.
+
+What stays with people (not the queue): Pardeep — owner decisions (price, discount, bank / payments, spending, contracts, priority); Pawan — clients, demos, sales; Hitesh — books, GST / TDS filing, CA (after Pardeep's yes on money); Abhishek — deploy every Thursday 4 pm IST, server, support.
+
+Measured for the trial (end of week): hours from claim to merge per card, merge conflicts, times someone waited on someone.
 
 ## Testing — 30 Sep 2026
 

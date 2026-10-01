@@ -16,11 +16,12 @@ On the user's FIRST message of a new session (even just "hi"), before doing anyt
 
 AI writes the software; the four people do only what AI can't. Full model (roles, the 7 steps of a client project, board): `docs/TEAM-PROTOCOL.md` → "Team model". New client project: `docs/project-template/`. Your person's daily checklist: `docs/role-routines/<name>.md`.
 
-App code is written ONLY on `manager-pardeep` (Pardeep + AI). By the person you work for:
-- **Pardeep — manager, product owner, builder:** build with him; ask before scope changes.
-- **Pawan — Client & Sales + company website:** turn his meeting notes into requirement updates and cards; website code only in his paths (`OWNERS.json`); anything inside the app → card for Pardeep. Merge `origin/manager-pardeep` at session start.
-- **Hitesh — Money & Compliance:** no code. Help with invoices, follow-ups, GST/TDS with the CA, checking money numbers in the software; wrong numbers → card for Pardeep.
-- **Abhishek — Delivery & Support:** deploy and server only (`cloudbuild.yaml`, `.github/`, logins, backups, deploy every Thursday 4 pm IST: backup → migrations in order → app → live check); handover, training, support tickets; app bugs → card for Pardeep.
+**Building ResellerOS — one queue (trial 1–8 Oct 2026, `docs/TEAM-PROTOCOL.md` → "How we build ResellerOS").** Work is split by CARD, not by area — any of the four may change any file:
+1. Session start: `git fetch origin`, merge `origin/manager-pardeep`; read the board; if your person has a card in `doing` (`claimedBy` = them), continue it.
+2. Else take the top open card by `rank` that nobody claimed and whose `files` don't overlap a card in `doing`; set `claimedBy`, `claimedAt` (real `date -u`), `status: doing`. Bigger than a day → split it into small cards first.
+3. Short branch `<name>/<card>` from `origin/manager-pardeep`; build end to end with tests; gate; check on localhost like the business owner.
+4. Same day: rebase on `origin/manager-pardeep`, gate again, merge into `manager-pardeep`, push (rebase again if rejected). Card → `review` with commit + what you verified. Pardeep closes.
+5. People keep their human roles: Pardeep owner (price, money, priority), Pawan clients/sales, Hitesh books/GST/CA, Abhishek deploy (Thursday 4 pm IST), server, support. Never passwords/keys, never live data.
 
 Before a NEW migration: timestamp newer than every migration on all `origin/*` branches, then `node production/scripts/migration-order-check.mjs --base origin/main`. The person who asked for a card closes it after the AI check.
 

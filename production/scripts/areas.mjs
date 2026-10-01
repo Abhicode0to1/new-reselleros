@@ -56,6 +56,12 @@ if (import.meta.url === `file://${process.argv[1].replace(/\\/g, "/")}` || impor
   }
   let branch = "";
   try { branch = sh("git rev-parse --abbrev-ref HEAD"); } catch { /* detached */ }
+  /* 1 Oct 2026 trial (Pardeep): "queue" mode — work is split by CARD, not by area. Anyone may
+     change any file; the card says what to build. Areas below are only "who knows this best". */
+  if (owners.mode === "queue") {
+    console.log(`queue mode (OWNERS.json): ${files.length} file(s) changed — no area limits. Keep the card small and merge today.`);
+    process.exit(0);
+  }
   const me = ownerOfBranch(branch);
   /* Only THIS branch's own commits count as citing a request — not the last 20 of history. */
   const lastMsgs = range ? (() => { try { return sh(`git log ${range} --format=%B`); } catch { return ""; } })() : "";
