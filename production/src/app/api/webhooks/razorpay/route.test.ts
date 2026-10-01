@@ -1,0 +1,280 @@
+/**
+ * POST /api/webhooks/razorpay — R-079 (Pardeep, 1 Oct 2026).
+ *
+ * Pinned with signed, mocked Razorpay events:
+ *  - payment.captured issues the GST invoice through generate_invoice (the desk's own
+ *    path), after record_payment, and the response names the invoice;
+ *  - the same event delivered again (and order.paid for the same payment) issues nothing
+ *    more — no second record_payment, no second invoice, no second provisioning row;
+ *  - a refused invoice (no place of supply) leaves a note on the lead and still answers 200;
+ *  - payment.failed writes "Payment failed — <reason>" on the lead with a retry link to the
+ *    SAME quote, never creates an order or charges, logs (not sends) the email off
+ *    production, sends it in production, and a repeated delivery writes one note.
+ */
+import crypto from "node:crypto";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { NextRequest } from "next/server";
+
+type Row = Record<string, unknown>;
+const db = vi.hoisted(() => ({
+  tables: {} as Record<string, Row[]>,
+  rpcCalls: [] as { name: string; args: Row }[],
+  rpcImpl: null as null | ((name: string, args: Row) => { data: unknown; error: unknown }),
+}));
+
+vi.mock("@/lib/supabase/server", () => {
+  function query(table: string) {
+    const filters: ((r: Row) => boolean)[] = [];
+    let lim = Infinity;
+    let pendingUpdate: Row | null = null;
+    const rows = () => (db.tables[table] ?? []).filter((r) => filters.every((f) => f(r))).slice(0, lim);
+    const q: Record<string, unknown> = {
+      select: () => q,
+      eq: (c: string, v: unknown) => { filters.push((r) => r[c] === v); return q; },
+      in: (c: string, vs: unknown[]) => { filters.push((r) => vs.includes(r[c])); return q; },
+      ilike: (c: string, pat: string) => {
+        const needle = pat.replace(/%/g, "").toLowerCase();
+        filters.push((r) => String(r[c] ?? "").toLowerCase().includes(needle));
+        return q;
+      },
+      limit: (n: number) => { lim = n; return q; },
+      maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
+      single: async () => {
+        const r = rows()[0];
+        return r ? { data: r, error: null } : { data: null, error: { message: "not found" } };
+      },
+      update: (patch: Row) => { pendingUpdate = patch; return q; },
+      insert: async (row: Row) => {
+        (db.tables[table] ??= []).push({ ...row });
+        return { data: null, error: null };
+      },
+      then: (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => {
+        if (pendingUpdate) { for (const r of rows()) Object.assign(r, pendingUpdate); }
+        return Promise.resolve({ data: rows(), error: null }).then(ok, bad);
+      },
+    };
+    return q;
+  }
+  return {
+    createAdminClient: () => ({
+      from: (t: string) => query(t),
+      rpc: async (name: string, args: Row) => {
+        db.rpcCalls.push({ name, args });
+        return db.rpcImpl ? db.rpcImpl(name, args) : { data: null, error: null };
+      },
+    }),
+  };
+});
+vi.mock("@/lib/crypto/tenant-secrets", () => ({ decryptTenantSecrets: (s: unknown) => s }));
+vi.mock("@/lib/notifications/notify.server", () => ({ notifyTenantOwners: vi.fn(async () => undefined) }));
+const sendEmail = vi.hoisted(() =>
+  vi.fn(async (_msg: Record<string, unknown>) => ({ status: "stubbed", providerId: null, errorMessage: null, provider: "stub" })),
+);
+vi.mock("@/lib/email/send", () => ({ sendEmail }));
+vi.mock("@/lib/email/owner-alert.server", () => ({
+  loadOwnerAlert: async () => ({ alert: { ok: true, to: "owner@example.invalid" }, tenant: { name: "AITEST Seller" } }),
+}));
+vi.mock("@/lib/ai/autonomy.server", () => ({ loadAutonomyPolicy: async () => ({ modes: {} }) }));
+const queueProvisioning = vi.hoisted(() => vi.fn(async () => "queued"));
+vi.mock("@/lib/provisioning/provisioning.server", () => ({ queueProvisioning }));
+vi.mock("@/lib/pdf/pdf-token", () => ({
+  pdfDownloadUrl: (base: string, kind: string, id: string) => `${base}/api/pdf/${kind}/${id}?sig=test`,
+}));
+
+import { POST } from "./route";
+
+const TENANT = "11111111-1111-4111-8111-111111111111";
+const SECRET = "whsec_aitest";
+const QUOTE = "Q-AITEST-0001";
+const LEAD = "L-AITEST";
+
+function seed() {
+  db.tables = {
+    tenant_secrets: [{ tenant_id: TENANT, razorpay_webhook_secret: SECRET, razorpay_key_id: "rzp_test_aitest" }],
+    quotes: [{
+      id: QUOTE, tenant_id: TENANT, customer_name: "AITEST Buyer Co", amount: 1180, payment_status: "awaiting",
+      lead_id: LEAD, seats: 1, plan: "domain-registration", line_items: [], is_renewal: false,
+      invoice_id: null, public_token: "tok_aitest", payment_reference: "order_AITEST1", customer_id: null,
+    }],
+    payments: [],
+    subscriptions: [],
+    items: [],
+    lead_activities: [],
+  };
+  db.rpcCalls = [];
+  /* A faithful-enough stand-in for the two RPCs: record_payment writes the payment and
+     marks the quote received; generate_invoice refuses a second invoice exactly as the SQL
+     does (unique_violation) and otherwise links one. */
+  db.rpcImpl = (name, args) => {
+    const q = db.tables.quotes.find((r) => r.id === args.p_quote_id)!;
+    if (name === "record_payment") {
+      db.tables.payments.push({ tenant_id: q.tenant_id, quote_id: q.id, reference: args.p_reference, status: "received", amount: args.p_amount });
+      q.payment_status = "received";
+      return { data: { payment_id: "p1" }, error: null };
+    }
+    if (name === "generate_invoice") {
+      if (q.invoice_id) return { data: null, error: { code: "23505", message: `Invoice ${q.invoice_id} already exists` } };
+      q.invoice_id = "INV-AITEST-0001";
+      q.payment_status = "invoiced";
+      return { data: [{ invoice_id: "INV-AITEST-0001", net_payable: 0, total_advances: 1180 }], error: null };
+    }
+    return { data: null, error: null };
+  };
+}
+
+function signed(event: Row) {
+  const raw = JSON.stringify(event);
+  const sig = crypto.createHmac("sha256", SECRET).update(raw).digest("hex");
+  return new NextRequest(`https://shop.example.invalid/api/webhooks/razorpay?tenant=${TENANT}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-razorpay-signature": sig },
+    body: raw,
+  });
+}
+
+const captured = (event = "payment.captured") => ({
+  event,
+  created_at: 1,
+  payload: {
+    payment: { entity: { id: "pay_AITEST1", order_id: "order_AITEST1", amount: 118000, currency: "INR", status: "captured", method: "card", email: "buyer@example.invalid", notes: { quoteId: QUOTE } } },
+    order: { entity: { id: "order_AITEST1", receipt: QUOTE, amount: 118000 } },
+  },
+});
+
+const failed = (payId = "pay_AITESTF1") => ({
+  event: "payment.failed",
+  created_at: 1,
+  payload: {
+    payment: { entity: {
+      id: payId, order_id: "order_AITEST1", amount: 118000, currency: "INR", status: "failed", method: "card",
+      email: "buyer@example.invalid", notes: { quoteId: QUOTE },
+      error_code: "BAD_REQUEST_ERROR", error_description: "Your payment was declined by the bank", error_reason: "payment_failed",
+    } },
+  },
+});
+
+const rpcNames = () => db.rpcCalls.map((c) => c.name);
+const ENV = { ...process.env };
+
+beforeEach(() => {
+  seed();
+  sendEmail.mockClear();
+  queueProvisioning.mockClear();
+});
+afterEach(() => {
+  process.env = { ...ENV };
+});
+
+describe("payment.captured — the GST invoice is issued automatically", () => {
+  it("records the payment, then issues the invoice through generate_invoice", async () => {
+    const res = await POST(signed(captured()));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(rpcNames()).toEqual(["record_payment", "generate_invoice"]);
+    expect(db.rpcCalls[1].args).toEqual({ p_quote_id: QUOTE });
+    expect(body.invoiceId).toBe("INV-AITEST-0001");
+    expect(body.invoice).toBe("issued");
+    // The confirmation email links the invoice instead of promising one "shortly".
+    const customerMail = sendEmail.mock.calls.map((c) => c[0] as { kind: string; text: string })
+      .find((m) => m.kind === "razorpay_payment_customer");
+    expect(customerMail?.text).toContain("/api/pdf/invoice/INV-AITEST-0001");
+  });
+
+  it("a repeated delivery — and order.paid for the same payment — issues nothing more", async () => {
+    await POST(signed(captured()));
+    const provisioned = queueProvisioning.mock.calls.length;
+    const mails = sendEmail.mock.calls.length;
+
+    const again = await POST(signed(captured()));
+    expect(again.status).toBe(200);
+    expect((await again.json()).alreadyProcessed).toBe(true);
+    const orderPaid = await POST(signed(captured("order.paid")));
+    expect((await orderPaid.json()).alreadyProcessed).toBe(true);
+
+    expect(rpcNames()).toEqual(["record_payment", "generate_invoice"]); // once each, ever
+    expect(db.tables.payments).toHaveLength(1);
+    expect(queueProvisioning.mock.calls.length).toBe(provisioned);
+    expect(sendEmail.mock.calls.length).toBe(mails);
+  });
+
+  it("an invoice already on the quote is reused, never a second one", async () => {
+    db.tables.quotes[0].invoice_id = "INV-EXISTING";
+    const res = await POST(signed(captured()));
+    const body = await res.json();
+    expect(rpcNames()).toEqual(["record_payment"]); // generate_invoice not even called
+    expect(body.invoiceId).toBe("INV-EXISTING");
+  });
+
+  it("a refused invoice (no place of supply) still answers 200 and leaves a note on the lead", async () => {
+    const base = db.rpcImpl!;
+    db.rpcImpl = (name, args) =>
+      name === "generate_invoice"
+        ? { data: null, error: { code: "23514", message: "Cannot issue this invoice: AITEST Buyer Co has no state on record." } }
+        : base(name, args);
+    const res = await POST(signed(captured()));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.invoice).toBe("failed");
+    expect(body.invoiceId).toBeNull();
+    const note = db.tables.lead_activities.find((a) => a.lead_id === LEAD);
+    expect(String(note?.detail)).toMatch(/GST invoice could not be issued automatically — Cannot issue this invoice/);
+    expect(String(note?.detail)).toContain(QUOTE);
+  });
+});
+
+describe("payment.failed — a note on the lead and a retry link, never a charge", () => {
+  it("notes the reason on the lead with a retry link to the SAME quote; logs, does not send, off production", async () => {
+    const res = await POST(signed(failed()));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.retryUrl).toBe(`https://shop.example.invalid/quote/${QUOTE}/accept?t=tok_aitest`);
+
+    const notes = db.tables.lead_activities.filter((a) => a.lead_id === LEAD);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].kind).toBe("note");
+    expect(String(notes[0].detail)).toMatch(/^Payment failed — Your payment was declined by the bank\./);
+    expect(String(notes[0].detail)).toContain("pay_AITESTF1");
+    expect(String(notes[0].detail)).toContain(body.retryUrl);
+
+    expect(db.rpcCalls).toEqual([]); // no record_payment, nothing settled or charged
+    expect(db.tables.quotes[0].payment_status).toBe("awaiting");
+    expect(sendEmail).not.toHaveBeenCalled(); // NODE_ENV=test → logged only
+  });
+
+  it("the same failure delivered twice writes one note", async () => {
+    await POST(signed(failed()));
+    const again = await POST(signed(failed()));
+    expect((await again.json()).alreadyProcessed).toBe(true);
+    expect(db.tables.lead_activities).toHaveLength(1);
+    // A second, different failed attempt is its own note.
+    await POST(signed(failed("pay_AITESTF2")));
+    expect(db.tables.lead_activities).toHaveLength(2);
+  });
+
+  it("in production the retry link is emailed to the buyer through the app's email path", async () => {
+    (process.env as Record<string, string>).NODE_ENV = "production";
+    await POST(signed(failed()));
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const mail = sendEmail.mock.calls[0][0] as { to: string; kind: string; text: string };
+    expect(mail.to).toBe("buyer@example.invalid");
+    expect(mail.kind).toBe("razorpay_payment_failed_retry");
+    expect(mail.text).toContain(`/quote/${QUOTE}/accept?t=tok_aitest`);
+    expect(mail.text).toContain("nothing was charged");
+  });
+
+  it("a failure after the quote was paid is ignored", async () => {
+    db.tables.quotes[0].payment_status = "invoiced";
+    db.tables.quotes[0].invoice_id = "INV-AITEST-0001";
+    const res = await POST(signed(failed()));
+    expect((await res.json()).ignored).toMatch(/already paid/);
+    expect(db.tables.lead_activities).toHaveLength(0);
+  });
+
+  it("an unsigned failure event is rejected before anything is written", async () => {
+    const r = signed(failed());
+    const forged = new NextRequest(r.url, { method: "POST", headers: { "x-razorpay-signature": "00" }, body: JSON.stringify(failed()) });
+    const res = await POST(forged);
+    expect(res.status).toBe(401);
+    expect(db.tables.lead_activities).toHaveLength(0);
+  });
+});

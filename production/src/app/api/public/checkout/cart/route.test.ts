@@ -13,7 +13,7 @@
  * Runs through the route's simulation path (no Razorpay keys, NODE_ENV=test), so
  * the quote it would charge is observable without calling Razorpay.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 const inserts = vi.hoisted(() => ({ rows: [] as { table: string; row: Record<string, unknown> }[] }));
@@ -372,5 +372,54 @@ describe("paid hosting needs a real domain (30 Sep 2026)", () => {
   it("no domain typed and none in the cart → refused", async () => {
     const res = await POST(req({ lines: [hosting] }));
     expect(res.status).toBe(400);
+  });
+});
+
+describe("R-079 — place of supply on the lead, and the live-site guards", () => {
+  const domainLine = { sku: "domain:in", label: "acme.in", domain: "acme.in", qty: 1 };
+  const ENV = { ...process.env };
+  afterEach(() => { process.env = { ...ENV }; });
+
+  it("the address's state becomes the lead's GST state, which record_payment copies to the customer", async () => {
+    const res = await POST(req({ address, lines: [domainLine] }));
+    expect(res.status).toBe(200);
+    expect(lead()).toEqual(expect.objectContaining({ state_code: "07", state: "Delhi", gstin: null }));
+  });
+
+  it("a checksum-valid GSTIN is stored and decides the state when no state was typed", async () => {
+    const res = await POST(req({ gstin: "29aagcb1286q1z0", domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+    expect(res.status).toBe(200);
+    expect(lead()).toEqual(expect.objectContaining({ gstin: "29AAGCB1286Q1Z0", state_code: "29", state: "Karnataka" }));
+  });
+
+  it("an invalid GSTIN is not stored and decides nothing — the state stays unknown, never guessed", async () => {
+    const res = await POST(req({ gstin: "07XXXXX0000X1ZZ", domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+    expect(res.status).toBe(200);
+    expect(lead()).toEqual(expect.objectContaining({ gstin: null, state_code: null, state: null }));
+  });
+
+  it("a simulated payment is refused in production even with ALLOW_SIMULATED_CHECKOUT=1 — nothing saved", async () => {
+    Object.assign(process.env, { NODE_ENV: "production", ALLOW_SIMULATED_CHECKOUT: "1", BUY_PAGE_TENANT_ID: "tenant-live" });
+    const res = await POST(req({ address, lines: [domainLine] }));
+    expect(res.status).toBe(503);
+    expect(lead()).toBeUndefined();
+    expect(quote()).toBeUndefined();
+    expect(rpc).not.toHaveBeenCalledWith("record_payment", expect.anything());
+  });
+
+  it("production without BUY_PAGE_TENANT_ID refuses in words instead of using the hard-coded tenant", async () => {
+    Object.assign(process.env, { NODE_ENV: "production" });
+    delete process.env.BUY_PAGE_TENANT_ID;
+    const res = await POST(req({ address, lines: [domainLine] }));
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toMatch(/not configured on this site yet\. Nothing was charged/);
+    expect(inserts.rows).toEqual([]);
+  });
+
+  it("outside production the dev tenant is still used", async () => {
+    delete process.env.BUY_PAGE_TENANT_ID;
+    const res = await POST(req({ address, lines: [domainLine] }));
+    expect(res.status).toBe(200);
+    expect(lead()!.tenant_id).toBe("fbb976f1-9090-4f10-9726-0901bd144e42");
   });
 });

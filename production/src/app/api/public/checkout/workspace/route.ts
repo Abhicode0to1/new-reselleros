@@ -30,9 +30,11 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
+import { buyPageTenantIdOrEmpty, simulatedPaymentAllowed } from "@/lib/checkout/live-guards";
+import { issueInvoiceForOnlinePayment } from "@/lib/checkout/online-invoice.server";
 
-const BUY_PAGE_TENANT_ID =
-  process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
+/* R-079: the hard-coded dev tenant only off production; "" (fails closed) when unset there. */
+const BUY_PAGE_TENANT_ID = buyPageTenantIdOrEmpty();
 
 // Razorpay credentials — read from per-tenant `tenant_secrets` first
 // (Settings → Integrations → Razorpay), falling back to env for the
@@ -233,9 +235,8 @@ export async function POST(request: NextRequest) {
     // (non-prod, or ALLOW_SIMULATED_CHECKOUT=1). In production without that
     // flag, a crafted simulate:true must NOT create a fake "paid" customer,
     // even if the UI button is already hidden. Server is the real gate.
-    const simulationAllowed =
-      process.env.ALLOW_SIMULATED_CHECKOUT === "1" ||
-      process.env.NODE_ENV !== "production";
+    // R-079: a production deployment or a live key refuses it whatever ALLOW_SIMULATED_CHECKOUT says.
+    const simulationAllowed = simulatedPaymentAllowed({ razorpayKeyId: rzKeyId });
 
     if (!razorpayConfigured && !isSimulation) {
       return NextResponse.json(
@@ -484,6 +485,8 @@ export async function POST(request: NextRequest) {
           { status: 500 },
         );
       }
+      // The same automatic GST invoice the webhook issues for a real payment (R-079).
+      await issueInvoiceForOnlinePayment(admin, { quoteId, tenantId: BUY_PAGE_TENANT_ID, logTag: "[checkout/workspace] simulated" });
 
       // Best-effort confirmation emails — clearly tagged [TEST] in subject.
       const amountFmt = `₹${amount.toLocaleString("en-IN")}`;

@@ -18,6 +18,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { quoteTokenMatches } from "@/lib/quotes/accept-token";
 import { QUOTE_ORDER_COLUMNS, startQuotePayment } from "@/lib/checkout/quote-order";
+import { simulatedPaymentAllowed } from "@/lib/checkout/live-guards";
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -39,7 +40,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   }
 
   const r = await startQuotePayment(admin, quote, {
-    allowSimulation: process.env.NODE_ENV !== "production" || process.env.ALLOW_QUOTE_PAY_SIMULATION === "1",
+    /* R-079: never on a production deployment — ALLOW_QUOTE_PAY_SIMULATION no longer
+       overrides that. This page is also where a failed website payment's retry link lands. */
+    allowSimulation: simulatedPaymentAllowed(),
     logTag: "[public/quote/pay]",
   });
   return NextResponse.json(r.body, { status: r.status });

@@ -20,6 +20,7 @@
 import { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
 import { BuyWorkspaceClient, type CatalogItem } from "./buy-workspace-client";
+import { simulatedPaymentAllowed } from "@/lib/checkout/live-guards";
 
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
@@ -88,9 +89,8 @@ export default async function BuyWorkspacePage() {
   //    so a REAL customer never sees a "Simulate payment" button on a public
   //    storefront before Razorpay go-live. They get "Get a GST quote" instead.
   const configured = await isRazorpayConfigured();
-  const allowSim =
-    process.env.ALLOW_SIMULATED_CHECKOUT === "1" ||
-    process.env.NODE_ENV !== "production";
+  // R-079: never on a production deployment, whatever ALLOW_SIMULATED_CHECKOUT says — same gate as the route.
+  const allowSim = simulatedPaymentAllowed();
   const paymentMode: "live" | "simulation" | "disabled" = configured
     ? "live"
     : allowSim

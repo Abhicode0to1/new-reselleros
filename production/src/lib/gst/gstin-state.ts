@@ -96,3 +96,24 @@ export function gstinContradictsState(party: {
   // Compare numerically so "7" and "07" are the same state, not a contradiction.
   return Number(explicit) !== Number(derived);
 }
+
+/**
+ * A GST state code from what a buyer typed in a state box (R-079): a two-digit code, or the
+ * state's name as `GST_STATE_BY_CODE` spells it, ignoring case, spacing and "&" vs "and".
+ * Null for anything else — an unrecognised spelling is not guessed at, because the code
+ * decides CGST+SGST vs IGST on the invoice.
+ */
+export function stateCodeFromName(input: string | null | undefined): string | null {
+  const raw = (input ?? "").trim();
+  if (!raw) return null;
+  if (/^\d{1,2}$/.test(raw)) {
+    const code = raw.padStart(2, "0");
+    return code in GST_STATE_BY_CODE ? code : null;
+  }
+  const norm = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a-z]/g, "");
+  const want = norm(raw);
+  for (const [code, name] of Object.entries(GST_STATE_BY_CODE)) {
+    if (norm(name) === want) return code;
+  }
+  return null;
+}

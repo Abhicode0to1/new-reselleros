@@ -55,9 +55,16 @@ import { startHostingTrial } from "@/lib/hosting/start-trial";
 import { hostingLimitProblem } from "./hosting-limit";
 import { hostingDomain, planDomains, BUY_A_DOMAIN_HREF } from "./hosting-domain";
 import { hostingRate } from "./hosting-prices";
+import { buyPageTenantId, buyPageTenantIdOrEmpty, BuyPageTenantMissingError, simulatedPaymentAllowed } from "./live-guards";
+import { issueInvoiceForOnlinePayment } from "./online-invoice.server";
+import { resolveStateCode, stateCodeFromName } from "@/lib/gst/gstin-state";
+import { GST_STATE_BY_CODE, isValidGstin } from "@/lib/utils";
 
-export const BUY_PAGE_TENANT_ID =
-  process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
+/* R-079: production requires BUY_PAGE_TENANT_ID — the hard-coded dev tenant is used only
+   off production (lib/checkout/live-guards.ts). This constant is for importers that need a
+   value at module load; it is "" in production when unset, so their lookups fail closed.
+   runCartCheckout resolves the tenant per request and refuses with a clear error instead. */
+export const BUY_PAGE_TENANT_ID = buyPageTenantIdOrEmpty();
 const ENV_RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID?.trim() || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || "";
 const ENV_RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET?.trim() || "";
 
@@ -83,6 +90,12 @@ const cartSchema = z.object({
   email: z.string().email().max(200),
   phone: z.string().min(10).max(20),
   gstin: z.string().max(20).optional(),
+  /**
+   * The buyer's GST state code ("07") or state name (R-079). Optional: the address's state
+   * and a valid GSTIN are also read. It decides CGST+SGST vs IGST on the GST invoice issued
+   * when the payment lands; with none of the three, the invoice waits for the desk.
+   */
+  stateCode: z.string().max(80).optional(),
   /** Required when a hosting line is present — the account is provisioned on it. */
   domain: z.string().max(120).optional(),
   lines: z.array(lineSchema).min(1).max(50),
@@ -257,6 +270,22 @@ export type CheckoutChannel = { kind: "site" } | { kind: "dms-panel"; dmsUserId:
 
 export async function runCartCheckout(request: NextRequest, body: unknown, channel: CheckoutChannel): Promise<NextResponse> {
   const panel = channel.kind === "dms-panel" ? channel : null;
+  /* R-079: per request, so a production deployment without BUY_PAGE_TENANT_ID refuses in
+     words instead of filing the order under the hard-coded dev tenant. Shadows the
+     module constant on purpose — every use below is this resolved value. */
+  let BUY_PAGE_TENANT_ID: string;
+  try {
+    BUY_PAGE_TENANT_ID = buyPageTenantId();
+  } catch (e) {
+    if (e instanceof BuyPageTenantMissingError) {
+      console.error(`[checkout ${channel.kind}] ${e.message}`);
+      return NextResponse.json(
+        { error: "Online checkout is not configured on this site yet. Nothing was charged. Please use 'Get a quote'." },
+        { status: 503 },
+      );
+    }
+    throw e;
+  }
   try {
     const parsed = cartSchema.safeParse(body);
     if (!parsed.success) {
@@ -485,7 +514,9 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
     }
     const razorpayConfigured = Boolean(rzKeyId) && Boolean(rzKeySecret);
     const isSimulation = simulate === true;
-    const simulationAllowed = process.env.ALLOW_SIMULATED_CHECKOUT === "1" || process.env.NODE_ENV !== "production";
+    /* R-079: never on a production deployment or with a live key — ALLOW_SIMULATED_CHECKOUT
+       can no longer switch it on there (lib/checkout/live-guards.ts). */
+    const simulationAllowed = simulatedPaymentAllowed({ razorpayKeyId: rzKeyId });
     if (!razorpayConfigured && !isSimulation) {
       return NextResponse.json({ error: "Online payment isn't set up yet. Please use 'Get a quote'." }, { status: 503 });
     }
@@ -538,6 +569,20 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       ...items.map((i) => `  • ${i.name} × ${i.qty} @ ₹${i.rate}`),
     ].filter(Boolean).join("\n");
 
+    /* ── The buyer's place of supply (R-079) ────────────────────────────────
+       record_payment copies the lead's state_code / state / gstin onto the customer it
+       creates, and generate_invoice reads the place of supply from that customer. So this
+       is where the GST head of the automatic invoice is decided. Same precedence as
+       everywhere else (resolveStateCode): an entered state wins, a checksum-valid GSTIN is
+       the fallback; nothing is guessed. Only a VALID GSTIN is stored — it prints on the
+       tax invoice. */
+    const cleanGstin = (gstin ?? "").trim().toUpperCase();
+    const validGstin = cleanGstin && isValidGstin(cleanGstin) ? cleanGstin : null;
+    const buyerStateCode = resolveStateCode({
+      stateCode: stateCodeFromName(parsed.data.stateCode) ?? stateCodeFromName(address?.state),
+      gstin: validGstin,
+    });
+
     const { error: leadErr } = await admin.from("leads").insert({
       id: leadId,
       tenant_id: BUY_PAGE_TENANT_ID,
@@ -553,6 +598,9 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       ...captureFromRequest(request, body as Record<string, unknown>),
       domain: cleanDomain || null,
       notes,
+      gstin: validGstin,
+      state_code: buyerStateCode,
+      state: buyerStateCode ? (GST_STATE_BY_CODE[buyerStateCode] ?? null) : null,
     });
     if (leadErr) {
       console.error("[checkout/cart] lead insert failed:", leadErr);
@@ -614,7 +662,12 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
         console.error("[checkout/cart] simulated record_payment failed:", recErr);
         return NextResponse.json({ error: "Simulation failed: " + recErr.message }, { status: 500 });
       }
-      return NextResponse.json({ success: true, simulated: true, quoteId, leadId, totalRupees: amount });
+      // The same automatic GST invoice the webhook issues for a real payment (R-079).
+      const invoice = await issueInvoiceForOnlinePayment(admin, { quoteId, tenantId: BUY_PAGE_TENANT_ID, logTag: "[checkout/cart] simulated" });
+      return NextResponse.json({
+        success: true, simulated: true, quoteId, leadId, totalRupees: amount,
+        invoiceId: invoice.status === "issued" || invoice.status === "exists" ? invoice.invoiceId : null,
+      });
     }
 
     // ── LIVE — create Razorpay order ───────────────────────────────────────
