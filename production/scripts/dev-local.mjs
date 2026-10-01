@@ -83,7 +83,13 @@ console.log(`\n  dev:local  →  http://localhost:${port}`);
 console.log(`  database   →  ${sb.url} (local)`);
 console.log(`  band kiye  →  ${[...new Set(blanked)].filter((k) => !k.startsWith("NEXT_PUBLIC_SUPABASE") && k !== "SUPABASE_SERVICE_ROLE_KEY").length} live keys (Razorpay, Resend, Gupshup, Vapi, Google, GST IRP, …)\n`);
 
-const child = spawn("npx", ["next", "dev", "-p", port, ...args.filter((_, i) => i !== portIdx && i !== portIdx + 1)], {
+/* Turbopack by default (1 Oct 2026, measured on this laptop): first compile of a page
+   dropped from 5–58 s (webpack) to 1–2 s — e.g. /invoices 4.6–58 s → 2 s, /projects/[id]
+   19 s → 1 s. Every browser check waited on those compiles. `--webpack` brings the old
+   bundler back (next build still uses webpack, so a build-only problem shows in the build). */
+const rest = args.filter((_, i) => i !== portIdx && i !== portIdx + 1);
+const bundler = rest.includes("--webpack") ? [] : rest.includes("--turbopack") ? [] : ["--turbopack"];
+const child = spawn("npx", ["next", "dev", "-p", port, ...bundler, ...rest.filter((a) => a !== "--webpack")], {
   env, stdio: "inherit", shell: process.platform === "win32",
 });
 child.on("exit", (code) => process.exit(code ?? 0));
