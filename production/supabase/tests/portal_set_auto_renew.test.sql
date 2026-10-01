@@ -6,6 +6,10 @@
 --      untouched, RPC returns the new value.
 --   2. The same customer cannot toggle ANOTHER customer's sub → RPC raises and
 --      that sub is unchanged (no cross-customer write).
+--   3. The toggle lands in the activity feed as "Customer <name>" (R-016,
+--      migration 20260930200001): user_id null — a portal customer is not in
+--      public.users, the FK that used to fail and roll the toggle back —
+--      actor_label 'Customer Cust A', and the auto_renew true→false change recorded.
 --
 -- This fixture OWNS its auth user (AGENTS.md L11). It used to borrow one with
 -- `select id from auth.users limit 1`, and that is why it failed:
@@ -36,6 +40,7 @@ insert into public.subscriptions (id, tenant_id, customer_id, customer_name, pla
 -- ── act as customer A (authenticated) ──
 do $$
 declare v_uid text; v_ret boolean; v_ar boolean; v_seats int; v_mrr int; v_b_ar boolean; v_err boolean := false;
+        v_log record; v_n int;
 begin
   select auth_user_id::text into v_uid from public.customer_users where customer_id='cccccccc-0000-0000-0000-0000000000f1';
   perform set_config('request.jwt.claims', json_build_object('sub', v_uid, 'role','authenticated')::text, true);
@@ -54,6 +59,23 @@ begin
   select auto_renew into v_b_ar from public.subscriptions where id='aaaaaaaa-0000-0000-0000-0000000000f2';
   if v_b_ar <> true then raise exception 'FAIL: customer B auto_renew changed (cross-customer write!)'; end if;
 
-  raise notice 'PASS: own toggle works (seats/mrr intact), cross-customer blocked';
+  -- 3. the activity feed names the customer
+  select count(*) into v_n from public.activity_log
+   where entity = 'subscriptions' and entity_id = 'aaaaaaaa-0000-0000-0000-0000000000f1';
+  if v_n <> 1 then raise exception 'FAIL: expected 1 activity row for the toggle, got %', v_n; end if;
+  select user_id, actor_label, action, changes into v_log from public.activity_log
+   where entity = 'subscriptions' and entity_id = 'aaaaaaaa-0000-0000-0000-0000000000f1';
+  if v_log.user_id is not null then raise exception 'FAIL: activity user_id should be null for a portal customer, got %', v_log.user_id; end if;
+  if v_log.actor_label is distinct from 'Customer Cust A' then raise exception 'FAIL: actor_label expected "Customer Cust A", got %', v_log.actor_label; end if;
+  if v_log.action <> 'update' then raise exception 'FAIL: action expected update, got %', v_log.action; end if;
+  if v_log.changes->'auto_renew' is distinct from '{"old": true, "new": false}'::jsonb then
+    raise exception 'FAIL: changes.auto_renew expected true->false, got %', v_log.changes->'auto_renew';
+  end if;
+  -- the blocked attempt on customer B left no activity behind
+  select count(*) into v_n from public.activity_log
+   where entity = 'subscriptions' and entity_id = 'aaaaaaaa-0000-0000-0000-0000000000f2' and action = 'update';
+  if v_n <> 0 then raise exception 'FAIL: blocked toggle on customer B wrote % activity row(s)', v_n; end if;
+
+  raise notice 'PASS: own toggle works (seats/mrr intact), cross-customer blocked, activity says Customer Cust A';
 end $$;
 rollback;

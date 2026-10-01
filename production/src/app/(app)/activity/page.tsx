@@ -11,10 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import { useActivityLog, type ActivityRow } from "@/lib/queries/activity";
+import { activityActorInitials, activityActorName } from "@/lib/queries/activity-actor";
 
 /* The columns worth reading in a feed line — money and dates. Everything else in
    `changes` is still there for an export; a feed that prints every jsonb key is noise. */
-const SHOWN_FIELDS = ["amount", "gst_paid", "tds_amount", "net", "gross", "paid_amount", "expense_date", "pay_date", "paid_on", "invoice_date", "status", "category", "vendor_name", "kind", "period", "channel", "bank_account_id"];
+const SHOWN_FIELDS = ["amount", "gst_paid", "tds_amount", "net", "gross", "paid_amount", "expense_date", "pay_date", "paid_on", "invoice_date", "status", "category", "vendor_name", "kind", "period", "channel", "bank_account_id", "auto_renew"];
 function fmtVal(v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
   if (typeof v === "number") return v.toLocaleString("en-IN");
@@ -133,10 +134,10 @@ export default function ActivityLogPage() {
                         className="shrink-0 h-7 w-7 rounded-full flex items-center justify-center text-2xs font-semibold text-paper"
                         style={{ background: r.actor?.color ?? "var(--ink-3, #787c84)" }}
                       >
-                        {r.actor?.initials ?? "?"}
+                        {activityActorInitials(r)}
                       </span>
                       <div className="min-w-0 flex-1 text-sm">
-                        <span className="font-medium text-ink">{r.actor?.full_name ?? "Someone"}</span>
+                        <span className="font-medium text-ink">{activityActorName(r)}</span>
                         {" ne "}
                         <span className={cn("font-medium", ACTION_TONE[r.action] ?? "text-ink-2")}>
                           {r.entity !== "session" ? `${ENTITY_LABEL[r.entity] ?? r.entity} ` : ""}{ACTION_VERB[r.action] ?? r.action}
