@@ -31,7 +31,7 @@ import { useDebitNotesByInvoice } from "@/lib/queries/debit-notes";
 import { useInvoiceNoteTotals } from "@/lib/queries/invoice-note-totals";
 import { netAfterNotes, type NoteTotals } from "@/lib/invoices/note-totals";
 import { ReceiptVoucherDialog } from "@/components/features/quotes/receipt-voucher-dialog";
-import { isInterStateSupply } from "@/lib/gst/place-of-supply";
+import { isInterStateSupply, placeOfSupplyLabel } from "@/lib/gst/place-of-supply";
 import { supplierIdentity, supplierIdentityMessage } from "@/lib/invoices/supplier-identity";
 /* R-060. `status = 'overdue'` has no writer anywhere in the product, so the Overdue tab
    and its KPI were permanently empty while invoices ran months late. Derived from
@@ -1370,7 +1370,8 @@ function InvoicePreviewContainer({
                   <div className="grid grid-cols-2 gap-2 text-ink-2">
                     <div><span className="text-ink-3">Invoice Date:</span> {formatDate(invoice.invoice_date)}</div>
                     <div><span className="text-ink-3">Due Date:</span> {invoice.due_date ? formatDate(invoice.due_date) : "—"}</div>
-                    <div><span className="text-ink-3">Place of Supply:</span> {interState ? "Inter-state (IGST)" : "Intra-state (CGST+SGST)"}</div>
+                    {/* R-043: the place of supply and tax head FROZEN on the invoice (Rule 46 name + code), not today's customer. */}
+                    <div><span className="text-ink-3">Place of Supply:</span> {placeOfSupplyLabel({ posCode: invoice.pos_state_code, interState: invoice.inter_state ?? !!interState, isExport: invoice.pos_state_code === "96", country: invoice.customer_country })}</div>
                     <div><span className="text-ink-3">Tax Total:</span> {rupee(tax)} ({taxRate}%)</div>
                   </div>
                 </div>

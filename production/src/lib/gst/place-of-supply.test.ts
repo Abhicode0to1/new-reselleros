@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isInterStateSupply, isExportSupply, gstTreatment } from "./place-of-supply";
+import { isInterStateSupply, isExportSupply, gstTreatment, placeOfSupplyLabel, frozenParty } from "./place-of-supply";
 
 describe("isInterStateSupply", () => {
   it("intra-state: same state code → false (CGST + SGST)", () => {
@@ -114,5 +114,40 @@ describe("isInterStateSupply — GSTIN fallback (third argument)", () => {
     expect(isInterStateSupply(null, SELLER)).toBe(false);
     expect(isInterStateSupply("29", SELLER)).toBe(true);
     expect(isInterStateSupply("07", SELLER)).toBe(false);
+  });
+});
+
+describe("placeOfSupplyLabel (R-043, Rule 46 state name + code)", () => {
+  it("names the state and code from the code frozen on the invoice", () => {
+    expect(placeOfSupplyLabel({ posCode: "29", interState: true })).toBe("Karnataka (29) · IGST");
+    expect(placeOfSupplyLabel({ posCode: "07", interState: false })).toBe("Delhi (07) · CGST + SGST");
+  });
+  it("export is 96 with the country", () => {
+    expect(placeOfSupplyLabel({ posCode: "96", interState: false, country: "United States" })).toBe("Export · United States (96)");
+    expect(placeOfSupplyLabel({ isExport: true, interState: false })).toBe("Export · outside India (96)");
+  });
+  it("no frozen code keeps the old wording — never a guessed state", () => {
+    expect(placeOfSupplyLabel({ posCode: null, interState: true })).toBe("Inter-state (IGST)");
+    expect(placeOfSupplyLabel({ posCode: "", interState: false })).toBe("Intra-state (CGST + SGST)");
+  });
+});
+
+describe("frozenParty (R-043 — GSTR-1 reads the invoice, not today's customer)", () => {
+  const live = { gstin: "27AAGCB1286Q1Z9", stateCode: "27", state: "Maharashtra", country: "India" };
+  it("uses the GSTIN and state frozen at issue, not today's", () => {
+    const p = frozenParty({ customer_gstin: "29AAGCB1286Q1Z0", pos_state_code: "29", seller_state_code: "07", customer_country: "India" }, live);
+    expect(p).toEqual({ gstin: "29AAGCB1286Q1Z0", stateCode: "29", state: "Karnataka", country: "India" });
+  });
+  it("unregistered at issue stays unregistered even if they registered later", () => {
+    expect(frozenParty({ customer_gstin: null, pos_state_code: "07", seller_state_code: "07" }, live).gstin).toBeNull();
+  });
+  it("export (96) has no Indian state", () => {
+    const p = frozenParty({ pos_state_code: "96", customer_country: "United States", seller_state_code: "07" }, live);
+    expect(p.stateCode).toBeNull();
+    expect(p.country).toBe("United States");
+  });
+  it("no snapshot → today's customer, as before", () => {
+    expect(frozenParty({ customer_gstin: null }, live)).toEqual(live);
+    expect(frozenParty(null, live)).toEqual(live);
   });
 });

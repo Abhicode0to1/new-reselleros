@@ -25,8 +25,8 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { rupee, formatDate, toWhatsAppDigits } from "@/lib/utils";
-import { isExportSupply } from "@/lib/gst/place-of-supply";
+import { rupee, formatDate, toWhatsAppDigits, GST_STATE_BY_CODE } from "@/lib/utils";
+import { isExportSupply, placeOfSupplyLabel } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
 import type { Invoice, Payment, QuoteLineItem } from "@/lib/supabase/database.types";
 import { splitTaxHeads } from "@/lib/gst/tax-split";
@@ -104,20 +104,20 @@ export function TaxInvoiceDialog({
   total,
   receivedPayments,
   interState = false,
-  customerGstin,
+  customerGstin: liveCustomerGstin,
   customerEmail,
   customerPhone,
-  customerAddress,
-  customerState,
-  customerCountry,
+  customerAddress: liveCustomerAddress,
+  customerState: liveCustomerState,
+  customerCountry: liveCustomerCountry,
   currency,
   exchangeRate,
   tenantName,
-  tenantGstin,
+  tenantGstin: liveTenantGstin,
   tenantEmail,
   tenantPhone,
   tenantAddress,
-  tenantState,
+  tenantState: liveTenantState,
 }: Props) {
   /* Logo yahan se aata hai, parent se nahi — ek prop thread karne ka matlab hota har
      parent me yaad rakhna, aur ek bhoolne par us document par logo chup-chaap gayab.
@@ -142,6 +142,24 @@ export function TaxInvoiceDialog({
   const fRate    = invoice.tax_rate      ?? taxRate;
   const fTotal   = invoice.amount        ?? total;
 
+  /* R-043 (1 Oct 2026): the PARTIES as they stood on the day of issue, frozen on the row
+     by trg_invoice_snapshot_parties. The props are the customer/company as they are NOW;
+     reading those let a later customer edit (new GSTIN, moved state) rewrite an invoice the
+     buyer already holds. Once a row carries its snapshot, a NULL GSTIN there means "buyer
+     unregistered at issue" — never fall back to today's GSTIN. Rows with no snapshot at all
+     (none after the backfill) still use the live props. */
+  const hasSnapshot = invoice.seller_state_code != null || invoice.pos_state_code != null || invoice.billing_address != null;
+  const customerGstin   = hasSnapshot ? invoice.customer_gstin : liveCustomerGstin;
+  const customerAddress = invoice.billing_address ?? liveCustomerAddress;
+  const customerCountry = invoice.customer_country ?? liveCustomerCountry;
+  const customerState   = invoice.pos_state_code && invoice.pos_state_code !== "96"
+    ? (GST_STATE_BY_CODE[invoice.pos_state_code] ?? liveCustomerState)
+    : liveCustomerState;
+  const tenantGstin     = invoice.seller_gstin ?? liveTenantGstin;
+  const tenantState     = invoice.seller_state_code
+    ? (GST_STATE_BY_CODE[invoice.seller_state_code] ?? liveTenantState)
+    : liveTenantState;
+
   /* R-046: one definition of the CGST/SGST split, shared with the GSTR-1 return.
      For a positive whole-rupee tax this is EXACTLY what `Math.round(tax / 2)` gave, so
      nothing on an ordinary invoice moves — said plainly rather than sold as a fix. What it
@@ -154,6 +172,8 @@ export function TaxInvoiceDialog({
   // Export (international) supply → zero-rated under LUT; the invoice carries an
   // export declaration instead of a CGST/SGST/IGST split.
   const isExport = isExportSupply(customerCountry);
+  /* Rule 46: state NAME and CODE, from the code frozen at issue. */
+  const placeOfSupply = placeOfSupplyLabel({ posCode: invoice.pos_state_code, interState: fInter, isExport, country: customerCountry });
   const isForeign = isForeignCurrency(currency);
   const fxRate = exchangeRate ?? 1;
   // Export invoices display in the CLIENT's currency (USD…); books stay ₹, so the
@@ -223,7 +243,7 @@ export function TaxInvoiceDialog({
       customerGstin, customerEmail, customerAddress, customerState, customerCountry,
       currency, exchangeRate,
       tenantName, tenantGstin, tenantEmail, tenantPhone,
-      tenantAddress, tenantState,
+      tenantAddress, tenantState, placeOfSupply,
       tenantLogo: await logoDataUri(me?.tenantLogoUrl),
     });
   }
@@ -406,7 +426,7 @@ export function TaxInvoiceDialog({
             </div>
             <div>
               <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Place of supply</p>
-              <p>{isExport ? `Export · ${customerCountry ?? "outside India"}` : fInter ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</p>
+              <p>{placeOfSupply}</p>
             </div>
           </div>
 

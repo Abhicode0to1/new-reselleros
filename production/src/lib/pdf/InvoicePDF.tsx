@@ -60,6 +60,8 @@ export interface InvoicePDFProps {
   customerEmail?:   string | null;
   customerAddress?: string | null;
   customerState?:   string | null;
+  /** Rule 46 place of supply, "Karnataka (29) · IGST" — from placeOfSupplyLabel (R-043). */
+  placeOfSupply?:   string | null;
   customerCountry?: string | null;   // foreign → export (zero-rated under LUT)
   currency?:        string | null;   // billing currency (books stay ₹)
   exchangeRate?:    number | null;   // INR per unit of currency
@@ -409,7 +411,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
   const {
     invoice, lineItems, subtotal, discountPct, discount, taxable, taxRate, tax, total,
     interState = false,
-    customerGstin, customerEmail, customerAddress, customerState, customerCountry,
+    customerGstin, customerEmail, customerAddress, customerState, customerCountry, placeOfSupply,
     currency, exchangeRate, termsConditions,
     tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress, tenantState, tenantLogo,
     upiQrDataUrl, upiVpa, payMethods = null,
@@ -505,7 +507,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
           <View style={s.metaCell}>
             <Text style={s.metaLabel}>Place of supply</Text>
             <Text style={s.metaValue}>
-              {isExport ? `Export · ${customerCountry ?? "outside India"}` : interState ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}
+              {placeOfSupply || (isExport ? `Export · ${customerCountry ?? "outside India"}` : interState ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)")}
             </Text>
           </View>
         </View>

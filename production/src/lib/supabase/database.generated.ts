@@ -5117,6 +5117,12 @@ export type Database = {
           amount: number
           created_at: string
           customer_id: string | null
+          customer_country: string | null
+          customer_gstin: string | null
+          billing_address: string | null
+          pos_state_code: string | null
+          seller_gstin: string | null
+          seller_state_code: string | null
           customer_name: string
           due_date: string | null
           first_advance_at: string | null
@@ -5144,6 +5150,12 @@ export type Database = {
           amount: number
           created_at?: string
           customer_id?: string | null
+          customer_country?: string | null
+          customer_gstin?: string | null
+          billing_address?: string | null
+          pos_state_code?: string | null
+          seller_gstin?: string | null
+          seller_state_code?: string | null
           customer_name: string
           due_date?: string | null
           first_advance_at?: string | null
@@ -5171,6 +5183,12 @@ export type Database = {
           amount?: number
           created_at?: string
           customer_id?: string | null
+          customer_country?: string | null
+          customer_gstin?: string | null
+          billing_address?: string | null
+          pos_state_code?: string | null
+          seller_gstin?: string | null
+          seller_state_code?: string | null
           customer_name?: string
           due_date?: string | null
           first_advance_at?: string | null

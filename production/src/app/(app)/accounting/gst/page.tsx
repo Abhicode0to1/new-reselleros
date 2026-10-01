@@ -30,7 +30,7 @@ import { gstPaidForPeriods } from "@/lib/accounting/tax-payments";
 import { useTaxPayments } from "@/lib/queries/tax-payments";
 import { rupee, formatDate } from "@/lib/utils";
 import { buildGstr1, buildAdvances, docHeads, docHsnLines, gstr1Csv, gstr1Json, gstr3bClass, isExportDoc, GSTR1_HEADERS, type Advance, type HsnSourceLine } from "@/lib/gst/gstr1";
-import { isInterStateSupply } from "@/lib/gst/place-of-supply";
+import { isInterStateSupply, frozenParty } from "@/lib/gst/place-of-supply";
 import { computeGstr3b, gstr3bRows, type Heads } from "@/lib/gst/gstr3b";
 import { parseGstr2b, reconcile2b, type Reconciliation } from "@/lib/gst/gstr2b";
 import { createClient } from "@/lib/supabase/client";
@@ -121,7 +121,7 @@ function useGstReport(range: DateRange) {
       // ── Output: invoices issued in the period ─────────────────────
       const { data: invoices, error: invErr } = await supabase
         .from("invoices")
-        .select("id, amount, invoice_date, customer_name, customer_id, status, taxable_value, tax_amount, tax_rate, inter_state, line_items, adjusted_advances")
+        .select("id, amount, invoice_date, customer_name, customer_id, status, taxable_value, tax_amount, tax_rate, inter_state, line_items, adjusted_advances, customer_gstin, pos_state_code, customer_country, billing_address, seller_state_code")
         .gte("invoice_date", range.from)
         .lte("invoice_date", range.to)
         .in("status", ["pending", "paid", "overdue"]);
@@ -176,6 +176,14 @@ function useGstReport(range: DateRange) {
         for (const c of customers ?? []) custById.set(c.id, { gstin: c.gstin ?? null, stateCode: c.state_code ?? null, state: c.state ?? null, country: c.country ?? null });
       }
       const custOf = (id: string | null | undefined) => (id ? custById.get(id) : undefined);
+      /* R-043: an invoice's buyer as frozen at issue; a credit/debit note takes the
+         buyer of the invoice it amends (filled below for parents outside the period). */
+      type Snap = Parameters<typeof frozenParty>[0];
+      const snapByInvoice = new Map<string, Snap>();
+      for (const i of invoices ?? []) snapByInvoice.set(i.id, i);
+      const partyOf = (inv: Snap, live: ReturnType<typeof custOf>) => frozenParty(inv, live);
+      const noteParty = (invoiceId: string | null | undefined, live: ReturnType<typeof custOf>) =>
+        frozenParty(invoiceId ? snapByInvoice.get(invoiceId) : null, live);
 
       // Seller's own state (place of supply for intra-state B2C). RLS scopes to own tenant.
       const { data: tenantRow } = await supabase
@@ -194,8 +202,10 @@ function useGstReport(range: DateRange) {
       const noteParentIds = Array.from(new Set([...(creditNotes ?? []), ...(debitNotes ?? [])]
         .map((n) => n.invoice_id).filter((x): x is string => !!x && !linesByInvoice.has(x))));
       if (noteParentIds.length) {
-        const { data: parents } = await supabase.from("invoices").select("id, line_items").in("id", noteParentIds);
-        for (const iv of parents ?? []) linesByInvoice.set(iv.id, linesOf(iv.line_items));
+        const { data: parents } = await supabase.from("invoices")
+          .select("id, line_items, customer_gstin, pos_state_code, customer_country, billing_address, seller_state_code")
+          .in("id", noteParentIds);
+        for (const iv of parents ?? []) { linesByInvoice.set(iv.id, linesOf(iv.line_items)); snapByInvoice.set(iv.id, iv); }
       }
       const itemIds = Array.from(new Set(Array.from(linesByInvoice.values()).flatMap((ls) => ls.map((l) => l.item_id)).filter((x): x is string => !!x)));
       const hsnByItem = new Map<string, string | null>();
@@ -212,14 +222,17 @@ function useGstReport(range: DateRange) {
         const taxableValue = i.taxable_value ?? Math.round(amount * 100 / (100 + taxRate));
         const gst          = i.tax_amount ?? (amount - taxableValue);
         const c = custOf(i.customer_id);
+        /* R-043: the buyer as on the day of issue, frozen on the invoice — a later customer
+           edit must not move a filed invoice between B2B / B2CL / B2CS. */
+        const p = partyOf(i, c);
         return {
           invoiceId:     i.id,
           invoiceDate:   i.invoice_date,
           customerName:  i.customer_name ?? "—",
-          customerGstin: c?.gstin ?? null,
-          customerStateCode: c?.stateCode ?? null,
-          customerState:     c?.state ?? null,
-          customerCountry:   c?.country ?? null,
+          customerGstin: p.gstin,
+          customerStateCode: p.stateCode,
+          customerState:     p.state,
+          customerCountry:   p.country,
           amount,
           taxableValue,
           gst,
@@ -234,20 +247,20 @@ function useGstReport(range: DateRange) {
       const noteLines = (taxable: number, invoiceId: string | null | undefined) =>
         docHsnLines(taxable, invoiceId ? linesByInvoice.get(invoiceId) : null, hsnByItem);
       for (const n of creditNotes ?? []) {
-        const c = custOf(n.customer_id);
+        const c = noteParty(n.invoice_id, custOf(n.customer_id));
         outputRows.push({
           invoiceId: n.id, invoiceDate: n.credit_date, customerName: n.customer_name ?? "—",
-          customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null, customerCountry: c?.country ?? null,
+          customerGstin: c.gstin, customerStateCode: c.stateCode, customerState: c.state, customerCountry: c.country,
           amount: -(n.amount ?? 0), taxableValue: -(n.taxable_value ?? 0), gst: -(n.tax_amount ?? 0),
           taxRate: n.tax_rate ?? 18, interState: n.inter_state ?? false, docType: "credit_note",
           lines: noteLines(-(n.taxable_value ?? 0), n.invoice_id),
         });
       }
       for (const n of debitNotes ?? []) {
-        const c = custOf(n.customer_id);
+        const c = noteParty(n.invoice_id, custOf(n.customer_id));
         outputRows.push({
           invoiceId: n.id, invoiceDate: n.debit_date, customerName: n.customer_name ?? "—",
-          customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null, customerCountry: c?.country ?? null,
+          customerGstin: c.gstin, customerStateCode: c.stateCode, customerState: c.state, customerCountry: c.country,
           amount: n.amount ?? 0, taxableValue: n.taxable_value ?? 0, gst: n.tax_amount ?? 0,
           taxRate: n.tax_rate ?? 18, interState: n.inter_state ?? false, docType: "debit_note",
           lines: noteLines(n.taxable_value ?? 0, n.invoice_id),
@@ -272,7 +285,7 @@ function useGstReport(range: DateRange) {
         });
       }
       for (const i of invoices ?? []) {
-        const c = custOf(i.customer_id);
+        const c = partyOf(i, custOf(i.customer_id));
         for (const a of Array.isArray(i.adjusted_advances) ? i.adjusted_advances : []) {
           if (!a?.received_at) continue;
           const receivedDate = toIstDate(a.received_at);
@@ -280,7 +293,7 @@ function useGstReport(range: DateRange) {
           advances.push({
             paymentId: a.payment_id, voucherNo: a.voucher_no ?? null, receivedDate, adjustedOn: i.invoice_date,
             gross: a.amount ?? 0, rate: i.tax_rate ?? 18, interState: i.inter_state ?? false,
-            customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null, customerCountry: c?.country ?? null,
+            customerGstin: c.gstin, customerStateCode: c.stateCode, customerState: c.state, customerCountry: c.country,
           });
         }
       }

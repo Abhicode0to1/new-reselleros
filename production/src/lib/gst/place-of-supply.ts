@@ -1,4 +1,5 @@
 import { resolveStateCode } from "./gstin-state";
+import { GST_STATE_BY_CODE } from "@/lib/utils";
 
 /**
  * Place-of-supply → GST head (CGST+SGST vs IGST)
@@ -79,4 +80,60 @@ export function gstTreatment(
 ): GstTreatment {
   if (isExportSupply(customerCountry)) return "export";
   return isInterStateSupply(customerStateCode, sellerStateCode) ? "inter_state" : "intra_state";
+}
+
+/**
+ * The place-of-supply line printed on an invoice — CGST Rule 46(n) wants the STATE NAME
+ * AND CODE for an inter-state supply. R-043 (1 Oct 2026): it used to print only
+ * "Inter-state (IGST)". `posCode` is the code frozen on the invoice at issue; with none
+ * (a legacy row whose state never agreed with its tax head) the old wording stays rather
+ * than a guessed state.
+ *
+ * @example placeOfSupplyLabel({ posCode: "29", interState: true }) // "Karnataka (29) · IGST"
+ */
+export function placeOfSupplyLabel(a: {
+  posCode?: string | null;
+  interState: boolean;
+  isExport?: boolean;
+  country?: string | null;
+}): string {
+  if (a.isExport || a.posCode === "96") return `Export · ${a.country?.trim() || "outside India"} (96)`;
+  const code = (a.posCode ?? "").trim();
+  const name = code ? GST_STATE_BY_CODE[code] : undefined;
+  const head = a.interState ? "IGST" : "CGST + SGST";
+  if (name) return `${name} (${code}) · ${head}`;
+  return a.interState ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)";
+}
+
+/** A buyer's GST facts as the GST return needs them. */
+export interface PartyFacts { gstin: string | null; stateCode: string | null; state: string | null; country: string | null }
+
+/**
+ * The buyer as on the day of issue (R-043), falling back to today's customer only for a
+ * row that carries no snapshot at all. Once an invoice has its snapshot, a NULL GSTIN
+ * there means "unregistered at issue" — today's GSTIN is NOT borrowed, or a later edit
+ * would move a filed invoice from B2CS into B2B. Place of supply "96" is an export: no
+ * Indian state. A snapshot with no place of supply (backfill left it unknown because
+ * today's state contradicts the frozen tax head) keeps today's state, as before.
+ */
+export function frozenParty(
+  inv: {
+    customer_gstin?: string | null; pos_state_code?: string | null; customer_country?: string | null;
+    billing_address?: string | null; seller_state_code?: string | null;
+  } | null | undefined,
+  live: PartyFacts | null | undefined,
+): PartyFacts {
+  const l: PartyFacts = live ?? { gstin: null, stateCode: null, state: null, country: null };
+  if (!inv) return l;
+  const has = inv.seller_state_code != null || inv.pos_state_code != null || inv.billing_address != null;
+  if (!has) return l;
+  const pos = inv.pos_state_code ?? null;
+  const country = inv.customer_country ?? l.country;
+  if (pos === "96") return { gstin: inv.customer_gstin ?? null, stateCode: null, state: null, country };
+  return {
+    gstin: inv.customer_gstin ?? null,
+    stateCode: pos ?? l.stateCode,
+    state: pos ? (GST_STATE_BY_CODE[pos] ?? l.state) : l.state,
+    country,
+  };
 }
