@@ -12,7 +12,7 @@ On the user's FIRST message of a session (even "hi"):
 3. Tell them in ≤6 lines of Hinglish: their card in `doing` (if any), the next card for them, and their `step` cards (`stepFor` = them, no `stepDoneAt`).
 4. Offer: "agla card lo?" — one question.
 
-Card fields: `id`, `title`, `why`, `fix`, `doneWhen`, `where`, `files` (folders it touches), `priority` p0–p3, `rank` (1 = next), `status` = `list` → `doing` → `review` → `live` (merged, waits for Thursday deploy) / `done`; `claimedBy`, `claimedAt`, `finishedAt`, `commits`, `checked`; human steps: `step`, `stepFor`, `stepAfterDeploy`, `stepDoneAt`. A one-line card someone typed has `draft: true` — fill its fields before building it. Times only from `date -u`.
+Card fields: `id`, `title`, `why`, `fix`, `doneWhen`, `where`, `files` (folders it touches), `priority` p0–p3, `rank` (1 = next), `status` = `list` → `doing` → `review` → `live` (merged, waits for Thursday deploy) / `done`; `claimedBy`, `claimedAt`, `finishedAt`, `commits`, `checked`, `howToCheck`; human steps: `step`, `stepFor`, `stepAfterDeploy`, `stepDoneAt`. A one-line card someone typed has `draft: true` — fill its fields before building it. Times only from `date -u`.
 
 ## Team model — AI custom-software company (1 Oct 2026, Pardeep)
 
@@ -22,7 +22,7 @@ AI writes the software; the four people do only what AI can't. Full model (roles
 1. Session start: `git fetch origin`, merge `origin/manager-pardeep`; read the board; if your person has a card in `doing` (`claimedBy` = them), continue it.
 2. "agla card lo": take the `status: list` card with the lowest `rank` whose `files` don't overlap a card in `doing`; set `status: doing`, `claimedBy` (the person), `claimedAt`. Empty `files` → fill them first. Bigger than a day → split into small cards (new ids `R-<next>`, ranks next to it) first.
 3. Short branch `<name>/<card>` from `origin/manager-pardeep`; build end to end with tests; gate; check on localhost like the business owner.
-4. Same day: rebase on `origin/manager-pardeep`, gate again, merge into `manager-pardeep`, push (rebase again if rejected). Card → `status: review` with `commits`, `checked` (one line: what you verified on localhost) and `finishedAt` (real `date -u`) — the board's "✅ Ho gaya" tab shows who (`claimedBy`), when and how many hours from it. Pardeep checks it (→ `live` until the Thursday deploy; Abhishek's deploy session sets `done`).
+4. Same day: rebase on `origin/manager-pardeep`, gate again, merge into `manager-pardeep`, push (rebase again if rejected). Card → `status: review` with `commits`, `checked` (one line: what you verified on localhost) `finishedAt` (real `date -u`) and `howToCheck` — 2–3 plain Hinglish steps a non-coder owner can follow on localhost to SEE it works (which page to open, what to click, what number/text should appear; never code or terminal steps) — the board's "✅ Ho gaya" tab shows who (`claimedBy`), when and how many hours from it. Pardeep checks it (→ `live` until the Thursday deploy; Abhishek's deploy session sets `done`).
 5. People keep their human roles: Pardeep owner (price, money, priority), Pawan clients/sales, Hitesh books/GST/CA, Abhishek deploy (Thursday 4 pm IST), server, support. Never passwords/keys, never live data.
 
 Before a NEW migration: timestamp newer than every migration on all `origin/*` branches, then `node production/scripts/migration-order-check.mjs --base origin/main`. The person who asked for a card closes it after the AI check.
