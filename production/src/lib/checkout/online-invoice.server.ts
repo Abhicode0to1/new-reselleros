@@ -60,7 +60,7 @@ async function issue(
 
   const { data: q, error: qErr } = await admin
     .from("quotes")
-    .select("id, invoice_id, payment_status, lead_id")
+    .select("id, invoice_id, payment_status, lead_id, customer_id")
     .eq("id", quoteId)
     .eq("tenant_id", tenantId)
     .maybeSingle();
@@ -75,6 +75,8 @@ async function issue(
      applies after record_payment ("the GST invoice is raised once the quote is fully
      paid"). A part payment stays a receipt voucher (advance), as it does at the desk. */
   if (q.payment_status !== "received") return { status: "not_fully_paid" };
+
+  await fillBlankCustomerState(admin, { tenantId, quoteId, leadId: q.lead_id, customerId: q.customer_id, logTag });
 
   const { data, error } = await admin.rpc("generate_invoice", { p_quote_id: quoteId });
   if (error) {
@@ -106,4 +108,42 @@ async function issue(
   }
   console.info(`${logTag} GST invoice ${invoiceId} issued for paid ${quoteId}`);
   return { status: "issued", invoiceId };
+}
+
+/**
+ * R-092 (1 Oct 2026): a RETURNING buyer's customer row may have no state, while the state
+ * they just chose at checkout sits on this order's lead. record_payment reuses the existing
+ * customer (matched by email) and copies the lead's state only onto a NEW one, so the
+ * invoice for a repeat buyer was refused for "no state on record" — every DMS panel order
+ * from an existing customer, in practice.
+ *
+ * So, just before the invoice: if the customer the paid quote points to has NO state, and
+ * the order's lead has one, fill the blank. Never overwrites a recorded state (the update
+ * itself is conditioned on it still being empty), never guesses one, and a failure here only
+ * leaves the invoice to the existing "not issued" note below.
+ */
+export async function fillBlankCustomerState(
+  admin: Admin,
+  args: { tenantId: string; quoteId: string; leadId: string | null; customerId: string | null; logTag: string },
+): Promise<"filled" | "already" | "nothing_to_fill"> {
+  const { tenantId, leadId, customerId, logTag, quoteId } = args;
+  if (!customerId || !leadId) return "nothing_to_fill";
+  const { data: cust } = await admin
+    .from("customers").select("state_code").eq("id", customerId).eq("tenant_id", tenantId).maybeSingle();
+  if (!cust) return "nothing_to_fill";
+  if ((cust.state_code ?? "").trim()) return "already";
+  const { data: lead } = await admin
+    .from("leads").select("state_code, state").eq("id", leadId).eq("tenant_id", tenantId).maybeSingle();
+  const code = (lead?.state_code ?? "").trim();
+  if (!/^\d{2}$/.test(code)) return "nothing_to_fill";
+  const { data: updated, error } = await admin
+    .from("customers")
+    .update({ state_code: code, state: lead?.state ?? null })
+    .eq("id", customerId)
+    .eq("tenant_id", tenantId)
+    .or("state_code.is.null,state_code.eq.")
+    .select("id");
+  if (error || !updated?.length) return "nothing_to_fill";
+  console.info(`${logTag} ${quoteId}: customer ${customerId} had no state; filled ${code} from the order the buyer just placed`);
+  return "filled";
 }
