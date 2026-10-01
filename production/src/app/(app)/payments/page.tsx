@@ -63,7 +63,7 @@ import { rupee, formatDate, bankLabel, cleanDisplayName, cn } from "@/lib/utils"
 import { istMonth, toIstDate } from "@/lib/dates/ist";
 /* The postpaid countdown, shared with /subscriptions and the onboarding dialog. */
 import { paymentDueState, paymentDueChipLabel, todayIST } from "@/lib/subscriptions/payment-due";
-import { useConfirm } from "@/components/providers/confirm-provider";
+import { useConfirm, useAskText } from "@/components/providers/confirm-provider";
 
 const STATUS_TABS: TabBarItem[] = [
   { id: "all",       label: "All" },
@@ -88,6 +88,8 @@ const PAY_COL_WIDTHS: Record<string, string> = {
 };
 
 function PaymentsPageInner() {
+  /* window.prompt returns null in the desktop app — Write off did nothing (R-052). */
+  const askText = useAskText();
   const router = useRouter();
   const [tab, setTab]       = React.useState<"all" | "received" | "refunded">("all");
   const [view, setView]     = React.useState<"all" | "subscription" | "project">("all");
@@ -443,10 +445,16 @@ function PaymentsPageInner() {
                         }
                       }}
                       onResume={() => resumeSub.mutate(o.subscription_id)}
-                      onWriteOff={() => {
-                        const reason = prompt(`Write off ${rupee(o.outstanding_amount)} from ${o.customer_name}?\n\nThis cancels the subscription and marks the balance as uncollectable.\n\nReason (for audit):`);
-                        if (reason && reason.trim().length > 0) {
-                          writeOffSub.mutate({ id: o.subscription_id, reason: reason.trim() });
+                      onWriteOff={async () => {
+                        const reason = await askText({
+                          title: `Write off ${rupee(o.outstanding_amount)} from ${o.customer_name}?`,
+                          body: "This cancels the subscription and marks the balance as uncollectable.",
+                          label: "Reason (for audit)",
+                          confirmLabel: "Write off",
+                          danger: true,
+                        });
+                        if (reason) {
+                          writeOffSub.mutate({ id: o.subscription_id, reason });
                         }
                       }}
                       recordPaymentHref={o.quote_id ? `/quotes/${o.quote_id}` : null}
@@ -937,16 +945,19 @@ function PaymentRowView({
         action: { label: "Open quote", onClick: () => router.push(`/quotes/${p.quote_id}` as any) },
       }),
   });
-  const [refundReason, setRefundReason] = React.useState("");
+  const askText = useAskText();
 
   const handleRefund = async () => {
-    const reason = window.prompt(
-      `${rupee(p.amount)} ka refund book karna hai (${p.quote_id}).\n\nWajah likhiye — ye RFV voucher par darj hogi:`,
-      refundReason,
-    );
+    /* In-app box, not window.prompt — that returned null in the desktop app, so Refund
+       did nothing (R-052). */
+    const reason = await askText({
+      title: `Refund ${rupee(p.amount)} on ${p.quote_id}?`,
+      body: "The reason is printed on the RFV voucher.",
+      label: "Reason (at least 5 characters)",
+      confirmLabel: "Next",
+    });
     if (reason === null) return;
-    setRefundReason(reason);
-    if (reason.trim().length < 5) {
+    if (reason.length < 5) {
       toast.error("Wajah kam se kam 5 akshar ki ho — voucher par chhapti hai.");
       return;
     }

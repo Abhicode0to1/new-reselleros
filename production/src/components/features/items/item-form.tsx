@@ -4,6 +4,7 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -193,7 +194,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
 
     if (Object.keys(cleanPrices).length === 0) {
       // No tier filled — error out
-      alert("Please enter at least one commitment tier pricing");
+      toast.error("Enter a price for at least one commitment tier.", { description: "Fill Annual or Monthly in the pricing section, then save again." });
       return;
     }
 
@@ -208,13 +209,13 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
     const headline = headlineTier(cleanPrices);
     const blocker = agentQuoteBlocker(data.kind, cleanPrices);
     if (blocker) {
-      alert(blocker);
+      toast.error(blocker, { description: "Fix this in the pricing section, then save again." });
       return;
     }
 
     // Distributor sanity: if marked partner-visible, must have a partner price
     if (isDistributor && isPartnerVisible && partnerPrice <= 0) {
-      alert("Partner price required when SKU is marked visible to sub-resellers");
+      toast.error("Partner price is required when the SKU is visible to sub-resellers.", { description: "Add a partner price, or turn off visibility to sub-resellers." });
       return;
     }
 

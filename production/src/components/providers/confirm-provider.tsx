@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Textarea } from "@/components/ui/textarea";
 
 export interface ConfirmOptions {
   title: string;
@@ -38,7 +39,16 @@ export interface ConfirmOptions {
 
 type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
 
+/** Same dialog with a text box — the in-app replacement for window.prompt() (R-052). */
+export interface AskTextOptions extends ConfirmOptions {
+  /** Label above the box, e.g. "Reason (for audit)". */
+  label: string;
+  placeholder?: string;
+}
+type AskTextFn = (opts: AskTextOptions) => Promise<string | null>;
+
 const ConfirmContext = React.createContext<ConfirmFn | null>(null);
+const AskTextContext = React.createContext<AskTextFn | null>(null);
 
 /** Returns a `confirm(opts) => Promise<boolean>` function. */
 export function useConfirm(): ConfirmFn {
@@ -47,23 +57,45 @@ export function useConfirm(): ConfirmFn {
   return ctx;
 }
 
+/**
+ * Returns `askText(opts) => Promise<string | null>`: the trimmed text, or null when
+ * cancelled. Confirm stays disabled while the box is empty — every caller needs a reason.
+ */
+export function useAskText(): AskTextFn {
+  const ctx = React.useContext(AskTextContext);
+  if (!ctx) throw new Error("useAskText must be used within <ConfirmProvider>");
+  return ctx;
+}
+
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
-  const [opts, setOpts] = React.useState<ConfirmOptions | null>(null);
-  const resolverRef = React.useRef<((v: boolean) => void) | null>(null);
+  const [opts, setOpts] = React.useState<(ConfirmOptions & Partial<AskTextOptions>) | null>(null);
+  const [text, setText] = React.useState("");
+  const resolverRef = React.useRef<((v: boolean | string | null) => void) | null>(null);
+  const isAsk = !!opts?.label;
 
   const confirm = React.useCallback<ConfirmFn>((options) => {
     setOpts(options);
-    return new Promise<boolean>((resolve) => { resolverRef.current = resolve; });
+    return new Promise<boolean>((resolve) => { resolverRef.current = (v) => resolve(v === true); });
   }, []);
 
-  const settle = React.useCallback((result: boolean) => {
-    setOpts(null);
-    resolverRef.current?.(result);
-    resolverRef.current = null;
+  const askText = React.useCallback<AskTextFn>((options) => {
+    setText("");
+    setOpts(options);
+    return new Promise<string | null>((resolve) => {
+      resolverRef.current = (v) => resolve(typeof v === "string" ? v : null);
+    });
   }, []);
+
+  const settle = React.useCallback((ok: boolean) => {
+    const value = ok ? (opts?.label ? text.trim() : true) : (opts?.label ? null : false);
+    setOpts(null);
+    resolverRef.current?.(value);
+    resolverRef.current = null;
+  }, [opts, text]);
 
   return (
     <ConfirmContext.Provider value={confirm}>
+    <AskTextContext.Provider value={askText}>
       {children}
       <Dialog open={!!opts} onOpenChange={(o) => { if (!o) settle(false); }}>
         <DialogContent className="md:!max-w-[440px]">
@@ -82,6 +114,19 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                   <DialogDescription className="whitespace-pre-line">{opts.body}</DialogDescription>
                 )}
               </DialogHeader>
+              {isAsk && (
+                <div className="space-y-1.5">
+                  <label htmlFor="ask-text" className="block text-xs font-medium text-ink-2">{opts.label}</label>
+                  <Textarea
+                    id="ask-text"
+                    rows={3}
+                    value={text}
+                    placeholder={opts.placeholder}
+                    onChange={(e) => setText(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              )}
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => settle(false)}>
                   {opts.cancelLabel ?? "Cancel"}
@@ -91,7 +136,8 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                   variant={opts.danger ? "danger" : "primary"}
                   icon={opts.icon}
                   onClick={() => settle(true)}
-                  autoFocus
+                  disabled={isAsk && !text.trim()}
+                  autoFocus={!isAsk}
                 >
                   {opts.confirmLabel ?? "Confirm"}
                 </Button>
@@ -100,6 +146,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           )}
         </DialogContent>
       </Dialog>
+    </AskTextContext.Provider>
     </ConfirmContext.Provider>
   );
 }

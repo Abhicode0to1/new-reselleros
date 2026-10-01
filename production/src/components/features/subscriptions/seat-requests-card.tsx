@@ -23,6 +23,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { useAskText } from "@/components/providers/confirm-provider";
 import { cn, rupee, formatDate, daysBetween } from "@/lib/utils";
 import type { SeatRequest, Subscription } from "@/lib/supabase/database.types";
 import { assessRequest, previewCharge, requestBadge } from "@/lib/subscriptions/seat-request";
@@ -34,6 +35,8 @@ export function SeatRequestsCard({ requests, subscriptions, onDecided }: {
   subscriptions: Subscription[];
   onDecided: () => void;
 }) {
+  /* window.prompt returned null in the desktop app, so Reject did nothing (R-052). */
+  const askText = useAskText();
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const pending = requests.filter((r) => r.status === "pending");
   const today = localDateISO(new Date());
@@ -165,10 +168,10 @@ export function SeatRequestsCard({ requests, subscriptions, onDecided }: {
                       size="sm"
                       variant="ghost"
                       disabled={busyId === r.id}
-                      onClick={() => {
-                        const note = window.prompt("Why are you rejecting it? The customer sees this.");
+                      onClick={async () => {
+                        const note = await askText({ title: "Reject this request?", label: "Why? The customer sees this.", confirmLabel: "Reject", danger: true });
                         if (note === null) return;
-                        decide(r.id, "rejected", note.trim() || undefined);
+                        decide(r.id, "rejected", note);
                       }}
                     >
                       Reject

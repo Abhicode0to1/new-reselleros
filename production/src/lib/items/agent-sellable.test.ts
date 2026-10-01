@@ -129,6 +129,6 @@ describe("form isi function se guzarta hai", () => {
   it("blocker ka jawab dikhaya jata hai, chup-chaap phenka nahi jata", () => {
     /* Ek guard jo faisla karke kuch na kahe, us bug se bura hai jise wo rok raha hai:
        button dabta hai aur kuch nahi hota. */
-    expect(code).toMatch(/if \(blocker\) \{[\s\S]{0,80}alert\(blocker\)/);
+    expect(code).toMatch(/if \(blocker\) \{[\s\S]{0,80}toast\.error\(blocker/);
   });
 });

@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useConfirm } from "@/components/providers/confirm-provider";
 import { cn } from "@/lib/utils";
 import { pillsFor, pillDraft, replySubject, type PillContext } from "@/lib/inbound/reply-pills";
 import { repliedState, repliedNote, repliedIsProblem, type ReplyRef } from "@/lib/inbound/replied";
@@ -55,6 +56,9 @@ export function ReplyComposer({
 }: ReplyComposerProps) {
   const [subject, setSubject] = React.useState(() => replySubject(originalSubject));
   const [body, setBody]       = React.useState("");
+  /* App dialog, not window.confirm — the browser one silently returns false in the
+     desktop app and some webviews, so these buttons looked dead (R-052). */
+  const confirm = useConfirm();
 
   /* A new enquiry gets a fresh box. Without this the previous customer's half-typed reply
      would still be sitting there under someone else's email. */
@@ -75,12 +79,12 @@ export function ReplyComposer({
 
   const pills = React.useMemo(() => pillsFor(context), [context]);
 
-  function applyPill(id: (typeof pills)[number]["id"]) {
+  async function applyPill(id: (typeof pills)[number]["id"]) {
     const draft = pillDraft(id, context);
     if (body.trim() && body.trim() !== draft.trim()) {
       /* Asked, not assumed. Silently discarding typed text is the small betrayal that
          makes people stop trusting the buttons. */
-      if (!window.confirm("Replace what you have written with this reply?")) return;
+      if (!(await confirm({ title: "Replace what you have written with this reply?", confirmLabel: "Replace", cancelLabel: "Keep mine" }))) return;
     }
     setBody(draft);
   }
@@ -111,7 +115,7 @@ export function ReplyComposer({
 
   async function draftWithAi() {
     if (!leadId) return;
-    if (body.trim() && !window.confirm("Replace what you have written with an AI draft?")) return;
+    if (body.trim() && !(await confirm({ title: "Replace what you have written with an AI draft?", confirmLabel: "Replace", cancelLabel: "Keep mine" }))) return;
     setAiBusy(true);
     try {
       const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/draft-reply`, { method: "POST" });
@@ -194,7 +198,7 @@ export function ReplyComposer({
             key={p.id}
             type="button"
             title={p.hint}
-            onClick={() => applyPill(p.id)}
+            onClick={() => void applyPill(p.id)}
             className="rounded-full border border-hairline bg-paper px-2.5 py-1 text-[12px] text-ink-2 transition-colors hover:border-amber hover:text-amber-ink"
           >
             {p.label}

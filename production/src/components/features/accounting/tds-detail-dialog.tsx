@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { rupee, formatDate } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { useConfirm } from "@/components/providers/confirm-provider";
+import { useConfirm, useAskText } from "@/components/providers/confirm-provider";
 import {
   type TdsReceivable,
   TDS_STATUS_LABEL,
@@ -61,6 +61,7 @@ export function TdsDetailDialog({ open, onOpenChange, tds }: Props) {
   const writeOff           = useWriteOffTds();
   const deleteTds          = useDeleteTdsReceivable();
   const confirm            = useConfirm();
+  const askText            = useAskText();
 
   // Fetch customer phone for WhatsApp chase
   React.useEffect(() => {
@@ -270,8 +271,8 @@ export function TdsDetailDialog({ open, onOpenChange, tds }: Props) {
             <Button
               type="button"
               variant="default"
-              onClick={() => {
-                const reason = prompt("Reason for dispute (e.g., not appearing on Form 26AS, customer denies deduction):");
+              onClick={async () => {
+                const reason = await askText({ title: "Mark this TDS as disputed?", label: "Reason", placeholder: "e.g. not on Form 26AS, customer denies deduction", confirmLabel: "Mark disputed" });
                 if (reason) {
                   markDisputed.mutate({ id: tds.id, reason }, { onSuccess: () => onOpenChange(false) });
                 }
