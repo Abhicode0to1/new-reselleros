@@ -41,6 +41,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { MetricCard } from "@/components/features/customers/customer-insights";
 import { DealStageStepper } from "@/components/features/deals/deal-stage-stepper";
+import { stagesReached } from "@/lib/deals/stages-reached";
 import { DealHistoryFeed } from "@/components/features/deals/deal-history-feed";
 import {
   DealSummaryCard, DealDetailsCard, DealFollowupsCard, DealQuotesCard, DealMoneyCard,
@@ -263,7 +264,10 @@ export function DealDetailView({ leadId }: { leadId: string }) {
           </div>
         </div>
 
-        <DealStageStepper lead={lead} />
+        <DealStageStepper
+          lead={lead}
+          reached={stagesReached({ stageMoves: history.stageMoves, quotes, projectQuotes: quoteRows, trialStartedAt: lead.trial_started_at })}
+        />
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(140px,1fr))]">
           <MetricCard label="Value" value={lead.value ? rupee(lead.value) : "—"} hint={lead.value ? "saal ka" : "Edit se bharo"} />

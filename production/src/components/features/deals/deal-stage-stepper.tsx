@@ -20,11 +20,14 @@ import type { Lead } from "@/lib/supabase/database.types";
 
 const STEPS: Lead["stage"][] = ["quote", "demo", "trial", "won"];
 
-export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "company" | "value" | "expected_close_date"> }) {
+export function DealStageStepper({ lead, reached }: {
+  lead: Pick<Lead, "id" | "stage" | "company" | "value" | "expected_close_date">;
+  /** Steps this deal really went through (lib/deals/stages-reached.ts) — only these get a ✓. */
+  reached?: ReadonlySet<string>;
+}) {
   const { changeStage, isPending } = useChangeLeadStage();
   const confirm = useConfirm();
   const qc = useQueryClient();
-  const currentIdx = STEPS.indexOf(lead.stage);
   const name = lead.company?.trim() || "Deal";
 
   const move = async (to: Lead["stage"]) => {
@@ -56,7 +59,7 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
   /* 1 Oct 2026, Pardeep: "4 Won ka matlab nahi samjh aaya". The pills showed a step number
      ("4 Won") and a ✓ on every earlier stage — but a deal can jump straight from quote to
      won (Excel Technologies did), so the ✓ claimed a demo and trial that never happened.
-     Now: no numbers, no ticks; the current stage is just highlighted (Pardeep: no "Abhi:"/"Current:" prefix — the highlight says it), the rest are plain
+     Now: no numbers; a ✓ only on steps with evidence (stages-reached.ts — e.g. a sent quote); the current stage is just highlighted (Pardeep: no "Abhi:"/"Current:" prefix — the highlight says it), the rest are plain
      "click to move" pills, and one caption says what the row is for. */
   return (
     <div className="space-y-1.5">
@@ -64,7 +67,7 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
     <div className="flex flex-wrap items-center gap-2">
       <ol className="flex min-w-0 flex-wrap items-center gap-1" aria-label="Deal stage">
         {STEPS.map((s, i) => {
-          const done = currentIdx >= 0 && i < currentIdx;
+          const done = !!reached?.has(s) && s !== lead.stage;
           const current = s === lead.stage;
           return (
             <li key={s} className="flex shrink-0 items-center gap-1">
@@ -74,16 +77,18 @@ export function DealStageStepper({ lead }: { lead: Pick<Lead, "id" | "stage" | "
                 onClick={() => void move(s)}
                 disabled={current || isPending}
                 aria-current={current ? "step" : undefined}
-                title={current ? "This is the current stage" : `Move to ${STAGE_LABEL[s]}`}
+                title={current ? "This is the current stage" : done ? `${STAGE_LABEL[s]} — done` : `Move to ${STAGE_LABEL[s]}`}
                 className={cn(
                   "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber",
                   current && s === "won" && "border-emerald bg-emerald-soft text-emerald cursor-default",
                   current && s !== "won" && "border-amber bg-amber-soft text-amber-ink cursor-default",
-                  !current && "border-hairline bg-paper text-ink-3 hover:bg-paper-2 hover:text-ink",
+                  !current && done && "border-amber/40 bg-paper text-ink-2 hover:bg-paper-2",
+                  !current && !done && "border-hairline bg-paper text-ink-3 hover:bg-paper-2 hover:text-ink",
                 )}
               >
                 {current && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />}
+                {done && <Icon name="check" size={12} />}
                 {STAGE_LABEL[s]}
               </button>
             </li>

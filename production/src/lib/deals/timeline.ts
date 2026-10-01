@@ -98,6 +98,8 @@ export interface DealHistory {
   undated: number;
   /** Events per filter chip ("all" = every event). */
   counts: Record<DealFilter, number>;
+  /** Stages the lead was recorded moving INTO (activity_log) — evidence for the stepper's ✓. */
+  stageMoves: string[];
 }
 
 /** id → display name. Unknown / null ids return null (never a bare uuid). */
@@ -452,7 +454,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
 
   const counts: Record<DealFilter, number> = { all: events.length, calls: 0, email: 0, money: 0, stage: 0 };
   for (const e of events) counts[e.group]++;
-  return { events, undated, counts };
+  return { events, undated, counts, stageMoves: leadStageMoves };
 }
 
 export function filterDealHistory(events: readonly DealEvent[], filter: DealFilter): DealEvent[] {
