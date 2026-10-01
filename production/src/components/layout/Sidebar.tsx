@@ -23,7 +23,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { APP_NAV, filterNavForRole, navItemContains, type UserRole, type NavItem } from "@/lib/nav";
+import { type UserRole, type NavItem } from "@/lib/nav";
+import { buildSidebarApps, appForPath } from "@/lib/nav-apps";
 import { useNavBadges } from "@/lib/hooks/useNavBadges";
 import { useCurrentUser, useIdentity } from "@/lib/hooks/useCurrentUser";
 import { roleLabel } from "@/lib/auth/roles";
@@ -41,17 +42,106 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
   // open when the current route is the parent or one of its children.
   const [openMenus, setOpenMenus] = React.useState<Record<string, boolean>>({});
 
-  // Single-open accordion — ALWAYS exactly one group open: the one holding the
-  // current page. Click another group's header to peek it (that becomes the open
-  // one). Navigating resets to the new page's group. Fully predictable — the
-  // menu never expands/collapses "on its own". `manualOpen` = a group the user
-  // clicked open; null = follow the active route.
-  const [manualOpen, setManualOpen] = React.useState<string | null>(null);
-  // Clear the manual choice whenever the route changes, so the section you land
-  // in is the one that opens — every time, consistently.
-  React.useEffect(() => { setManualOpen(null); }, [pathname]);
-  const toggleSection = (name: string) =>
-    setManualOpen((cur) => (cur === name ? null : name));
+  /* R-088 — the menu is an app switcher (Sales · Billing · Accounts · Delivery · Team ·
+     Settings) that shows only the chosen app's rows, with Today/Dashboard pinned above;
+     see lib/nav-apps.ts. The app follows the page you are on; clicking another app peeks
+     it until you navigate. A role with a short menu gets every row at once, no switcher. */
+  const role = me?.role as UserRole | undefined;
+  const model = React.useMemo(() => buildSidebarApps(role), [role]);
+  const routeApp = appForPath(model, pathname);
+  const [pickedApp, setPickedApp] = React.useState<string | null>(null);
+  // The last app the route pointed at — so a pinned page (/dashboard) or a page outside the
+  // nav keeps the app you were in instead of jumping back to the first one.
+  const [lastRouteApp, setLastRouteApp] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setPickedApp(null);
+    if (routeApp) setLastRouteApp(routeApp);
+  }, [pathname, routeApp]);
+  const activeApp =
+    model.apps.find((a) => a.id === (pickedApp ?? routeApp ?? lastRouteApp)) ?? model.apps[0];
+
+  // Reusable link (plain item + accordion children).
+  const renderLink = (it: NavItem, child = false) => {
+    const isActive = pathname === it.href;
+    const b = it.badge ?? navBadges[it.id as keyof typeof navBadges];
+    return (
+      <Link
+        key={it.id}
+        href={it.href as any}
+        onClick={onNavigate}
+        target={it.external ? "_blank" : undefined}
+        rel={it.external ? "noopener noreferrer" : undefined}
+        title={collapsed ? (it.hint ? `${it.label} — ${it.hint}` : it.label) : it.hint}
+        className={cn(
+          "group relative flex items-center rounded-md text-sm transition-colors",
+          collapsed ? "justify-center px-0 py-2" : child ? "gap-2 pl-8 pr-3 py-1.5 text-[13px]" : "gap-2.5 px-3 py-1.5",
+          isActive
+            ? "bg-amber-soft text-amber-ink font-medium"
+            : "text-ink-2 hover:bg-paper-2 hover:text-ink"
+        )}
+        aria-current={isActive ? "page" : undefined}
+      >
+        {child
+          ? <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", isActive ? "bg-amber" : "bg-ink-3/40")} />
+          : <Icon name={it.icon} size={15} className={cn("flex-shrink-0", isActive ? "text-amber" : "text-ink-3 group-hover:text-ink-2")} />}
+        {!collapsed && <span className="flex-1 truncate" title={it.label}>{it.label}</span>}
+        {!collapsed && it.external && <Icon name="external" size={12} className="flex-shrink-0 text-ink-3" />}
+        {/* The expanded badge reads text-amber-ink, matching every other `bg-amber/15` badge
+            in the app (dashboard:865, mobile:404, platform:398). This one was the exception:
+            it measured 4.30:1 against the active row's amber-soft, under the 4.5 AA floor at
+            10px — and actually worse than that, because the badge's own 15% amber tint darkens
+            the very surface the measurement stopped at. */}
+        {b && (collapsed ? (
+          <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-amber" />
+        ) : (
+          <span className={cn("text-3xs px-1.5 py-0.5 rounded-full tabular-nums flex-shrink-0", isActive ? "bg-amber/15 text-amber-ink" : "bg-paper-2 text-ink-3")}>
+            {b}
+          </span>
+        ))}
+      </Link>
+    );
+  };
+
+  // A group item — accordion parent (has children, e.g. Reports) or plain link.
+  const renderItem = (item: NavItem) => {
+    const active = pathname === item.href;
+    if (item.children?.length && !collapsed) {
+      const isOpen = openMenus[item.id] ?? (active || item.children.some((c) => pathname === c.href));
+      return (
+        <div key={item.id}>
+          <div className="flex items-center">
+            <Link
+              href={item.href as any}
+              onClick={onNavigate}
+              className={cn(
+                "group flex items-center gap-2.5 rounded-md text-sm transition-colors flex-1 px-3 py-1.5",
+                active ? "bg-amber-soft text-amber-ink font-medium" : "text-ink-2 hover:bg-paper-2 hover:text-ink"
+              )}
+              aria-current={active ? "page" : undefined}
+            >
+              <Icon name={item.icon} size={15} className={cn("flex-shrink-0", active ? "text-amber" : "text-ink-3 group-hover:text-ink-2")} />
+              <span className="flex-1 truncate" title={item.label}>{item.label}</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setOpenMenus((m) => ({ ...m, [item.id]: !isOpen }))}
+              aria-label={isOpen ? `Collapse ${item.label}` : `Expand ${item.label}`}
+              aria-expanded={isOpen}
+              className="p-1.5 rounded-md text-ink-3 hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+            >
+              <Icon name={isOpen ? "chevron_up" : "chevron_down"} size={14} />
+            </button>
+          </div>
+          {isOpen && (
+            <div className="mt-0.5 space-y-0.5">
+              {item.children!.map((c) => renderLink(c, true))}
+            </div>
+          )}
+        </div>
+      );
+    }
+    return renderLink(item);
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -89,9 +179,8 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
         )}
       </div>
 
-      {/* Nav scroll area — items filtered by current user's role (sales-only
-          users get a stripped-down menu). For sales users, also relabel
-          "Deal Pipeline" → "Leads" since the Kanban / deals UI is hidden. */}
+      {/* Nav scroll area — rows filtered by the current user's role, then shown one
+          app at a time (R-088, lib/nav-apps.ts). */}
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
         {/* Mobile-only quick-grid — surface My Expenses & top tools at the top of the "More" drawer */}
         <div className="md:hidden">
@@ -124,142 +213,55 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
             ))}
           </div>
         </div>
-        {filterNavForRole(APP_NAV, me?.role as UserRole | undefined, { canViewDeals: me?.canViewDeals }).map((section) => {
-          // Setup Wizard is a first-run experience — drop it once setup's done.
-          const visibleItems = section.items.filter(
-            (item) => item.id !== "setup" || !me?.tenantSetupCompletedAt,
-          );
-          if (visibleItems.length === 0) return null;
+        {model.pinned.length > 0 && (
+          <div className={cn("space-y-0.5", model.apps.length > 0 && "pb-2 mb-2 border-b border-hairline")}>
+            {model.pinned.map((it) => renderLink(it))}
+          </div>
+        )}
 
-          /* Directory rows (S30) count too: on /accounting/pnl the Books group is the one
-             that opens, because Reports is where that page lives. */
-          const sectionActive = visibleItems.some((it) => navItemContains(it, pathname));
-
-          // Reusable link (plain item + accordion children).
-          const renderLink = (it: NavItem, child = false) => {
-            const isActive = pathname === it.href;
-            const b = it.badge ?? navBadges[it.id as keyof typeof navBadges];
-            return (
-              <Link
-                key={it.id}
-                href={it.href as any}
-                onClick={onNavigate}
-                target={it.external ? "_blank" : undefined}
-                rel={it.external ? "noopener noreferrer" : undefined}
-                title={collapsed ? (it.hint ? `${it.label} — ${it.hint}` : it.label) : it.hint}
-                className={cn(
-                  "group relative flex items-center rounded-md text-sm transition-colors",
-                  collapsed ? "justify-center px-0 py-2" : child ? "gap-2 pl-8 pr-3 py-1.5 text-[13px]" : "gap-2.5 px-3 py-1.5",
-                  isActive
-                    ? "bg-amber-soft text-amber-ink font-medium"
-                    : "text-ink-2 hover:bg-paper-2 hover:text-ink"
-                )}
-                aria-current={isActive ? "page" : undefined}
-              >
-                {child
-                  ? <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", isActive ? "bg-amber" : "bg-ink-3/40")} />
-                  : <Icon name={it.icon} size={15} className={cn("flex-shrink-0", isActive ? "text-amber" : "text-ink-3 group-hover:text-ink-2")} />}
-                {!collapsed && <span className="flex-1 truncate" title={it.label}>{it.label}</span>}
-                {!collapsed && it.external && <Icon name="external" size={12} className="flex-shrink-0 text-ink-3" />}
-                {/* The expanded badge reads text-amber-ink, matching every other `bg-amber/15` badge
-                    in the app (dashboard:865, mobile:404, platform:398). This one was the exception:
-                    it measured 4.30:1 against the active row's amber-soft, under the 4.5 AA floor at
-                    10px — and actually worse than that, because the badge's own 15% amber tint darkens
-                    the very surface the measurement stopped at. */}
-                {b && (collapsed ? (
-                  <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-amber" />
-                ) : (
-                  <span className={cn("text-3xs px-1.5 py-0.5 rounded-full tabular-nums flex-shrink-0", isActive ? "bg-amber/15 text-amber-ink" : "bg-paper-2 text-ink-3")}>
-                    {b}
-                  </span>
-                ))}
-              </Link>
-            );
-          };
-
-          // A group item — accordion parent (has children, e.g. Reports) or plain link.
-          const renderItem = (item: NavItem) => {
-            const active = pathname === item.href;
-            if (item.children?.length && !collapsed) {
-              const isOpen = openMenus[item.id] ?? (active || item.children.some((c) => pathname === c.href));
-              return (
-                <div key={item.id}>
-                  <div className="flex items-center">
-                    <Link
-                      href={item.href as any}
-                      onClick={onNavigate}
-                      className={cn(
-                        "group flex items-center gap-2.5 rounded-md text-sm transition-colors flex-1 px-3 py-1.5",
-                        active ? "bg-amber-soft text-amber-ink font-medium" : "text-ink-2 hover:bg-paper-2 hover:text-ink"
-                      )}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      <Icon name={item.icon} size={15} className={cn("flex-shrink-0", active ? "text-amber" : "text-ink-3 group-hover:text-ink-2")} />
-                      <span className="flex-1 truncate" title={item.label}>{item.label}</span>
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => setOpenMenus((m) => ({ ...m, [item.id]: !isOpen }))}
-                      aria-label={isOpen ? `Collapse ${item.label}` : `Expand ${item.label}`}
-                      aria-expanded={isOpen}
-                      className="p-1.5 rounded-md text-ink-3 hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                    >
-                      <Icon name={isOpen ? "chevron_up" : "chevron_down"} size={14} />
-                    </button>
-                  </div>
-                  {isOpen && (
-                    <div className="mt-0.5 space-y-0.5">
-                      {item.children!.map((c) => renderLink(c, true))}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            return renderLink(item);
-          };
-
-          // Collapsed icon-only rail — flat list of item icons, no group headers.
-          if (collapsed) {
-            return (
-              <div key={section.section} className="space-y-0.5">
-                {visibleItems.map((it) => renderLink(it))}
-              </div>
-            );
-          }
-
-          // Single-item group (Home) → standalone top row, no chevron.
-          if (visibleItems.length === 1 && !visibleItems[0].children) {
-            return <div key={section.section}>{renderLink(visibleItems[0])}</div>;
-          }
-
-          // Expandable group (Zoho-style) — collapsed by default; force-open when
-          // the current route lives inside it.
-          // Single-open: if the user clicked a group open, only that one is open;
-          // otherwise the group holding the current page is open.
-          const open = manualOpen !== null ? section.section === manualOpen : sectionActive;
-          return (
-            <div key={section.section}>
-              <button
-                type="button"
-                onClick={() => toggleSection(section.section)}
-                aria-expanded={open}
-                className={cn(
-                  "group w-full flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
-                  sectionActive ? "text-ink font-medium" : "text-ink-2 hover:bg-paper-2 hover:text-ink"
-                )}
-              >
-                <Icon name={section.icon ?? "layout"} size={17} className={cn("flex-shrink-0", sectionActive ? "text-amber" : "text-ink-3 group-hover:text-ink-2")} />
-                <span className="flex-1 text-left">{section.section}</span>
-                <Icon name={open ? "chevron_down" : "chevron_right"} size={14} className="text-ink-3/60 group-hover:text-ink-3" />
-              </button>
-              {open && (
-                <div className="mt-0.5 mb-1 ml-[19px] pl-2 border-l border-hairline space-y-0.5">
-                  {visibleItems.map((item) => renderItem(item))}
-                </div>
+        {model.flat ? (
+          model.apps.map((app) => (
+            <div key={app.id} className="pb-1">
+              {!collapsed && model.apps.length > 1 && (
+                <div className="px-3 pt-2 pb-1 text-3xs font-bold uppercase tracking-wider text-ink-3">{app.label}</div>
               )}
+              <div className="space-y-0.5">{app.items.map((it) => renderItem(it))}</div>
             </div>
-          );
-        })}
+          ))
+        ) : (
+          <>
+            <div
+              aria-label="Apps"
+              className={cn("grid gap-1 pb-2 mb-2 border-b border-hairline", collapsed ? "grid-cols-1" : "grid-cols-3")}
+            >
+              {model.apps.map((app) => {
+                const on = app.id === activeApp?.id;
+                return (
+                  <button
+                    key={app.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setPickedApp(app.id)}
+                    title={collapsed ? app.label : undefined}
+                    aria-label={collapsed ? app.label : undefined}
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber",
+                      on ? "bg-amber-soft text-amber-ink font-semibold" : "text-ink-2 hover:bg-paper-2 hover:text-ink",
+                    )}
+                  >
+                    <Icon name={app.icon} size={16} className={cn("flex-shrink-0", on ? "text-amber" : "text-ink-3")} />
+                    {!collapsed && <span className="truncate max-w-full">{app.label}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {activeApp && (
+              <div className="space-y-0.5">
+                {activeApp.items.map((it) => renderItem(it))}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Founder-only — cross-tenant signups. Gated by the platform-admin
             allowlist (not a tenant role); the page + API re-check server-side. */}
