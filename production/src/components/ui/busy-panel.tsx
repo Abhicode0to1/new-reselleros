@@ -21,6 +21,7 @@
  * (site.css) and on the Tailwind pages (quote accept) alike.
  */
 import * as React from "react";
+import { createPortal } from "react-dom";
 
 export interface BusyPanelProps {
   /** Show it. When this goes false the panel disappears and the clock resets. */
@@ -31,9 +32,15 @@ export interface BusyPanelProps {
   steps: string[];
   /** Seconds before the "taking longer than usual" line appears. */
   slowAfterSec?: number;
+  /**
+   * "inline" (default): a box in the page flow. "modal" (checkout, 1 Oct 2026 — Pawan: the
+   * inline box pushed the form down mid-wait): a centred card over a dimmed page, so the
+   * layout under it does not move. It has no close button — the work is still running.
+   */
+  variant?: "inline" | "modal";
 }
 
-export function BusyPanel({ active, title, steps, slowAfterSec = 8 }: BusyPanelProps) {
+export function BusyPanel({ active, title, steps, slowAfterSec = 8, variant = "inline" }: BusyPanelProps) {
   const [secs, setSecs] = React.useState(0);
 
   React.useEffect(() => {
@@ -45,6 +52,7 @@ export function BusyPanel({ active, title, steps, slowAfterSec = 8 }: BusyPanelP
   }, [active]);
 
   if (!active) return null;
+  if (variant === "modal") return <BusyModal title={title} steps={steps} secs={secs} slow={secs >= slowAfterSec} />;
 
   return (
     <div
@@ -93,5 +101,75 @@ export function BusyPanel({ active, title, steps, slowAfterSec = 8 }: BusyPanelP
         </p>
       )}
     </div>
+  );
+}
+
+const SPIN_CSS = `
+  @keyframes busy-panel-spin { to { transform: rotate(360deg); } }
+  [data-busy-panel] .busy-panel-spinner { animation: busy-panel-spin 0.9s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { [data-busy-panel] .busy-panel-spinner { animation: none; } }
+`;
+
+/** The same content as a centred card over a dimmed page. */
+function BusyModal({ title, steps, secs, slow }: { title: string; steps: string[]; secs: number; slow: boolean }) {
+  React.useEffect(() => {
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = overflow; };
+  }, []);
+  if (typeof document === "undefined") return null;
+  /* Into the public site's wrapper when there is one (it carries the colours), else <body>;
+     never inside the page section, whose transform would trap the overlay's z-index. */
+  const host = document.querySelector(".anutech-site") ?? document.body;
+  return createPortal(
+    <div
+      data-busy-panel
+      style={{
+        position: "fixed", inset: 0, zIndex: 120, background: "rgba(12,17,22,.45)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+      }}
+    >
+      <style>{SPIN_CSS}</style>
+      <div
+        role="status"
+        aria-live="polite"
+        style={{
+          width: "100%", maxWidth: 400, background: "#fff", borderRadius: 14,
+          boxShadow: "0 30px 70px -30px rgba(12,17,22,.55)", padding: "30px 28px 24px",
+          textAlign: "center", fontSize: 14, color: "var(--text-secondary, #475467)",
+        }}
+      >
+        <span
+          className="busy-panel-spinner"
+          aria-hidden
+          style={{
+            display: "block", width: 40, height: 40, margin: "0 auto 18px", borderRadius: "50%",
+            border: "3px solid var(--border, #E0E5EC)", borderTopColor: "var(--primary, #1A6BE0)",
+          }}
+        />
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text, #101828)" }}>
+          {title}…
+        </h2>
+        <p style={{ margin: "6px 0 0", fontVariantNumeric: "tabular-nums", color: "var(--text-muted, #667085)", fontSize: 13 }}>
+          {secs}s · please keep this page open
+        </p>
+        {steps.length > 0 && (
+          <ul
+            style={{
+              margin: "18px 0 0", padding: "14px 16px 14px 34px", textAlign: "left", listStyle: "disc",
+              lineHeight: 1.7, background: "var(--tint, #F6F8FB)", borderRadius: 10,
+            }}
+          >
+            {steps.map((s) => <li key={s}>{s}</li>)}
+          </ul>
+        )}
+        {slow && (
+          <p style={{ margin: "14px 0 0", color: "var(--text, #101828)" }}>
+            This is taking a little longer than usual — there is no need to press the button again.
+          </p>
+        )}
+      </div>
+    </div>,
+    host,
   );
 }

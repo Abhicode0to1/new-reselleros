@@ -522,6 +522,7 @@ export default function CheckoutPage() {
                 <>
                   <BusyPanel
                     active={paying}
+                    variant="modal"
                     title="Starting your free trial"
                     steps={[
                       "Saving your trial request",
@@ -600,6 +601,7 @@ export default function CheckoutPage() {
 
               <BusyPanel
                 active={preparingPayment}
+                variant="modal"
                 title="Preparing your secure payment"
                 steps={[
                   "Re-checking every price on our server",

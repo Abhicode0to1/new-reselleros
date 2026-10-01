@@ -63,6 +63,11 @@ describe("the checkout page", () => {
     expect(src).not.toMatch(/#FEF2F2/);
     expect(src).not.toContain("setError(");
   });
+  it("the wait shows as a pop-up too, so the form under it never moves (1 Oct 2026)", () => {
+    const panels = src.match(/<BusyPanel[\s\S]*?\/>/g) ?? [];
+    expect(panels.length).toBe(2);
+    for (const p of panels) expect(p).toContain('variant="modal"');
+  });
   it("every field the pop-up can point at has its id", () => {
     for (const f of ["email", "domain", "state"]) expect(src).toContain(`id="checkout-${f}"`);
   });
