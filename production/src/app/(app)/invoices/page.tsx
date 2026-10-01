@@ -1387,12 +1387,31 @@ function InvoicePreviewContainer({
                         {lineItems.map((item, idx) => (
                           <tr key={idx}>
                             <td className="py-2 font-medium text-ink">{item.name}</td>
-                            <td className="py-2 text-center text-ink-3 font-mono text-2xs">{SAAS_HSN}</td>
+                            <td className="py-2 text-center text-ink-3 font-mono text-2xs">{(item as { hsn?: string | null }).hsn || SAAS_HSN}</td>
                             <td className="py-2 text-right tabular-nums">{item.qty}</td>
                             <td className="py-2 text-right font-medium tabular-nums">{rupee((item.rate ?? 0) * (item.qty ?? 1))}</td>
                           </tr>
                         ))}
                       </tbody>
+                      {/* R-084 (1 Oct 2026): a coupon's discount was invisible here — line ₹600,
+                          total ₹637 (540 + 97) with no −₹60 anywhere on screen, though the PDF
+                          showed it. Same numbers as the PDF (invoiceDisplayAmounts). */}
+                      {discount > 0 && (
+                        <tfoot className="border-t border-hairline text-ink-2">
+                          <tr>
+                            <td colSpan={3} className="pt-2 text-right">Subtotal</td>
+                            <td className="pt-2 text-right tabular-nums">{rupee(subtotal)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="py-1 text-right">Discount{quote?.discount_pct ? ` (${quote.discount_pct}%)` : ""}</td>
+                            <td className="py-1 text-right tabular-nums text-emerald">−{rupee(discount)}</td>
+                          </tr>
+                          <tr className="font-semibold text-ink">
+                            <td colSpan={3} className="text-right">Taxable value</td>
+                            <td className="text-right tabular-nums">{rupee(taxable)}</td>
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   ) : (
                     <p className="text-xs text-ink-3 italic p-2">Standard Subscription License Supply (HSN {SAAS_HSN})</p>

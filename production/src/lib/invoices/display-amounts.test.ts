@@ -124,3 +124,23 @@ describe("/invoices no longer taxes the gross", () => {
     expect(src).not.toMatch(/Math\.round\(\s*taxable\s*\*\s*\(\s*taxRate\s*\/\s*100\s*\)\s*\)/);
   });
 });
+
+/* R-084 (1 Oct 2026): INV-FBB9-27-0005 — ₹600 line, 10% coupon. The screen now shows the
+   discount row from these same numbers, so they must add up: 600 − 60 = 540, +97 = 637. */
+describe("a coupon invoice shows its discount (R-084)", () => {
+  const a = invoiceDisplayAmounts(
+    { amount: 637, taxable_value: 540, tax_amount: 97, tax_rate: 18 },
+    { subtotal: 600, discount_pct: 10, tax_rate: 18, amount: 637 },
+  );
+  it("discount, taxable and total add up", () => {
+    expect(a.discount).toBe(60);
+    expect(a.taxable).toBe(540);
+    expect(a.subtotal - a.discount).toBe(a.taxable);
+    expect(a.total).toBe(637);
+  });
+  it("the invoice screen renders a Discount row in its line-items table", () => {
+    const src = readFileSync("src/app/(app)/invoices/page.tsx", "utf8");
+    expect(src).toMatch(/discount > 0 && \(\s*<tfoot/);
+    expect(src).toMatch(/Taxable value/);
+  });
+});
