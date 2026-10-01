@@ -83,10 +83,22 @@ export function normaliseTrialDomain(domain: string | undefined): string {
     .trim();
 }
 
+/**
+ * The one-trial-per-customer check switched off, for testing on a local machine:
+ * `ALLOW_REPEAT_TRIALS_LOCAL=1` in .env.local, and only when NODE_ENV is not
+ * "production" — so a deployed build keeps the check even if the variable leaks in.
+ */
+export function repeatTrialsAllowed(env: Record<string, string | undefined> = process.env): boolean {
+  return env.NODE_ENV !== "production" && env.ALLOW_REPEAT_TRIALS_LOCAL?.trim() === "1";
+}
+
 export async function checkTrialEligibility(
   admin: ReturnType<typeof createAdminClient>,
   input: { email: string; phone: string; domain?: string },
 ): Promise<TrialEligibility> {
+  // Local testing only (Pawan, 1 Oct 2026): start trial after trial on the same details.
+  // Never in a production build, whatever the variable says.
+  if (repeatTrialsAllowed()) return { ok: true, eligible: true };
   const tierName = TRIAL_PLAN_NAME;
   const cleanDomain = normaliseTrialDomain(input.domain);
 

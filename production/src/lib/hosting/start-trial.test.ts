@@ -11,7 +11,7 @@ const checkTrialHistory = vi.hoisted(() => vi.fn());
 const recordTrialInDms = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/dms-engine/trials", () => ({ checkTrialHistory, recordTrialInDms }));
 
-import { startHostingTrial, likeEscape, quoteForOr } from "./start-trial";
+import { startHostingTrial, likeEscape, quoteForOr, repeatTrialsAllowed } from "./start-trial";
 
 type Admin = Parameters<typeof startHostingTrial>[0];
 
@@ -161,5 +161,16 @@ describe("trial emails: the customer only (30 Sep 2026)", () => {
     expect(kinds).toEqual(["buy_page_trial_customer"]);
     // The owner's address is still used — as the reply-to on the customer's email.
     expect(sendEmail.mock.calls[0][0]).toMatchObject({ replyTo: "owner@example.invalid" });
+  });
+});
+
+describe("repeat trials on a local machine only (1 Oct 2026)", () => {
+  it("on only with ALLOW_REPEAT_TRIALS_LOCAL=1 outside a production build", () => {
+    expect(repeatTrialsAllowed({ NODE_ENV: "development", ALLOW_REPEAT_TRIALS_LOCAL: "1" })).toBe(true);
+    expect(repeatTrialsAllowed({ NODE_ENV: "development" })).toBe(false);
+    expect(repeatTrialsAllowed({ NODE_ENV: "development", ALLOW_REPEAT_TRIALS_LOCAL: "true" })).toBe(false);
+  });
+  it("a production build keeps the one-trial check even if the variable is set", () => {
+    expect(repeatTrialsAllowed({ NODE_ENV: "production", ALLOW_REPEAT_TRIALS_LOCAL: "1" })).toBe(false);
   });
 });
