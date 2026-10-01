@@ -25,6 +25,8 @@ AI writes the software; the four people do only what AI can't. Full model (roles
 4. Same day: rebase on `origin/manager-pardeep`, gate again, merge into `manager-pardeep`, push (rebase again if rejected). Card → `status: review` with `commits`, `checked` (one line: what you verified on localhost) `finishedAt` (real `date -u`) and `howToCheck` — 2–3 plain Hinglish steps a non-coder owner can follow on localhost to SEE it works (which page to open, what to click, what number/text should appear; never code or terminal steps) — the board's "✅ Ho gaya" tab shows who (`claimedBy`), when and how many hours from it. Pardeep checks it (→ `live` until the Thursday deploy; Abhishek's deploy session sets `done`).
 5. People keep their human roles: Pardeep owner (price, money, priority), Pawan clients/sales, Hitesh books/GST/CA, Abhishek deploy (Thursday 4 pm IST), server, support. Never passwords/keys, never live data.
 
+"**<card id> jaanch karo**" (e.g. "R-079 jaanch karo"): read that card, follow its `howToCheck` steps on http://localhost:3001 with the browser tools exactly like the owner would (open the page, click, read the numbers/text; a logged-out step → check logged-out HTML/JS and say so), then write `aiResult` ("✓ …what you saw" or "⚠ …what was different"), `aiResultAt` (real `date -u`), `checkRequested: false` on the card. Never change its status — the owner presses "Theek hai".
+
 Before a NEW migration: timestamp newer than every migration on all `origin/*` branches, then `node production/scripts/migration-order-check.mjs --base origin/main`. The person who asked for a card closes it after the AI check.
 
 ## Branch names changed on 30 Sep 2026
