@@ -9,6 +9,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { mayDo } from "@/lib/auth/action-roles";
 import { googleOAuthCreds, originFromRequest, gbpRedirectUri, buildAuthUrl, GBP_SCOPES } from "@/lib/google/oauth";
 import { unionScopes } from "@/lib/google/scope-union";
 
@@ -19,6 +20,11 @@ export async function GET(request: NextRequest) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(`${origin}/login`);
+  /* S19: a company-wide account — owner / manager only (per-user Gmail and Contacts stay open). */
+  const { data: me } = await createClient().from("users").select("role").eq("id", user.id).maybeSingle();
+  if (!mayDo((me as { role?: string | null } | null)?.role, "integration.company")) {
+    return NextResponse.redirect(`${origin}/marketing/google-business?gbp=role`);
+  }
 
   const creds = googleOAuthCreds();
   if (!creds) return NextResponse.redirect(`${origin}/marketing/google-business?gbp=notconfigured`);

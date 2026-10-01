@@ -33,6 +33,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { mayDo, forbiddenMessage } from "@/lib/auth/action-roles";
 import { applySeatIncrease, SEAT_INCREASE_SELECT } from "@/lib/subscriptions/apply-seat-increase";
 
 export const dynamic = "force-dynamic";
@@ -71,11 +72,15 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   }
   const { data: me } = await userClient
     .from("users")
-    .select("tenant_id")
+    .select("tenant_id, role")
     .eq("id", authData.user.id)
     .single();
   if (!me?.tenant_id) {
     return NextResponse.json({ error: "user not linked to a tenant" }, { status: 403 });
+  }
+  /* S19: signed in + same tenant is not enough for this one. */
+  if (!mayDo((me as { role?: string | null }).role, "seats.change")) {
+    return NextResponse.json({ error: forbiddenMessage("seats.change") }, { status: 403 });
   }
 
   let body: unknown;

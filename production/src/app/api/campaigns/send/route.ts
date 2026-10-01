@@ -24,6 +24,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { replyToAddress } from "@/lib/email/reply-to";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { mayDo, forbiddenMessage } from "@/lib/auth/action-roles";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { unsubscribeUrl, unsubscribeFooter, normaliseEmail } from "@/lib/marketing/unsubscribe-token";
 import { fillName, greetingName, NO_NAME } from "@/lib/marketing/greeting-name";
@@ -72,11 +73,15 @@ export async function POST(req: NextRequest) {
   }
   const { data: me } = await userClient
     .from("users")
-    .select("tenant_id, full_name, email")
+    .select("tenant_id, full_name, email, role")
     .eq("id", authData.user.id)
     .single();
   if (!me?.tenant_id) {
     return NextResponse.json({ error: "user not linked to a tenant" }, { status: 403 });
+  }
+  /* S19: signed in + same tenant is not enough for this one. */
+  if (!mayDo((me as { role?: string | null }).role, "campaign.send")) {
+    return NextResponse.json({ error: forbiddenMessage("campaign.send") }, { status: 403 });
   }
 
   // Parse body

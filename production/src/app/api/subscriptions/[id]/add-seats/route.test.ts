@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
   seq: 0,
   sub: null as Record<string, any> | null,
   apply: null as any,
+  role: "billing" as string,
 }));
 
 vi.mock("@/lib/subscriptions/apply-seat-increase", () => ({
@@ -38,7 +39,7 @@ vi.mock("@/lib/supabase/server", () => {
         return { data: state.sub, error: state.sub ? null : { message: "not found" } };
       }
       if (table === "tenants") return { data: { grace_period_days: 7 }, error: null };
-      if (table === "users")   return { data: { tenant_id: "T1" }, error: null };
+      if (table === "users")   return { data: { tenant_id: "T1", role: state.role }, error: null };
       if (table === "seat_increase_claims") {
         if (ctx.op === "insert") {
           /* The unique index, in five lines. */
@@ -108,6 +109,7 @@ const okResult = {
 beforeEach(() => {
   state.claims = [];
   state.seq = 0;
+  state.role = "billing";
   state.sub = { id: "S1", tenant_id: "T1", status: "active", renewal_date: "2027-04-01", seats: 10, mrr: 6200 };
   state.apply = vi.fn(async () => okResult);
 });
@@ -193,6 +195,17 @@ describe("a failure does not burn the key", () => {
     expect(retry.status).toBe(409);
     expect((await retry.json()).error).toContain("seats not updated");
     expect(state.apply).not.toHaveBeenCalled();
+  });
+});
+
+describe("who may add seats (S19)", () => {
+  it.each(["sales", "support", "delivery"])("%s is refused before anything is claimed", async (role) => {
+    state.role = role;
+    const res = await post({ additional_seats: 5, idempotency_key: KEY });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/^Only Owner, Manager, Billing/);
+    expect(state.apply).not.toHaveBeenCalled();
+    expect(state.claims).toHaveLength(0);
   });
 });
 
