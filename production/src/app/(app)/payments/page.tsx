@@ -36,6 +36,7 @@ import {
 } from "@/lib/queries/payments";
 import { useQuotes } from "@/lib/queries/quotes";
 import { useAllProjectPayments } from "@/lib/queries/projects";
+import { collectedInMonth } from "@/lib/company/summary";
 import { useCustomers } from "@/lib/queries/customers";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -206,15 +207,14 @@ function PaymentsPageInner() {
   // Partial payments (quotes with status=partial)
   const partialQuotes = (quotes ?? []).filter((q) => q.payment_status === "partial");
 
-  /* R-062: this IST month, by received date. Was `new Date(); setDate(1)` — the 1st at
-     the CURRENT time of day in the browser's zone, so a payment received earlier on the
-     1st was left out. TDS the customer withheld settles the invoice but never reaches the
-     bank, so it is said separately. */
+  /* Collected this IST month — one helper (lib/company/summary.ts), shared with the dashboard
+     Company section (R-062: it used to start at "the 1st at this time of day", browser clock).
+     TDS the customer withheld settles the invoice but never reaches the bank — said separately. */
+  const mtdCollected = collectedInMonth(payments ?? [], projPays);
   const mtdMonth = istMonth();
-  const inMtd = (at: string | null | undefined) => !!at && toIstDate(at).slice(0, 7) === mtdMonth;
-  const mtdRows = [...allReceived, ...projPays].filter((p) => inMtd(p.received_at));
-  const mtdCollected = mtdRows.reduce((s, p) => s + p.amount, 0);
-  const mtdTds = mtdRows.filter((p) => p.method === "tds").reduce((s, p) => s + p.amount, 0);
+  const mtdTds = [...allReceived, ...projPays]
+    .filter((p) => p.method === "tds" && !!p.received_at && toIstDate(p.received_at).slice(0, 7) === mtdMonth)
+    .reduce((s, p) => s + p.amount, 0);
 
   // Method breakdown
   const methodBreakdown: Record<string, number> = {};

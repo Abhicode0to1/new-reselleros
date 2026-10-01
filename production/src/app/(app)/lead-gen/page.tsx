@@ -34,6 +34,8 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
+import { captureChannel } from "@/lib/leads/capture-channel";
+import { inIstMonth, istMonthStartUtc } from "@/lib/company/summary";
 
 // ─── Lead-source channel meta + aggregation (derived from real leads.source) ──
 
@@ -49,34 +51,20 @@ const SOURCE_LABEL: Record<string, string> = {
   facebook: "Facebook / Instagram", marketplace: "IndiaMART / JustDial", seo: "Google search / SEO",
 };
 
-/** Collapse a raw leads.source string into a canonical channel key. */
-function normalizeSource(raw: string | null | undefined): string {
-  const s = (raw ?? "manual").toLowerCase();
-  if (s.includes("whatsapp")) return "whatsapp";
-  if (s.includes("email")) return "email";
-  if (s.startsWith("buy") || s.includes("website") || s.includes("form")) return "website";
-  if (s.includes("referr")) return "referral";
-  if (s.includes("linkedin")) return "linkedin";
-  // Before the generic "ads" test below — meta-ads is a Facebook ad, not a Google one.
-  if (s.includes("meta") || s.includes("facebook") || s.includes("instagram")) return "facebook";
-  if (s.includes("indiamart") || s.includes("justdial")) return "marketplace";
-  if (s.includes("google-organic")) return "seo";   // found us on Google, no ad
-  if (s.includes("cold") || s.includes("apollo") || s.includes("lemlist")) return "cold";
-  if (s.includes("google") || s.includes("ads") || s.includes("adword")) return "ads";
-  if (s.includes("csv") || s.includes("import")) return "import";
-  if (s.includes("manual")) return "manual";
-  return s;
-}
+/** Collapse a raw leads.source string into a canonical channel key. One rule, shared with
+ *  the dashboard Company section — see lib/leads/capture-channel.ts. */
+const normalizeSource = captureChannel;
 
 interface CaptureChannel { id: string; label: string; icon: string; count: number; won: number; conv: number; leads: LeadSourceRow[]; }
 
 /** This-month lead count + conversion by capture channel, from real leads.
  *  Also carries the matching leads so a channel row can expand to show them. */
 function computeCaptureChannels(leads: readonly LeadSourceRow[]): CaptureChannel[] {
-  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  /* The IST month (lib/company/summary.ts) — the same "this month" as the dashboard Company section. */
+  const now = new Date();
   const byKey = new Map<string, LeadSourceRow[]>();
   for (const l of leads) {
-    if (!l.created_at || new Date(l.created_at) < monthStart) continue;
+    if (!l.created_at || !inIstMonth(l.created_at, now)) continue;
     const key = normalizeSource(l.source);
     const arr = byKey.get(key) ?? [];
     arr.push(l);
@@ -131,7 +119,7 @@ export default function LeadGenPage() {
      all-time count. It used to be useLeads(): every lead, cut at PostgREST's 1000 rows, so
      "Total leads" stopped at 1,000 and a busy month's channels counted part of it. */
   const [windowStart] = React.useState(() => {
-    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    const monthStart = istMonthStartUtc();
     const twoWeeks = new Date(Date.now() - 14 * 86_400_000);
     return (monthStart < twoWeeks ? monthStart : twoWeeks).toISOString();
   });

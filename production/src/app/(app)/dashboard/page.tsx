@@ -43,6 +43,7 @@ import { MoneyHealthCard } from "@/components/features/dashboard/money-health-ca
 import { AiPerformanceCard } from "@/components/features/dashboard/ai-performance-card";
 import { PriorityActionHub } from "@/components/features/dashboard/priority-action-hub";
 import { DealsStrip } from "@/components/features/deals/deals-strip";
+import { CompanySection } from "@/components/features/dashboard/company-section";
 import { useDealRows } from "@/lib/queries/deals";
 import { summarizeDealStrip } from "@/lib/deals/pipeline-summary";
 import { canSeeDeals } from "@/lib/deals/access";
@@ -585,6 +586,10 @@ export default function DashboardPage() {
       {/* Deals — the pipeline's money at a glance, every tile links to /deals.
           Renders nothing for roles that cannot open /deals. */}
       <DealsStrip role={currentUser?.role} />
+
+      {/* Company — this month by function (growth, sales, money, customers & ops), every
+          number a link to its screen. Owners and managers only; see company-section.tsx. */}
+      <CompanySection role={currentUser?.role} />
 
       {/* Money-health — silent when everything works, so its appearance means
           "stop and read". Placed above onboarding because a payment that is
