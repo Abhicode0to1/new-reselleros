@@ -4,7 +4,7 @@
  * The checkout's pop-up for an event that stops the order (1 Oct 2026, Pawan: a red line
  * of text above the button "looks flimsy" for something this significant).
  *
- * A centred dialog: a tone mark, a plain title, what happened, a reassurance line, and
+ * A centred dialog, its content centred too (Pawan, 1 Oct 2026): a tone mark, a plain title, what happened, a reassurance line, and
  * the buttons that fix it — the first is the main one. Escape, the ✕ and a click on
  * the backdrop all close it; focus moves to the main button when it opens and back to
  * where it was when it closes, so a keyboard user is never left behind the overlay.
@@ -80,7 +80,7 @@ export function CheckoutNotice({
         style={{
           position: "relative", width: "100%", maxWidth: 440, background: "#fff",
           borderRadius: 14, boxShadow: "0 30px 70px -30px rgba(12,17,22,.55)",
-          padding: "28px 26px 22px", animation: "wRise .22s ease",
+          padding: "32px 28px 24px", animation: "wRise .22s ease", textAlign: "center",
         }}
       >
         <button
@@ -100,7 +100,7 @@ export function CheckoutNotice({
           aria-hidden
           style={{
             width: 48, height: 48, borderRadius: "50%", background: t.ring, display: "flex",
-            alignItems: "center", justifyContent: "center", marginBottom: 16,
+            alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
           }}
         >
           <span
