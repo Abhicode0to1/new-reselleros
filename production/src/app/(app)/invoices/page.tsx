@@ -4,8 +4,8 @@
  * Layout:
  *   - Header: eyebrow "Revenue" + title + subtitle
  *   - Actions: Export GSTR-1 + Push to Zoho + New invoice
- *   - 5 KPIs: Outstanding / Overdue / Collected MTD / Margin MTD / Avg collection
- *   - Status tabs (All/Paid/Pending/Overdue/Draft) with counts
+ *   - 5 KPIs: Outstanding / Overdue / Paid this month / Margin MTD / Avg collection
+ *   - Status tabs (All/Paid/Partial/Pending/Overdue/Draft/Void) with counts — they add up to All
  *   - Table: checkbox / Invoice # / Customer / Date / Due / Amount / Status / Action
  *   - Auto-Sync Status card at bottom
  */
@@ -34,7 +34,8 @@ import { supplierIdentity, supplierIdentityMessage } from "@/lib/invoices/suppli
 /* R-060. `status = 'overdue'` has no writer anywhere in the product, so the Overdue tab
    and its KPI were permanently empty while invoices ran months late. Derived from
    due_date instead — see the header of lib/invoices/overdue.ts for why not a cron. */
-import { invoiceIsOverdue, invoiceOverdueDays, invoiceBucket } from "@/lib/invoices/overdue";
+import { invoiceOverdueDays, invoiceBucket } from "@/lib/invoices/overdue";
+import { invoiceChip, invoiceChipCounts, invoiceKpis } from "@/lib/invoices/kpis";
 /* R-066. The GST breakdown comes from one place, shared with the server PDF builder —
    see the header of lib/invoices/display-amounts.ts. */
 import { invoiceDisplayAmounts } from "@/lib/invoices/display-amounts";
@@ -210,30 +211,19 @@ function InvoicesPageInner() {
   // adjusted_advances non-empty. Useful for "how many invoices have SOME
   // money in, balance still owed" — a different operational signal from
   // "absolutely nothing received yet".
-  const counts = React.useMemo(() => {
-    const map: Record<string, number> = { all: viewInvoices.length, partial: 0, pending_bare: 0 };
-    for (const inv of viewInvoices) {
-      /* R-060: bucket, not raw status. An unpaid invoice past its due date counts as
-         Overdue and leaves Pending/Partial — exactly where it would have been if the
-         cron this replaces had written the status. One invoice, one tab. */
-      const bucket = invoiceBucket(inv);
-      map[bucket] = (map[bucket] ?? 0) + 1;
-      const hasAdv = Array.isArray(inv.adjusted_advances) && inv.adjusted_advances.length > 0;
-      if (bucket === "pending") {
-        if (hasAdv) map.partial += 1;
-        else        map.pending_bare += 1;
-      }
-    }
-    return map;
-  }, [viewInvoices]);
+  /* R-060: bucket, not raw status (an unpaid invoice past due is Overdue). R-063: one
+     invoice, one chip — invoiceChip — so the chips add up to All, Void included. */
+  const counts = React.useMemo(() => invoiceChipCounts(viewInvoices), [viewInvoices]);
 
   const tabs: TabBarItem[] = [
     { id: "all",     label: "All",     count: counts.all ?? 0 },
     { id: "paid",    label: "Paid",    count: counts.paid ?? 0, dot: "emerald" },
     { id: "partial", label: "Partial", count: counts.partial ?? 0, dot: "amber" },
-    { id: "pending", label: "Pending", count: counts.pending_bare ?? 0, dot: "amber" },
+    { id: "pending", label: "Pending", count: counts.pending ?? 0, dot: "amber" },
     { id: "overdue", label: "Overdue", count: counts.overdue ?? 0, dot: "rose" },
     { id: "draft",   label: "Draft",   count: counts.draft ?? 0 },
+    /* R-063: void invoices were in All but in no chip, so the chips never added up. */
+    { id: "void",    label: "Void",    count: counts.void ?? 0 },
   ];
 
   // Filter — status tab (Partial/Pending both derive from status='pending',
@@ -241,13 +231,7 @@ function InvoicesPageInner() {
   // customer, or status.
   const rows = dateFilteredInvoices.filter((i) => {
     // Status tab
-    if (tab !== "all") {
-      const hasAdv  = Array.isArray(i.adjusted_advances) && i.adjusted_advances.length > 0;
-      const bucket  = invoiceBucket(i);   // R-060 — same function the counts use
-      if (tab === "partial")      { if (!(bucket === "pending" && hasAdv)) return false; }
-      else if (tab === "pending") { if (!(bucket === "pending" && !hasAdv)) return false; }
-      else if (bucket !== tab)    { return false; }
-    }
+    if (tab !== "all" && invoiceChip(i) !== tab) return false;   // same function the counts use
     // Search
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -261,22 +245,12 @@ function InvoicesPageInner() {
     return true;
   });
 
-  // KPIs — use net_payable (after any advance adjustment) to match the Aging report.
-  const outstanding = (invoices ?? [])
-    .filter((i) => i.status !== "paid")
-    .reduce((s, i) => s + (i.net_payable ?? i.amount), 0);
-  const overdueTotal = (invoices ?? [])
-    .filter((i) => invoiceIsOverdue(i))          // R-060 — was `status === "overdue"`, always ₹0
-    .reduce((s, i) => s + (i.net_payable ?? i.amount), 0);
+  /* KPIs (R-062): lib/invoices/kpis.ts. Outstanding = what is still owed on pending /
+     overdue invoices (net of advances and receipts) — void and draft owe nothing.
+     "Paid this month" = invoices fully paid in this IST month, by paid date; the
+     /payments page's "Collected MTD" is money RECEIVED (incl. part payments and TDS). */
+  const { outstanding, overdueTotal, paidThisMonth: collectedMTD, paidThisMonthCount } = invoiceKpis(invoices ?? []);
   const overdueCount = counts.overdue ?? 0;
-  const collectedMTD = (invoices ?? [])
-    .filter((i) => {
-      if (i.status !== "paid" || !i.paid_date) return false;
-      const d = new Date(i.paid_date);
-      const now = new Date();
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    })
-    .reduce((s, i) => s + i.amount, 0);
   const marginMTD = Math.round(collectedMTD * 0.17); // 17% avg estimate
   const paidInvoices = (invoices ?? []).filter((i) => i.status === "paid" && i.paid_date);
   const avgCollection = paidInvoices.length > 0
@@ -588,8 +562,9 @@ function InvoicesPageInner() {
             onClick={() => setTab("paid")}
             className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-emerald/60 transition-all cursor-pointer"
           >
-            <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Collected MTD</p>
+            <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Paid this month</p>
             <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(collectedMTD, { compact: true })}</p>
+            <p className="text-3xs text-ink-3 mt-0.5">{paidThisMonthCount} invoice{paidThisMonthCount === 1 ? "" : "s"} fully paid</p>
           </button>
           <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
             <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Margin MTD</p>

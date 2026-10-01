@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { B2CL_THRESHOLD, buildAdvances, buildGstr1, gstr1Csv, gstr1Json, gstr3bClass, gstSplit, hsnLines, posFor, GSTR1_HEADERS, type Advance, type Gstr1Doc } from "./gstr1";
+import { B2CL_THRESHOLD, buildAdvances, buildGstr1, docHsnLines, lineHsn, gstr1Csv, gstr1Json, gstr3bClass, gstSplit, hsnLines, posFor, GSTR1_HEADERS, type Advance, type Gstr1Doc } from "./gstr1";
 import { SAAS_HSN } from "./hsn";
 
 const seller = { stateCode: "07", state: "Delhi", gstin: "07AABCU9603R1ZM" };
@@ -90,6 +90,36 @@ describe("GSTR-1 sections", () => {
     expect(ln[2].hsn).toBe(SAAS_HSN);
     expect(hsnLines(999, [{ hsn: "1", weight: 1 }, { hsn: "2", weight: 1 }, { hsn: "3", weight: 1 }]).reduce((s, l) => s + l.taxable, 0)).toBe(999);
     expect(hsnLines(500, [])).toEqual([{ hsn: SAAS_HSN, description: expect.any(String), taxable: 500 }]);
+  });
+
+  it("R-067: a line's own HSN (project milestone, SAC 998314, no item_id) is filed under 998314, not 998313", () => {
+    // INV-FBB9-2026-27-0003 as stored: one milestone line, own hsn, no catalogue item.
+    const stored = [{ id: "milestone-2", hsn: "998314", qty: 1, cost: 0, name: "Complete Billing System — Doosri kist (advance)", rate: 500000 }];
+    const catalogue = new Map<string, string | null>([["ITEM-GWS", null], ["ITEM-HW", "847130"]]);
+    const s = buildGstr1([doc({ id: "INV-FBB9-2026-27-0003", amount: 590000, taxableValue: 500000, gst: 90000, lines: docHsnLines(500000, stored, catalogue) })], seller);
+    expect(s.hsn.map((r) => r.hsn)).toEqual(["998314"]);
+    expect(s.hsn[0].taxable).toBe(500000);
+    expect(s.hsn[0].description).toBe("Information technology (IT) design and development services");
+    // Order: line's own code → catalogue item's code → SaaS default.
+    expect(lineHsn({ item_id: "ITEM-HW", hsn: "998314" }, catalogue)).toBe("998314");
+    expect(lineHsn({ item_id: "ITEM-HW" }, catalogue)).toBe("847130");
+    expect(lineHsn({ item_id: "ITEM-GWS", hsn: "  " }, catalogue)).toBeNull();
+    expect(docHsnLines(100, [{ item_id: "ITEM-GWS", qty: 1, rate: 1 }], catalogue)[0].hsn).toBe(SAAS_HSN);
+  });
+
+  it("R-067: a credit note on a 998314 invoice reverses 998314 (split like the invoice it amends)", () => {
+    const parent = [{ hsn: "998314", qty: 1, rate: 300000, name: "Dev" }, { item_id: "GWS", qty: 10, rate: 10000, name: "Workspace" }];
+    const lines = docHsnLines(-40000, parent, new Map());
+    expect(lines).toEqual([
+      { hsn: "998314", description: "Dev", taxable: -30000 },
+      { hsn: SAAS_HSN, description: "Workspace", taxable: -10000 },
+    ]);
+    const s = buildGstr1([
+      doc({ id: "INV-P", amount: 472000, taxableValue: 400000, gst: 72000, lines: docHsnLines(400000, parent, new Map()) }),
+      doc({ id: "CN-P", docType: "credit_note", amount: -47200, taxableValue: -40000, gst: -7200, lines }),
+    ], seller);
+    const by = Object.fromEntries(s.hsn.map((r) => [r.hsn, r.taxable]));
+    expect(by).toEqual({ "998314": 270000, [SAAS_HSN]: 90000 });
   });
 
   it("CSV rows follow the Offline Tool templates (CDNR note type, CDNUR UR type B2CL)", () => {

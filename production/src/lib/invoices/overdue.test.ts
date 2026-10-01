@@ -103,7 +103,13 @@ describe("/invoices no longer asks the column nobody writes", () => {
 
   it("the tab, the counts and the KPI all go through the derived helpers", () => {
     expect(src).toContain("invoiceBucket");
-    expect(src).toContain("invoiceIsOverdue(i)");
+    /* R-062/R-063: tab filter + counts go through invoiceChip, the KPI tiles through
+       invoiceKpis — both of which decide overdue with invoiceIsOverdue. */
+    expect(src).toContain("invoiceChip(i)");
+    expect(src).toContain("invoiceChipCounts(");
+    expect(src).toContain("invoiceKpis(");
+    const kpis = readFileSync("src/lib/invoices/kpis.ts", "utf8");
+    expect(kpis.split("invoiceIsOverdue(inv, today)").length - 1).toBe(2);
     // …and no filter is left comparing the stored status to the string.
     expect(src).not.toMatch(/status\s*===\s*"overdue"/);
   });
