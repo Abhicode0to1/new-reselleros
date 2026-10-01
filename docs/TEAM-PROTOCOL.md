@@ -32,14 +32,16 @@ tells you whose area a branch touched.
 
 ## Team model — one builder, 1 Oct 2026
 
+Goal (Pardeep): run an AI software company with four people — AI writes the software, each person owns one part of the company.
+
 Pardeep decided on 1 Oct 2026: four people writing code in parallel made the work slow and confusing (merges, cross-area cards, waiting). Code is now written by AI, so the app is built from **one branch** and the others do what only they can do. `OWNERS.json` is the truth.
 
 | Who | Does | Writes app code? |
 |---|---|---|
-| **Pardeep + AI** | Builds the whole app on `manager-pardeep`: Sell, Customer, Money, app shell, crons, tests, docs | Yes — the only app branch |
-| **Hitesh** | Checks money numbers (GST, invoices, books) on localhost / test site, talks to the CA, writes what is wrong as a card | No |
-| **Abhishek** | Weekly deploy **every Thursday 4 pm IST** (backup → migrations in order → app → version check), Cloud Run / Supabase / GitHub logins, CI settings, backups | Only `cloudbuild.yaml`, `.github/` |
-| **Pawan** | Website: public & marketing pages, login/signup, checkout, customer portal, public API | Only the website paths |
+| **Pardeep + AI — CEO & Product** | Decides what to build and in what order; builds the whole app on `manager-pardeep` with AI (Sell, Customer, Money, app shell, crons, tests, docs) | Yes — the only app branch |
+| **Hitesh — Finance & Compliance** | The company's own books, GST and TDS with the CA; checks every money number the app shows (invoices, GST, books) on localhost / test site; writes what is wrong as a card | No |
+| **Abhishek — Operations & Customer Delivery** | Weekly deploy **every Thursday 4 pm IST** (backup → migrations in order → app → version check); after each deploy a live run of quote → invoice → payment → renewal; new customer setup (Workspace / Microsoft / domain / hosting); technical support tickets; Cloud Run / Supabase / GitHub logins, CI, backups | Only `cloudbuild.yaml`, `.github/` |
+| **Pawan — Growth & Website** | Website and sign-up / checkout funnel, customer portal, public API; demos for prospects and turning website visitors into leads | Only the website paths |
 
 **Board = 2 lists:** "🐞 Bug / idea" (anyone writes one line; Pardeep's AI picks it up) and "🔎 Ye check karo" (what the AI built that a person should check — e.g. GST numbers → Hitesh). Old branches (`billing-abhishek`, `accounts-hitesh`) were merged into `manager-pardeep` on 1 Oct and are no longer worked on.
 
