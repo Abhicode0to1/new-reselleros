@@ -29,7 +29,7 @@ import { splitItc, itcEligibility, type ItcSplit } from "@/lib/gst/itc";
 import { gstPaidForPeriods } from "@/lib/accounting/tax-payments";
 import { useTaxPayments } from "@/lib/queries/tax-payments";
 import { rupee, formatDate } from "@/lib/utils";
-import { buildGstr1, buildAdvances, docHeads, gstr1Csv, gstr1Json, gstr3bClass, hsnLines, isExportDoc, GSTR1_HEADERS, type Advance } from "@/lib/gst/gstr1";
+import { buildGstr1, buildAdvances, docHeads, docHsnLines, gstr1Csv, gstr1Json, gstr3bClass, isExportDoc, GSTR1_HEADERS, type Advance, type HsnSourceLine } from "@/lib/gst/gstr1";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { computeGstr3b, gstr3bRows, type Heads } from "@/lib/gst/gstr3b";
 import { parseGstr2b, reconcile2b, type Reconciliation } from "@/lib/gst/gstr2b";
@@ -131,10 +131,10 @@ function useGstReport(range: DateRange) {
       // credit note reduces it, a debit note increases it), so GSTR-1/3B is right.
       const [{ data: creditNotes }, { data: debitNotes }] = await Promise.all([
         supabase.from("credit_notes")
-          .select("id, credit_date, customer_name, customer_id, amount, taxable_value, tax_amount, tax_rate, inter_state")
+          .select("id, invoice_id, credit_date, customer_name, customer_id, amount, taxable_value, tax_amount, tax_rate, inter_state")
           .gte("credit_date", range.from).lte("credit_date", range.to),
         supabase.from("debit_notes")
-          .select("id, debit_date, customer_name, customer_id, amount, taxable_value, tax_amount, tax_rate, inter_state")
+          .select("id, invoice_id, debit_date, customer_name, customer_id, amount, taxable_value, tax_amount, tax_rate, inter_state")
           .gte("debit_date", range.from).lte("debit_date", range.to),
       ]);
 
@@ -184,12 +184,20 @@ function useGstReport(range: DateRange) {
       const sellerState = tenantRow?.state ?? null;
       const sellerGstin = tenantRow?.gstin?.trim() || null;
 
-      /* Per-line SAC for the HSN table (27 Sep 2026). Invoice lines carry the catalogue
-         item's id; the item carries its `hsn`. A line with no item, or an item with no
-         code, is the SaaS SAC — the same default the invoice printed. */
-      type Line = { item_id?: string; name?: string; qty?: number; rate?: number };
-      const linesOf = (raw: unknown): Line[] => (Array.isArray(raw) ? raw as Line[] : []);
-      const itemIds = Array.from(new Set((invoices ?? []).flatMap((i) => linesOf(i.line_items).map((l) => l.item_id)).filter((x): x is string => !!x)));
+      /* Per-line SAC for the HSN table (27 Sep 2026; R-067 1 Oct 2026). A line's OWN `hsn`
+         wins (a project milestone line carries project_sales.sac_code, 998314); else the
+         catalogue item's `hsn`; else the SaaS SAC — the same order the invoice printed.
+         A note has no lines, so it is split like the invoice it amends (lineHsn/docHsnLines). */
+      const linesOf = (raw: unknown): HsnSourceLine[] => (Array.isArray(raw) ? raw as HsnSourceLine[] : []);
+      const linesByInvoice = new Map<string, HsnSourceLine[]>();
+      for (const i of invoices ?? []) linesByInvoice.set(i.id, linesOf(i.line_items));
+      const noteParentIds = Array.from(new Set([...(creditNotes ?? []), ...(debitNotes ?? [])]
+        .map((n) => n.invoice_id).filter((x): x is string => !!x && !linesByInvoice.has(x))));
+      if (noteParentIds.length) {
+        const { data: parents } = await supabase.from("invoices").select("id, line_items").in("id", noteParentIds);
+        for (const iv of parents ?? []) linesByInvoice.set(iv.id, linesOf(iv.line_items));
+      }
+      const itemIds = Array.from(new Set(Array.from(linesByInvoice.values()).flatMap((ls) => ls.map((l) => l.item_id)).filter((x): x is string => !!x)));
       const hsnByItem = new Map<string, string | null>();
       if (itemIds.length) {
         const { data: items } = await supabase.from("items").select("id, hsn").in("id", itemIds);
@@ -218,13 +226,13 @@ function useGstReport(range: DateRange) {
           taxRate,
           interState:    i.inter_state ?? false,
           docType:       "invoice",
-          lines:         hsnLines(taxableValue, linesOf(i.line_items).map((l) => ({
-            hsn: l.item_id ? hsnByItem.get(l.item_id) : null, description: l.name, weight: (l.qty ?? 0) * (l.rate ?? 0),
-          }))),
+          lines:         docHsnLines(taxableValue, linesByInvoice.get(i.id), hsnByItem),
         };
       });
 
       // Notes as SIGNED output rows — credit note negative, debit note positive.
+      const noteLines = (taxable: number, invoiceId: string | null | undefined) =>
+        docHsnLines(taxable, invoiceId ? linesByInvoice.get(invoiceId) : null, hsnByItem);
       for (const n of creditNotes ?? []) {
         const c = custOf(n.customer_id);
         outputRows.push({
@@ -232,6 +240,7 @@ function useGstReport(range: DateRange) {
           customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null, customerCountry: c?.country ?? null,
           amount: -(n.amount ?? 0), taxableValue: -(n.taxable_value ?? 0), gst: -(n.tax_amount ?? 0),
           taxRate: n.tax_rate ?? 18, interState: n.inter_state ?? false, docType: "credit_note",
+          lines: noteLines(-(n.taxable_value ?? 0), n.invoice_id),
         });
       }
       for (const n of debitNotes ?? []) {
@@ -241,6 +250,7 @@ function useGstReport(range: DateRange) {
           customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null, customerCountry: c?.country ?? null,
           amount: n.amount ?? 0, taxableValue: n.taxable_value ?? 0, gst: n.tax_amount ?? 0,
           taxRate: n.tax_rate ?? 18, interState: n.inter_state ?? false, docType: "debit_note",
+          lines: noteLines(n.taxable_value ?? 0, n.invoice_id),
         });
       }
       outputRows.sort((a, b) => b.invoiceDate.localeCompare(a.invoiceDate));
@@ -633,6 +643,7 @@ export default function GstReportPage() {
           gst={data?.outputGST ?? 0}
           rowCount={data?.outputRows.length ?? 0}
           rowLabel="invoice"
+          rowNote="dated in this period"
         />
         <SummaryCard
           label={<><Term k="input_gst">Input GST</Term> paid</>}
@@ -1042,20 +1053,23 @@ function SectionHeader({
 }
 
 function SummaryCard({
-  label, taxable, gst, rowCount, rowLabel,
+  label, taxable, gst, rowCount, rowLabel, rowNote,
 }: {
   label: React.ReactNode;
   taxable: number;
   gst: number;
   rowCount: number;
   rowLabel: string;
+  /** R-062: GST counts a sale by its INVOICE date — not the day it was paid. Said on the
+   *  card, because "two paid invoices, GST shows one" is otherwise read as a bug. */
+  rowNote?: string;
 }) {
   return (
     <Card className="p-4 md:p-5">
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className="font-serif text-2xl md:text-3xl text-ink leading-tight mb-2">{rupee(gst)}</div>
       <div className="text-xs text-ink-3 leading-relaxed">
-        on {rupee(taxable)} taxable value · {rowCount} {rowLabel}{rowCount === 1 ? "" : "s"}
+        on {rupee(taxable)} taxable value · {rowCount} {rowLabel}{rowCount === 1 ? "" : "s"}{rowNote ? ` ${rowNote}` : ""}
       </div>
     </Card>
   );

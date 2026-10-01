@@ -59,6 +59,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { rupee, formatDate, bankLabel, cleanDisplayName, cn } from "@/lib/utils";
+import { istMonth, toIstDate } from "@/lib/dates/ist";
 /* The postpaid countdown, shared with /subscriptions and the onboarding dialog. */
 import { paymentDueState, paymentDueChipLabel, todayIST } from "@/lib/subscriptions/payment-due";
 import { useConfirm } from "@/components/providers/confirm-provider";
@@ -205,10 +206,15 @@ function PaymentsPageInner() {
   // Partial payments (quotes with status=partial)
   const partialQuotes = (quotes ?? []).filter((q) => q.payment_status === "partial");
 
-  const mtdStart = new Date(); mtdStart.setDate(1);
-  const mtdCollected =
-    allReceived.filter((p) => new Date(p.received_at) >= mtdStart).reduce((s, p) => s + p.amount, 0) +
-    projPays.filter((p) => new Date(p.received_at) >= mtdStart).reduce((s, p) => s + p.amount, 0);
+  /* R-062: this IST month, by received date. Was `new Date(); setDate(1)` — the 1st at
+     the CURRENT time of day in the browser's zone, so a payment received earlier on the
+     1st was left out. TDS the customer withheld settles the invoice but never reaches the
+     bank, so it is said separately. */
+  const mtdMonth = istMonth();
+  const inMtd = (at: string | null | undefined) => !!at && toIstDate(at).slice(0, 7) === mtdMonth;
+  const mtdRows = [...allReceived, ...projPays].filter((p) => inMtd(p.received_at));
+  const mtdCollected = mtdRows.reduce((s, p) => s + p.amount, 0);
+  const mtdTds = mtdRows.filter((p) => p.method === "tds").reduce((s, p) => s + p.amount, 0);
 
   // Method breakdown
   const methodBreakdown: Record<string, number> = {};
@@ -307,6 +313,7 @@ function PaymentsPageInner() {
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Collected MTD</p>
                   <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(mtdCollected, { compact: true })}</p>
+                  {mtdTds > 0 && <p className="text-3xs text-ink-3 mt-0.5">incl. {rupee(mtdTds)} TDS</p>}
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Partial Quotes</p>

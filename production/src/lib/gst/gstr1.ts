@@ -30,7 +30,7 @@
  *     received and not invoiced in the same period, 11B the ones adjusted this period
  *     against an invoice after being reported earlier. See buildAdvances below.
  */
-import { SAAS_HSN, SAAS_HSN_LABEL } from "./hsn";
+import { SAAS_HSN, SAAS_HSN_LABEL, sacLabel } from "./hsn";
 import { splitTaxHeads } from "./tax-split";
 import { isExportSupply } from "./place-of-supply";
 import { GST_STATE_BY_CODE } from "@/lib/utils";
@@ -169,6 +169,39 @@ export function hsnLines(
   return out;
 }
 
+/** A stored invoice line, as far as the HSN table cares. `hsn` is the line's OWN code
+ *  (a project milestone line carries `project_sales.sac_code`, R-010); `item_id` points
+ *  at the catalogue, whose `items.hsn` is the fallback. */
+export interface HsnSourceLine { item_id?: string | null; hsn?: string | null; name?: string; qty?: number; rate?: number }
+
+/**
+ * R-067 — the HSN/SAC a stored line is filed under: the line's own code first, the
+ * catalogue item's second, and only then (inside hsnLines) the SaaS default.
+ *
+ * Before this, the GST page read ONLY the catalogue (`l.item_id ? hsnByItem.get(...) : null`),
+ * so a project milestone line — no item_id, own SAC 998314 printed on the invoice — was
+ * filed in GSTR-1 Table 12 under 998313. The return disagreed with the invoice.
+ */
+export function lineHsn(line: HsnSourceLine, hsnByItem: ReadonlyMap<string, string | null>): string | null {
+  const own = (line.hsn ?? "").trim();
+  if (own) return own;
+  const cat = line.item_id ? (hsnByItem.get(line.item_id) ?? "").trim() : "";
+  return cat || null;
+}
+
+/** hsnLines over stored invoice lines. Used for invoices AND their credit/debit notes:
+ *  a note has no lines of its own, so it is split in the same proportions as the invoice
+ *  it amends (a credit note on a 998314 invoice reverses 998314, not 998313). */
+export function docHsnLines(
+  taxableValue: number,
+  lines: HsnSourceLine[] | null | undefined,
+  hsnByItem: ReadonlyMap<string, string | null>,
+): { hsn: string; description?: string; taxable: number }[] {
+  return hsnLines(taxableValue, (lines ?? []).map((l) => ({
+    hsn: lineHsn(l, hsnByItem), description: l.name, weight: (l.qty ?? 0) * (l.rate ?? 0),
+  })));
+}
+
 export function buildGstr1(docs: Gstr1Doc[], seller: Seller): Gstr1Sections {
   const b2b: B2bRow[] = [];
   const b2cl: B2clRow[] = [];
@@ -192,7 +225,7 @@ export function buildGstr1(docs: Gstr1Doc[], seller: Seller): Gstr1Sections {
     const lineTax = (share: number) => (d.taxableValue ? Math.round((d.gst * share) / d.taxableValue) : 0);
     for (const ln of lines) {
       const key = `${ln.hsn}|${d.taxRate}`;
-      const cur = hsnMap.get(key) ?? { hsn: ln.hsn, description: ln.hsn === SAAS_HSN ? SAAS_HSN_LABEL : (ln.description ?? ""), rate: d.taxRate, value: 0, taxable: 0, heads: { igst: 0, cgst: 0, sgst: 0 } };
+      const cur = hsnMap.get(key) ?? { hsn: ln.hsn, description: sacLabel(ln.hsn) ?? (ln.description ?? ""), rate: d.taxRate, value: 0, taxable: 0, heads: { igst: 0, cgst: 0, sgst: 0 } };
       const tax = lines.length === 1 ? d.gst : lineTax(ln.taxable);
       cur.taxable += ln.taxable;
       cur.value += ln.taxable + tax;

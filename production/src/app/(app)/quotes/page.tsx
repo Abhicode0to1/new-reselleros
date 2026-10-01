@@ -24,6 +24,7 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { quotesEmptyCopy } from "@/lib/quotes/empty-tab";
 import { computeMargin } from "@/components/features/margin-pill";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button, IconButton } from "@/components/ui/button";
@@ -496,9 +497,15 @@ export default function QuotesPage() {
             </div>
           </Card>
         ) : (
-          <EmptyState icon="package" title="No project quotations yet"
-            body="One-time / custom-software project quotes show here. Create one from Project Sales → New quotation."
-            action={<Button variant="primary" icon="file" onClick={() => router.push("/projects" as never)}>Project Sales</Button>} />
+          (() => {
+            /* R-063: say it is empty for THIS kind, and point at the other tab. */
+            const c = quotesEmptyCopy("project", quotes?.length ?? 0);
+            return (
+              <EmptyState icon="package" title={c.title} body={c.body}
+                action={<Button variant="primary" icon="file" onClick={() => router.push("/projects" as never)}>Project Sales</Button>}
+                secondary={c.switchLabel ? <Button onClick={() => setView("subscription")}>{c.switchLabel}</Button> : undefined} />
+            );
+          })()
         )
       )}
 
@@ -703,18 +710,23 @@ export default function QuotesPage() {
       )}
 
       {/* Empty */}
-      {!isLoading && !error && quotes && quotes.length === 0 && (
-        <EmptyState
-          icon="file"
-          title="No quotes yet"
-          body="Quotes will appear here once you create your first quote for a customer."
-          action={
-            <Button asChild variant="primary" icon="plus">
-              <Link href={"/quotes/new" as any}>Create your first quote</Link>
-            </Button>
-          }
-        />
-      )}
+      {!isLoading && !error && quotes && quotes.length === 0 && (() => {
+        /* R-063: was "No quotes yet" even with project quotes in the next tab. */
+        const c = quotesEmptyCopy("subscription", projectQuotes?.length ?? 0);
+        return (
+          <EmptyState
+            icon="file"
+            title={c.title}
+            body={c.body}
+            action={
+              <Button asChild variant="primary" icon="plus">
+                <Link href={"/quotes/new" as any}>{c.switchLabel ? "New quote" : "Create your first quote"}</Link>
+              </Button>
+            }
+            secondary={c.switchLabel ? <Button onClick={() => setView("project")}>{c.switchLabel}</Button> : undefined}
+          />
+        );
+      })()}
 
       {/* Filtered empty */}
       {!isLoading && !error && quotes && quotes.length > 0 && filtered.length === 0 && (

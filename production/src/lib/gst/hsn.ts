@@ -78,3 +78,21 @@ export function hsnSummary(interState: boolean | null | undefined): string {
       : `CGST ${SAAS_GST_RATE / 2}% + SGST ${SAAS_GST_RATE / 2}%`;
   return `HSN/SAC ${SAAS_HSN} · ${head}`;
 }
+
+/** SAC 998314 — what `project_sales.sac_code` defaults to (development contracts). */
+export const PROJECT_SAC = "998314";
+
+/**
+ * The SAC scheme's own description for the codes this product prints (GSTR-1 Table 12
+ * "Description"). R-067: a project line (998314) used to borrow its milestone name
+ * ("Complete Billing System — Pehli kist") as the HSN description. Unknown code → null,
+ * and the caller falls back to whatever the line said.
+ */
+export const SAC_LABELS: Readonly<Record<string, string>> = {
+  [SAAS_HSN]: SAAS_HSN_LABEL,
+  [PROJECT_SAC]: "Information technology (IT) design and development services",
+};
+
+export function sacLabel(code: string | null | undefined): string | null {
+  return (code && SAC_LABELS[code.trim()]) || null;
+}
