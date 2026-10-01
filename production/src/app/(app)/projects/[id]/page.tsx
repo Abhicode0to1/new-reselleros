@@ -37,6 +37,7 @@ import { ProjectTasks } from "@/components/features/projects/project-tasks";
 import { useRemoveProjectLabour, useSaveProjectLabour, useUpdateProjectDates, type ProjectLabourLine } from "@/lib/queries/projects";
 import { Input } from "@/components/ui/input";
 import { istToday } from "@/lib/dates/ist";
+import { bookedToDate, labourMonthsElapsed, labourToDate } from "@/lib/projects/pnl";
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -58,6 +59,8 @@ export default function ProjectDetailPage() {
   const [datesEdit, setDatesEdit] = React.useState(false);
   const [startVal, setStartVal] = React.useState("");
   const [targetVal, setTargetVal] = React.useState("");
+  /* R-011: which P&L number is opened to show the entries behind it. */
+  const [pnlOpen, setPnlOpen] = React.useState<null | "contract" | "costs" | "labour" | "booked">(null);
 
   if (isLoading) {
     return (
@@ -91,11 +94,16 @@ export default function ProjectDetailPage() {
     milestones.filter((m) => m.invoice_id).reduce((s, m) => s + (m.total_amount ?? 0), 0) / (gstDiv || 1),
   );
   const contractProfit = contractRevenue - totalCost;
-  const bookedProfit = bookedRevenue - totalCost;
   const pct = (profit: number, rev: number) => (rev > 0 ? Math.round((profit / rev) * 100) : 0);
 
   // ── Timeline: start → target, duration, days-left / overdue ──
   const todayStr = istToday();     // R-025 — UTC "today" is yesterday before 05:30 IST.
+  /* R-011: "booked to date" counts only the labour months that have passed and costs dated
+     up to today — it used to subtract the whole 8-month allocation from a 5-month-old project. */
+  const booked = bookedToDate({ bookedRevenue, costs, labour, today: todayStr, projectStart: project.start_date });
+  const bookedProfit = booked.profit;
+  const invoicedMilestones = milestones.filter((m) => m.invoice_id);
+  const toggle = (k: NonNullable<typeof pnlOpen>) => setPnlOpen((o) => (o === k ? null : k));
   const durationDays = project.start_date && project.target_date ? daysBetween(project.start_date, project.target_date) : null;
   // Auto-suggest labour months from the project duration (full automation:
   // labour cost period follows the real project length).
@@ -291,17 +299,86 @@ export default function ProjectDetailPage() {
           )}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Sum label="Contract value" value={rupee(contractRevenue)} sub="ex-GST" />
-          <Sum label="Costs" value={rupee(costTotal)} sub="external" tone={costTotal > 0 ? "rose" : "ink"} />
-          <Sum label="Labour" value={rupee(labourTotal)} sub="allocated" tone={labourTotal > 0 ? "rose" : "ink"} />
+          <Sum label="Contract value" value={rupee(contractRevenue)} sub="ex-GST" onClick={() => toggle("contract")} open={pnlOpen === "contract"} />
+          <Sum label="Costs" value={rupee(costTotal)} sub={`external · ${costs.length} entr${costs.length === 1 ? "y" : "ies"}`} tone={costTotal > 0 ? "rose" : "ink"} onClick={() => toggle("costs")} open={pnlOpen === "costs"} />
+          <Sum label="Labour" value={rupee(labourTotal)} sub={`allocated · ${labour.length} ${labour.length === 1 ? "person" : "people"}`} tone={labourTotal > 0 ? "rose" : "ink"} onClick={() => toggle("labour")} open={pnlOpen === "labour"} />
           <Sum label="Expected profit" value={rupee(contractProfit)} tone={contractProfit >= 0 ? "emerald" : "rose"} strong />
           <Sum label="Margin" value={`${pct(contractProfit, contractRevenue)}%`} tone={contractProfit >= 0 ? "emerald" : "rose"} />
         </div>
-        <p className="text-2xs text-ink-3 mt-3">
-          Booked to date: {rupee(bookedRevenue)} invoiced − {rupee(totalCost)} costs ={" "}
+        <button
+          type="button"
+          onClick={() => toggle("booked")}
+          aria-expanded={pnlOpen === "booked"}
+          className="mt-3 block w-full text-left text-2xs text-ink-3 hover:text-ink"
+        >
+          Booked to date: {rupee(bookedRevenue)} invoiced − {rupee(booked.costsToDate)} costs − {rupee(booked.labourToDate)} labour so far ={" "}
           <span className={bookedProfit >= 0 ? "text-emerald" : "text-rose"}>{rupee(bookedProfit)}</span>{" "}
-          ({pct(bookedProfit, bookedRevenue)}%). External costs are ex-GST; labour is allocated salary (management view — it doesn&apos;t double-count in your overall P&amp;L).
+          ({booked.marginPct}%). <span className="underline">{pnlOpen === "booked" ? "Hide" : "Show"} how</span>
+        </button>
+        <p className="text-2xs text-ink-3 mt-1">
+          Tap a number to see its entries. External costs are ex-GST; labour is allocated salary (management view — it doesn&apos;t double-count in your overall P&amp;L).
         </p>
+
+        {pnlOpen && (
+          <div className="mt-3 rounded-md border border-hairline bg-paper-2/40 p-3 text-sm">
+            {pnlOpen === "contract" && (
+              lines.length === 0 ? <p className="text-ink-3">No line items on this project.</p> : (
+                <ul className="divide-y divide-hairline">
+                  {lines.map((l, i) => (
+                    <li key={i} className="flex justify-between gap-3 py-1.5">
+                      <span className="min-w-0">{l.name} <span className="text-ink-3">· {l.qty} × {rupee(l.rate)}</span></span>
+                      <span className="font-mono whitespace-nowrap">{rupee(l.amount ?? l.qty * l.rate)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
+            {pnlOpen === "costs" && (
+              costs.length === 0 ? <p className="text-ink-3">No costs recorded yet.</p> : (
+                <ul className="divide-y divide-hairline">
+                  {costs.map((c) => (
+                    <li key={c.id} className="flex justify-between gap-3 py-1.5">
+                      <span className="min-w-0">{formatDate(c.expense_date)} · {c.category}{c.vendor_name ? ` · ${c.vendor_name}` : ""}{c.description ? <span className="text-ink-3"> · {c.description}</span> : null}</span>
+                      <span className="font-mono whitespace-nowrap">{rupee(c.amount)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
+            {pnlOpen === "labour" && (
+              labour.length === 0 ? <p className="text-ink-3">No one allocated yet.</p> : (
+                <ul className="divide-y divide-hairline">
+                  {labour.map((l) => {
+                    const done = labourMonthsElapsed(l, todayStr, project.start_date);
+                    return (
+                      <li key={l.id} className="flex justify-between gap-3 py-1.5">
+                        <span className="min-w-0">
+                          {l.employeeName} <span className="text-ink-3">· {rupee(l.monthlyGross)}/mo × {l.percent}% × {l.months} mo{l.start_date ? ` · ${formatDate(l.start_date)} – ${l.end_date ? formatDate(l.end_date) : "open"}` : ""}</span>
+                          <span className="block text-2xs text-ink-3">So far: {done.toFixed(1)} mo = {rupee(labourToDate(l, todayStr, project.start_date))}</span>
+                        </span>
+                        <span className="font-mono whitespace-nowrap">{rupee(l.cost)}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            )}
+            {pnlOpen === "booked" && (
+              <ul className="divide-y divide-hairline">
+                {invoicedMilestones.length === 0 && <li className="py-1.5 text-ink-3">No milestone invoiced yet.</li>}
+                {invoicedMilestones.map((m) => (
+                  <li key={m.id} className="flex justify-between gap-3 py-1.5">
+                    <span className="min-w-0">{m.label} <span className="text-ink-3">· {m.invoice_id}</span></span>
+                    <span className="font-mono whitespace-nowrap">+{rupee(Math.round((m.total_amount ?? 0) / (gstDiv || 1)))}</span>
+                  </li>
+                ))}
+                <li className="flex justify-between gap-3 py-1.5"><span>Costs up to today</span><span className="font-mono">−{rupee(booked.costsToDate)}</span></li>
+                <li className="flex justify-between gap-3 py-1.5"><span>Labour up to today</span><span className="font-mono">−{rupee(booked.labourToDate)}</span></li>
+                <li className="flex justify-between gap-3 py-1.5 font-semibold"><span>Profit to date</span><span className={`font-mono ${bookedProfit >= 0 ? "text-emerald" : "text-rose"}`}>{rupee(bookedProfit)}</span></li>
+              </ul>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* GST-details nudge — a B2B tax invoice needs the customer's GSTIN + state */}
@@ -647,16 +724,24 @@ function LabourRow({ line, projectId, projectStart, projectTarget }: { line: Pro
   );
 }
 
-function Sum({ label, value, sub, strong, tone = "ink" }: {
+function Sum({ label, value, sub, strong, tone = "ink", onClick, open }: {
   label: string; value: string; sub?: string; strong?: boolean; tone?: "ink" | "rose" | "emerald";
+  /** R-011: a number with entries behind it opens them below the card. */
+  onClick?: () => void; open?: boolean;
 }) {
   const c = tone === "rose" ? "text-rose" : tone === "emerald" ? "text-emerald" : "text-ink";
-  return (
-    <div>
-      <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
+  const body = (
+    <>
+      <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}{onClick && <Icon name={open ? "chevron_up" : "chevron_down"} size={11} className="inline ml-1 align-[-1px]" />}</p>
       <p className={`font-serif text-xl mt-1 ${c} ${strong ? "font-semibold" : ""}`}>{value}</p>
       {sub && <p className="text-3xs text-ink-3">{sub}</p>}
-    </div>
+    </>
+  );
+  if (!onClick) return <div>{body}</div>;
+  return (
+    <button type="button" onClick={onClick} aria-expanded={open} className={`text-left rounded-md -m-1 p-1 hover:bg-paper-2/60 ${open ? "bg-paper-2/60" : ""}`}>
+      {body}
+    </button>
   );
 }
 
