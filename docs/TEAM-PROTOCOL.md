@@ -38,7 +38,7 @@ Pardeep decided on 1 Oct 2026: four people writing code in parallel made the wor
 |---|---|---|
 | **Pardeep + AI** | Builds the whole app on `manager-pardeep`: Sell, Customer, Money, app shell, crons, tests, docs | Yes — the only app branch |
 | **Hitesh** | Checks money numbers (GST, invoices, books) on localhost / test site, talks to the CA, writes what is wrong as a card | No |
-| **Abhishek** | Weekly deploy (migrations first, then app), Cloud Run / Supabase / GitHub logins, CI settings, backups | Only `cloudbuild.yaml`, `.github/` |
+| **Abhishek** | Weekly deploy **every Thursday 4 pm IST** (backup → migrations in order → app → version check), Cloud Run / Supabase / GitHub logins, CI settings, backups | Only `cloudbuild.yaml`, `.github/` |
 | **Pawan** | Website: public & marketing pages, login/signup, checkout, customer portal, public API | Only the website paths |
 
 **Board = 2 lists:** "🐞 Bug / idea" (anyone writes one line; Pardeep's AI picks it up) and "🔎 Ye check karo" (what the AI built that a person should check — e.g. GST numbers → Hitesh). Old branches (`billing-abhishek`, `accounts-hitesh`) were merged into `manager-pardeep` on 1 Oct and are no longer worked on.
