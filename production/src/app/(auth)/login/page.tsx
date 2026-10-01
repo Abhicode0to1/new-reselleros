@@ -16,6 +16,7 @@ import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { DevDemoPanel } from "@/components/shared/dev-demo-panel";
+import { isOAuthProviderEnabled } from "@/lib/auth/oauth-enabled";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -96,6 +97,13 @@ function LoginPageInner() {
   }
 
   async function onGoogleSignIn() {
+    /* R-098: ask first — with Google off (every local setup) the redirect below lands on
+       Supabase raw JSON, "provider is not enabled", and the user is stuck there. */
+    const enabled = await isOAuthProviderEnabled(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", "google");
+    if (enabled === false) {
+      toast.error("Google sign-in isn't turned on here.", { description: "Use your email and password below." });
+      return;
+    }
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
