@@ -51,6 +51,12 @@ export interface SmartPasteProps {
   catalogue: readonly CatalogueEntry[];
   /** Called with only the fields that were actually found. */
   onFill: (values: SmartPasteValues) => void;
+  /**
+   * Only name / email / phone — for a form that has no seats, product or domain box
+   * (Quick add lead, R-099). The preview and the "Fill N fields" count then describe
+   * exactly what will be filled, not three rows the form throws away.
+   */
+  contactOnly?: boolean;
 }
 
 function toValues(e: ExtractedEntities): SmartPasteValues {
@@ -70,7 +76,7 @@ function toValues(e: ExtractedEntities): SmartPasteValues {
   return v;
 }
 
-export function SmartPaste({ catalogue, onFill }: SmartPasteProps) {
+export function SmartPaste({ catalogue, onFill, contactOnly = false }: SmartPasteProps) {
   const [open, setOpen] = React.useState(false);
   const [text, setText] = React.useState("");
 
@@ -83,9 +89,11 @@ export function SmartPaste({ catalogue, onFill }: SmartPasteProps) {
   /* The domain counts as a found field when it is there — it fills a real box on the
      customer form, and a preview that said "4 of 5" while filling five would be lying
      about its own work. */
-  const found = entities
-    ? foundCount(entities) + (companyDomainFromEmail(entities.email.value) ? 1 : 0)
-    : 0;
+  const found = !entities
+    ? 0
+    : contactOnly
+      ? [entities.name, entities.email, entities.phone].filter((f) => f.value != null).length
+      : foundCount(entities) + (companyDomainFromEmail(entities.email.value) ? 1 : 0);
 
   if (!open) {
     return (
@@ -127,19 +135,23 @@ export function SmartPaste({ catalogue, onFill }: SmartPasteProps) {
       {entities && (
         <div className="mt-2.5 rounded-md border border-hairline bg-paper p-2.5">
           <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-ink-3">
-            Found {found} of 6
+            Found {found} of {contactOnly ? 3 : 6}
           </p>
           <dl className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             <Row label="Name"    value={entities.name.value}    source={entities.name.source} />
             <Row label="Email"   value={entities.email.value}   source={entities.email.source} />
             <Row label="Phone"   value={entities.phone.value}   source={entities.phone.source} />
-            <Row label="Seats"   value={entities.seats.value}   source={entities.seats.source} />
-            <Row label="Product" value={entities.product.value?.name ?? null} source={entities.product.source} />
-            <Row
-              label="Company domain"
-              value={companyDomainFromEmail(entities.email.value)}
-              source={entities.email.value ? `the address ${entities.email.value}` : null}
-            />
+            {!contactOnly && (
+              <>
+                <Row label="Seats"   value={entities.seats.value}   source={entities.seats.source} />
+                <Row label="Product" value={entities.product.value?.name ?? null} source={entities.product.source} />
+                <Row
+                  label="Company domain"
+                  value={companyDomainFromEmail(entities.email.value)}
+                  source={entities.email.value ? `the address ${entities.email.value}` : null}
+                />
+              </>
+            )}
           </dl>
           <p className="mt-2 border-t border-hairline pt-1.5 text-3xs leading-snug text-ink-3">
             Read from the text by rules, not by a model — anything blank was not found and is

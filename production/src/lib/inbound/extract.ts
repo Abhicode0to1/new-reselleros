@@ -407,7 +407,28 @@ function findName(fromName: string | null | undefined, body: string): Extracted<
       return { value: candidate, source: m[0].trim().replace(/\s+/g, " ") };
     }
   }
-  return { ...NONE };
+  return selfIntroName(body);
+}
+
+/* Words that follow "I am" / "main" without being a name: "I am Interested", "Main Delhi se". */
+const NOT_A_NAME = /^(interested|looking|from|here|calling|writing|reaching|the|a|an|bhi|aapka|aapki|ek|abhi|sir|madam|ji|ok|okay|google|microsoft|zoho|office|tally|adobe|aws|gmail)$/i;
+
+/**
+ * R-099 (1 Oct 2026): a WhatsApp has no sign-off — people introduce themselves at the top:
+ * "main Sunil Verma", "mera naam Ravi hai", "I am Priya Shah", "this is Amit".
+ * Only CAPITALISED words right after the intro are taken (one to three), so "main bhi
+ * interested hoon" finds nothing. Still a rule, never a guess: no intro, no name.
+ */
+function selfIntroName(body: string): Extracted<string> {
+  const m = /(?:^|[\s,.!])((?:[Mm]y name is|[Mm]era naam|[Mm]y naam|[Ii] am|[Ii]'m|[Tt]his is|[Mm]ain|[Mm]ai)\s+)([A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+){0,2})/
+    .exec(body);
+  if (!m) return { ...NONE };
+  const words = m[2].split(/\s+/);
+  while (words.length && NOT_A_NAME.test(words[words.length - 1])) words.pop();
+  if (!words.length || NOT_A_NAME.test(words[0])) return { ...NONE };
+  const candidate = words.join(" ");
+  if (!plausibleName(candidate)) return { ...NONE };
+  return { value: candidate, source: (m[1] + m[2]).trim() };
 }
 
 /* ── The whole thing ───────────────────────────────────────────────────────── */

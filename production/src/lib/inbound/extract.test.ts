@@ -556,3 +556,22 @@ describe("findBillingCycle — bhugtan ki baat, commitment ki nahi (1 Sep 2026)"
     expect(r.source).toContain("monthly invoices");
   });
 });
+
+describe("name from a WhatsApp self-introduction (R-099)", () => {
+  const nameOf = (body: string) => run({ fromName: null, body }).name.value;
+  it("reads the common intros", () => {
+    expect(nameOf("Namaste ji, main Sunil Verma, AITEST Traders se.")).toBe("Sunil Verma");
+    expect(nameOf("Mera naam Ravi hai, 20 id chahiye")).toBe("Ravi");
+    expect(nameOf("Hi, I am Priya Shah from Acme")).toBe("Priya Shah");
+    expect(nameOf("Hello this is Amit. Need a quote")).toBe("Amit");
+  });
+  it("finds nothing when the words after the intro are not a name", () => {
+    expect(nameOf("main bhi interested hoon")).toBeNull();
+    expect(nameOf("I am Interested in Google Workspace")).toBeNull();
+    expect(nameOf("Main Google Workspace lena chahta hoon")).toBeNull();
+    expect(nameOf("Need 20 ids, call 9876543210")).toBeNull();
+  });
+  it("a sign-off still wins over an intro", () => {
+    expect(nameOf("I am Ravi.\nNeed ids.\n\nRegards,\nRavi Kumar")).toBe("Ravi Kumar");
+  });
+});

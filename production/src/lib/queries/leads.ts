@@ -774,7 +774,8 @@ export function useClassifyJunk() {
 type LeadInsert = Database["public"]["Tables"]["leads"]["Insert"];
 type LeadUpdate = Database["public"]["Tables"]["leads"]["Update"];
 
-export function useCreateLead() {
+/** @param opts.quiet no "Lead created" toast — for a form that confirms the save itself (Quick add, R-099). */
+export function useCreateLead(opts: { quiet?: boolean } = {}) {
   const qc = useQueryClient();
 
   return useMutation({
@@ -800,7 +801,7 @@ export function useCreateLead() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
-      toast.success("Lead created");
+      if (!opts.quiet) toast.success("Lead created");
     },
     onError: (err) => toastError(err),
   });
