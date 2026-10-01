@@ -22,6 +22,7 @@
  *   - Razorpay key secret never sent to client (only `razorpayKeyId` which is public)
  *   - Webhook signature verification done in the webhook route, not here
  */
+import { addDaysISO, istToday } from "@/lib/dates/ist";
 import { NextResponse, type NextRequest } from "next/server";
 import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
@@ -32,6 +33,7 @@ import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { buyPageTenantIdOrEmpty, simulatedPaymentAllowed } from "@/lib/checkout/live-guards";
 import { issueInvoiceForOnlinePayment } from "@/lib/checkout/online-invoice.server";
+import { publicDbError } from "@/app/api/public/_lib/db-error";
 
 /* R-079: the hard-coded dev tenant only off production; "" (fails closed) when unset there. */
 const BUY_PAGE_TENANT_ID = buyPageTenantIdOrEmpty();
@@ -392,11 +394,9 @@ export async function POST(request: NextRequest) {
         p_name:         fullName,
       });
       if (redeemErr) {
-        console.error("[checkout/workspace] redeem_coupon failed:", redeemErr);
-        return NextResponse.json(
-          { error: "Could not apply coupon: " + redeemErr.message },
-          { status: 500 },
-        );
+        // redeem_coupon returns its refusals as { ok:false, reason }; an error here is a fault (R-026).
+        const e = publicDbError("checkout/workspace", redeemErr, "We could not apply the coupon just now. Nothing was charged — please try again in a minute, or continue without it.");
+        return NextResponse.json({ error: e.message }, { status: e.status });
       }
       if (!redeemRes?.ok) {
         return NextResponse.json(
@@ -415,9 +415,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Insert the actual quote row with the (possibly-discounted) totals.
-    const today   = new Date();
-    const expires = new Date(today);
-    expires.setDate(expires.getDate() + 7);
+    /* R-026: the IST calendar day. `toISOString().slice(0, 10)` is the UTC day, so an order
+       placed between 00:00 and 05:30 IST was dated yesterday (AGENTS.md §6). */
+    const createdDate = istToday();
+    const expiresDate = addDaysISO(createdDate, 7);
 
     const quoteNotes = [
       isSimulation
@@ -453,8 +454,8 @@ export async function POST(request: NextRequest) {
       payment_status: "awaiting",          // webhook flips to 'received'
       owner_id:       null,
       domain:         cleanDomain,         // structured — record_payment copies to subscription
-      created_date:   today.toISOString().slice(0, 10),
-      expires_date:   expires.toISOString().slice(0, 10),
+      created_date:   createdDate,
+      expires_date:   expiresDate,
       notes:          quoteNotes,
     }).select("public_token").single();
     if (qErr || !inserted?.public_token) {
@@ -479,11 +480,8 @@ export async function POST(request: NextRequest) {
         p_notes:     `[SIMULATION] Test payment for ${tierName} · ${seats} users`,
       });
       if (rpcErr) {
-        console.error("[checkout/workspace] simulated record_payment failed:", rpcErr);
-        return NextResponse.json(
-          { error: "Simulation failed: " + rpcErr.message },
-          { status: 500 },
-        );
+        const e = publicDbError("checkout/workspace", rpcErr, "The test payment could not be recorded. Nothing was charged — please try again.");
+        return NextResponse.json({ error: e.message }, { status: e.status });
       }
       // The same automatic GST invoice the webhook issues for a real payment (R-079).
       await issueInvoiceForOnlinePayment(admin, { quoteId, tenantId: BUY_PAGE_TENANT_ID, logTag: "[checkout/workspace] simulated" });

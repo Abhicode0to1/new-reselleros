@@ -10,6 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyClaimToken } from "@/lib/claim-token";
 import { rateLimit } from "@/lib/security/rate-limit";
+import { publicDbError } from "@/app/api/public/_lib/db-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +47,10 @@ export async function POST(request: NextRequest) {
     p_employee_id: employeeId,
     p_pin:         pin,
   });
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) {
+    const e = publicDbError("expense-claim/verify", error, "We could not check your PIN just now. Please try again in a minute.", { passCodes: { P0001: 400 } });
+    return NextResponse.json({ error: e.message }, { status: e.status });
+  }
 
   return NextResponse.json({ ok: true, remaining: Number(data ?? 0) });
 }

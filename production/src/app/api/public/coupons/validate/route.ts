@@ -14,6 +14,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
+import { publicDbError } from "@/app/api/public/_lib/db-error";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -53,7 +54,8 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ ok: false, reason: "server_error", message: error.message }, { status: 500 });
+    const e = publicDbError("coupons/validate", error, "We could not check this coupon just now. Please try again in a minute, or continue without it.");
+    return NextResponse.json({ ok: false, reason: "server_error", message: e.message }, { status: e.status });
   }
   if (!coupon) {
     return NextResponse.json({ ok: false, reason: "invalid_code" }, { status: 200 });

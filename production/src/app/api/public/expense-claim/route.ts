@@ -13,6 +13,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyClaimToken } from "@/lib/claim-token";
+import { publicDbError } from "@/app/api/public/_lib/db-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,8 +70,10 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    // RPC raises friendly messages (Wrong PIN, no open advance, over-limit).
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    // The RPC raises friendly messages (Wrong PIN, no open advance, over-limit) as P0001;
+    // anything else is a fault, and its raw text stays in the server log (R-026).
+    const e = publicDbError("expense-claim", error, "We could not submit the claim just now. Please try again in a minute.", { passCodes: { P0001: 400 } });
+    return NextResponse.json({ error: e.message }, { status: e.status });
   }
 
   // Fresh claimable balance so the form can update without a reload.

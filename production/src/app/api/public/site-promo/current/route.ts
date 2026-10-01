@@ -22,6 +22,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { SitePromoRow } from "@/lib/supabase/database.types";
+import { publicDbError } from "@/app/api/public/_lib/db-error";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -58,10 +59,8 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query.maybeSingle();
   if (error) {
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 },
-    );
+    const e = publicDbError("site-promo/current", error, "We could not load the current offer just now.");
+    return NextResponse.json({ ok: false, error: e.message }, { status: e.status });
   }
 
   let promo = (data ?? null) as SitePromoRow | null;

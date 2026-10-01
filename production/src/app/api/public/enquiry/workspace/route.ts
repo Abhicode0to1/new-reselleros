@@ -33,6 +33,7 @@
  * - Uses admin client (bypasses RLS — required since visitor has no session)
  * - Rate limit TODO: bolt on at the edge later (Cloudflare or upstream proxy)
  */
+import { addDaysISO, istToday } from "@/lib/dates/ist";
 import { NextResponse, type NextRequest } from "next/server";
 import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
@@ -179,9 +180,10 @@ export async function POST(request: NextRequest) {
     const canAutoQuote = tierId !== "enterprise" && chosen.items.length > 0;
 
     if (canAutoQuote) {
-      const today    = new Date();
-      const expires  = new Date(today);
-      expires.setDate(expires.getDate() + 7);
+      /* R-026: the IST calendar day. `toISOString().slice(0, 10)` is the UTC day, so an order
+         placed between 00:00 and 05:30 IST was dated yesterday (AGENTS.md §6). */
+      const createdDate = istToday();
+      const expiresDate = addDaysISO(createdDate, 7);
 
       for (let attempt = 1; attempt <= 3 && !draftQuoteId; attempt++) {
         const { data: quoteId, error: numErr } = await admin
@@ -211,8 +213,8 @@ export async function POST(request: NextRequest) {
           billing_cycle: usingFlex ? "monthly" : "yearly",
           status:        "draft",
           owner_id:      null,
-          created_date:  today.toISOString().slice(0, 10),
-          expires_date:  expires.toISOString().slice(0, 10),
+          created_date:  createdDate,
+          expires_date:  expiresDate,
           notes:         `Auto-generated from /buy/workspace enquiry. Customer wants ${seats} seat${seats === 1 ? "" : "s"} of Google Workspace ${tierName}, ${usingFlex ? "monthly flexible (pay-as-you-go)" : "annual commitment"}.`,
         });
 

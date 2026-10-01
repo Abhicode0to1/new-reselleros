@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { quoteTokenMatches } from "@/lib/quotes/accept-token";
+import { publicDbError } from "@/app/api/public/_lib/db-error";
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -36,8 +37,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   const { data, error } = await supabase.rpc("accept_project_quote", { p_project_id: params.id });
 
   if (error) {
-    const status = error.code === "no_data_found" ? 404 : 400;
-    return NextResponse.json({ error: error.message }, { status });
+    /* accept_project_quote raises its two customer-facing refusals with their own SQLSTATE:
+       "Quotation not found" (no_data_found = P0002) and "This quotation cannot be accepted
+       (status …)" (invalid_parameter_value = 22023). This compared error.code with the
+       condition NAME, which Postgres never sends, so a missing quotation was a 400. */
+    const e = publicDbError("project-quote/accept", error, "We could not accept this quotation just now. Please try again in a minute.", {
+      passCodes: { P0002: 404, "22023": 409 },
+    });
+    return NextResponse.json({ error: e.message }, { status: e.status });
   }
   return NextResponse.json({ ok: true, result: data });
 }

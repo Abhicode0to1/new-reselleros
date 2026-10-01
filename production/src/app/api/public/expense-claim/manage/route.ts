@@ -9,6 +9,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyClaimToken } from "@/lib/claim-token";
+import { publicDbError } from "@/app/api/public/_lib/db-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,10 @@ export async function POST(request: NextRequest) {
     const { error } = await admin.rpc("delete_claim_public", {
       p_tenant_id: tid, p_employee_id: employeeId, p_pin: pin, p_claim_id: claimId,
     });
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+      const e = publicDbError("expense-claim/manage", error, "We could not delete the claim just now. Please try again in a minute.", { passCodes: { P0001: 400 } });
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
   } else if (action === "edit") {
     const amount   = Math.round(Number(body.amount));
     const category = String(body.category ?? "").trim();
@@ -48,7 +52,10 @@ export async function POST(request: NextRequest) {
       p_tenant_id: tid, p_employee_id: employeeId, p_pin: pin, p_claim_id: claimId,
       p_amount: amount, p_category: category, p_purpose: purpose, p_spent_on: spentOn,
     });
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+      const e = publicDbError("expense-claim/manage", error, "We could not save the claim just now. Please try again in a minute.", { passCodes: { P0001: 400 } });
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
   } else {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }

@@ -15,6 +15,7 @@ import { buildSalesAcknowledgementHtml } from "@/lib/email/quote-template";
 import { configureQuote, describeChanges, type LineChoice } from "@/lib/quotes/configure";
 import { grossAmount } from "@/lib/quotes/amounts";
 import type { QuoteLineItem, Item } from "@/lib/supabase/database.types";
+import { publicDbError } from "@/app/api/public/_lib/db-error";
 
 /** Accepts only the three fields a choice may carry — anything else is dropped. */
 function parseChoices(raw: unknown): LineChoice[] {
@@ -159,7 +160,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       })
       .eq("id", params.id);
     if (reshapeErr) {
-      return NextResponse.json({ error: reshapeErr.message }, { status: 500 });
+      const e = publicDbError("quote/accept", reshapeErr, "We could not update your quote just now. Please try again in a minute.");
+      return NextResponse.json({ error: e.message }, { status: e.status });
     }
   }
 
@@ -205,7 +207,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   });
 
   if (acceptErr) {
-    return NextResponse.json({ error: acceptErr.message }, { status: 500 });
+    /* accept_quote's own messages are written for staff ("quote … does not belong to your
+       tenant"), so none of them is passed to the customer (R-026). */
+    const e = publicDbError("quote/accept", acceptErr, "We could not accept this quote just now. Please refresh the page and try again.");
+    return NextResponse.json({ error: e.message }, { status: e.status });
   }
 
   // 4. Send Sales Team Acknowledgement Notification Email to Reseller / Sales Exec

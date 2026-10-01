@@ -423,3 +423,17 @@ describe("R-079 — place of supply on the lead, and the live-site guards", () =
     expect(lead()!.tenant_id).toBe("fbb976f1-9090-4f10-9726-0901bd144e42");
   });
 });
+
+describe("a quote is dated by the IST day (R-026)", () => {
+  it("an order at 01:00 IST on 2 Oct is dated 2 Oct, and valid 7 days from it", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-01T19:30:00Z")); // = 2 Oct 2026, 01:00 IST
+    try {
+      await POST(req({ domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+      expect(quote()!.created_date).toBe("2026-10-02"); // the UTC day would be 1 Oct
+      expect(quote()!.expires_date).toBe("2026-10-09");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

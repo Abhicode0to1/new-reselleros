@@ -39,6 +39,7 @@
  * lookup the search uses (lib/domains/live-lookup.ts), and is refused — never charged a
  * guess — when that lookup is unreachable, the name is taken, or the price is unknown.
  */
+import { addDaysISO, istToday } from "@/lib/dates/ist";
 import { NextResponse, type NextRequest } from "next/server";
 import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
@@ -615,8 +616,10 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       return NextResponse.json({ error: "Could not allocate a quote number. Please retry." }, { status: 500 });
     }
     const quoteId = qid as string;
-    const today = new Date();
-    const expires = new Date(today); expires.setDate(expires.getDate() + 7);
+    /* R-026: the IST calendar day. `toISOString().slice(0, 10)` is the UTC day, so an order
+       placed between 00:00 and 05:30 IST was dated yesterday (AGENTS.md §6). */
+    const createdDate = istToday();
+    const expiresDate = addDaysISO(createdDate, 7);
 
     const { error: qErr } = await admin.from("quotes").insert({
       id: quoteId,
@@ -636,8 +639,8 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       payment_status: "awaiting",
       owner_id: null,
       domain: cleanDomain || null,
-      created_date: today.toISOString().slice(0, 10),
-      expires_date: expires.toISOString().slice(0, 10),
+      created_date: createdDate,
+      expires_date: expiresDate,
       // `notes` is printed on the customer's PDF (lib/pdf/build-props.ts), and it is written
       // once, here, before payment. Until 28 Sep 2026 it said "Razorpay order pending" — false
       // on every paid order's bill — and printed the internal DMS account id. Only a sentence
