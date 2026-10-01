@@ -109,9 +109,9 @@ export function LeadsStatusStates({
             "No leads match this view"
           }
           body={
-            smartView === "today"   ? "No new leads came in today. Use the Add Lead button to add one manually — new inbound leads will show up here." :
+            smartView === "today"   ? "No new leads came in today. Use Add lead to add one manually — new inbound leads will show up here." :
             smartView === "hot"     ? "No leads in Demo / Trial / Quote stage. Move qualified leads forward to surface hot opportunities." :
-            smartView === "new"     ? "Inbox is clear. Switch to Hot or Won MTD to see what's moving." :
+            smartView === "new"     ? "Inbox is clear. Switch to Hot or Won this month to see what's moving." :
             smartView === "won-mtd" ? "Close your first deal this month — it'll show up here." :
             smartView === "mine"    ? "Leads assigned to you will appear here. Switch to All to see everyone's." :
             "Try a different view or clear filters."

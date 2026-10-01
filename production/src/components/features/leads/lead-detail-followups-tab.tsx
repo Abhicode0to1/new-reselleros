@@ -31,13 +31,13 @@ export function LeadFollowupsTab({ openTasks, doneTasks, setAddTaskOpen, complet
                 )}
               </div>
               <Button size="sm" variant="ghost" icon="plus" onClick={() => setAddTaskOpen(true)}>
-                Add
+                Add follow-up
               </Button>
             </div>
 
             {openTasks.length === 0 && doneTasks.length === 0 ? (
               <p className="text-[12px] text-ink-3 italic">
-                No follow-ups scheduled. Click <b>+ Add</b> to set a reminder.
+                No follow-ups scheduled.
               </p>
             ) : (
               <div className="space-y-1.5">

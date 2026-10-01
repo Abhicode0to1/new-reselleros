@@ -139,10 +139,10 @@ export function LeadsSmartViews({
     /* The page opens here (26 Sep 2026, Pardeep: "by default saari leads show honi
        chahiye"). With one deal just moved to Won, "All open" showed an empty page with
        "No leads match" — every lead existed, the default view simply hid it. */
-    { id: "everything", label: isDealsPage ? "Saari deals" : "All leads", count: everythingCount ?? all, tone: "default",
+    { id: "everything", label: isDealsPage ? "All deals" : "All leads", count: everythingCount ?? all, tone: "default",
       hint: isDealsPage
-        ? "Har deal — quote se won aur lost tak. New / Contacted Leads page par hain."
-        : "Har lead — open, won aur lost. Junk alag hai." },
+        ? "Every deal, Quote Sent to Won and Lost"
+        : "Open, won and lost — not junk" },
     { id: "all",   label: "All open", count: all,     tone: "default",
       hint: "Every open lead. Won and lost are not open — they have their own folders." },
     ...(currentUserId
@@ -214,8 +214,9 @@ export function LeadsSmartViews({
               bare label — it sits in a row of folders with an inbox icon, which says what it is —
               and the scope goes here, on the control whose whole job is choosing a view.
               Hidden below `sm` because the label is already tight on a phone and the eye icon
-              carries the same meaning there. */}
-          <span className="hidden text-ink-3 sm:inline">{"View: "}</span>
+              carries the same meaning there.
+              1 Oct 2026 (Pardeep, plain-English UI pass): the "View:" text was dropped
+              at every width — the eye icon now carries the scope everywhere. */}
           <span className="font-medium">{triggerLabel}</span>
           {triggerCount !== undefined && (
             <span className="text-xs tabular-nums opacity-70">{triggerCount}</span>

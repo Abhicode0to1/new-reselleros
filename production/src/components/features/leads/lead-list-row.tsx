@@ -303,7 +303,7 @@ export function LeadListRow({
               return (
                 <span
                   className="text-xs tabular-nums text-ink-3"
-                  title={`Pehla jawab ${waitLabel(w.minutes)} me chala gaya tha`}
+                  title={`First reply sent in ${waitLabel(w.minutes)}`}
                 >
                   ✓ {waitLabel(w.minutes)}
                 </span>
@@ -312,10 +312,8 @@ export function LeadListRow({
             return (
               <span
                 title={
-                  `Is lead ka jawab ${waitLabel(w.minutes)} se baaki hai.\n\n` +
-                  "Research (MIT/InsideSales): 5 minute me jawab dene par lead qualify " +
-                  "hone ki sambhavna 30 minute se 21 guna hoti hai, aur 78% B2B customer " +
-                  "us vendor se khareedte hain jo pehle jawab deta hai."
+                  `No reply for ${waitLabel(w.minutes)}.\n\n` +
+                  "Replying within 5 minutes makes a lead 21× likelier to qualify."
                 }
                 className={cn(
                   "inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
@@ -389,7 +387,7 @@ export function LeadListRow({
               title={
                 isStageLocked(lead.stage)
                   ? "Closed. Reopening a won deal touches recorded money, so it cannot be done from this cell."
-                  : "Stage khud badalta hai — baat hone, demo, trial ya quote jane par. Badalna ho to lead kholiye."
+                  : "Stage updates on its own. To change it, open the lead."
               }
             >
               {STAGE_LABEL[lead.stage]}

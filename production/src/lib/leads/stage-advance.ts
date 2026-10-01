@@ -73,13 +73,13 @@ export function advanceStage(
   if (!stage) {
     /* Bina stage ki lead ko hum samajhte nahi. Ek event se uski funnel jagah gadhna
        andaza hoga, jaanch nahi. */
-    return { nextStage: null, code: "nostage", reason: "is lead ka koi stage darj nahi hai, isliye kuch nahi badla" };
+    return { nextStage: null, code: "nostage", reason: "lead has no stage set, nothing changed" };
   }
 
   if (stage === "won") {
     /* Jeete hue deal ko wapas pipeline me kheenchna use forecast me do baar ginega aur
        uski stage-age dobara shuru kar dega. */
-    return { nextStage: null, code: "terminal", reason: "deal pehle hi Won hai — use wapas pipeline me nahi laya jata" };
+    return { nextStage: null, code: "terminal", reason: "deal is already Won and can't return to the pipeline" };
   }
 
   if (stage === "lost") {
@@ -88,7 +88,7 @@ export function advanceStage(
     return {
       nextStage: null,
       code: "terminal",
-      reason: "lead Lost hai — use dobara kholna ek insaan ka faisla hai, kisi action ka side effect nahi",
+      reason: "lead is Lost — reopen it by hand",
     };
   }
 
@@ -99,7 +99,7 @@ export function advanceStage(
     /* DB me aisa stage jo is list me nahi. Chhoda ja raha hai AUR bola ja raha hai —
        galat aage ka move utna hi nuksaandeh hai jitna galat peechhe ka, aur koi bhi naya
        stage isi shakha me girega. */
-    return { nextStage: null, code: "unknown", reason: `stage "${stage}" is niyam ko pata nahi hai, isliye chhod diya gaya` };
+    return { nextStage: null, code: "unknown", reason: `unknown stage "${stage}", skipped` };
   }
 
   if (from >= to) {
@@ -107,12 +107,12 @@ export function advanceStage(
       nextStage: null,
       code: "already",
       reason: from === to
-        ? `lead pehle se ${stage} par hai`
-        : `lead ${stage} par hai, jo ${target} se aage hai — peechhe nahi le jaya jata`,
+        ? `lead is already at ${stage}`
+        : `lead is at ${stage}, past ${target} — stages don't move back`,
     };
   }
 
-  return { nextStage: target, code: "moved", reason: `${stage} se ${target} par aaya` };
+  return { nextStage: target, code: "moved", reason: `moved ${stage} → ${target}` };
 }
 
 /**
@@ -130,11 +130,11 @@ export function markLost(currentStage: string | null | undefined): StageAdvance 
     return {
       nextStage: null,
       code: "terminal",
-      reason: "Won deal ko Lost nahi kiya ja sakta — uske peechhe payment aur invoice hai, wo alag faisla hai",
+      reason: "a Won deal can't be marked Lost — it has payments and invoices",
     };
   }
   if (stage === "lost") {
-    return { nextStage: null, code: "already", reason: "lead pehle se Lost hai" };
+    return { nextStage: null, code: "already", reason: "lead is already Lost" };
   }
-  return { nextStage: "lost", code: "moved", reason: `${stage || "lead"} se Lost par gaya` };
+  return { nextStage: "lost", code: "moved", reason: `moved ${stage || "lead"} → Lost` };
 }

@@ -186,7 +186,7 @@ function baseOutcome(
           detail: lead.contact_phone?.trim() || "—",
         },
         navigate: null,
-        toast: `${who} · call log ho gaya`,
+        toast: `${who} · call logged`,
         undoable: false,
       });
 
@@ -226,7 +226,7 @@ function baseOutcome(
         patch: null,
         activity: { kind: "note", detail: "Demo ho gaya" },
         navigate: null,
-        toast: `${who} · demo darj hua`,
+        toast: `${who} · demo logged`,
         undoable: false,
       });
 
@@ -235,7 +235,7 @@ function baseOutcome(
         patch: null,
         activity: { kind: "note", detail: "Trial shuru hua" },
         navigate: null,
-        toast: `${who} · trial shuru`,
+        toast: `${who} · trial started`,
         undoable: false,
       });
 
@@ -303,7 +303,7 @@ export const OUTCOME_CHIPS: ReadonlyArray<{
      hai: timeline me uska jodidaar "No answer" hai, aur dono batate hain ki call me KYA
      HUA. Wahan "Call log" likhna us farak ko mita deta — dono call hi log hain. Button
      ek KAAM ka naam hai, record ek NATEEJE ka; ye ek jaise hone bhi nahi chahiye. */
-  { id: "talked",        label: "Call log",      icon: "mobile", tone: "amber",
+  { id: "talked",        label: "Log call",      icon: "mobile", tone: "amber",
     hint: "Insaan se baat ho gayi — call record hoga. Lead pehli baar Contacted par jayegi; uske baad sirf call darj hota hai.",
     needsPhone: true, showsAt: ["new", "contact", "demo", "trial", "quote"] },
   { id: "no_answer",     label: "No answer",    icon: "mobile", tone: "default",
@@ -311,15 +311,15 @@ export const OUTCOME_CHIPS: ReadonlyArray<{
     needsPhone: true, showsAt: ["new", "contact", "demo", "trial", "quote"] },
   { id: "call_tomorrow", label: "Call tomorrow", icon: "clock",  tone: "amber",
     hint: "Move the follow-up date to tomorrow.", needsPhone: false, showsAt: null },
-  { id: "demo_done",     label: "Demo hua",      icon: "check",  tone: "amber",
-    hint: "Demo ho chuka — lead Demo par jayegi.", needsPhone: false, showsAt: ["new", "contact"] },
-  { id: "trial_started", label: "Trial shuru",   icon: "check",  tone: "amber",
-    hint: "Trial chalu ho gaya — lead Trial par jayegi.", needsPhone: false, showsAt: ["contact", "demo"] },
+  { id: "demo_done",     label: "Demo done",     icon: "check",  tone: "amber",
+    hint: "Moves the lead to Demo Done.", needsPhone: false, showsAt: ["new", "contact"] },
+  { id: "trial_started", label: "Trial started", icon: "check",  tone: "amber",
+    hint: "Moves the lead to Trial Active.", needsPhone: false, showsAt: ["contact", "demo"] },
   { id: "send_quote",    label: "Send quote",   icon: "send",   tone: "amber",
     hint: "Open the quote builder with this lead's details. The stage moves when the quote is actually created.",
     needsPhone: false, showsAt: null },
   { id: "mark_lost",     label: "Lost",          icon: "alert",  tone: "rose",
-    hint: "Ye deal haath se nikal gayi. Won deal yahan se Lost nahi hoti.",
+    hint: "Deal lost. A Won deal can't be marked Lost here.",
     needsPhone: false, showsAt: ["new", "contact", "demo", "trial", "quote"] },
   { id: "mark_junk",     label: "Junk",         icon: "alert",  tone: "rose",
     hint: "Hide as spam or a fake enquiry. Restorable from the Junk view.", needsPhone: false,

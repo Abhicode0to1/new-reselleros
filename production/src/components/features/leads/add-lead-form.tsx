@@ -150,7 +150,7 @@ function listPricePerSeat(plan: string): number | undefined {
    (migration 20260926110000). */
 const ENQUIRY_TYPES = [
   { value: "subscription", label: "Subscription", hint: "Google / Microsoft / Zoho seats" },
-  { value: "project",      label: "Custom software / project", hint: "Kuch banwana hai — app, ERP, website…" },
+  { value: "project",      label: "Custom software / project", hint: "App, ERP, website…" },
 ] as const;
 
 
@@ -501,7 +501,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
     const fields = Object.keys(errs) as DealFormField[];
     for (const f of fields) setError(f, { type: "deal", message: errs[f] });
     if (fields.length > 0) {
-      toast.error("Deal ke liye kuch zaroori cheezein baaki hain", {
+      toast.error("Required fields missing", {
         description: fields.map((f) => errs[f]).join(" · "),
       });
     }
@@ -744,13 +744,13 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
         className="w-full sm:max-w-[520px] md:max-w-[600px] p-0 flex flex-col overflow-x-hidden"
       >
         <SheetHeader className="min-w-0">
-          <SheetTitle className="break-words">{isEditing ? "Edit lead" : defaultStage ? "Add a new deal" : "Add a new lead"}</SheetTitle>
+          <SheetTitle className="break-words">{isEditing ? (dealMode ? "Edit deal" : "Edit lead") : dealMode ? "Add deal" : "Add lead"}</SheetTitle>
           <SheetDescription className="break-words">
             {isEditing
               ? `Update details for ${editingLead?.company}.`
               : defaultStage
                 ? "Add an opportunity straight to your Deal Pipeline."
-                : "Track a potential lead. Send a quote to move it into the Deal Pipeline."}
+                : "Send a quote to move it into the Deal Pipeline."}
           </SheetDescription>
         </SheetHeader>
 
@@ -797,7 +797,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                       )}
                       aria-current={n === step ? "step" : undefined}
                     >
-                      <span aria-hidden="true">{done ? "✓" : n}</span>
+                      {done && <span aria-hidden="true">✓</span>}
                       <span>{label}</span>
                     </button>
                     {n < STEP_LABELS.length && <span aria-hidden="true" className="text-ink-3">›</span>}
@@ -839,8 +839,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
 
           <Step show={!useSteps || step === 1}>
 
-          <div className="flex gap-2" role="group" aria-label="Lead kiska hai">
-            {[{ v: false, label: "Naya business" }, { v: true, label: "Existing customer" }].map((o) => (
+          <div className="flex gap-2" role="group" aria-label="Lead type">
+            {[{ v: false, label: "New business" }, { v: true, label: "Existing customer" }].map((o) => (
               <button key={o.label} type="button" onClick={() => { setForCustomer(o.v); if (!o.v) setCustomerId(""); }}
                 aria-pressed={forCustomer === o.v}
                 className={cn("rounded-full border px-3 py-1 text-xs",
@@ -850,8 +850,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
             ))}
           </div>
           {forCustomer && (
-            <FormField label="Kaunsa customer" htmlFor="lead-customer">
-              <CustomerCombobox id="lead-customer" value={customerId} placeholder="Customer dhoondho…"
+            <FormField label="Customer" htmlFor="lead-customer">
+              <CustomerCombobox id="lead-customer" value={customerId} placeholder="Search customers…"
                 onChange={(id) => {
                   setCustomerId(id);
                   const c = (customerList ?? []).find((x) => x.id === id);
@@ -874,7 +874,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           <FormField label="Company name" htmlFor="company">
             <Input
               id="company"
-              placeholder="e.g. Acme Corp Pvt Ltd (marzi se)"
+              placeholder="e.g. Acme Corp Pvt Ltd (optional)"
               error={errors.company?.message}
               {...register("company")}
             />
@@ -914,7 +914,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
             <div className="rounded-md bg-indigo-50 border border-indigo/20 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 min-w-0">
               <p className="text-xs text-indigo-ink inline-flex items-start gap-2 min-w-0 leading-snug">
                 <Icon name="mobile" size={13} className="flex-shrink-0 mt-0.5" />
-                <span>Phone par hain? Apne contacts se direct add karo.</span>
+                <span>On your phone? Add from contacts.</span>
               </p>
               <Button
                 type="button"
@@ -994,7 +994,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           <Step show={!useSteps || step === 2}>
 
           {/* What the enquiry is FOR decides every field below it. */}
-          <FormField label="Enquiry kis cheez ki hai?" htmlFor="enquiry_type">
+          <FormField label="Enquiry type" htmlFor="enquiry_type">
             <div id="enquiry_type" role="radiogroup" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {ENQUIRY_TYPES.map((t) => (
                 <button
@@ -1021,22 +1021,22 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
 
           {isProject ? (
             <>
-              <FormField label="Kya banwana hai?" htmlFor="requirement">
+              <FormField label="Requirement" htmlFor="requirement">
                 <textarea
                   id="requirement"
                   rows={3}
-                  placeholder="e.g. School ERP — fees, attendance, parent app; ya inventory + billing software"
+                  placeholder="e.g. School ERP — fees, attendance, parent app"
                   className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-amber resize-y"
                   {...register("requirement")}
                 />
                 <p className="text-xs text-ink-3 mt-1">
                   {(watch("requirement") ?? "").trim()
-                    ? "Requirement hai — Deal Pipeline mein qualified project opportunity ki tarah jaayegi."
-                    : "Khaali chhodo to Lead Inbox mein jaayegi — baad mein requirement likh sakte ho."}
+                    ? "Goes to the Deal Pipeline as a qualified project."
+                    : "Leave blank to keep it in the Lead Inbox."}
                 </p>
               </FormField>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <FormField label="Anumaanit budget (₹, GST se pehle)" htmlFor="value">
+                <FormField label="Budget (₹, before GST)" htmlFor="value">
                   <Input
                     id="value"
                     type="text"
@@ -1056,8 +1056,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                     <p className="mt-1 text-xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
                   )}
                 </FormField>
-                <FormField label="Kab tak chahiye?" htmlFor="project_timeline">
-                  <Input id="project_timeline" placeholder="e.g. 3 months, Diwali se pehle" {...register("project_timeline")} />
+                <FormField label="Timeline" htmlFor="project_timeline">
+                  <Input id="project_timeline" placeholder="e.g. 3 months, before Diwali" {...register("project_timeline")} />
                 </FormField>
               </div>
             </>
@@ -1079,7 +1079,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               }}
             >
               <SelectTrigger id="plan" error={!!errors.plan}>
-                <SelectValue placeholder={dealMode ? "Plan chuno (zaroori)" : "Abhi pata nahi? Khaali chhodo — Lead Inbox me jaayegi"} />
+                <SelectValue placeholder={dealMode ? "Pick a plan (required)" : "Not sure yet? Leave blank"} />
               </SelectTrigger>
               <SelectContent>
                 {PLANS.map((p) => (
@@ -1095,10 +1095,10 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
             ) : (
               <p className="text-xs text-ink-3 mt-1">
                 {dealDetailsRequired
-                  ? "Deal ke liye plan zaroori hai — mix ho to Custom / Mixed chuno."
+                  ? "Plan is required — use Custom / Mixed for a mix."
                   : plan
-                    ? "Plan hai — quote bhejne par ye Deals me jaayegi."
-                    : "Khaali chhodo to Lead Inbox me jaayegi — baad me qualify kar sakte ho."}
+                    ? "Moves to Deals once a quote is sent."
+                    : "Leave blank to keep it in the Lead Inbox."}
               </p>
             )}
           </FormField>
@@ -1183,12 +1183,12 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </p>
             )}
             {plan === "Custom / Mixed" && (
-              <p className="mt-1 text-xs text-ink-3">Negotiated deal value bharo</p>
+              <p className="mt-1 text-xs text-ink-3">Enter the negotiated deal value</p>
             )}
             {/* R-071: the value stays yearly on a monthly deal; one month's bill is shown. */}
             {watch("billing_cycle") === "monthly" && monthlyBill(parseMoney(valueText)) !== null && (
               <p className="mt-1 text-xs text-ink-3">
-                Monthly billing: ≈ <b className="text-ink">₹{monthlyBill(parseMoney(valueText))!.toLocaleString("en-IN")}/month</b> (value upar saal ka hai)
+                Monthly billing: ≈ <b className="text-ink">₹{monthlyBill(parseMoney(valueText))!.toLocaleString("en-IN")}/month</b> (deal value is per year)
               </p>
             )}
           </FormField>
@@ -1221,8 +1221,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   lib/leads/stage-options.ts) — not picking a plan, as this line used to say. */}
               <p className="mt-1 text-xs text-ink-3 leading-snug">
                 {dealMode
-                  ? "Quote / Demo / Trial / Won: plan, company aur close date zaroori. Won ke liye value bhi."
-                  : "Quote bhejne par lead Deals me aati hai — tab Demo / Trial / Won khulte hain."}
+                  ? "Quote Sent onward needs plan, company and expected close. Won also needs value."
+                  : "Send a quote to move it to Deals."}
               </p>
             </FormField>
             <FormField label="Source" htmlFor="source">
@@ -1320,7 +1320,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               existed and nothing wrote it, so "Closing this month" and the forecast were
               empty). Required from Quote onward; not in the past (IST). An edit may keep an
               already-saved past date — lib/leads/deal-rules.ts#dealFormErrors. */}
-          <FormField label="Kab tak band hogi? (expected close)" required={dealDetailsRequired} htmlFor="expected_close_date">
+          <FormField label="Expected close" required={dealDetailsRequired} htmlFor="expected_close_date">
             <Input
               id="expected_close_date"
               type="date"
@@ -1329,7 +1329,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               {...register("expected_close_date")}
             />
             <p className="mt-1 text-xs text-ink-3">
-              Forecast aur &ldquo;Closing this month&rdquo; isi date se chalte hain.
+              Used by the forecast and &ldquo;Closing this month&rdquo;.
             </p>
           </FormField>
 
@@ -1473,7 +1473,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 variant="primary"
                 loading={isSubmitting || createLead.isPending || updateLead.isPending}
               >
-                {isEditing ? "Save changes" : "Save lead"}
+                {isEditing ? "Save changes" : dealMode ? "Save deal" : "Save lead"}
               </Button>
             )}
           </SheetFooter>

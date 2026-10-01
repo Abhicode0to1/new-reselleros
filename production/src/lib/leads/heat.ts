@@ -33,9 +33,9 @@ export function isHotLead(l: Pick<Lead, "priority" | "stage">): boolean {
  *  mystery. Priority takes precedence when both signals are true. "" if not hot. */
 export function hotReason(l: Pick<Lead, "priority" | "stage">): string {
   if (l.priority === "high") return "High priority";
-  if (l.stage === "quote") return "Quote sent";
-  if (l.stage === "trial") return "Trial active";
-  if (l.stage === "demo") return "Demo done";
+  if (l.stage === "quote") return "Quote Sent";
+  if (l.stage === "trial") return "Trial Active";
+  if (l.stage === "demo") return "Demo Done";
   return "";
 }
 

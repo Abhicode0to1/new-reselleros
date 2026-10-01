@@ -28,10 +28,10 @@ export function DealsStrip({ role }: { role: string | null | undefined }) {
     { label: "Pipeline", value: rupee(s.pipeline.value, { compact: true }), icon: "target",
       trend: plural(s.pipeline.count, "open deal", "open deals") },
     { label: "Weighted", value: rupee(s.weighted, { compact: true }), icon: "trending_up",
-      trend: "stage probability se" },
-    { label: "Is mahine close hone wali", value: rupee(s.closingThisMonth.value, { compact: true }), icon: "calendar",
+      trend: "By stage probability" },
+    { label: "Closing this month", value: rupee(s.closingThisMonth.value, { compact: true }), icon: "calendar",
       trend: plural(s.closingThisMonth.count, "deal", "deals") },
-    { label: "Is mahine Won", value: rupee(s.wonThisMonth.value, { compact: true }), icon: "check_circle",
+    { label: "Won this month", value: rupee(s.wonThisMonth.value, { compact: true }), icon: "check_circle",
       trend: plural(s.wonThisMonth.count, "deal", "deals"), accent: "emerald" as const },
   ] : [];
 
@@ -40,17 +40,17 @@ export function DealsStrip({ role }: { role: string | null | undefined }) {
       <div className="flex items-center justify-between mb-2">
         <h2 id="dash-deals" className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Deals</h2>
         <Link href={"/deals" as Route} className="text-xs font-medium text-amber-ink hover:underline">
-          Sab deals dekho →
+          All deals →
         </Link>
       </div>
       {error ? (
         <p className="text-sm text-rose-ink rounded-lg border border-hairline bg-paper p-3">
-          Deals load nahi hue — {(error as Error).message}. Ye ₹0 nahi hai; <Link href={"/deals" as Route} className="underline">/deals</Link> kholo.
+          Couldn't load deals — {(error as Error).message}. This is not ₹0; open <Link href={"/deals" as Route} className="underline">/deals</Link>.
         </p>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {loading
-            ? ["Pipeline", "Weighted", "Is mahine close hone wali", "Is mahine Won"].map((l) => (
+            ? ["Pipeline", "Weighted", "Closing this month", "Won this month"].map((l) => (
                 <KPI key={l} label={l} value="" loading />
               ))
             : tiles.map((t) => (

@@ -148,10 +148,10 @@ export function LeadsKanbanBoard({ boardLeads, columnTotals, serverColumnTotals,
                 </div>
                 {(sum.total > 0 || sum.partial) && (
                   <div className="mt-1 flex items-center justify-between text-3xs text-ink-3 tabular-nums">
-                    <span title="Har deal ki value × stage ki jeetne ki sambhavna (lib/leads/forecast.ts)">
+                    <span title="By stage probability">
                       Weighted {rupee(sum.weighted, { compact: true })}
                     </span>
-                    {sum.partial && <span>total ≈ (sirf dikhne wale cards)</span>}
+                    {sum.partial && <span>≈ visible cards only</span>}
                   </div>
                 )}
               </div>
@@ -174,7 +174,7 @@ export function LeadsKanbanBoard({ boardLeads, columnTotals, serverColumnTotals,
 
                 {stageLeads.length === 0 && (
                   <div className="h-20 flex items-center justify-center border border-dashed border-hairline/60 rounded-md text-xs text-ink-3">
-                    No deals in {stage.label.toLowerCase()}
+                    No deals in {stage.label}
                   </div>
                 )}
 

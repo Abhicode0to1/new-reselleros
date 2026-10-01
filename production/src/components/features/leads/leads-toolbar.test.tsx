@@ -73,10 +73,10 @@ describe("R-056: the Kanban toggle on a phone", () => {
     render(<LeadsToolbar {...props({ isMobile: true, setView })} />);
     const btn = kanbanButton();
     expect(btn.getAttribute("aria-disabled")).toBe("true");
-    expect(btn.getAttribute("title")).toBe("Kanban badi screen par milta hai");
+    expect(btn.getAttribute("title")).toBe("Kanban needs a larger screen");
     fireEvent.click(btn);
     expect(setView).not.toHaveBeenCalled();
-    expect(toastInfo).toHaveBeenCalledWith("Kanban badi screen par milta hai");
+    expect(toastInfo).toHaveBeenCalledWith("Kanban needs a larger screen");
   });
 
   it("stays a normal toggle on desktop", () => {
@@ -84,7 +84,7 @@ describe("R-056: the Kanban toggle on a phone", () => {
     render(<LeadsToolbar {...props({ setView })} />);
     const btn = kanbanButton();
     expect(btn.getAttribute("aria-disabled")).toBeNull();
-    expect(btn.getAttribute("title")).toBe("Kanban view — best for stage flow");
+    expect(btn.getAttribute("title")).toBe("Kanban view");
     fireEvent.click(btn);
     expect(setView).toHaveBeenCalledWith("kanban");
     expect(toastInfo).not.toHaveBeenCalled();

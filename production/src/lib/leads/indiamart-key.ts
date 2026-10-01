@@ -21,15 +21,15 @@ import { formatIstDate, istParts } from "@/lib/dates/ist";
 import { RATE_LIMIT_BACKOFF_MINUTES } from "./indiamart";
 
 /** The cron's Cloud Scheduler line (scripts/setup-cloud-scheduler.sh): `*\/15 8-21 * * *`, Asia/Kolkata. */
-export const PULL_SCHEDULE_TEXT = "har 15 minute, subah 8 baje se raat 9:45 tak (IST)";
+export const PULL_SCHEDULE_TEXT = "every 15 minutes, 8 am – 9:45 pm IST";
 
 /** Where the owner finds the key — shown on the screen, and what the save error points to. */
 export const KEY_SOURCE_TEXT = "IndiaMART Seller panel → Lead Manager → CRM API key";
 
 export const crmKeySchema = z.object({
   crm_key: z.string().trim()
-    .min(16, "Ye IndiaMART CRM key jaisi nahi lagti — Lead Manager se poori key copy karo")
-    .max(200, "Key bahut lambi hai — sirf CRM key paste karo, poora link ya message nahi"),
+    .min(16, "Doesn't look like a CRM key — copy the full key from Lead Manager")
+    .max(200, "Too long — paste only the CRM key"),
 });
 export type CrmKeyInput = z.infer<typeof crmKeySchema>;
 
@@ -72,15 +72,15 @@ export function pullSummary(s: Pick<IndiamartKeyStatus, "configured" | "last_run
   if (!s.configured) {
     return {
       tone: "neutral",
-      title: "Key save nahi hai — IndiaMART leads apne aap nahi aa rahi",
-      detail: `Neeche CRM key save karo. Uske baad app ${PULL_SCHEDULE_TEXT} nayi enquiries leads mein daalega.`,
+      title: "Not connected",
+      detail: `Save the CRM key below. New enquiries are then pulled ${PULL_SCHEDULE_TEXT}.`,
     };
   }
   if (!s.last_run_at) {
     return {
       tone: "neutral",
-      title: "Key saved — pehla pull abhi hona hai",
-      detail: `Agle run mein pichhle 24 ghante ki enquiries aayengi. Pull ${PULL_SCHEDULE_TEXT} chalta hai.`,
+      title: "Waiting for first pull",
+      detail: `The first pull brings the last 24 hours of enquiries. Runs ${PULL_SCHEDULE_TEXT}.`,
     };
   }
   const when = istDateTime(s.last_run_at);
@@ -88,28 +88,28 @@ export function pullSummary(s: Pick<IndiamartKeyStatus, "configured" | "last_run
     const n = s.last_imported ?? 0;
     return {
       tone: "success",
-      title: `Chal raha hai — last pull ${when}`,
-      detail: n === 0 ? "Us pull mein koi nayi enquiry nahi thi." : `Us pull mein ${n} nayi ${n === 1 ? "lead bani" : "leads bani"}.`,
+      title: `Active — last pull ${when}`,
+      detail: n === 0 ? "No new enquiries." : `${n} new ${n === 1 ? "lead" : "leads"}.`,
     };
   }
   const err = s.last_error ?? "";
   if (/^rate limited/i.test(err)) {
     return {
       tone: "warning",
-      title: `IndiaMART ne thodi der rukne ko kaha (${when})`,
-      detail: `Kuch karna nahi hai — app ${RATE_LIMIT_BACKOFF_MINUTES} minute baad khud dobara try karega.`,
+      title: `Rate-limited (${when})`,
+      detail: `No action needed — retrying in ${RATE_LIMIT_BACKOFF_MINUTES} minutes.`,
     };
   }
   if (/rejected the CRM key/i.test(err)) {
     return {
       tone: "danger",
-      title: `IndiaMART ne key reject ki (${when})`,
-      detail: `${KEY_SOURCE_TEXT} se nayi key copy karke neeche "Key badlo" se save karo. Abhi save ki hai to agle pull mein check hogi.`,
+      title: `Key rejected (${when})`,
+      detail: `Copy a new key from ${KEY_SOURCE_TEXT} and save it below. A new key is checked on the next pull.`,
     };
   }
   return {
     tone: "danger",
-    title: `Last pull fail hua (${when})`,
-    detail: `${err || "Wajah record nahi hui."} Agla pull khud try karega; baar-baar ho to key dobara save karo.`,
+    title: `Last pull failed (${when})`,
+    detail: `${err || "No reason recorded."} The next pull retries; if it keeps failing, save the key again.`,
   };
 }

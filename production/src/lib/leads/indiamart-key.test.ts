@@ -34,10 +34,10 @@ describe("crmKeySchema — the one rule the page and the API both apply", () => 
   it("refuses a short or oversized paste with a next step", () => {
     const short = crmKeySchema.safeParse({ crm_key: "abc" });
     expect(short.success).toBe(false);
-    expect(short.error!.issues[0].message).toMatch(/Lead Manager se poori key copy karo/);
+    expect(short.error!.issues[0].message).toMatch(/copy the full key from Lead Manager/);
     const long = crmKeySchema.safeParse({ crm_key: "x".repeat(201) });
     expect(long.success).toBe(false);
-    expect(long.error!.issues[0].message).toMatch(/sirf CRM key paste karo/);
+    expect(long.error!.issues[0].message).toMatch(/paste only the CRM key/);
   });
 });
 
@@ -58,7 +58,7 @@ describe("pullSummary", () => {
   it("no key: says leads are NOT coming, and what to do", () => {
     const s = pullSummary({ ...base, configured: false });
     expect(s.tone).toBe("neutral");
-    expect(s.title).toMatch(/nahi aa rahi/);
+    expect(s.title).toMatch(/Not connected/);
     expect(s.detail).toContain(PULL_SCHEDULE_TEXT);
   });
 
@@ -68,22 +68,22 @@ describe("pullSummary", () => {
 
   it("key saved, never pulled: says the first pull is pending and how far back it reaches", () => {
     const s = pullSummary({ ...base, last_run_at: null, last_ok: null });
-    expect(s.title).toMatch(/pehla pull abhi hona hai/);
-    expect(s.detail).toMatch(/24 ghante/);
+    expect(s.title).toMatch(/Waiting for first pull/);
+    expect(s.detail).toMatch(/24 hours/);
   });
 
   it("working: names the time and the count, singular and plural", () => {
-    expect(pullSummary(base)).toMatchObject({ tone: "success", title: "Chal raha hai — last pull 29 Sep 2026, 2:15 pm" });
-    expect(pullSummary(base).detail).toMatch(/koi nayi enquiry nahi/);
-    expect(pullSummary({ ...base, last_imported: 1 }).detail).toBe("Us pull mein 1 nayi lead bani.");
-    expect(pullSummary({ ...base, last_imported: 3 }).detail).toBe("Us pull mein 3 nayi leads bani.");
+    expect(pullSummary(base)).toMatchObject({ tone: "success", title: "Active — last pull 29 Sep 2026, 2:15 pm" });
+    expect(pullSummary(base).detail).toMatch(/No new enquiries/);
+    expect(pullSummary({ ...base, last_imported: 1 }).detail).toBe("1 new lead.");
+    expect(pullSummary({ ...base, last_imported: 3 }).detail).toBe("3 new leads.");
   });
 
   it("an unknown failure shows the recorded reason and still gives a next step", () => {
     const s = pullSummary({ ...base, last_ok: false, last_error: "IndiaMART error: server busy" });
     expect(s.tone).toBe("danger");
     expect(s.detail).toMatch(/^IndiaMART error: server busy/);
-    expect(s.detail).toMatch(/key dobara save karo/);
+    expect(s.detail).toMatch(/save the key again/);
   });
 
   /* The two failures the owner can act on, from the text the real cron writes. */
@@ -110,7 +110,7 @@ describe("pullSummary", () => {
     const st = db.upserts.at(-1)!;
     const s = pullSummary({ configured: true, last_run_at: st.last_run_at as string, last_ok: st.last_ok as boolean, last_error: st.last_error as string, last_imported: 0 });
     expect(s.tone).toBe("warning");
-    expect(s.detail).toMatch(/Kuch karna nahi hai/);
+    expect(s.detail).toMatch(/No action needed/);
   });
 
   it("recognises the cron's rejected-key record and sends the owner to get a new key", async () => {
@@ -120,7 +120,7 @@ describe("pullSummary", () => {
     expect(String(st.last_error)).toContain("/marketing/indiamart");
     const s = pullSummary({ configured: true, last_run_at: st.last_run_at as string, last_ok: st.last_ok as boolean, last_error: st.last_error as string, last_imported: 0 });
     expect(s.tone).toBe("danger");
-    expect(s.title).toMatch(/key reject ki/);
+    expect(s.title).toMatch(/Key rejected/);
     expect(s.detail).toContain(KEY_SOURCE_TEXT);
     // …and the record the screen shows never carries the key itself.
     expect(JSON.stringify(db.upserts)).not.toContain(KEY);

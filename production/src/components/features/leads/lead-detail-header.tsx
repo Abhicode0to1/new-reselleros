@@ -24,10 +24,9 @@ export function LeadDetailHeader({ lead, stageLabel, confirm, changeStage, onClo
   return (
   <SheetHeader className="!p-5 flex flex-row items-start justify-between gap-3 border-b border-hairline">
     <div className="min-w-0 flex-1">
-      <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Lead detail</p>
-      <SheetTitle className="text-xl mt-1">{lead.company}</SheetTitle>
+      <SheetTitle className="text-xl">{lead.company}</SheetTitle>
       <SheetDescription className="text-xs mt-1">
-        {lead.id} · Stage: <b className="text-ink">{stageLabel}</b>
+        {lead.id} · <b className="text-ink">{stageLabel}</b>
       </SheetDescription>
 
       {/* ── Stage ka ekmatra manual raasta (26 Aug 2026) ────────────────────
@@ -47,7 +46,7 @@ export function LeadDetailHeader({ lead, stageLabel, confirm, changeStage, onClo
           `changeStage` hi wo darwaza hai jo `lost` par loss-reason poochhta hai. */}
       <div className="mt-1.5 flex items-center gap-1.5">
         <label htmlFor="lead-stage-override" className="text-3xs uppercase tracking-wider text-ink-3">
-          Stage badlein
+          Change stage
         </label>
         <select
           id="lead-stage-override"
@@ -56,12 +55,12 @@ export function LeadDetailHeader({ lead, stageLabel, confirm, changeStage, onClo
             const next = e.target.value as Lead["stage"];
             if (next === lead.stage) return;
             const ok = await confirm({
-              title: `Stage badal kar ${STAGE_LABEL[next]} karein?`,
+              title: `Change stage to ${STAGE_LABEL[next]}?`,
               body:
-                `${lead.company} abhi ${STAGE_LABEL[lead.stage]} par hai.\n\n` +
-                "Aam taur par stage khud badalta hai — baat hone, demo, trial ya quote jane par. " +
-                "Ye haath se badalna hai, isliye ye lead ke saath jo sach me hua uske khilaf ja sakta hai.",
-              confirmLabel: "Haan, badlo",
+                `${lead.company} is at ${STAGE_LABEL[lead.stage]}.\n\n` +
+                "Stages normally update on their own — after a call, demo, trial or quote. " +
+                "A manual change may not match what actually happened.",
+              confirmLabel: "Change stage",
             });
             if (ok) await changeStage(lead, next);
           }}

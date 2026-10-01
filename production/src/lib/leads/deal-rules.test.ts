@@ -20,7 +20,7 @@ describe("checkBoardMove — the board obeys the form's rules", () => {
       for (const to of ["quote", "demo", "trial", "won"] as const) {
         const v = checkBoardMove(card({ stage: from }), to);
         expect(v.ok).toBe(false);
-        if (!v.ok) expect(v.title).toContain("pehle quote bhejo");
+        if (!v.ok) expect(v.title).toContain("Send a quote first");
       }
     }
     expect(checkBoardMove(card({ stage: "new" }), "contact").ok).toBe(true);
@@ -31,15 +31,15 @@ describe("checkBoardMove — the board obeys the form's rules", () => {
     const noValue = checkBoardMove(card({ stage: "trial", value: 0 }), "won");
     expect(noValue.ok).toBe(false);
     if (!noValue.ok) {
-      expect(noValue.description).toContain("deal value");
-      expect(noValue.description).not.toContain("close date");
+      expect(noValue.title).toContain("deal value");
+      expect(noValue.title).not.toContain("expected close");
     }
     const noDate = checkBoardMove(card({ stage: "trial", expected_close_date: null }), "won");
     expect(noDate.ok).toBe(false);
-    if (!noDate.ok) expect(noDate.description).toContain("close date");
+    if (!noDate.ok) expect(noDate.title).toContain("expected close");
     const neither = checkBoardMove(card({ stage: "demo", value: null, expected_close_date: null }), "won");
     expect(neither.ok).toBe(false);
-    if (!neither.ok) expect(neither.description).toContain("deal value (₹) aur close date");
+    if (!neither.ok) expect(neither.title).toContain("missing: deal value (₹), expected close");
     expect(checkBoardMove(card({ stage: "quote" }), "won").ok).toBe(true);
   });
 
@@ -143,7 +143,7 @@ describe("autoDealValue — BUG: opening Edit overwrote a negotiated value", () 
 describe("the wiring", () => {
   it("the form writes expected_close_date and runs the deal rules on step 2 and on save", () => {
     expect(FORM).toContain("expected_close_date: data.expected_close_date || null,");
-    expect(FORM).toContain('label="Kab tak band hogi? (expected close)"');
+    expect(FORM).toContain('label="Expected close"');
     expect(FORM).toMatch(/if \(ok && \(step !== 2 \|\| checkDealRules\(\)\)\) setStep\(step \+ 1\);/);
     expect(FORM).toMatch(/const onSubmit = async \(data: FormData\) => \{[\s\S]{0,120}if \(!checkDealRules\(\)\) return;/);
     expect(FORM).toContain('<Review label="Expected close"');
@@ -152,7 +152,7 @@ describe("the wiring", () => {
   it("Add Deal does not offer to skip the plan, and the stage hint no longer says a plan unlocks stages", () => {
     expect(FORM).not.toContain("Skip to capture as raw lead (Inbox)");
     expect(FORM).not.toContain("Pick a plan to unlock Demo / Trial / Quote / Won.");
-    expect(FORM).toContain('placeholder={dealMode ? "Plan chuno (zaroori)"');
+    expect(FORM).toContain('placeholder={dealMode ? "Pick a plan (required)"');
   });
 
   it("the board checks the rule BEFORE writing the stage, and its header shows weighted ₹", () => {
@@ -160,6 +160,6 @@ describe("the wiring", () => {
     expect(drop.indexOf("checkBoardMove(lead, toStage)")).toBeGreaterThan(-1);
     expect(drop.indexOf("checkBoardMove(lead, toStage)")).toBeLessThan(drop.indexOf("await changeStage(lead, toStage)"));
     expect(BOARD).toContain("Weighted {rupee(sum.weighted");
-    expect(BOARD).toContain("total ≈ (sirf dikhne wale cards)");
+    expect(BOARD).toContain("≈ visible cards only");
   });
 });

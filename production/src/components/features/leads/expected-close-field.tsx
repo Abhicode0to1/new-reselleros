@@ -27,9 +27,9 @@ export function ExpectedCloseField({ lead }: { lead: Pick<Lead, "id" | "stage" |
     const parsed = parseFollowUpDate(raw);
     if (!parsed.ok) { toast.error(parsed.error); return; }
     if (parsed.value === (lead.expected_close_date ?? null)) return;
-    if (parsed.value && parsed.value < today) { toast.error("Close date aaj ya aage ki chuno"); return; }
+    if (parsed.value && parsed.value < today) { toast.error("Pick today or later"); return; }
     if (!parsed.value && required) {
-      toast.error("Is stage par close date zaroori hai", { description: "Quote / Demo / Trial / Won deal ki date hatayi nahi ja sakti — badal sakte ho." });
+      toast.error("Expected close is required", { description: "Deals from Quote Sent onward need a date. You can change it, not remove it." });
       return;
     }
     updateLead.mutate({ id: lead.id, patch: { expected_close_date: parsed.value } });
@@ -38,7 +38,7 @@ export function ExpectedCloseField({ lead }: { lead: Pick<Lead, "id" | "stage" |
   return (
     <div>
       <label htmlFor={`close-${lead.id}`} className="block text-2xs uppercase tracking-wider text-ink-3 mb-0.5">
-        Kab tak band hogi?
+        Expected close
       </label>
       <input
         id={`close-${lead.id}`}
@@ -59,11 +59,11 @@ export function ExpectedCloseField({ lead }: { lead: Pick<Lead, "id" | "stage" |
       />
       {overdue && (
         <p id={`close-${lead.id}-overdue`} className="mt-0.5 text-xs font-semibold text-rose">
-          Overdue — nayi date lagao ya deal update karo
+          Overdue — update date
         </p>
       )}
       {!saved && required && (
-        <p className="mt-0.5 text-xs text-ink-3">Date nahi hai — forecast aur &ldquo;Closing this month&rdquo; me nahi aayegi.</p>
+        <p className="mt-0.5 text-xs text-ink-3">No date — left out of the forecast and &ldquo;Closing this month&rdquo;.</p>
       )}
     </div>
   );

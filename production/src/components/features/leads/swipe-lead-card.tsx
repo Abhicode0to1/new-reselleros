@@ -377,7 +377,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                   right-swipe. Sudhaarna ho to lead kholiye: drawer me override hai. */}
               {stageMeta && (
                 <span
-                  title="Stage khud badalta hai — baat hone, demo, trial ya quote jane par. Badalna ho to lead kholiye."
+                  title="Stage updates on its own. To change it, open the lead."
                   className="inline-flex items-center gap-1 text-xs font-medium text-ink-2 px-1.5 py-0.5 shrink-0"
                 >
                   <span className={cn("w-1.5 h-1.5 rounded-full", stageMeta.dot)} />
@@ -426,7 +426,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 <span
                   role="button"
                   tabIndex={0}
-                  aria-label={`${lead.company} ke liye actions`}
+                  aria-label={`Actions for ${lead.company}`}
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                   className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-paper-2 active:bg-paper-2/70"
@@ -443,7 +443,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 {(hasPhone || hasEmail) && (
                   <>
                     <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
-                      Sampark karein
+                      Contact
                     </DropdownMenuLabel>
                     {hasPhone && (
                       <DropdownMenuItem asChild className="cursor-pointer gap-2.5 py-2">
@@ -486,7 +486,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 {onOutcome && (
                   <>
                     <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
-                      Kya hua
+                      Log outcome
                     </DropdownMenuLabel>
                     {chipsForStage(lead.stage).map((chip) => {
                       const blocked = chip.needsPhone && !hasPhone;
@@ -495,7 +495,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                           key={chip.id}
                           disabled={blocked}
                           title={blocked
-                            ? `${chip.hint}\n\nIs lead par phone number nahi hai — pehle jodiye.`
+                            ? `${chip.hint}\n\nNo phone number on this lead — add one first.`
                             : chip.hint}
                           onSelect={() => {
                             /* "Send quote" caller ka apna handler pasand karta hai: page ka

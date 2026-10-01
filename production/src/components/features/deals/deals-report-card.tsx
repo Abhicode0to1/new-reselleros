@@ -30,7 +30,7 @@ export function DealsReportCard({ role }: { role: string | null | undefined }) {
   const nameOf = (id: string | null) => {
     if (id === null) return "Unassigned";
     const m = members?.find((x) => x.id === id);
-    return m ? memberLabel(m) : "Purana teammate";
+    return m ? memberLabel(m) : "Former teammate";
   };
 
   return (
@@ -39,17 +39,17 @@ export function DealsReportCard({ role }: { role: string | null | undefined }) {
         <div>
           <p className="text-sm font-semibold text-ink leading-tight">Deals</p>
           <p className="text-xs text-ink-3 mt-0.5">
-            Pichhle {REPORT_WINDOW_DAYS} din me jo deals won ya lost hui
-            {report ? ` · ${formatIstDate(report.since)} se aaj tak` : ""}
+            Won or lost in the last {REPORT_WINDOW_DAYS} days
+            {report ? ` · since ${formatIstDate(report.since)}` : ""}
           </p>
         </div>
         <Link href={"/deals" as Route} className="shrink-0 text-xs font-medium text-amber-ink hover:underline">
-          Deals kholo →
+          Open deals →
         </Link>
       </div>
 
       {error ? (
-        <p className="text-sm text-rose-ink">Deals load nahi hue — {(error as Error).message}</p>
+        <p className="text-sm text-rose-ink">Couldn't load deals — {(error as Error).message}</p>
       ) : isLoading || !report ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24" />)}
@@ -72,15 +72,15 @@ export function DealsReportCard({ role }: { role: string | null | undefined }) {
             <KPI
               label="Avg days to close"
               value={report.avgDaysToClose === null ? "—" : `${report.avgDaysToClose}`}
-              unit={report.avgDaysToClose === null ? undefined : "din"}
-              trend="lead bana → won"
+              unit={report.avgDaysToClose === null ? undefined : "days"}
+              trend="Created → Won"
               icon="calendar"
             />
           </div>
 
           {report.byOwner.length === 0 ? (
             <p className="text-sm text-ink-3 py-4 text-center">
-              Is window me koi deal won ya lost nahi hui — jaise hi hogi, yahan owner-wise dikhegi.
+              No deals won or lost in this period.
             </p>
           ) : (
             <div className="overflow-x-auto">

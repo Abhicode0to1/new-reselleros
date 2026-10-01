@@ -96,7 +96,7 @@ export function useLeadOutcome() {
            khabar nahi. Call phir bhi darj hoti hai; wahi to poochha gaya tha.
 
            `return` nahi — chip ka baaki kaam (activity log) phir bhi hona chahiye. */
-        toast.info(`Stage waise hi hai — ${eff.stage.reason}`);
+        toast.info(`Stage unchanged — ${eff.stage.reason}`);
       }
 
       try {

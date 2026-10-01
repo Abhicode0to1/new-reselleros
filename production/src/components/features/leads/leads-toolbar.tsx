@@ -41,7 +41,7 @@ import { UNASSIGNED } from "@/lib/leads/list-selectors";
 import { useTeamMembers } from "@/lib/queries/team";
 
 /** R-056: why the Kanban button does nothing on a phone. */
-export const KANBAN_MOBILE_HINT = "Kanban badi screen par milta hai";
+export const KANBAN_MOBILE_HINT = "Kanban needs a larger screen";
 
 type TeamMember = NonNullable<ReturnType<typeof useTeamTree>["data"]>[number];
 type Priority = "low" | "medium" | "high";
@@ -190,7 +190,7 @@ export function LeadsToolbar({
                   ? "bg-ink text-paper cursor-pointer"
                   : "bg-paper text-ink-2 hover:bg-paper-2 cursor-pointer"
             )}
-            title={isMobile ? KANBAN_MOBILE_HINT : "Kanban view — best for stage flow"}
+            title={isMobile ? KANBAN_MOBILE_HINT : "Kanban view"}
           >
             <Icon name="layout" size={13} /> Kanban
           </button>
@@ -202,7 +202,7 @@ export function LeadsToolbar({
               "px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-hairline cursor-pointer",
               effectiveView === "list" ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2"
             )}
-            title="List view — best for scanning many leads"
+            title="List view"
           >
             <Icon name="more_h" size={13} /> List
           </button>
@@ -264,9 +264,9 @@ export function LeadsToolbar({
             {members.length > 1 && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">Kiska</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">Owner</DropdownMenuLabel>
                 {[
-                  ...(meId ? [{ id: meId, label: "Mera" }] : []),
+                  ...(meId ? [{ id: meId, label: "Me" }] : []),
                   ...members
                     .filter((m) => m.id !== meId)
                     .map((m) => ({ id: m.id, label: m.full_name || m.email || "Unknown" }))

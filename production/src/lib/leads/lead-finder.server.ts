@@ -211,7 +211,7 @@ async function fillLead(admin: Admin, tenantId: string, leadId: string, contact:
  */
 export async function searchPeople(admin: Admin, tenantId: string, opts: { ids?: string[]; limit?: number } = {}): Promise<{ searched: number; found: number }> {
   const ai = await resolveGeminiConfig(admin, tenantId);
-  if (!ai.apiKey) throw new Error("Naam search ke liye Gemini key chahiye — Settings → Integrations → AI.");
+  if (!ai.apiKey) throw new Error("Name search needs a Gemini key — Settings → Integrations → AI.");
   let q = admin.from("lead_finder_candidates").select("id, company, domain, city, signals, lead_id, status").eq("tenant_id", tenantId).neq("status", "rejected");
   if (opts.ids?.length) q = q.in("id", opts.ids);
   const { data } = await q.order("score", { ascending: false }).limit(200);
@@ -266,7 +266,7 @@ async function knownDomains(admin: Admin, tenantId: string): Promise<Set<string>
 
 export async function runLeadFinder(admin: Admin, tenantId: string, profileId: string, trigger: "manual" | "cron"): Promise<FinderRunResult> {
   const { data: profile } = await admin.from("lead_finder_profiles").select("*").eq("id", profileId).eq("tenant_id", tenantId).maybeSingle();
-  if (!profile) throw new Error("Profile nahi mila.");
+  if (!profile) throw new Error("Profile not found.");
   const { data: run } = await admin.from("lead_finder_runs").insert({ tenant_id: tenantId, profile_id: profileId, trigger }).select("id").single();
   const result: FinderRunResult = { discovered: 0, skippedDupe: 0, saved: 0, noContact: 0, errors: [] };
   const finish = async (ok: boolean, error?: string) => {
@@ -280,8 +280,8 @@ export async function runLeadFinder(admin: Admin, tenantId: string, profileId: s
       // dev:local blanks every live key on purpose (scripts/dev-local.mjs), so on a laptop
       // "go to Settings" sends people hunting for a key that was switched off deliberately.
       throw new Error(process.env.NEXT_PUBLIC_APP_ENV === "local"
-        ? "Local mode (dev:local) mein AI band hai — live keys jaan-boojh kar band hoti hain. AI test karna ho to isi local app ki Settings → Integrations → AI mein apni Gemini key daalo."
-        : "Gemini API key nahi hai — Settings → Integrations → AI mein daalo.");
+        ? "AI is off in local mode (dev:local). To test AI, add a Gemini key in this app's Settings → Integrations → AI."
+        : "No Gemini API key — add one in Settings → Integrations → AI.");
     }
     const p: FinderProfile = { name: profile.name, cities: profile.cities, industries: profile.industries, company_size: profile.company_size, products: profile.products, must_have: profile.must_have, exclude: profile.exclude, daily_limit: profile.daily_limit };
     const known = await knownDomains(admin, tenantId);
@@ -292,7 +292,7 @@ export async function runLeadFinder(admin: Admin, tenantId: string, profileId: s
     const text = await geminiGroundedText({ apiKey: cfg.apiKey, model: cfg.model, system: dp.system, user: dp.user, label: "leads/finder-discovery" });
     const found: DiscoveredCompany[] = parseDiscovery(text);
     result.discovered = found.length;
-    if (found.length === 0) { await finish(false, "Gemini ne koi company nahi di — profile ko aur specific karo (city + industry)."); return result; }
+    if (found.length === 0) { await finish(false, "Gemini found no companies — make the profile more specific (city + industry)."); return result; }
 
     // Industry × city round-robin, so the day's limit is a mix even if the answer is lopsided.
     const fresh = spreadByIndustryCity(found.filter((c) => !known.has(c.domain)));

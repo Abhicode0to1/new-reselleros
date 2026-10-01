@@ -58,7 +58,7 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
     <Dialog open={Boolean(companyName)} onOpenChange={(o) => { if (!o) close(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Call log — {companyName}</DialogTitle>
+          <DialogTitle>Log call — {companyName}</DialogTitle>
           <DialogDescription>
             Kya baat hui? Bolkar ya likhkar darj kariye. Khaali chhod dein to bhi call darj
             ho jayegi.
@@ -72,8 +72,8 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
               onChange={(e) => setNote(e.target.value)}
               rows={4}
               autoFocus
-              placeholder="20 seats chahiye, budget March me…"
-              aria-label="Call ka mazmoon"
+              placeholder="Needs 20 seats, budget in March…"
+              aria-label="Call notes"
               className="min-w-0 flex-1 resize-y rounded-md border border-hairline bg-paper px-2 py-1.5 text-sm text-ink placeholder:text-ink-4 focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
             />
             {dictation.supported && (
@@ -81,7 +81,7 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
                 type="button"
                 onClick={dictation.toggle}
                 aria-pressed={dictation.listening}
-                title={dictation.listening ? "Sun raha hoon — rokne ke liye dabaiye" : "Bolkar likhein"}
+                title={dictation.listening ? "Listening — click to stop" : "Dictate"}
                 className={cn(
                   "shrink-0 rounded-md border p-2 transition-colors",
                   dictation.listening
@@ -91,7 +91,7 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
               >
                 <Icon name={dictation.listening ? "mic_off" : "mic"} size={16} />
                 <span className="sr-only">
-                  {dictation.listening ? "Sunna band karein" : "Bolkar likhein"}
+                  {dictation.listening ? "Stop dictation" : "Dictate"}
                 </span>
               </button>
             )}
@@ -100,7 +100,7 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
           {dictation.listening && (
             <p className="flex flex-wrap items-center gap-1.5 text-xs text-rose-ink">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose" />
-              Sun raha hoon…
+              Listening…
               {dictation.interim && <span className="italic text-ink-3">{dictation.interim}</span>}
             </p>
           )}
@@ -117,12 +117,12 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
                   onClick={dictation.requestMic}
                   className="inline-flex items-center gap-1.5 rounded-md border border-amber bg-amber-soft px-2 py-1 text-xs font-semibold text-amber-ink hover:bg-amber-soft/70"
                 >
-                  <Icon name="mic" size={12} /> Mic chalu karein
+                  <Icon name="mic" size={12} /> Turn on mic
                 </button>
               )}
               {dictation.permission && (
                 <p className="text-xs text-ink-3">
-                  Is tab me Chrome ka faisla:{" "}
+                  Chrome mic permission:{" "}
                   <b className={dictation.permission === "granted" ? "text-emerald-ink" : "text-rose-ink"}>
                     {dictation.permission}
                   </b>
@@ -136,16 +136,16 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
               behtar hai, ye us pal par nirbhar hai ki wo kya bol raha hai. */}
           {dictation.supported && (
             <div className="flex items-center gap-1 text-xs text-ink-3">
-              <span>Bolne ki bhasha:</span>
-              {([["en-IN", "English"], ["hi-IN", "हिंदी"]] as const).map(([code, label]) => (
+              <span>Speech language:</span>
+              {([["en-IN", "Hinglish (Roman script)"], ["hi-IN", "Hindi (Devanagari)"]] as const).map(([code, label]) => (
                 <button
                   key={code}
                   type="button"
                   aria-pressed={dictation.lang === code}
                   onClick={() => dictation.setLang(code)}
                   title={code === "en-IN"
-                    ? "Hinglish Roman me aayega (20 seats chahiye)"
-                    : "Hindi Devanagari me aayegi (20 सीट्स चाहिए)"}
+                    ? "Types in Roman script (20 seats chahiye)"
+                    : "Types in Devanagari (20 सीट्स चाहिए)"}
                   className={cn(
                     "rounded px-1.5 py-0.5 font-semibold",
                     dictation.lang === code ? "bg-ink text-paper" : "hover:bg-paper-2",
@@ -169,7 +169,7 @@ export function CallLogDialog({ companyName, onClose, onSave }: CallLogDialogPro
               onClose();
             }}
           >
-            Call log karein
+            Log call
           </Button>
         </DialogFooter>
       </DialogContent>

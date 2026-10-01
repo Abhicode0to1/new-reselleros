@@ -82,7 +82,7 @@ export function LeadDetailsTab({
             <Link href={`/customers/${lead.customer_id}` as never}
               className="flex items-center gap-2 rounded-lg border border-emerald/30 bg-emerald/5 px-3 py-2 text-sm text-ink hover:bg-emerald/10">
               <Icon name="users" size={14} className="text-emerald" />
-              Existing customer ki lead — customer profile kholo
+              Existing customer — open customer
             </Link>
           )}
 
@@ -293,7 +293,7 @@ export function LeadDetailsTab({
               : LEAD_STAGES.filter((s) => s.id !== "new" && s.id !== "contact");
             return (
               <div>
-                <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-2">Move to stage</div>
+                <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-2">Change stage</div>
                 <div className="flex flex-wrap gap-1.5">
                   {visibleStages.map((s) => (
                     <button

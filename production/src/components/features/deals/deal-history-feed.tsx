@@ -45,12 +45,12 @@ export function DealHistoryFeed({ lead, history, loading, failed, logActivity, o
     if (!text) return;
     logActivity.mutate(
       { leadId: lead.id, kind: "note", detail: text },
-      { onSuccess: () => { setNote(""); toast.success("Note add ho gaya"); } },
+      { onSuccess: () => { setNote(""); toast.success("Note added"); } },
     );
   };
 
   return (
-    <Card title="Poori history" sub="Is deal se juda sab kuch — calls, email, quotes, paise, stage — naya sabse upar">
+    <Card title="History" sub="Newest first">
       {/* Add to the history */}
       <div className="mb-4 space-y-2 rounded-lg border border-hairline bg-paper-2/40 p-3">
         <div className="flex items-start gap-2">
@@ -59,15 +59,15 @@ export function DealHistoryFeed({ lead, history, loading, failed, logActivity, o
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) saveNote(); }}
             rows={2}
-            placeholder="Note likho — kya baat hui, customer ne kya poocha…"
-            aria-label={`${lead.company} ke baare me note`}
+            placeholder="Add a note…"
+            aria-label={`Note on ${lead.company}`}
             className="min-w-0 flex-1 resize-y rounded-md border border-hairline bg-paper px-2 py-1.5 text-sm text-ink placeholder:text-ink-4 focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
           />
           <Button size="sm" onClick={saveNote} disabled={!note.trim()} loading={logActivity.isPending}>Save</Button>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" icon="mobile" onClick={onCallLog}>Call log</Button>
-          <Button size="sm" icon="clock" onClick={onAddFollowUp}>Follow-up lagao</Button>
+          <Button size="sm" icon="mobile" onClick={onCallLog}>Log call</Button>
+          <Button size="sm" icon="clock" onClick={onAddFollowUp}>Add follow-up</Button>
         </div>
       </div>
 
@@ -98,7 +98,7 @@ export function DealHistoryFeed({ lead, history, loading, failed, logActivity, o
         </div>
       ) : rows.length === 0 ? (
         <p className="rounded-md bg-paper-2 p-3 text-sm italic text-ink-3">
-          {filter === "all" ? "Abhi kuch record nahi hua." : "Is filter me abhi kuch nahi."}
+          {filter === "all" ? "No history yet." : "Nothing in this filter."}
         </p>
       ) : (
         <ol className="relative space-y-3">
@@ -136,11 +136,11 @@ export function DealHistoryFeed({ lead, history, loading, failed, logActivity, o
         <div className="mt-3 space-y-1 text-xs text-ink-3">
           {history.undated > 0 && (
             <p className="flex items-start gap-1"><Icon name="info" size={11} className="mt-0.5 shrink-0" />
-              {history.undated} record me date nahi hai — galat jagah dikhane ke bajaye chhod diye.</p>
+              {history.undated} records have no date and are not shown.</p>
           )}
           {failed.length > 0 && (
             <p className="flex items-start gap-1"><Icon name="alert" size={11} className="mt-0.5 shrink-0" />
-              Ye load nahi hue (permission ya network): {failed.join(", ")}.</p>
+              Couldn't load (permission or network): {failed.join(", ")}.</p>
           )}
         </div>
       )}

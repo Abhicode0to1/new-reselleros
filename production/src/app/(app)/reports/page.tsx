@@ -134,12 +134,12 @@ function ReportCard({
 // aaj ki stage — isliye card kehta hai "Pipeline today" aur % kul ka hissa
 // hai, conversion nahi.
 const PIPELINE_STAGES: ReadonlyArray<{ id: Lead["stage"]; label: string; color: string }> = [
-  { id: "new",     label: "New leads",      color: "#64748b" },
+  { id: "new",     label: "New",            color: "#64748b" },
   { id: "contact", label: "Contacted",      color: "#6366f1" },
-  { id: "demo",    label: "Demo scheduled", color: "#0ea5e9" },
-  { id: "trial",   label: "Trial active",   color: "#f43f5e" },
-  { id: "quote",   label: "Quote sent",     color: "#C2410C" },
-  { id: "won",     label: "Closed won",     color: "#16a34a" },
+  { id: "demo",    label: "Demo Done",      color: "#0ea5e9" },
+  { id: "trial",   label: "Trial Active",   color: "#f43f5e" },
+  { id: "quote",   label: "Quote Sent",     color: "#C2410C" },
+  { id: "won",     label: "Won",            color: "#16a34a" },
 ];
 
 const PIPELINE_STAGE_IDS = PIPELINE_STAGES.map((s) => s.id);
@@ -522,8 +522,8 @@ export default function ReportsPage() {
                 </BarChart>
               </ResponsiveContainer>
               <p className="mt-2 text-xs text-ink-3">
-                Vendor-margin ke rupaye <Link href={"/accounting/pnl" as never} className="underline">P&amp;L report</Link> par
-                hain — wahan har aankde ke saath uska basis likha hota hai.
+                Vendor margin in ₹ is on the <Link href={"/accounting/pnl" as never} className="underline">P&amp;L report</Link>,
+                with the basis for each figure.
               </p>
             </>
           )}

@@ -65,7 +65,7 @@ export function JunkAIReview({ leads }: { leads: readonly LeadListRow[] }) {
           </Button>
           {flagged.length > 0 && (
             <Button size="sm" icon="alert" disabled={setJunk.isPending} onClick={markAllFlagged}>
-              Mark all {flagged.length} junk
+              Mark all {flagged.length} as junk
             </Button>
           )}
         </>

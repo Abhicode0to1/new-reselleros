@@ -62,7 +62,7 @@ export function leadDisplayName(lead: LeadNameParts | null | undefined): LeadDis
     return {
       label: company,
       source: "company",
-      hint: "Contact ka naam nahi diya gaya — ye company ka naam hai",
+      hint: "No contact name — showing company",
     };
   }
 
@@ -74,11 +74,11 @@ export function leadDisplayName(lead: LeadNameParts | null | undefined): LeadDis
     return {
       label: email,
       source: "email",
-      hint: "Na company ka naam hai na contact ka — ye email hai",
+      hint: "No company or contact name — showing email",
     };
   }
 
-  return { label: NAMELESS, source: "none", hint: "Is lead par koi naam nahi hai" };
+  return { label: NAMELESS, source: "none", hint: "No name on this lead" };
 }
 
 /**

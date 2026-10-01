@@ -41,6 +41,6 @@ describe("R-069: Add Lead reaches the Review step before saving", () => {
   });
 
   it("the final button says Save lead, not Add lead", () => {
-    expect(SRC).toMatch(/isEditing \? "Save changes" : "Save lead"/);
+    expect(SRC).toMatch(/isEditing \? "Save changes" : dealMode \? "Save deal" : "Save lead"/);
   });
 });

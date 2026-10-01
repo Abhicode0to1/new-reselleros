@@ -38,7 +38,7 @@ export function BillingCycleField({ lead }: { lead: Pick<Lead, "id" | "billing_c
         {BILLING_CYCLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       {perMonth !== null && (
-        <p className="mt-0.5 text-xs text-ink-3">≈ {rupee(perMonth)}/month (deal value saal ka hai)</p>
+        <p className="mt-0.5 text-xs text-ink-3">≈ {rupee(perMonth)}/month (deal value is per year)</p>
       )}
     </div>
   );

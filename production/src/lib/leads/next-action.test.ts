@@ -41,7 +41,7 @@ describe("project leads", () => {
 
   it("a project lead with NO project id falls through to the ordinary rules", () => {
     const a = nextActionFor({ ...base, lead: lead({ enquiry_type: "project", project_id: null }) })!;
-    expect(a.label).toBe("Send Quote");
+    expect(a.label).toBe("Send quote");
   });
 });
 
@@ -88,7 +88,7 @@ describe("quote money states outrank everything else", () => {
   });
 
   it("a quote with an unknown age falls through to the stage rules", () => {
-    expect(nextActionFor({ ...base, latestQuoteForAction: quote({}), quoteAgeDays: null })!.label).toBe("Send Quote");
+    expect(nextActionFor({ ...base, latestQuoteForAction: quote({}), quoteAgeDays: null })!.label).toBe("Send quote");
   });
 });
 
@@ -132,7 +132,7 @@ describe("no quote — by conversation, then by stage", () => {
 
   it("trial → Convert trial; anything else → Send Quote", () => {
     expect(nextActionFor({ ...base, lead: lead({ stage: "trial" }) })!.label).toBe("Convert trial · send quote");
-    expect(nextActionFor({ ...base, lead: lead({ stage: "demo" }) })!.label).toBe("Send Quote");
+    expect(nextActionFor({ ...base, lead: lead({ stage: "demo" }) })!.label).toBe("Send quote");
     expect(nextActionFor({ ...base, lead: lead({ stage: "contact" }) })!.target).toEqual({ kind: "send_quote" });
   });
 });
