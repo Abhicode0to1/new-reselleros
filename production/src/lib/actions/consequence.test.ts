@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDocumentNumber, seriesGap, isBlocked, type SeriesState } from "./consequence";
+import { formatDocumentNumber, seriesGap, isBlocked, effectiveDocCode, type SeriesState } from "./consequence";
 
 const S: SeriesState = {
   prefix: "RV", docCode: "ADPL", fiscalYear: "FY2627",
@@ -100,5 +100,20 @@ describe("isBlocked", () => {
   it("is false for facts alone", () => {
     expect(isBlocked([{ tone: "fact", text: "Records ₹1,000." }])).toBe(false);
     expect(isBlocked([])).toBe(false);
+  });
+});
+
+describe("effectiveDocCode (R-095)", () => {
+  it("empty doc_code falls back to the first 4 hex of the tenant id, like next_document_number", () => {
+    expect(effectiveDocCode(null, "fbb976f1-9090-4f10-9726-0901bd144e42")).toBe("FBB9");
+    expect(effectiveDocCode("  ", "fbb976f1-9090-4f10-9726-0901bd144e42")).toBe("FBB9");
+  });
+  it("a set doc_code wins, trimmed and capped at 4", () => {
+    expect(effectiveDocCode(" ADPL ", "fbb976f1-9090-4f10-9726-0901bd144e42")).toBe("ADPL");
+    expect(effectiveDocCode("ANUTECH", "fbb976f1-9090-4f10-9726-0901bd144e42")).toBe("ANUT");
+  });
+  it("the predicted number now matches the issued one (INV-FBB9-27-0008)", () => {
+    const s: SeriesState = { prefix: "INV", docCode: effectiveDocCode(null, "fbb976f1-9090-4f10-9726-0901bd144e42"), fiscalYear: "FY2627", lastNumber: 7, documentCount: 7 };
+    expect(formatDocumentNumber(s, 8)).toBe("INV-FBB9-27-0008");
   });
 });

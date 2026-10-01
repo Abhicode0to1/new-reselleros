@@ -26,7 +26,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createBareClient } from "@supabase/supabase-js";
-import type { SeriesState } from "@/lib/actions/consequence";
+import { effectiveDocCode, type SeriesState } from "@/lib/actions/consequence";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -51,7 +51,9 @@ export async function GET() {
 
   const { data: tenant } = await supabase
     .from("tenants").select("doc_code").eq("id", tenantId).maybeSingle();
-  const docCode = (tenant as { doc_code?: string | null } | null)?.doc_code ?? null;
+  /* The code the SQL allocator will print — with its tenant-id fallback when doc_code is
+     empty (R-095). Passing the raw NULL dropped "FBB9" from the predicted number. */
+  const docCode = effectiveDocCode((tenant as { doc_code?: string | null } | null)?.doc_code, tenantId);
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -62,6 +62,21 @@ export interface SeriesState {
  * without it the second tenant to issue its first invoice of a year collides with the
  * first tenant's. Capped at 4, as the SQL caps it.
  */
+/**
+ * The tenant code next_document_number() actually prints — including its FALLBACK.
+ *
+ * R-095 (1 Oct 2026): with tenants.doc_code empty, the SQL takes the first 4 hex of the
+ * tenant id, upper-cased (ANUTECH fbb976f1-… → "FBB9"). The dialog passed the raw NULL
+ * through, so it predicted "INV-27-0008" for an invoice that came out "INV-FBB9-27-0008"
+ * — the owner confirmed an irreversible GST number that was not the one issued.
+ * Mirrors next_document_number: trim, empty → id fallback, cap at 4.
+ */
+export function effectiveDocCode(docCode: string | null | undefined, tenantId: string): string {
+  const own = (docCode ?? "").trim();
+  const code = own || tenantId.replace(/-/g, "").slice(0, 4).toUpperCase();
+  return code.slice(0, 4);
+}
+
 export function formatDocumentNumber(s: SeriesState, n: number): string {
   const fy = /^FY(\d{2})(\d{2})$/.exec(s.fiscalYear);
   const year = fy ? fy[2] : s.fiscalYear;
