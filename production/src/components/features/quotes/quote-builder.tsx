@@ -308,6 +308,8 @@ export function QuoteBuilder() {
   // Document-level terms & conditions (Zoho-style), shown on the quote/invoice PDF.
   const [termsConditions, setTermsConditions] = React.useState("");
   const [taxRate, setTaxRate] = React.useState(18);
+  // R-100: validity / terms + GST show as one line; the boxes open only on "Change".
+  const [termsOpen, setTermsOpen] = React.useState(false);
   // Foreign currency (international clients) — books stay INR; this is the
   // billing currency + rate shown to the customer. INR = domestic.
   const [currency, setCurrency] = React.useState("INR");
@@ -696,6 +698,8 @@ export function QuoteBuilder() {
   const hasFlexMonthly     = lineItems.some((l) => (l.commitment ?? "annual_yearly") === "monthly");
   const effectiveCycle: BillingCycle = hasFlexMonthly ? "monthly" : billingCycle;
   const billingN           = cycleInvoicesPerYear(effectiveCycle);
+  /* Short name for the one-line summary under the totals (R-100). */
+  const cycleLabel = ({ yearly: "Billed yearly", half_yearly: "Billed half-yearly", quarterly: "Billed quarterly", monthly: "Billed monthly" } as Record<string, string>)[effectiveCycle] ?? "Billed yearly";
   const billingUnit        = cycleUnitLabel(effectiveCycle);
   const showPerInvoice     = billingN > 1;
   const totalsLabel        =
@@ -1437,123 +1441,16 @@ export function QuoteBuilder() {
           </Card>
         )}
 
-        {/* Settings sit ABOVE the line items — the currency + exchange rate + pricing
-            basis + billing cycle chosen here drive how each line is priced/displayed,
-            so they must be set before adding items (true for quotes AND invoices). */}
-        <Card title={isInvoiceMode ? "Invoice Settings" : "Quote Settings"}>
+        {/* R-100 (1 Oct 2026, Pardeep: "ye section khatam hi karna chahta hu"): the old
+            Quote / Invoice Settings card is gone. Billing cycle, validity / terms and GST
+            are one line under the totals ("Change" opens them). Only an EXPORT customer
+            still gets a card here — currency + rate must be set before adding items. */}
+        {isExport && (
+        <Card title="International billing">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 items-start">
-
-            {/* Billing cycle — quote-level invoice FREQUENCY, independent of any
-                line's price tier (migration 0161). Always enabled (a quote-level
-                choice, not gated on line items). A flex-monthly line forces the
-                whole quote to monthly billing — a no-commitment plan can only
-                bill monthly. Per-line PRICE tier (Monthly-flex vs Annual) is a
-                separate control in the items table. */}
-            <div>
-              <label htmlFor="qb-billing-cycle" className="text-xs font-medium text-ink-3 mb-1.5 block">Billing cycle</label>
-              <select
-                id="qb-billing-cycle"
-                value={effectiveCycle}
-                onChange={(e) => setBillingCycle(e.target.value as BillingCycle)}
-                disabled={hasFlexMonthly}
-                className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {BILLING_CYCLE_OPTIONS.map((o) => (
-                  <option key={o.id} value={o.id}>{o.label}</option>
-                ))}
-              </select>
-              <p className="mt-1.5 text-2xs text-ink-3">
-                {hasFlexMonthly
-                  ? "A line is “Monthly flex” — a no-commitment plan bills monthly, so the whole invoice is monthly."
-                  : <>How often invoices go out. Applies to the whole {isInvoiceMode ? "invoice" : "quote"} — separate from each line’s Monthly-flex vs Annual <b>price</b> (set in the items table).</>}
-              </p>
-            </div>
-
-            {/* Valid / Expires / GST — 3 across, filling the right half */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 self-start">
-            {isInvoiceMode ? (
-              /* Zoho-style Terms → Due date. The chosen net-days are saved and
-                 generate_invoice (0163) stamps the invoice due date from them. */
-              <>
-                <FormField label="Terms" htmlFor="terms">
-                  <select
-                    id="terms"
-                    value={paymentTermsDays}
-                    onChange={(e) => setPaymentTermsDays(parseInt(e.target.value))}
-                    className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
-                  >
-                    <option value={0}>Due on receipt</option>
-                    <option value={15}>Net 15</option>
-                    <option value={30}>Net 30</option>
-                    <option value={45}>Net 45</option>
-                  </select>
-                </FormField>
-                <FormField label="Due date" htmlFor="due">
-                  <Input
-                    id="due"
-                    value={formatDate(new Date(Date.now() + paymentTermsDays * 86400000))}
-                    readOnly
-                    className="bg-paper-2 cursor-default font-mono"
-                  />
-                </FormField>
-              </>
-            ) : (
-              <>
-                <FormField label="Valid for (days)" htmlFor="validity">
-                  <Input
-                    id="validity"
-                    type="number"
-                    min={1}
-                    max={365}
-                    value={validityDays}
-                    onChange={(e) => setValidityDays(parseInt(e.target.value) || 30)}
-                    className="tabular-nums"
-                  />
-                </FormField>
-
-                <FormField label="Expires on" htmlFor="expires">
-                  <Input
-                    id="expires"
-                    value={formatDate(new Date(Date.now() + validityDays * 86400000))}
-                    readOnly
-                    className="bg-paper-2 cursor-default font-mono"
-                  />
-                </FormField>
-              </>
-            )}
-
-            <FormField label="GST rate %" htmlFor="taxRate">
-              <Input
-                id="taxRate"
-                type="number"
-                min={0}
-                max={28}
-                suffix="%"
-                // Export supply is zero-rated under LUT — show 0% and lock the field
-                // so it never contradicts the "Export → no GST" badge above.
-                value={isExport ? 0 : taxRate}
-                onChange={(e) => setTaxRate(parseInt(e.target.value) || 18)}
-                disabled={isExport}
-                /* The smart default, SAID OUT LOUD. The rate and the SAC are filled in
-                   for the operator and always were — but nothing ever showed what would
-                   be printed on the document their customer's accountant reads, and a
-                   default nobody can see is indistinguishable from a missing one.
-
-                   `buyerStateCode` gates the head deliberately: with no state on file
-                   isInterStateSupply() answers "intra-state" as a safe DEFAULT, and
-                   printing "CGST + SGST" off the back of that would state a head nobody
-                   knows. hsnSummary(null) says so instead. */
-                helper={isExport
-                  ? "Export → zero-rated under LUT · no GST"
-                  : hsnSummary(buyerStateCode ? interState : null)}
-                className={isExport ? "bg-paper-2 cursor-not-allowed" : undefined}
-              />
-            </FormField>
-            </div>
-
             {/* International billing — set the currency + rate BEFORE adding items so
                 the catalog picker shows each product's real USD price (books stay ₹). */}
-            {isExport && (
+            {(
               <div className="lg:col-span-2 rounded-md bg-indigo-soft/40 border border-indigo/20 p-3 space-y-2">
                 <p className="text-2xs font-semibold text-indigo-ink">🌍 International billing · books stay in ₹</p>
                 <div className="grid grid-cols-2 gap-3 max-w-sm">
@@ -1648,6 +1545,7 @@ export function QuoteBuilder() {
             )}
           </div>
         </Card>
+        )}
 
       {/* Line Items card */}
       <Card flush>
@@ -2075,6 +1973,158 @@ export function QuoteBuilder() {
                       : `Same state → CGST + SGST split @ ${taxRate}%`}
                 </div>
               )}
+
+              {/* Billing cycle · validity / terms · GST — one line, boxes behind "Change" (R-100). */}
+              <div className="py-1">
+                {/* Valid / Expires / GST — R-100 (1 Oct 2026, Pardeep: "is section ki yaha koi
+                    jarurat nahi"). 30 days and 18% are what nearly every quote uses, "Valid for"
+                    and "Expires on" said one thing twice, and an always-open GST box is one typo
+                    from a wrong total. So: one line with the values, boxes behind "Change". */}
+                {!termsOpen ? (
+                  <div className="min-w-0">
+                    <div className="rounded-md border border-hairline bg-paper-2/60 px-3 py-2 text-xs text-ink-2 flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+                      <span>{cycleLabel}</span>
+                      <span className="text-ink-3" aria-hidden>·</span>
+                      {isInvoiceMode ? (
+                        <span>
+                          {paymentTermsDays === 0 ? "Due on receipt" : `Net ${paymentTermsDays}`}
+                          {" · due "}
+                          <b className="tabular-nums">{formatDate(new Date(Date.now() + paymentTermsDays * 86400000))}</b>
+                        </span>
+                      ) : (
+                        <span>
+                          Valid till{" "}
+                          <b className="tabular-nums">{formatDate(new Date(Date.now() + validityDays * 86400000))}</b>
+                        </span>
+                      )}
+                      <span className="text-ink-3" aria-hidden>·</span>
+                      <span>GST <b>{isExport ? "0% (export)" : `${taxRate}%`}</b></span>
+                      <button
+                        type="button"
+                        onClick={() => setTermsOpen(true)}
+                        className="ml-auto text-xs font-semibold text-amber-ink underline underline-offset-2 hover:text-amber"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                {/* Billing cycle — quote-level invoice FREQUENCY, independent of any
+                    line's price tier (migration 0161). Always enabled (a quote-level
+                    choice, not gated on line items). A flex-monthly line forces the
+                    whole quote to monthly billing — a no-commitment plan can only
+                    bill monthly. Per-line PRICE tier (Monthly-flex vs Annual) is a
+                    separate control in the items table. */}
+                <div>
+                  <label htmlFor="qb-billing-cycle" className="text-xs font-medium text-ink-3 mb-1.5 block">Billing cycle</label>
+                  <select
+                    id="qb-billing-cycle"
+                    value={effectiveCycle}
+                    onChange={(e) => setBillingCycle(e.target.value as BillingCycle)}
+                    disabled={hasFlexMonthly}
+                    className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {BILLING_CYCLE_OPTIONS.map((o) => (
+                      <option key={o.id} value={o.id}>{o.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 text-2xs text-ink-3">
+                    {hasFlexMonthly
+                      ? "A line is “Monthly flex” — a no-commitment plan bills monthly, so the whole invoice is monthly."
+                      : <>How often invoices go out. Applies to the whole {isInvoiceMode ? "invoice" : "quote"} — separate from each line’s Monthly-flex vs Annual <b>price</b> (set in the items table).</>}
+                  </p>
+                </div>
+                </div>
+                {isInvoiceMode ? (
+                  /* Zoho-style Terms → Due date. The chosen net-days are saved and
+                     generate_invoice (0163) stamps the invoice due date from them. */
+                  <>
+                    <FormField label="Terms" htmlFor="terms">
+                      <select
+                        id="terms"
+                        value={paymentTermsDays}
+                        onChange={(e) => setPaymentTermsDays(parseInt(e.target.value))}
+                        className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                      >
+                        <option value={0}>Due on receipt</option>
+                        <option value={15}>Net 15</option>
+                        <option value={30}>Net 30</option>
+                        <option value={45}>Net 45</option>
+                      </select>
+                    </FormField>
+                    <FormField label="Due date" htmlFor="due">
+                      <Input
+                        id="due"
+                        value={formatDate(new Date(Date.now() + paymentTermsDays * 86400000))}
+                        readOnly
+                        className="bg-paper-2 cursor-default font-mono"
+                      />
+                    </FormField>
+                  </>
+                ) : (
+                  <>
+                    <FormField label="Valid for (days)" htmlFor="validity">
+                      <Input
+                        id="validity"
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={validityDays}
+                        onChange={(e) => setValidityDays(parseInt(e.target.value) || 30)}
+                        className="tabular-nums"
+                      />
+                    </FormField>
+    
+                    <FormField label="Expires on" htmlFor="expires">
+                      <Input
+                        id="expires"
+                        value={formatDate(new Date(Date.now() + validityDays * 86400000))}
+                        readOnly
+                        className="bg-paper-2 cursor-default font-mono"
+                      />
+                    </FormField>
+                  </>
+                )}
+    
+                <FormField label="GST rate %" htmlFor="taxRate">
+                  <Input
+                    id="taxRate"
+                    type="number"
+                    min={0}
+                    max={28}
+                    suffix="%"
+                    // Export supply is zero-rated under LUT — show 0% and lock the field
+                    // so it never contradicts the "Export → no GST" badge above.
+                    value={isExport ? 0 : taxRate}
+                    onChange={(e) => setTaxRate(parseInt(e.target.value) || 18)}
+                    disabled={isExport}
+                    /* The smart default, SAID OUT LOUD. The rate and the SAC are filled in
+                       for the operator and always were — but nothing ever showed what would
+                       be printed on the document their customer's accountant reads, and a
+                       default nobody can see is indistinguishable from a missing one.
+    
+                       `buyerStateCode` gates the head deliberately: with no state on file
+                       isInterStateSupply() answers "intra-state" as a safe DEFAULT, and
+                       printing "CGST + SGST" off the back of that would state a head nobody
+                       knows. hsnSummary(null) says so instead. */
+                    helper={isExport
+                      ? "Export → zero-rated under LUT · no GST"
+                      : hsnSummary(buyerStateCode ? interState : null)}
+                    className={isExport ? "bg-paper-2 cursor-not-allowed" : undefined}
+                  />
+                </FormField>
+                <button
+                  type="button"
+                  onClick={() => setTermsOpen(false)}
+                  className="sm:col-span-2 justify-self-start text-xs font-semibold text-ink-3 underline underline-offset-2 hover:text-ink"
+                >
+                  Done
+                </button>
+                </div>
+                )}
+              </div>
 
               {/* Foreign billing SUMMARY (read-only) — the currency + rate are set once
                   up top (Settings), so here we just confirm what the customer is billed. */}
