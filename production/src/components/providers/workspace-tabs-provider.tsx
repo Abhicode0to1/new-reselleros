@@ -39,9 +39,10 @@ import {
   type TabsState, type TabsAction, type WorkspaceTab,
 } from "@/lib/workspace/tabs";
 import {
-  pushUrl, seekTo, resolvePopState, historyOpFor, emptyHistory,
+  seekTo, resolvePopState, historyOpFor,
   type TabHistory,
 } from "@/lib/workspace/history";
+import { recordAddress, urlForTabSwitch } from "@/lib/workspace/address-sync";
 
 const STORAGE_KEY = "ros.workspace.tabs.v1";
 
@@ -138,6 +139,10 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
     if (saved) {
       setState(saved.tabs);
       setHistories(saved.histories ?? {});
+      // The adopt and record effects below run in this same pass and read the refs; left
+      // stale they saw an empty workspace, and adopt overwrote the saved tabs.
+      stateRef.current = saved.tabs;
+      historiesRef.current = saved.histories ?? {};
     }
     hydrated.current = true;
   }, []);
@@ -175,16 +180,19 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
   }, [confirm]);
 
   // ── Keep the URL in step with the active tab ────────────────────────────
-  const lastAppliedUrl = React.useRef<string | null>(null);
+  // R-068: ONLY on a genuine switch of the active tab. This used to replace to the stored
+  // history cursor on hydration and on every tabs-array change, which navigated users off the
+  // page they had just opened (/leads → /renewals, repeatedly). See lib/workspace/address-sync.
+  const prevActiveId = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (!hydrated.current || !state.activeId) return;
-    const tab = state.tabs.find((t) => t.id === state.activeId);
-    if (!tab) return;
-    const target = historiesRef.current[tab.id]
-      ? (historiesRef.current[tab.id].stack[historiesRef.current[tab.id].cursor] ?? tab.url)
-      : tab.url;
-    if (target === lastAppliedUrl.current) return;
-    lastAppliedUrl.current = target;
+    if (!hydrated.current) return;
+    const prev = prevActiveId.current;
+    prevActiveId.current = state.activeId;
+    const target = urlForTabSwitch(
+      prev, stateRef.current, historiesRef.current,
+      window.location.pathname + window.location.search,
+    );
+    if (!target) return;
     // replace, not push: switching tabs must not add a history entry. That single
     // choice is what makes Back mean "the previous page in this tab".
     //
@@ -221,7 +229,6 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
         const moved = seekTo(target, outcome.url);
         return moved ? { ...h, [outcome.tabId]: moved } : h;
       });
-      lastAppliedUrl.current = outcome.url;
       router.replace(outcome.url as never);
     };
 
@@ -273,14 +280,20 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
   }, [pathname, dispatch, fullPath]);
 
   // ── Record navigation inside the active tab ─────────────────────────────
+  // R-068: keyed on the ADDRESS only. It was also keyed on state.activeId, so switching or
+  // closing a tab pushed the old tab's url into the new tab's history — the source of the
+  // alternating "/leads, /renewals, /leads…" stack. An address that is another open tab's
+  // own page activates that tab instead of being filed under the active one.
   React.useEffect(() => {
-    if (!hydrated.current || !state.activeId || !pathname) return;
-    const id = state.activeId;
-    setHistories((h) => {
-      const next = pushUrl(h[id] ?? emptyHistory, fullPath());
-      return next === h[id] ? h : { ...h, [id]: next };
-    });
-  }, [pathname, state.activeId, fullPath]);
+    if (!hydrated.current || !pathname) return;
+    const { activateId, histories: next } =
+      recordAddress(stateRef.current, historiesRef.current, fullPath());
+    if (next !== historiesRef.current) {
+      historiesRef.current = next;
+      setHistories(next);
+    }
+    if (activateId) dispatch({ type: "activate", id: activateId, at: Date.now() });
+  }, [pathname, fullPath, dispatch]);
 
   // ── Warn before the browser window closes with unsaved work ─────────────
   React.useEffect(() => {

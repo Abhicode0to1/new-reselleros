@@ -67,8 +67,10 @@ describe("the provider records the query string, not just the path", () => {
   it("records in-tab navigation WITH its query", () => {
     /* And `pushUrl(..., pathname)` was the other half — this is the one the sync effect reads
        back, so it is the one that actually did the deleting. */
-    expect(PROVIDER).toMatch(/pushUrl\(h\[id\] \?\? emptyHistory, fullPath\(\)\)/);
-    expect(PROVIDER).not.toMatch(/pushUrl\(h\[id\] \?\? emptyHistory, pathname\)/);
+    /* R-068 moved the recording into lib/workspace/address-sync.ts; the address handed to it
+       must still be the full one. */
+    expect(PROVIDER).toMatch(/recordAddress\(stateRef\.current, historiesRef\.current, fullPath\(\)\)/);
+    expect(PROVIDER).not.toMatch(/recordAddress\([^)]*, pathname\)/);
   });
 
   it("does not reach for useSearchParams, which would break the static marketing page", () => {
