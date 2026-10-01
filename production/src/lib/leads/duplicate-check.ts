@@ -82,10 +82,10 @@ const MATCH_LABEL: Record<string, string> = { gstin: "GSTIN", email: "email", ph
 /** "Ye pehle se hai: Acme (Quote Sent, Ravi)" — owner "koi owner nahi" when unassigned. */
 export function duplicateWarning(d: LeadDuplicate): { title: string; matched: string } {
   const stage = STAGE_LABEL[d.stage as Lead["stage"]] ?? d.stage;
-  const owner = d.owner_name?.trim() || (d.owner_id ? "owner" : "koi owner nahi");
+  const owner = d.owner_name?.trim() || (d.owner_id ? "owner" : "unassigned");
   const name = d.company.trim() || d.contact_name?.trim() || d.id;
   return {
-    title: `Ye pehle se hai: ${name} (${stage}${d.is_junk ? ", junk" : ""}, ${owner})`,
+    title: `Already exists: ${name} (${stage}${d.is_junk ? ", junk" : ""}, ${owner})`,
     matched: `Same ${d.matched_on.map((m) => MATCH_LABEL[m] ?? m).join(" + ")}`,
   };
 }

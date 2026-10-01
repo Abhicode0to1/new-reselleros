@@ -41,7 +41,7 @@ export function DealStageStepper({ lead, reached }: {
       const ok = await confirm({
         title: `${name}: ${STAGE_LABEL[lead.stage]} → ${STAGE_LABEL[to]}?`,
         body: "The board, forecast and reports will all follow the new stage.",
-        confirmLabel: "Yes, change",
+        confirmLabel: "Change stage",
       });
       if (!ok) return;
     }
@@ -77,7 +77,7 @@ export function DealStageStepper({ lead, reached }: {
                 onClick={() => void move(s)}
                 disabled={current || isPending}
                 aria-current={current ? "step" : undefined}
-                title={current ? "This is the current stage" : done ? `${STAGE_LABEL[s]} — done` : `Move to ${STAGE_LABEL[s]}`}
+                title={current ? "Current stage" : done ? `${STAGE_LABEL[s]} — done` : `Move to ${STAGE_LABEL[s]}`}
                 className={cn(
                   "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber",

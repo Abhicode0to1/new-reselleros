@@ -37,10 +37,10 @@ export type DealEventGroup = "calls" | "email" | "money" | "stage";
 export type DealFilter = "all" | DealEventGroup;
 
 export const DEAL_FILTERS: readonly { id: DealFilter; label: string }[] = [
-  { id: "all",   label: "Sab" },
+  { id: "all",   label: "All" },
   { id: "calls", label: "Calls & notes" },
   { id: "email", label: "Email" },
-  { id: "money", label: "Quotes & paise" },
+  { id: "money", label: "Quotes & payments" },
   { id: "stage", label: "Stage" },
 ];
 
@@ -180,15 +180,15 @@ function changeOf(changes: unknown, col: string): { old: unknown; new: unknown }
 }
 
 const ACTIVITY: Record<string, { title: string; icon: string; group: DealEventGroup; tone: DealEventTone }> = {
-  call:      { title: "Call hui",            icon: "phone",    group: "calls", tone: "amber" },
-  whatsapp:  { title: "WhatsApp kiya",       icon: "whatsapp", group: "calls", tone: "emerald" },
-  note:      { title: "Note likha",          icon: "edit",     group: "calls", tone: "ink" },
-  meeting:   { title: "Meeting hui",         icon: "calendar", group: "calls", tone: "indigo" },
-  email:     { title: "Email bheja",         icon: "mail",     group: "email", tone: "indigo" },
-  email_out: { title: "Email bheja",         icon: "mail",     group: "email", tone: "indigo" },
-  email_in:  { title: "Customer ka email aaya", icon: "inbox", group: "email", tone: "indigo" },
+  call:      { title: "Call logged",         icon: "phone",    group: "calls", tone: "amber" },
+  whatsapp:  { title: "WhatsApp sent",       icon: "whatsapp", group: "calls", tone: "emerald" },
+  note:      { title: "Note added",          icon: "edit",     group: "calls", tone: "ink" },
+  meeting:   { title: "Meeting held",        icon: "calendar", group: "calls", tone: "indigo" },
+  email:     { title: "Email sent",          icon: "mail",     group: "email", tone: "indigo" },
+  email_out: { title: "Email sent",          icon: "mail",     group: "email", tone: "indigo" },
+  email_in:  { title: "Email received",     icon: "inbox", group: "email", tone: "indigo" },
   quote:     { title: "Quote activity",      icon: "file",     group: "money", tone: "amber" },
-  stage:     { title: "Stage badla",         icon: "target",   group: "stage", tone: "indigo" },
+  stage:     { title: "Stage changed",       icon: "target",   group: "stage", tone: "indigo" },
 };
 
 const QUOTE_STATUS_TITLE: Record<string, string> = {
@@ -212,11 +212,11 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
   if (lead) {
     push(iso(lead.created_at), {
       id: `lead:created:${lead.id}`, group: "stage", icon: "plus", tone: "ink",
-      title: "Lead bani", detail: lead.source ? `Source: ${lead.source}` : null, who: nameOf(lead.created_by),
+      title: "Lead added", detail: lead.source ? `Source: ${lead.source}` : null, who: nameOf(lead.created_by),
     });
-    if (lead.trial_started_at) push(iso(lead.trial_started_at), { id: `lead:trial-start:${lead.id}`, group: "stage", icon: "play", tone: "rose", title: "Trial shuru hua" });
-    if (lead.trial_converted_at) push(iso(lead.trial_converted_at), { id: `lead:trial-conv:${lead.id}`, group: "stage", icon: "check_circle", tone: "emerald", title: "Trial convert hua" });
-    if (lead.trial_expired_at) push(iso(lead.trial_expired_at), { id: `lead:trial-exp:${lead.id}`, group: "stage", icon: "clock", tone: "rose", title: "Trial expire hua" });
+    if (lead.trial_started_at) push(iso(lead.trial_started_at), { id: `lead:trial-start:${lead.id}`, group: "stage", icon: "play", tone: "rose", title: "Trial started" });
+    if (lead.trial_converted_at) push(iso(lead.trial_converted_at), { id: `lead:trial-conv:${lead.id}`, group: "stage", icon: "check_circle", tone: "emerald", title: "Trial converted" });
+    if (lead.trial_expired_at) push(iso(lead.trial_expired_at), { id: `lead:trial-exp:${lead.id}`, group: "stage", icon: "clock", tone: "rose", title: "Trial expired" });
     if (lead.stage === "lost" && lead.lost_at) {
       push(iso(lead.lost_at), {
         id: `lead:lost:${lead.id}`, group: "stage", icon: "x_circle", tone: "rose", title: "Deal lost",
@@ -240,7 +240,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
   for (const e of src.emails ?? []) {
     push(iso(e.created_at), {
       id: `email:${e.id}`, group: "email", icon: e.sent ? "send" : "inbox", tone: "indigo",
-      title: e.sent ? `Email bheja${e.to_email ? ` → ${e.to_email}` : ""}` : "Customer ka email aaya",
+      title: e.sent ? `Email sent${e.to_email ? ` → ${e.to_email}` : ""}` : "Email received",
       detail: e.subject || null,
       who: e.sent ? null : (e.from_name || e.from_email || "Customer"),
     });
@@ -251,7 +251,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
     const due = t.due_at ? ` · due ${formatIstDateTime(iso(t.due_at) ?? t.due_at)}` : "";
     push(iso(t.created_at, t.due_at), {
       id: `task:${t.id}`, group: "calls", icon: "clock", tone: "amber",
-      title: `Follow-up set: ${t.title}`, detail: `${t.status === "done" ? "Ho gaya" : t.status === "snoozed" ? "Snoozed" : "Pending"}${due}`,
+      title: `Follow-up set: ${t.title}`, detail: `${t.status === "done" ? "Done" : t.status === "snoozed" ? "Snoozed" : "Pending"}${due}`,
       who: nameOf(t.owner_id),
     });
     if (t.status === "done" && t.completed_at) {
@@ -272,14 +272,14 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
   for (const q of quotes) {
     push(iso(q.created_at), {
       id: `quote:${q.id}`, group: "money", icon: "file", tone: "amber",
-      title: "Quote banaya", detail: q.id, amount: q.amount ?? null, href: quoteHref(q.id), who: nameOf(q.owner_id),
+      title: "Quote created", detail: q.id, amount: q.amount ?? null, href: quoteHref(q.id), who: nameOf(q.owner_id),
     });
   }
   for (const s of src.quoteSends ?? []) {
     const failed = s.status === "failed";
     push(iso(s.sent_at), {
       id: `quote-send:${s.id}`, group: "money", icon: "send", tone: failed ? "rose" : "amber",
-      title: failed ? "Quote email fail hua" : "Quote bheja",
+      title: failed ? "Quote email failed" : "Quote sent",
       detail: [s.quote_id, s.recipient_email ? `→ ${s.recipient_email}` : null].filter(Boolean).join(" "),
       href: quoteHref(s.quote_id), who: nameOf(s.sent_by),
     });
@@ -297,7 +297,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
     ats.sort();
     events.push({
       id: `quote-view:${qid}`, group: "money", icon: "eye", tone: "indigo", at: ats[0],
-      title: "Customer ne quote dekha",
+      title: "Customer viewed quote",
       detail: ats.length > 1 ? `${qid} · ${ats.length} baar dekha · last ${formatIstDateTime(ats[ats.length - 1])}` : qid,
       href: quoteHref(qid), who: "Customer",
     });
@@ -358,7 +358,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
     const movedAt = Date.parse(lead.stage_changed_at);
     const stageNote = (src.activities ?? []).some((a) =>
       a.kind === "stage" && !!a.created_at && Math.abs(Date.parse(a.created_at) - movedAt) <= 5 * 60_000);
-    /* Created straight into this stage — "Lead bani" already marks that moment. */
+    /* Created straight into this stage — "Lead added" already marks that moment. */
     const bornHere = !!lead.created_at && Math.abs(Date.parse(lead.created_at) - movedAt) <= 5 * 60_000;
     const explained = leadStageMoves.includes(lead.stage)
       || (lead.stage === "lost" && !!lead.lost_at)
@@ -367,7 +367,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
       push(iso(lead.stage_changed_at), {
         id: `lead:stage:${lead.id}`, group: "stage", icon: "target",
         tone: lead.stage === "won" ? "emerald" : lead.stage === "lost" ? "rose" : "indigo",
-        title: `${stageName(lead.stage)} stage me aayi`,
+        title: `Moved to ${stageName(lead.stage)}`,
       });
     }
   }
@@ -378,7 +378,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
     if (projectInvoiceIds.has(inv.id)) continue;                // shown once, as a project invoice
     push(iso(inv.created_at, inv.invoice_date), {
       id: `invoice:${inv.id}`, group: "money", icon: "receipt", tone: inv.status === "void" ? "rose" : "indigo",
-      title: inv.status === "void" ? "Invoice (void)" : "Invoice bana",
+      title: inv.status === "void" ? "Invoice (void)" : "Invoice issued",
       detail: [inv.id, inv.status && inv.status !== "void" ? inv.status : null].filter(Boolean).join(" · "),
       amount: inv.amount ?? null, href: `/invoices?open=${encodeURIComponent(inv.id)}`,
     });
@@ -386,20 +386,20 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
   for (const p of src.payments ?? []) {
     push(iso(p.received_at, p.created_at), {
       id: `payment:${p.id}`, group: "money", icon: "rupee", tone: "emerald",
-      title: "Payment mila", detail: [p.method, p.quote_id].filter(Boolean).join(" · ") || null,
+      title: "Payment received", detail: [p.method, p.quote_id].filter(Boolean).join(" · ") || null,
       amount: p.amount ?? null, href: p.quote_id ? quoteHref(p.quote_id) : null, who: nameOf(p.recorded_by),
     });
     if (p.refunded_at) {
       push(iso(p.refunded_at), {
         id: `refund:${p.id}`, group: "money", icon: "arrow_left", tone: "rose",
-        title: "Payment refund hua", amount: p.amount ?? null, href: p.quote_id ? quoteHref(p.quote_id) : null,
+        title: "Payment refunded", amount: p.amount ?? null, href: p.quote_id ? quoteHref(p.quote_id) : null,
       });
     }
   }
   for (const s of src.subscriptions ?? []) {
     push(iso(s.created_at, s.start_date), {
       id: `subscription:${s.id}`, group: "money", icon: "refresh", tone: "emerald",
-      title: "Subscription bani",
+      title: "Subscription created",
       detail: [s.plan, s.seats ? `${s.seats} seats` : null, s.status].filter(Boolean).join(" · ") || null,
       amount: s.mrr ?? null, href: "/subscriptions",
     });
@@ -431,19 +431,19 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
        separate send step or send log, so the moment it was made is the moment it was out. */
     push(made, {
       id: `project:${p.id}`, group: "money", icon: "file", tone: "amber",
-      title: "Project quote banaya", detail: name, amount: p.total_amount ?? null, href: projectHref(p.id),
+      title: "Project quote created", detail: name, amount: p.total_amount ?? null, href: projectHref(p.id),
     });
     if (st === "cancelled") {
       push(iso(p.updated_at), {
         id: `project-status:${p.id}`, group: "money", icon: "x_circle", tone: "rose",
-        title: "Project quote declined", detail: `${name} · time = project ka last update`, href: projectHref(p.id),
+        title: "Project quote declined", detail: `${name} · no accept date, shown at last update`, href: projectHref(p.id),
       });
     } else if (p.accepted_at || st === "active" || st === "completed") {
       /* accepted_at is stamped by accept_project_quote; older rows lack it — placed at the
          last update then, and said so (lib/projects/quotation-view.ts treats them as accepted). */
       push(iso(p.accepted_at, p.updated_at), {
         id: `project-accept:${p.id}`, group: "money", icon: "check_circle", tone: "emerald",
-        title: "Project quote accepted", detail: p.accepted_at ? name : `${name} · time = project ka last update`,
+        title: "Project quote accepted", detail: p.accepted_at ? name : `${name} · no accept date, shown at last update`,
         amount: p.total_amount ?? null, href: projectHref(p.id),
       });
     }
@@ -457,7 +457,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
     push(datedAt(inv.invoice_date, inv.created_at), {
       dateOnly: !!invLate, addedOn: invLate,
       id: `project-invoice:${inv.id}`, group: "money", icon: "receipt", tone: inv.status === "void" ? "rose" : "indigo",
-      title: inv.status === "void" ? "Project invoice (void)" : "Project invoice bana",
+      title: inv.status === "void" ? "Project invoice (void)" : "Project invoice issued",
       detail: [inv.id, ms?.label, inv.status && inv.status !== "void" ? inv.status : null].filter(Boolean).join(" · "),
       amount: inv.amount ?? null, href: `/invoices?open=${encodeURIComponent(inv.id)}`,
     });
@@ -469,7 +469,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
     push(datedAt(p.received_at, p.created_at), {
       dateOnly: !!payLate, addedOn: payLate,
       id: `project-payment:${p.id}`, group: "money", icon: "rupee", tone: "emerald",
-      title: tds ? "TDS kata (customer ne) — project" : "Project payment mila",
+      title: tds ? "TDS deducted by customer" : "Project payment received",
       detail: [projectTitle.get(p.project_id), ms?.label, tds ? null : p.method].filter(Boolean).join(" · ") || null,
       amount: p.amount ?? null, href: projectHref(p.project_id),
     });
@@ -480,7 +480,7 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
     const inbound = w.direction === "inbound";
     push(iso(w.created_at), {
       id: `wa:${w.id}`, group: "calls", icon: "whatsapp", tone: "emerald",
-      title: inbound ? "Customer ka WhatsApp aaya" : "WhatsApp bheja (app se)",
+      title: inbound ? "WhatsApp received" : "WhatsApp sent",
       detail: w.text_body || (w.template_name ? `Template: ${w.template_name}` : w.type) || null,
       who: inbound ? "Customer" : null,
     });

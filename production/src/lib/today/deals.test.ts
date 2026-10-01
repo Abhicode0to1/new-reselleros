@@ -18,7 +18,7 @@ describe("dealTodayItems", () => {
     const [i] = dealTodayItems([d], null, NOW);
     expect(i.kind).toBe("deal_overdue");
     expect(i.href).toBe(`/deals?lead=${d.id}`);
-    expect(i.title).toMatch(/^Acme — close date nikal gayi \(3d\)/);
+    expect(i.title).toMatch(/^Acme — close date passed \(3d\)/);
     expect(i.due_at).toBe("2026-09-26T18:30:00.000Z");
     expect(i.priority).toBe(65);
   });
@@ -38,7 +38,7 @@ describe("dealTodayItems", () => {
       deal({ id: "q6", stage: "quote", stage_changed_at: "2026-09-24T05:00:00Z" }),
     ], null, NOW);
     expect(items.map((i) => [i.kind, i.id])).toEqual([["deal_quote_stale", "q7"]]);
-    expect(items[0].title).toContain("quote bheje 7 din, koi follow-up nahi");
+    expect(items[0].title).toContain("quote sent 7d ago, no follow-up");
   });
 
   it("a follow-up after the quote clears it; one from before does not", () => {

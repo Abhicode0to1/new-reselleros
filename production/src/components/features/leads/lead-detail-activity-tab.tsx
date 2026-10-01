@@ -119,18 +119,18 @@ export function LeadActivityTab({ lead, noteDraft, setNoteDraft, logActivity, ca
                 <button
                   type="button"
                   onClick={() => callLog.run("talked", lead)}
-                  title="Call darj karein — bolkar ya likhkar. Lead pehli baar Contacted par jayegi."
+                  title="Log a call by voice or text. First call moves the lead to Contacted."
                   className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md border border-amber/50 bg-paper text-xs font-semibold text-amber-ink transition-colors hover:bg-amber-soft/50"
                 >
-                  <Icon name="mobile" size={13} /> Call log
+                  <Icon name="mobile" size={13} /> Log call
                 </button>
                 <button
                   type="button"
                   onClick={() => { void runOutcome("no_answer", lead, noteDraft); setNoteDraft(""); }}
                   disabled={!lead.contact_phone}
                   title={lead.contact_phone
-                    ? "Call ki, uthi nahi — koshish log hogi aur lead kal wapas aayegi. Stage nahi badlega."
-                    : "Is lead par phone number nahi hai — pehle jodiye."}
+                    ? "Called, no answer. Logs the attempt; lead returns tomorrow. Stage unchanged."
+                    : "No phone number on this lead — add one first."}
                   className={cn(
                     "inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md border bg-paper text-xs font-semibold transition-colors",
                     lead.contact_phone

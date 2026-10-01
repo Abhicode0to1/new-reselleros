@@ -30,7 +30,7 @@ export function LeadsKpiDrawer({
     <div className="mb-2.5 p-2.5 border border-hairline rounded-lg bg-paper shrink-0">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-          <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Open Pipeline</p>
+          <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Pipeline</p>
           <p className="font-serif text-base font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalValue, { compact: true })}</p>
           {/* Licences and custom software are different businesses — a ₹5L project and
               ₹5L of annual seats are not the same pipeline, so the split is shown. */}
@@ -49,7 +49,7 @@ export function LeadsKpiDrawer({
           <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{wonCount}</p>
         </div>
         <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-          <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
+          <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Win rate</p>
           <p className="font-serif text-base font-bold text-emerald tabular-nums mt-0.5">
             {conversion === null ? "—" : `${conversion}%`}
           </p>
@@ -60,11 +60,11 @@ export function LeadsKpiDrawer({
           </p>
         </div>
         <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-          <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">High Priority</p>
+          <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">High priority</p>
           <p className="font-serif text-base font-bold text-rose-600 tabular-nums mt-0.5">{highPriority}</p>
         </div>
         <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-          <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total Inquiries</p>
+          <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total enquiries</p>
           <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{totalInquiries}</p>
         </div>
       </div>

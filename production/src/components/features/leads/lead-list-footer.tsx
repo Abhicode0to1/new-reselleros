@@ -41,15 +41,15 @@ export function LeadListFooter({ density, setDensity, hidden, setHidden, colW, r
           rehta. */}
       <div className="flex shrink-0 items-center gap-1 rounded border border-hairline p-0.5">
         {([
-          ["compact", "Ghana", 40],
-          ["regular", "Aam", 48],
-          ["relaxed", "Khula", 56],
+          ["compact", "Compact", 40],
+          ["regular", "Default", 48],
+          ["relaxed", "Comfortable", 56],
         ] as const).map(([key, label, px]) => (
           <button
             key={key}
             type="button"
             aria-pressed={density === key}
-            title={`Row ki unchai ~${px}px`}
+            title={`Row height ~${px}px`}
             onClick={() => {
               setDensity(key);
               try { window.localStorage.setItem("resellersos.leads.density", key); } catch { /* ok */ }
@@ -74,12 +74,12 @@ export function LeadListFooter({ density, setDensity, hidden, setHidden, colW, r
             type="button"
             className="shrink-0 rounded border border-hairline px-1.5 py-0.5 font-semibold text-ink-2 hover:bg-paper-2"
           >
-            Column {hidden.size > 0 ? `(${hidden.size} chhupe)` : ""}
+            Columns{hidden.size > 0 ? ` (${hidden.size} hidden)` : ""}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[12rem]">
           <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
-            Kaun se column dikhein
+            Show columns
           </DropdownMenuLabel>
           {LEADLIST_COL_ORDER
             /* `select` aur `actions` chhupaye nahi ja sakte: checkbox ke bina bulk
@@ -116,7 +116,7 @@ export function LeadListFooter({ density, setDensity, hidden, setHidden, colW, r
           onClick={resetWidths}
           className="shrink-0 rounded border border-hairline px-1.5 py-0.5 font-semibold text-ink-2 hover:bg-paper-2"
         >
-          Chaudai reset
+          Reset widths
         </button>
       )}
     </div>

@@ -113,7 +113,7 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
           </p>
           <h2 className="font-serif text-2xl text-ink">New trial</h2>
           <p className="text-xs text-ink-3 mt-1">
-            Customer asked over phone/email — fill in their details. We'll create a lead at <Badge size="sm" kind="warning" dot>trial</Badge> stage
+            Customer asked over phone/email — fill in their details. We'll create a lead at <Badge size="sm" kind="warning" dot>Trial Active</Badge> stage
             and schedule the 3 follow-up reminders automatically.
           </p>
         </header>
@@ -185,7 +185,7 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
         <div className="bg-paper-2 rounded-md p-3 mb-4 text-xs text-ink-3 leading-relaxed">
           <p className="font-medium text-ink-2 mb-1">What happens next:</p>
           <ol className="list-decimal list-inside space-y-0.5">
-            <li>Lead created at <b>trial</b> stage</li>
+            <li>Lead created at <b>Trial Active</b> stage</li>
             <li>3 reminder tasks scheduled: Day 7 (check-in), Day 12 (conversion call), Day 14 (final)</li>
             <li>Trial appears on Subscriptions page + Dashboard widget</li>
             <li>You provision the licenses in Google Reseller Console manually</li>

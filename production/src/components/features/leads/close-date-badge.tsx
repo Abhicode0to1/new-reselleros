@@ -17,10 +17,10 @@ export function CloseDateBadge({ lead, className }: {
   const overdue = isCloseOverdue(lead, istToday());
   return (
     <span
-      title={overdue ? "Close date nikal gayi — nayi date lagao ya deal update karo" : "Expected close date"}
+      title={overdue ? "Overdue — update date" : "Expected close"}
       className={cn("tabular-nums whitespace-nowrap", overdue ? "font-semibold text-rose" : "text-ink-3", className)}
     >
-      Band: {closeDateShort(lead.expected_close_date)}{overdue ? " · overdue" : ""}
+      Close: {closeDateShort(lead.expected_close_date)}{overdue ? " · overdue" : ""}
     </span>
   );
 }

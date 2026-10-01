@@ -31,7 +31,7 @@ describe("deal history — backfilled deal", () => {
 
   it("reads in the order things happened: quote accepted (project start) → invoice/payment → lead added", () => {
     const iQuote = titles.indexOf("Project quote accepted");
-    const iPay = titles.indexOf("Project payment mila");
+    const iPay = titles.indexOf("Project payment received");
     const iLead = titles.findIndex((t) => /lead/i.test(t));
     expect(iQuote).toBeGreaterThanOrEqual(0);
     expect(iQuote).toBeLessThan(iPay);
@@ -39,7 +39,7 @@ describe("deal history — backfilled deal", () => {
   });
 
   it("does not show a separate 'quote banaya' on the keying-in day", () => {
-    expect(titles).not.toContain("Project quote banaya");
+    expect(titles).not.toContain("Project quote created");
   });
 
   it("date-only business dates and 'added to app' marks", () => {
@@ -61,7 +61,7 @@ describe("deal history — backfilled deal", () => {
       projects: [{ ...src.projects![0], created_at: "2026-09-26T05:00:00Z", accepted_at: "2026-09-28T06:00:00Z", start_date: "2026-10-01" }],
       projectInvoices: [], projectPayments: [],
     });
-    expect(live.events.map((e) => e.title)).toContain("Project quote banaya");
+    expect(live.events.map((e) => e.title)).toContain("Project quote created");
     expect(live.addedToAppOn).toBeNull();
   });
 });

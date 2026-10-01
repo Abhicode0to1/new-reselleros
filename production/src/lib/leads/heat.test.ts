@@ -82,7 +82,7 @@ describe("intentMeta", () => {
   it("gives every tier a label, a tone and a plain-language reason", () => {
     const hot = intentMeta(lead({ value: 90_000, stage: "quote" }), null, NOW);
     expect(hot).toMatchObject({ tier: "hot", label: "Hot", kind: "danger" });
-    expect(hot.reason).toContain("Quote sent");
+    expect(hot.reason).toContain("Quote Sent");
 
     const cold = intentMeta(lead({ updated_at: daysAgo(14) }), null, NOW);
     expect(cold).toMatchObject({ tier: "cold", label: "Cold" });

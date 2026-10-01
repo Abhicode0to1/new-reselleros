@@ -3,7 +3,7 @@ import {
   normaliseDomain, parseDiscovery, mxProvider, siteNote, baselineScore, mergeScores, discoveryPrompt, leadNotes, splitList, spreadByIndustryCity, cleanPitch, type ScoreInput,
 } from "./lead-finder";
 
-const site = (over: Partial<ReturnType<typeof siteNote>> = {}) => ({ https: true, status: 200, note: "Website theek hai", ...over });
+const site = (over: Partial<ReturnType<typeof siteNote>> = {}) => ({ https: true, status: 200, note: "Site OK", ...over });
 const input = (over: Partial<ScoreInput> = {}): ScoreInput => ({ company: "Acme Pvt Ltd", domain: "acme.co.in", city: "Gurgaon", description: null, mx: "zoho", site: site(), products: ["workspace", "website"], ...over });
 
 describe("lead finder", () => {
@@ -31,9 +31,9 @@ describe("lead finder", () => {
   });
 
   it("website audit reads SSL and stack", () => {
-    expect(siteNote({ httpsOk: false, httpOk: false, status: null }).note).toMatch(/nahi khulti/);
-    expect(siteNote({ httpsOk: false, httpOk: true, status: 200 }).note).toMatch(/SSL nahi/);
-    expect(siteNote({ httpsOk: true, httpOk: true, status: 200, generator: "WordPress 4.9", title: "Acme" }).note).toBe("Purana WordPress");
+    expect(siteNote({ httpsOk: false, httpOk: false, status: null }).note).toBe("Site down");
+    expect(siteNote({ httpsOk: false, httpOk: true, status: 200 }).note).toBe("No SSL");
+    expect(siteNote({ httpsOk: true, httpOk: true, status: 200, generator: "WordPress 4.9", title: "Acme" }).note).toBe("Old WordPress");
     expect(siteNote({ httpsOk: true, httpOk: true, status: 200, generator: "Wix.com Website Builder", title: "Acme" }).note).toMatch(/builder/);
   });
 

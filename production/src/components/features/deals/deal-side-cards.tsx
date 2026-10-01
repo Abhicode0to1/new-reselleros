@@ -42,8 +42,8 @@ export function DealSummaryCard({ lead, latestQuote }: { lead: Lead; latestQuote
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
         <Fact label={isProject ? "Project" : "Plan"} value={isProject ? (lead.requirement ?? "Project") : lead.plan} />
         {!isProject && <Fact label="Seats" value={lead.seats?.toString()} mono />}
-        {!isProject && <Fact label="Price / seat / mahina" value={perSeat ? rupee(perSeat) : null} mono />}
-        <Fact label={isProject ? "Deal value (one-time, ex-GST)" : "Deal value (saal)"} value={lead.value ? rupee(lead.value) : null} big />
+        {!isProject && <Fact label="Price / seat / month" value={perSeat ? rupee(perSeat) : null} mono />}
+        <Fact label={isProject ? "Deal value (one-time, ex-GST)" : "Deal value / year"} value={lead.value ? rupee(lead.value) : null} big />
       </div>
       {hints.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -51,7 +51,7 @@ export function DealSummaryCard({ lead, latestQuote }: { lead: Lead; latestQuote
         </div>
       )}
       {!isProject && !perSeat && (
-        <p className="mt-2 text-xs text-ink-3">Price / seat tab dikhega jab value aur seats dono bhare hon — Edit se bharo.</p>
+        <p className="mt-2 text-xs text-ink-3">Add value and seats via Edit to see price / seat.</p>
       )}
     </Card>
   );
@@ -77,13 +77,13 @@ export function DealDetailsCard({ lead, userNames, onEdit }: {
       {lead.customer_id && (
         <Link href={`/customers/${lead.customer_id}` as never}
           className="mt-3 flex items-center gap-2 rounded-lg border border-emerald/30 bg-emerald/5 px-3 py-2 text-sm text-ink hover:bg-emerald/10">
-          <Icon name="users" size={14} className="text-emerald" /> Customer profile kholo
+          <Icon name="users" size={14} className="text-emerald" /> Open customer
         </Link>
       )}
       <div className="mt-3">
         <div className="mb-1 text-2xs uppercase tracking-wider text-ink-3">Notes</div>
         <div className="min-h-[48px] whitespace-pre-wrap rounded-md bg-paper-2 p-3 text-sm text-ink-2">
-          {lead.notes || <span className="italic text-ink-3">Koi note nahi.</span>}
+          {lead.notes || <span className="italic text-ink-3">No notes.</span>}
         </div>
       </div>
     </Card>
@@ -103,9 +103,9 @@ export function DealFollowupsCard(props: {
 
 export function DealQuotesCard({ rows, onNewQuote, projectFailed }: { rows: DealQuoteRow[]; onNewQuote: () => void; projectFailed?: boolean }) {
   return (
-    <Card title={`Quotes${rows.length ? ` (${rows.length})` : ""}`} actions={<Button size="sm" variant="ghost" icon="plus" onClick={onNewQuote}>Naya</Button>}>
+    <Card title={`Quotes${rows.length ? ` (${rows.length})` : ""}`} actions={<Button size="sm" variant="ghost" icon="plus" onClick={onNewQuote}>New quote</Button>}>
       {rows.length === 0 ? (
-        <p className="text-sm italic text-ink-3">Abhi koi quote nahi.</p>
+        <p className="text-sm italic text-ink-3">No quotes yet.</p>
       ) : (
         <ul className="-mx-1 divide-y divide-hairline">
           {rows.map((q) => (
@@ -126,7 +126,7 @@ export function DealQuotesCard({ rows, onNewQuote, projectFailed }: { rows: Deal
           ))}
         </ul>
       )}
-      {projectFailed && <p className="mt-2 text-xs text-rose">Project quotation load nahi hui — list adhoori ho sakti hai.</p>}
+      {projectFailed && <p className="mt-2 text-xs text-rose">Couldn't load project quotation — list may be incomplete.</p>}
     </Card>
   );
 }
@@ -136,15 +136,15 @@ export function DealMoneyCard({ money, subscriptions, failed, hasQuotes }: {
 }) {
   const p = money.project;
   return (
-    <Card title="Paise" sub="Is deal ke quotes aur project quotation se jude invoice aur payment">
+    <Card title="Payments" sub="Invoices and payments from this deal's quotes">
       {!hasQuotes ? (
-        <p className="text-sm italic text-ink-3">Quote ke baad invoice aur payment yahan dikhenge.</p>
+        <p className="text-sm italic text-ink-3">Invoices and payments appear here after a quote.</p>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2">
-          <MetricCard label="Invoiced" value={money.invoiceCount ? rupee(money.invoiced) : "—"} hint={money.invoiceCount ? `${money.invoiceCount} invoice` : "Abhi nahi"} />
+          <MetricCard label="Invoiced" value={money.invoiceCount ? rupee(money.invoiced) : "—"} hint={money.invoiceCount ? `${money.invoiceCount} invoice` : "None yet"} />
           <MetricCard label="Paid" value={money.paymentCount ? rupee(money.paid) : "—"} tone={money.paid > 0 ? "success" : "default"} hint={money.paymentCount ? `${money.paymentCount} payment${p.tds > 0 ? ` · ${rupee(p.tds)} TDS` : ""}` : undefined} />
           <MetricCard
-            label="Baaki"
+            label="Balance due"
             value={money.outstanding === null ? "—" : money.outstanding > 0 ? rupee(money.outstanding) : "Clear"}
             tone={money.outstanding && money.outstanding > 0 ? "danger" : money.outstanding === 0 ? "success" : "default"}
           />
@@ -152,14 +152,14 @@ export function DealMoneyCard({ money, subscriptions, failed, hasQuotes }: {
       )}
       {p.value > 0 && (
         <p className="mt-2 text-xs text-ink-3">
-          Project ki kul value {rupee(p.value)}
-          {p.notInvoiced > 0 ? ` — ${rupee(p.notInvoiced)} ki milestones ka invoice abhi nahi bana.` : " — saari milestones invoice ho chuki."}
+          Project total {rupee(p.value)}
+          {p.notInvoiced > 0 ? ` — ${rupee(p.notInvoiced)} of milestones not invoiced yet.` : " — all milestones invoiced."}
         </p>
       )}
       {subscriptions > 0 && (
-        <p className="mt-2 text-xs text-ink-3">{subscriptions} subscription is deal ke quote se bani.</p>
+        <p className="mt-2 text-xs text-ink-3">{subscriptions} subscription(s) from this deal's quotes.</p>
       )}
-      {failed && <p className="mt-2 text-xs text-rose">Kuch billing records load nahi hue — numbers adhoore ho sakte hain.</p>}
+      {failed && <p className="mt-2 text-xs text-rose">Some billing records didn't load — numbers may be incomplete.</p>}
     </Card>
   );
 }

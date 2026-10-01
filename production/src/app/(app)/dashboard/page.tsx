@@ -342,10 +342,10 @@ export default function DashboardPage() {
 
   const integrations = [
     { name: "Supabase Auth + DB",         status: "Live",       tone: "ok" as const },
-    { name: "Razorpay",                   status: "Not setup",  tone: "warn" as const },
-    { name: "GST e-Invoice (NIC/IRP)",    status: "Not setup",  tone: "warn" as const },
-    { name: "Google CSP Reseller API",    status: "Not setup",  tone: "warn" as const },
-    { name: "WhatsApp Business (Gupshup)", status: "Not setup", tone: "warn" as const },
+    { name: "Razorpay",                   status: "Not set up",  tone: "warn" as const },
+    { name: "GST e-Invoice (NIC/IRP)",    status: "Not set up",  tone: "warn" as const },
+    { name: "Google CSP Reseller API",    status: "Not set up",  tone: "warn" as const },
+    { name: "WhatsApp Business (Gupshup)", status: "Not set up", tone: "warn" as const },
   ];
 
   // ── Draggable dashboard widgets ───────────────────────────────────────────
@@ -354,7 +354,7 @@ export default function DashboardPage() {
   const hasChase = toCollect > 0 || overdueFollowups > 0 || overdueTaskCount > 0;
   const widgets: Record<string, React.ReactNode> = {
     focus: (
-      <Card title="Today's Focus" sub="What needs your attention now"
+      <Card title="Today's focus" sub="What needs your attention now"
         actions={<Button size="sm" variant="ghost" icon="filter">All</Button>} flush>
         <div className="px-4 pb-3">
           {focus.map((f, i) => (
@@ -365,7 +365,7 @@ export default function DashboardPage() {
       </Card>
     ),
     activity: (
-      <Card title="Recent Activity" sub="Last 24 hours"
+      <Card title="Recent activity" sub="Last 24 hours"
         actions={<Button size="sm" variant="ghost" iconRight="external">Full feed</Button>}>
         {activity.length === 0 ? (
           <div className="py-6 text-center text-sm text-ink-3">
@@ -380,7 +380,7 @@ export default function DashboardPage() {
       </Card>
     ),
     pipeline: (
-      <Card title="Pipeline by Stage"
+      <Card title="Pipeline by stage"
         sub={activeCount > 0
           ? `${rupee(totalPipeline, { compact: true })} across ${activeCount} deal${activeCount === 1 ? "" : "s"}`
           : "No active deals yet"}>
@@ -434,7 +434,7 @@ export default function DashboardPage() {
       </Card>
     ),
     leaderboard: (
-      <Card title="Sales Leaderboard" sub="This month">
+      <Card title="Sales leaderboard" sub="This month">
         <div className="space-y-3">
           {leaderboard.map((p) => (
             <div key={p.rank} className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
@@ -442,12 +442,12 @@ export default function DashboardPage() {
                 p.rank === 1 ? "bg-amber text-white" : "bg-paper-2 text-ink-2")}>{p.rank}</div>
               <div className="min-w-0">
                 <div className="text-sm font-medium truncate">{p.name}</div>
-                <div className="text-2xs text-ink-3">{p.deals} deal{p.deals === 1 ? "" : "s"} closed</div>
+                <div className="text-2xs text-ink-3">{p.deals} deal{p.deals === 1 ? "" : "s"} won</div>
               </div>
               <div className="font-serif tabular-nums text-lg">{rupee(p.amount, { compact: true })}</div>
             </div>
           ))}
-          {leaderboard.length === 0 && <div className="text-center text-sm text-ink-3 py-2">No closed deals yet</div>}
+          {leaderboard.length === 0 && <div className="text-center text-sm text-ink-3 py-2">No won deals yet</div>}
         </div>
       </Card>
     ),
@@ -494,7 +494,7 @@ export default function DashboardPage() {
     ),
     trials: <TrialsExpiringCard />,
     comingup: (
-      <Card title="Coming Up"
+      <Card title="Coming up"
         sub={upcoming.some((u) => u.time.includes("overdue")) ? "⚠ Overdue first, then next 7 days" : "Next 7 days · scheduled follow-ups"}>
         {upcoming.length === 0 ? (
           <div className="py-6 text-center">
@@ -561,7 +561,7 @@ export default function DashboardPage() {
           {/* Money one-liner — the greeting row also carries business signal so
               the seller sees "how am I doing" before scanning anything. */}
           <p className="text-sm text-ink-3 mt-1">
-            <b className="text-emerald tabular-nums">{rupee(closedThisMonthValue, { compact: true })}</b> closed this month
+            <b className="text-emerald tabular-nums">{rupee(closedThisMonthValue, { compact: true })}</b> won this month
             <span className="mx-1.5">·</span>
             <b className="text-ink tabular-nums">{rupee(moneyPipeline, { compact: true })}</b> in pipeline
             <span className="hidden sm:inline"> · {workspaceName}</span>
@@ -632,7 +632,7 @@ export default function DashboardPage() {
           counts drop to a compact secondary strip so zeros don't shout. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
         <KPI
-          label="Closed this month"
+          label="Won this month"
           value={rupee(closedThisMonthValue, { compact: true })}
           accent="emerald"
           trend={closedTrend}

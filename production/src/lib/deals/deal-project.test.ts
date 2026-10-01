@@ -123,7 +123,7 @@ describe("buildDealHistory — project quotation events", () => {
   const h = buildDealHistory(excel);
   const byId = (id: string) => h.events.find((e) => e.id === id)!;
 
-  it("quote created, accepted, invoice issued and each payment, all under Quotes & paise", () => {
+  it("quote created, accepted, invoice issued and each payment, all under Quotes & payments", () => {
     const ids = h.events.map((e) => e.id);
     expect(ids).toEqual(expect.arrayContaining([
       `project:${PID}`, `project-accept:${PID}`, "project-invoice:INV-1", "project-invoice:INV-3",
@@ -135,7 +135,7 @@ describe("buildDealHistory — project quotation events", () => {
   });
 
   it("carries amount and a link to the existing project / invoice page", () => {
-    expect(byId(`project:${PID}`)).toMatchObject({ title: "Project quote banaya", amount: 5_900_000, href: `/projects/${PID}` });
+    expect(byId(`project:${PID}`)).toMatchObject({ title: "Project quote created", amount: 5_900_000, href: `/projects/${PID}` });
     expect(byId(`project-accept:${PID}`)).toMatchObject({ title: "Project quote accepted", tone: "emerald" });
     expect(byId("project-invoice:INV-1")).toMatchObject({ amount: 590_000, href: "/invoices?open=INV-1" });
     expect(byId("project-payment:pp2").title).toMatch(/TDS/);
@@ -159,7 +159,7 @@ describe("buildDealHistory — project quotation events", () => {
 
   it("a declined project is shown as declined, not accepted", () => {
     const ev = buildDealHistory({ projects: [{ id: PID, status: "cancelled", created_at: "2026-09-01T05:00:00Z", updated_at: "2026-09-03T05:00:00Z" }] }).events;
-    expect(ev.map((e) => e.title)).toEqual(["Project quote declined", "Project quote banaya"]);
+    expect(ev.map((e) => e.title)).toEqual(["Project quote declined", "Project quote created"]);
   });
 });
 

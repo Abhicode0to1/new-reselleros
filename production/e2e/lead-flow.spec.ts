@@ -40,7 +40,7 @@ test.describe("Sales Workspace v2 — Owner UI flows", () => {
   test("Smart Views chip bar renders with all 6 view options", async ({ page }) => {
     // Each chip carries its label + count badge. We don't assert exact counts
     // (seed data may evolve) — just that all 6 names appear.
-    for (const label of ["All", "Mine", "Today", "Hot", "New", "Won MTD"]) {
+    for (const label of ["All", "Mine", "Today", "Hot", "New", "Won this month"]) {
       await expect(page.getByRole("button", { name: new RegExp(`^${label}`, "i") }).first()).toBeVisible();
     }
   });

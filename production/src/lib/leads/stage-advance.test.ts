@@ -16,7 +16,7 @@ describe("peechhe kabhi nahi", () => {
         const from = FUNNEL_ORDER[i], to = FUNNEL_ORDER[j];
         const out = advanceStage(from, to);
         expect(out.nextStage, `${from} → ${to} hona hi nahi chahiye`).toBeNull();
-        expect(out.reason).toMatch(/peechhe|pehle se/);
+        expect(out.reason).toMatch(/move back|already/);
       }
     }
   });
@@ -33,7 +33,7 @@ describe("peechhe kabhi nahi", () => {
     for (const s of FUNNEL_ORDER) {
       const out = advanceStage(s, s);
       expect(out.nextStage).toBeNull();
-      expect(out.reason).toMatch(/pehle se/);
+      expect(out.reason).toMatch(/already/);
     }
   });
 });
@@ -67,7 +67,7 @@ describe("jo pata nahi, use chhodta hai — aur bolta hai", () => {
     for (const v of [null, undefined, "", "   "]) {
       const out = advanceStage(v, "contact");
       expect(out.nextStage).toBeNull();
-      expect(out.reason).toMatch(/koi stage darj nahi/);
+      expect(out.reason).toMatch(/no stage set/);
     }
   });
 
@@ -77,7 +77,7 @@ describe("jo pata nahi, use chhodta hai — aur bolta hai", () => {
        jodi gayi koi bhi nayi stage isi shakha me girti hai. */
     const out = advanceStage("negotiation", "quote");
     expect(out.nextStage).toBeNull();
-    expect(out.reason).toMatch(/nahi hai|pata nahi/);
+    expect(out.reason).toMatch(/unknown stage/);
   });
 
   it("bade-chhote akshar aur khaali jagah se pareshan nahi hota", () => {

@@ -62,7 +62,7 @@ const PAGE = "p-4 md:p-6 lg:p-8 max-w-[1240px] mx-auto";
 function BackLink() {
   return (
     <Link href={"/deals" as never} className="inline-flex min-h-9 items-center gap-1 text-sm text-ink-3 hover:text-ink">
-      <Icon name="arrow_left" size={14} /> Saari deals
+      <Icon name="arrow_left" size={14} /> All deals
     </Link>
   );
 }
@@ -155,7 +155,7 @@ export function DealDetailView({ leadId }: { leadId: string }) {
   const failed = React.useMemo(
     () => [...new Set([
       ...(leadSrc.data?.failed ?? []), ...(quoteSrc.data?.failed ?? []), ...(projectSrc.data?.failed ?? []),
-      ...(leadSrc.error || quoteSrc.error || projectSrc.error ? ["Kuch records"] : []),
+      ...(leadSrc.error || quoteSrc.error || projectSrc.error ? ["Some records"] : []),
     ])],
     [leadSrc.data, quoteSrc.data, projectSrc.data, leadSrc.error, quoteSrc.error, projectSrc.error],
   );
@@ -166,7 +166,7 @@ export function DealDetailView({ leadId }: { leadId: string }) {
   if (me && !(canSeeDeals(me.role) || me.canViewDeals)) {
     return (
       <div className={PAGE}>
-        <EmptyState icon="lock" title="Deals dekhne ki permission nahi" body="Apne manager se Deals access maango." />
+        <EmptyState icon="lock" title="No access to Deals" body="Ask your manager for Deals access." />
       </div>
     );
   }
@@ -177,9 +177,9 @@ export function DealDetailView({ leadId }: { leadId: string }) {
         <BackLink />
         <EmptyState
           icon="alert"
-          title={leadQ.error ? "Deal load nahi hui" : "Ye deal nahi mili"}
-          body={leadQ.error ? (leadQ.error as Error).message : `${leadId} is workspace me nahi hai, ya delete ho chuki hai.`}
-          action={<Button asChild variant="primary" icon="arrow_left"><Link href={"/deals" as never}>Saari deals</Link></Button>}
+          title={leadQ.error ? "Couldn't load deal" : "Deal not found"}
+          body={leadQ.error ? (leadQ.error as Error).message : `${leadId} is not in this workspace, or was deleted.`}
+          action={<Button asChild variant="primary" icon="arrow_left"><Link href={"/deals" as never}>All deals</Link></Button>}
         />
       </div>
     );
@@ -220,8 +220,8 @@ export function DealDetailView({ leadId }: { leadId: string }) {
       {!isDealStage(lead.stage) && (
         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-amber/40 bg-amber-soft/60 px-3 py-2 text-sm text-amber-ink">
           <Icon name="info" size={14} className="shrink-0" />
-          <span className="min-w-0 flex-1">Ye abhi lead hai, deal nahi — {STAGE_LABEL[lead.stage]} stage. Quote jaane par ye Deals me aayegi.</span>
-          <Link href={`/leads?lead=${lead.id}` as never} className="font-semibold underline underline-offset-2 hover:text-ink">Leads me kholo</Link>
+          <span className="min-w-0 flex-1">Still a lead ({STAGE_LABEL[lead.stage]}). It moves to Deals once a quote is sent.</span>
+          <Link href={`/leads?lead=${lead.id}` as never} className="font-semibold underline underline-offset-2 hover:text-ink">Open in Leads</Link>
         </div>
       )}
 
@@ -232,7 +232,7 @@ export function DealDetailView({ leadId }: { leadId: string }) {
             <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-3">{isDealStage(lead.stage) ? "Deal" : "Lead"} · <span className="font-mono">{lead.id}</span></p>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-serif text-3xl leading-tight md:text-4xl break-words">{title}</h1>
-              {!lead.company?.trim() && <span className="text-xs text-ink-3">(company abhi nahi — Edit se jodo)</span>}
+              {!lead.company?.trim() && <span className="text-xs text-ink-3">(no company — add via Edit)</span>}
               <Badge kind={STAGE_KIND[lead.stage]} dot>{STAGE_LABEL[lead.stage]}</Badge>
             </div>
             {(lead.contact_name || lead.contact_phone || lead.contact_email) && (
@@ -253,13 +253,13 @@ export function DealDetailView({ leadId }: { leadId: string }) {
             <Button
               icon="mail"
               onClick={() => {
-                if (!lead.contact_email) { toast.error("Is deal par email nahi hai — Edit se jodo, phir yahin se likho."); return; }
+                if (!lead.contact_email) { toast.error("No email on this deal — add one via Edit."); return; }
                 setEmailOpen(true);
               }}
             >Email</Button>
             <Button icon="edit" variant="ghost" onClick={() => setEditOpen(true)}>Edit</Button>
             {lead.stage !== "won" && lead.stage !== "lost" && (
-              <Button variant="primary" icon="send" onClick={newQuote}>{quoteRows.length ? "Naya quote" : "Quote bhejo"}</Button>
+              <Button variant="primary" icon="send" onClick={newQuote}>{quoteRows.length ? "New quote" : "Send quote"}</Button>
             )}
           </div>
         </div>
@@ -270,15 +270,15 @@ export function DealDetailView({ leadId }: { leadId: string }) {
         />
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(140px,1fr))]">
-          <MetricCard label="Value" value={lead.value ? rupee(lead.value) : "—"} hint={lead.value ? (lead.enquiry_type === "project" || lead.project_id ? "one-time, ex-GST" : "saal ka") : "Edit se bharo"} />
-          <MetricCard label="Weighted" value={lead.value ? rupee(weightedValue(lead)) : "—"} hint={`${prob}% chance · ${STAGE_LABEL[lead.stage]}`} />
+          <MetricCard label="Deal value" value={lead.value ? rupee(lead.value) : "—"} hint={lead.value ? (lead.enquiry_type === "project" || lead.project_id ? "one-time, ex-GST" : "per year") : "Add via Edit"} />
+          <MetricCard label="Weighted" value={lead.value ? rupee(weightedValue(lead)) : "—"} hint={`${prob}% · ${STAGE_LABEL[lead.stage]}`} />
           <MetricCard
-            label="Close date"
+            label="Expected close"
             value={lead.expected_close_date ? closeDateShort(lead.expected_close_date) : "—"}
             tone={overdue ? "danger" : "default"}
-            hint={overdue ? "Overdue — nayi date do" : lead.expected_close_date ? lead.expected_close_date.slice(0, 4) : "Set nahi"}
+            hint={overdue ? "Overdue — update date" : lead.expected_close_date ? lead.expected_close_date.slice(0, 4) : "Not set"}
           />
-          <MetricCard label="Is stage me" value={`${Math.max(0, daysInStage)} din`} hint={lead.stage_changed_at ? `se ${formatDate(lead.stage_changed_at)}` : "created se"} />
+          <MetricCard label="In stage" value={`${Math.max(0, daysInStage)}d`} hint={lead.stage_changed_at ? `since ${formatDate(lead.stage_changed_at)}` : "since created"} />
           <MetricCard label="Owner" value={owner ?? "—"} />
           <MetricCard label="Source" value={lead.source ?? "—"} />
           <MetricCard label="Created" value={formatDate(lead.created_at)} />

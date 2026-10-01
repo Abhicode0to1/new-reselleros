@@ -242,7 +242,7 @@ describe("the contact card, dissolved by what each part is for", () => {
        now anchors on "Baat hui" — the placement rule is unchanged, only the label is. */
     const activityTab = code.indexOf('{drawerTab === "activity" && (');
     const note = code.indexOf('placeholder="Add a note');
-    const callButton = code.indexOf("Call log");
+    const callButton = code.indexOf("/> Log call");
     expect(activityTab).toBeGreaterThan(0);
     expect(note).toBeGreaterThan(activityTab);
     expect(callButton).toBeGreaterThan(activityTab);

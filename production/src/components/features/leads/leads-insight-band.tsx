@@ -39,6 +39,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { rupee, cn } from "@/lib/utils";
 import type { Lead } from "@/lib/supabase/database.types";
 import { istToday } from "@/lib/dates/ist";
+import { STAGE_LABEL } from "@/lib/leads/stage-meta";
 
 export type LeadsDueFilter = "all" | "today" | "overdue" | "hot";
 
@@ -66,9 +67,9 @@ const ACTIVE_STAGES: Array<Lead["stage"]> = [
 const STAGE_META: Record<Lead["stage"], { label: string; segment: string; dot: string }> = {
   new:     { label: "New",       segment: "bg-slate",   dot: "bg-slate" },
   contact: { label: "Contacted", segment: "bg-amber",   dot: "bg-amber" },
-  demo:    { label: "Demo",      segment: "bg-indigo",  dot: "bg-indigo" },
-  trial:   { label: "Trial",     segment: "bg-rose",    dot: "bg-rose" },
-  quote:   { label: "Quote",     segment: "bg-indigo",  dot: "bg-indigo" },
+  demo:    { label: STAGE_LABEL.demo,  segment: "bg-indigo",  dot: "bg-indigo" },
+  trial:   { label: STAGE_LABEL.trial, segment: "bg-rose",    dot: "bg-rose" },
+  quote:   { label: STAGE_LABEL.quote, segment: "bg-indigo",  dot: "bg-indigo" },
   won:     { label: "Won",       segment: "bg-emerald", dot: "bg-emerald" },
   lost:    { label: "Lost",      segment: "bg-ink-3",   dot: "bg-ink-3" },
 };
@@ -140,7 +141,7 @@ export function LeadsInsightBand({
           tone={dueTodayCount > 0 ? "amber" : "muted"}
           active={dueFilter === "today"}
           onClick={() => onChangeDueFilter(dueFilter === "today" ? "all" : "today")}
-          tooltipText="Aaj jo nayi leads aayi hain (created today)"
+          tooltipText="Leads created today"
         />
         <KpiPill
           icon="alert"
@@ -174,7 +175,7 @@ export function LeadsInsightBand({
             (Stripe / Datadog / Linear all cap at 4-5). */}
         <KpiPill
           icon="rupee"
-          label="Won MTD"
+          label="Won this month"
           value={wonMtdValue}
           formatAs="currency"
           tone={wonMtdValue > 0 ? "emerald" : "muted"}

@@ -180,7 +180,7 @@ export function QuickAddLeadForm({ open, onOpenChange }: QuickAddLeadFormProps) 
             Quick add lead
           </SheetTitle>
           <SheetDescription className="break-words">
-            4 fields. Just the basics — qualify later from the lead drawer.
+            Just the basics — qualify later.
           </SheetDescription>
         </SheetHeader>
 
@@ -195,7 +195,7 @@ export function QuickAddLeadForm({ open, onOpenChange }: QuickAddLeadFormProps) 
           <FormField label="Company name" htmlFor="q-company">
             <Input
               id="q-company"
-              placeholder="e.g. Acme Corp Pvt Ltd (marzi se)"
+              placeholder="e.g. Acme Corp Pvt Ltd (optional)"
               error={errors.company?.message}
               {...register("company")}
             />
@@ -206,7 +206,7 @@ export function QuickAddLeadForm({ open, onOpenChange }: QuickAddLeadFormProps) 
             <div className="rounded-md bg-indigo-50 border border-indigo/20 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 min-w-0">
               <p className="text-xs text-indigo-ink inline-flex items-start gap-2 min-w-0 leading-snug">
                 <Icon name="mobile" size={13} className="flex-shrink-0 mt-0.5" />
-                <span>Phonebook se direct add karo.</span>
+                <span>Add from your phonebook.</span>
               </p>
               <Button
                 type="button"

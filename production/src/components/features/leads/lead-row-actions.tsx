@@ -140,7 +140,7 @@ export function RowActions({
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
-                  Kya hua
+                  Log outcome
                 </DropdownMenuLabel>
                 {outcomeItems.map((chip) => {
                   const blocked = chip.needsPhone && !hasPhone;
@@ -149,7 +149,7 @@ export function RowActions({
                       key={chip.id}
                       disabled={blocked}
                       title={blocked
-                        ? `${chip.hint}\n\nIs lead par phone number nahi hai — pehle jodiye.`
+                        ? `${chip.hint}\n\nNo phone number on this lead — add one first.`
                         : chip.hint}
                       /* `callLog.run`, seedha `runOutcome` NAHI — warna "Call log" yahan
                          chup-chaap log kar deta aur drawer me popup kholta. 26 Aug 2026:
@@ -217,7 +217,7 @@ export function RowActions({
                it throws away the only fact that makes the decision reversible — see
                MarkJunkDialog. */
             <DropdownMenuItem className={cn(itemCls, "text-rose")} onClick={() => setJunkOpen(true)}>
-              <Icon name="alert" size={20} /> Mark as junk…
+              <Icon name="alert" size={20} /> Mark as junk
             </DropdownMenuItem>
           )}
             {/* ── Delete, row se bhi (26 Aug 2026, Pardeep ke kehne par) ─────────────
@@ -237,7 +237,7 @@ export function RowActions({
                   title: `Permanently delete lead "${lead.company}"?`,
                   body:
                     "This cannot be undone.\n\n" +
-                    "Sirf hataana hai to \"Mark as junk\" behtar hai — wo Junk view se wapas aa jati hai.",
+                    "To just hide it, use \"Mark as junk\" — it can be restored from the Junk view.",
                   confirmLabel: "Delete",
                   danger: true,
                 });

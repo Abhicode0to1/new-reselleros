@@ -83,23 +83,23 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
         <SheetHeader>
           <SheetTitle>Project quotation</SheetTitle>
           <SheetDescription>
-            {party ? `${party} ke liye` : ""} — custom software ka quote. Banne ke baad Project Sales mein khulega, wahan se customer ko link bhejo.
+            Custom software quote{party ? ` for ${party}` : ""}. Opens in Project Sales, where you can send the customer a link.
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
-          <FormField label="Project ka naam" htmlFor="pq_title" required>
+          <FormField label="Project name" htmlFor="pq_title" required>
             <Input id="pq_title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. School ERP" />
           </FormField>
 
-          <FormField label="Scope (quotation par dikhega)" htmlFor="pq_scope">
+          <FormField label="Scope (shown on quotation)" htmlFor="pq_scope">
             <textarea
               id="pq_scope" rows={4} value={scope} onChange={(e) => setScope(e.target.value)}
               className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber resize-y"
             />
           </FormField>
 
-          <FormField label="Price (₹, GST se pehle)" htmlFor="pq_price" required>
+          <FormField label="Price (₹, before GST)" htmlFor="pq_price" required>
             <Input
               id="pq_price" type="text" inputMode="numeric" prefix="₹" value={priceText}
               onChange={(e) => setPriceText(liveMoney(e.target.value))}
@@ -112,8 +112,8 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
             )}
             {/* Once accepted and invoiced a price can only be corrected with a credit / debit
                 note — a slipped zero against the lead's own budget is caught here instead. */}
-            {magnitudeWarning(taxable, lead?.value, "lead ka budget") && (
-              <p className="mt-1 text-xs text-rose">{magnitudeWarning(taxable, lead?.value, "lead ka budget")}</p>
+            {magnitudeWarning(taxable, lead?.value, "the lead's budget") && (
+              <p className="mt-1 text-xs text-rose">{magnitudeWarning(taxable, lead?.value, "the lead's budget")}</p>
             )}
           </FormField>
 
@@ -122,18 +122,18 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
               <p className="text-sm text-ink">
                 {derived ? "Inter-state — IGST" : "Intra-state — CGST + SGST"}
                 <span className="block text-xs text-ink-3">
-                  client ka state {clientState}{matchedCustomer && !lead?.state_code && !lead?.gstin ? ` (customer "${matchedCustomer.name}" se)` : ""} · aapka {sellerState}
+                  Client state {clientState}{matchedCustomer && !lead?.state_code && !lead?.gstin ? ` (from customer "${matchedCustomer.name}")` : ""} · yours {sellerState}
                 </span>
               </p>
             ) : (
               <>
                 <select id="pq_place" value={placeChoice} onChange={(e) => setPlaceChoice(e.target.value as typeof placeChoice)} className={selectCls}>
-                  <option value="" disabled>Client kis state mein hai? chuno…</option>
-                  <option value="intra">Aapke hi state mein — CGST + SGST</option>
-                  <option value="inter">Doosre state mein — IGST</option>
+                  <option value="" disabled>Client's state…</option>
+                  <option value="intra">Same state — CGST + SGST</option>
+                  <option value="inter">Other state — IGST</option>
                 </select>
                 <p className="mt-1 text-xs text-amber-ink">
-                  Lead mein client ka state / GSTIN nahi hai{sellerState ? "" : " (aur aapki company ka state bhi darj nahi hai)"} — isliye poochh rahe hain.
+                  Lead has no client state or GSTIN{sellerState ? "" : " (and your company state is not set)"}.
                 </p>
               </>
             )}
@@ -150,14 +150,14 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
                 ))}
               </ul>
             )}
-            <p className="mt-1 text-xs text-ink-3">Baad mein Project Sales mein milestones badal sakte ho.</p>
+            <p className="mt-1 text-xs text-ink-3">You can change milestones later in Project Sales.</p>
           </FormField>
         </div>
 
         <SheetFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
           <Button type="button" variant="primary" icon="send" loading={create.isPending} disabled={!canSubmit} onClick={submit}>
-            Quotation banao
+            Create quotation
           </Button>
         </SheetFooter>
       </SheetContent>

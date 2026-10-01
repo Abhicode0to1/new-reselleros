@@ -83,7 +83,7 @@ describe("Baat hui — wo chip jiski gairhaazri me dropdown zinda tha", () => {
        laa sakta. */
     const eff = applyOutcome("talked", lead({ stage: "quote" }), NOW);
     expect(eff.stage?.nextStage).toBeNull();
-    expect(eff.stage?.reason).toMatch(/peechhe/);
+    expect(eff.stage?.reason).toMatch(/move back/);
   });
 
   it("won aur lost dono ko chhodta hai, aur wajah batata hai", () => {
@@ -303,7 +303,7 @@ describe("OUTCOME_CHIPS — the shared vocabulary", () => {
        dega aur timeline apni sabse kaam ki baat kho degi. */
     const chip = OUTCOME_CHIPS.find((c) => c.id === "talked");
     const eff = applyOutcome("talked", lead(), NOW);
-    expect(chip?.label).toBe("Call log");
+    expect(chip?.label).toBe("Log call");
     /* Kahin bhi "Baat hui" nahi bacha — na toast me, na record me. */
     expect(eff.toast).not.toMatch(/baat hui/i);
     expect(eff.activity?.detail).not.toMatch(/baat hui/i);

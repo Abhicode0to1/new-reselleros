@@ -60,7 +60,7 @@ export function dealTodayItems(
       const late = daysBetweenISO(close, today);
       buckets.deal_overdue.push({
         kind: "deal_overdue", id: d.id, href,
-        title: `${d.company} — close date nikal gayi (${late}d)${money(d.value)}`,
+        title: `${d.company} — close date passed (${late}d)${money(d.value)}`,
         due_at: istMidnightISO(close), priority: DEAL_PRIORITY.deal_overdue,
       });
       continue;
@@ -74,7 +74,7 @@ export function dealTodayItems(
       if (age >= QUOTE_STALE_DAYS && noFollowUp) {
         buckets.deal_quote_stale.push({
           kind: "deal_quote_stale", id: d.id, href,
-          title: `${d.company} — quote bheje ${age} din, koi follow-up nahi${money(d.value)}`,
+          title: `${d.company} — quote sent ${age}d ago, no follow-up${money(d.value)}`,
           due_at: istMidnightISO(addDaysISO(quotedOn, QUOTE_STALE_DAYS)),
           priority: DEAL_PRIORITY.deal_quote_stale,
         });
@@ -85,7 +85,7 @@ export function dealTodayItems(
     if (close && close >= today && close <= weekEnd) {
       buckets.deal_closing.push({
         kind: "deal_closing", id: d.id, href,
-        title: `${d.company} — is hafte band honi hai${money(d.value)}`,
+        title: `${d.company} — closing this week${money(d.value)}`,
         due_at: istMidnightISO(close), priority: DEAL_PRIORITY.deal_closing,
       });
     }

@@ -210,7 +210,7 @@ export function ImportCsvDialog({ open, onOpenChange, onImportComplete }: Import
             {/* Sample download banner */}
             <div className="rounded-md bg-amber-soft/60 border border-amber/30 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="text-sm text-amber-ink min-w-0">
-                <p className="font-semibold">Pehli baar? Sample file download karo.</p>
+                <p className="font-semibold">First time? Download the sample file.</p>
                 <p className="text-xs opacity-90 mt-0.5">
                   Header row + 4 example rows. Open in Excel/Sheets to add your leads.
                 </p>

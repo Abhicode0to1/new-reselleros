@@ -138,7 +138,7 @@ describe("POST", () => {
   it("refuses a too-short paste with a next step, storing nothing", async () => {
     const res = await POST(req("POST", { crm_key: "abc" }));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/Lead Manager se poori key copy karo/);
+    expect((await res.json()).error).toMatch(/copy the full key from Lead Manager/);
     expect(state.upserts).toEqual([]);
   });
 

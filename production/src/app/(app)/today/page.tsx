@@ -182,7 +182,7 @@ export default function TodayPage() {
       {!loading && !inbox.error && all.length === 0 && (
         <EmptyState
           icon="check_circle"
-          title="Aaj ke liye sab clear"
+          title="All clear for today"
           body="No overdue invoices, no waiting approvals, nothing queued. New work shows up here within a minute."
         />
       )}

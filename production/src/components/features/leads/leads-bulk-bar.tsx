@@ -69,7 +69,7 @@ export function LeadsBulkBar({
       <DropdownMenu>
         <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors hover:bg-paper/10 focus-visible:bg-paper/10 focus-visible:outline-none">
           <Icon name="target" size={13} />
-          Move to stage
+          Change stage
           <Icon name="chevron_down" size={11} className="opacity-60" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="center" side="top">
@@ -89,7 +89,7 @@ export function LeadsBulkBar({
       {/* Moves selected out of the working views. Not destructive, so no confirm. */}
       {onMarkJunk && (
         <BulkBarButton icon="alert" onClick={onMarkJunk}>
-          Mark junk
+          Mark as junk
         </BulkBarButton>
       )}
 

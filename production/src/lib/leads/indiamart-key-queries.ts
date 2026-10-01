@@ -28,7 +28,7 @@ async function call<T>(method: "GET" | "POST" | "DELETE", body?: unknown): Promi
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json?.ok === false) {
-    throw new IndiamartApiError(typeof json?.error === "string" ? json.error : "IndiaMART setting ka server se jawab nahi aaya — page refresh karke dobara try kariye.", res.status);
+    throw new IndiamartApiError(typeof json?.error === "string" ? json.error : "No response from server — refresh and try again.", res.status);
   }
   return json as T;
 }
@@ -48,10 +48,10 @@ export function useSaveIndiamartKey() {
     mutationFn: (crmKey: string) => call<{ encrypted: boolean }>("POST", { crm_key: crmKey }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: INDIAMART_KEY_QUERY });
-      if (r.encrypted) toast.success("IndiaMART key save ho gayi — agle pull se leads aane lagengi");
-      else toast.warning("Key save hui, par encrypt nahi hui", { description: "Server par SECRETS_MASTER_KEY set nahi hai — admin se set karwaiye, phir key dobara save kariye." });
+      if (r.encrypted) toast.success("Key saved");
+      else toast.warning("Key saved, not encrypted", { description: "SECRETS_MASTER_KEY is not set on the server. Ask an admin to set it, then save the key again." });
     },
-    onError: (e) => toastError(e, { description: "Key save nahi hui. Key dobara copy karke paste kariye; baar-baar ho to page refresh kariye." }),
+    onError: (e) => toastError(e, { description: "Couldn't save key. Paste it again; if it keeps failing, refresh the page." }),
   });
 }
 
@@ -61,8 +61,8 @@ export function useRemoveIndiamartKey() {
     mutationFn: () => call<Record<string, never>>("DELETE"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: INDIAMART_KEY_QUERY });
-      toast.success("IndiaMART key hata di — ab naye pull nahi honge", { description: "Pehle aayi leads jaisi thi waisi rahengi." });
+      toast.success("Key removed", { description: "No new pulls. Existing leads stay as they are." });
     },
-    onError: (e) => toastError(e, { description: "Key abhi bhi saved hai. Page refresh karke dobara try kariye." }),
+    onError: (e) => toastError(e, { description: "Key is still saved. Refresh and try again." }),
   });
 }

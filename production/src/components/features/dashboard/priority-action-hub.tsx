@@ -29,11 +29,11 @@ export function PriorityActionHub({
         <Card className="p-4 border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent relative overflow-hidden shadow-xs">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <StatusPill status="expiring" label="Attention Needed" size="sm" />
+              <StatusPill status="expiring" label="Attention needed" size="sm" />
               <h4 className="text-sm font-semibold text-foreground mt-2">
                 {expiringRenewalsCount > 0
-                  ? `${expiringRenewalsCount} Renewals Expiring Soon`
-                  : "No Urgent Renewals"}
+                  ? `${expiringRenewalsCount} renewals due soon`
+                  : "No urgent renewals"}
               </h4>
               <p className="text-xs text-muted-foreground">
                 {expiringRenewalsCount > 0
@@ -51,7 +51,7 @@ export function PriorityActionHub({
             </span>
             <Button asChild size="sm" variant="outline" className="h-7 text-xs border-amber-500/30 hover:bg-amber-500/10">
               <Link href="/renewals">
-                View Renewals <Icon name="chevron_right" size={14} className="ml-1" />
+                View renewals <Icon name="chevron_right" size={14} className="ml-1" />
               </Link>
             </Button>
           </div>
@@ -61,11 +61,11 @@ export function PriorityActionHub({
         <Card className="p-4 border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent relative overflow-hidden shadow-xs">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <StatusPill status="sent" label="Drafts & Pending" size="sm" />
+              <StatusPill status="sent" label="Draft quotes" size="sm" />
               <h4 className="text-sm font-semibold text-foreground mt-2">
                 {draftQuotesCount > 0
-                  ? `${draftQuotesCount} Draft Quotes to Finalize`
-                  : "Quotes Pipeline Active"}
+                  ? `${draftQuotesCount} draft quotes to finalize`
+                  : "No draft quotes"}
               </h4>
               <p className="text-xs text-muted-foreground">
                 {draftQuotesCount > 0
@@ -79,11 +79,11 @@ export function PriorityActionHub({
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-blue-500/20 pt-3">
             <span className="text-2xs font-medium text-muted-foreground">
-              Quote Builder
+              Quote builder
             </span>
             <Button asChild size="sm" variant="outline" className="h-7 text-xs border-blue-500/30 hover:bg-blue-500/10">
               <Link href="/quotes">
-                Open Quotes <Icon name="chevron_right" size={14} className="ml-1" />
+                Open quotes <Icon name="chevron_right" size={14} className="ml-1" />
               </Link>
             </Button>
           </div>
@@ -96,8 +96,8 @@ export function PriorityActionHub({
               <StatusPill status="paid" label="Collections" size="sm" />
               <h4 className="text-sm font-semibold text-foreground mt-2">
                 {pendingCollectValue > 0
-                  ? `${rupee(pendingCollectValue)} Outstanding Owed`
-                  : "All Invoices Settled"}
+                  ? `${rupee(pendingCollectValue)} outstanding`
+                  : "All invoices paid"}
               </h4>
               <p className="text-xs text-muted-foreground">
                 {pendingCollectValue > 0
@@ -111,11 +111,11 @@ export function PriorityActionHub({
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-emerald-500/20 pt-3">
             <span className="text-2xs font-medium text-muted-foreground">
-              Payments Hub
+              Payments
             </span>
             <Button asChild size="sm" variant="outline" className="h-7 text-xs border-emerald-500/30 hover:bg-emerald-500/10">
               <Link href="/payments">
-                View Payments <Icon name="chevron_right" size={14} className="ml-1" />
+                View payments <Icon name="chevron_right" size={14} className="ml-1" />
               </Link>
             </Button>
           </div>

@@ -79,18 +79,18 @@ export function dealFormErrors(i: DealFormInput): Partial<Record<DealFormField, 
   const out: Partial<Record<DealFormField, string>> = {};
   const close = (i.expectedClose ?? "").trim();
   if (close && close < i.today && close !== (i.savedClose ?? "")) {
-    out.expected_close_date = "Aaj ya aage ki date chuno";
+    out.expected_close_date = "Pick today or later";
   }
   if (!needsDealDetails(i.stage)) return out;
 
-  if ((i.company ?? "").trim().length < 2) out.company = "Deal ke liye company ka naam zaroori hai";
+  if ((i.company ?? "").trim().length < 2) out.company = "Company is required";
   if (i.isProject) {
-    if (!(i.requirement ?? "").trim()) out.requirement = "Deal ke liye likho kya banwana hai";
+    if (!(i.requirement ?? "").trim()) out.requirement = "Requirement is required";
   } else if (!(i.plan ?? "").trim()) {
-    out.plan = "Deal ke liye plan chuno — Custom / Mixed bhi chalega";
+    out.plan = "Plan is required";
   }
-  if (!close) out.expected_close_date = "Kab tak band hogi — date zaroori hai";
-  if (i.stage === "won" && !((i.value ?? 0) > 0)) out.value = "Won deal ki value (₹) bharo";
+  if (!close) out.expected_close_date = "Expected close is required";
+  if (i.stage === "won" && !((i.value ?? 0) > 0)) out.value = "Value is required for Won";
   return out;
 }
 
@@ -109,7 +109,7 @@ export function checkBoardMove(
   lead: Pick<Lead, "stage" | "company" | "value" | "expected_close_date">, to: Stage,
 ): MoveVerdict {
   if (lead.stage === to) return { ok: true };
-  const name = lead.company?.trim() || "Ye lead";
+  const name = lead.company?.trim() || "This lead";
 
   if (lead.stage === "won") {
     return {
@@ -124,25 +124,25 @@ export function checkBoardMove(
     return preQuote && isDealStage(to)
       ? {
           ok: false,
-          title: `${name}: pehle quote bhejo`,
-          description: `${STAGE_LABEL[lead.stage]} se seedha ${STAGE_LABEL[to]} nahi. Quote bhejne par lead khud Quote Sent me aa jaati hai — lead kholo → Send quote.`,
+          title: `${name}: Send a quote first`,
+          description: `Sending a quote moves it to ${STAGE_LABEL.quote}. Open the lead → Send quote.`,
         }
       : {
           ok: false,
-          title: `${STAGE_LABEL[lead.stage]} se ${STAGE_LABEL[to]} nahi ja sakte`,
-          description: "Ye stage yahan se nahi badalta — lead kholo aur wahan se badlo.",
+          title: `Can't move ${STAGE_LABEL[lead.stage]} → ${STAGE_LABEL[to]}`,
+          description: "Open the lead to change its stage.",
         };
   }
 
   if (to === "won") {
     const missing: string[] = [];
     if (!((lead.value ?? 0) > 0)) missing.push("deal value (₹)");
-    if (!lead.expected_close_date) missing.push("close date");
+    if (!lead.expected_close_date) missing.push("expected close");
     if (missing.length > 0) {
       return {
         ok: false,
-        title: `${name} abhi Won nahi ho sakti`,
-        description: `Won ke liye chahiye: ${missing.join(" aur ")}. Lead kholo → Edit me bharo, phir dobara drag karo.`,
+        title: `Can't mark Won yet — missing: ${missing.join(", ")}`,
+        description: `${name}: open the lead → Edit, fill these in, then drag again.`,
       };
     }
   }

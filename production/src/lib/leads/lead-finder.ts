@@ -130,14 +130,14 @@ export interface SiteAudit { https: boolean | null; status: number | null; note:
 
 /** Interpret a fetch of https://domain: what the site tells a salesperson. */
 export function siteNote(a: { httpsOk: boolean; httpOk: boolean; status: number | null; server?: string | null; generator?: string | null; title?: string | null }): SiteAudit {
-  if (!a.httpsOk && !a.httpOk) return { https: false, status: a.status, note: "Website nahi khulti (dead / no site)" };
-  if (!a.httpsOk && a.httpOk) return { https: false, status: a.status, note: "Sirf HTTP — SSL nahi (browser 'Not secure' dikhata hai)", server: a.server, generator: a.generator };
+  if (!a.httpsOk && !a.httpOk) return { https: false, status: a.status, note: "Site down" };
+  if (!a.httpsOk && a.httpOk) return { https: false, status: a.status, note: "No SSL", server: a.server, generator: a.generator };
   const gen = (a.generator ?? "").toLowerCase();
-  let note = "Website theek hai";
-  if (/wordpress [1-5]\./.test(gen)) note = "Purana WordPress";
-  else if (/wix|weebly|godaddy website builder|jimdo/.test(gen)) note = "Website builder (Wix / Weebly)";
-  else if (/joomla|drupal 7/.test(gen)) note = "Purana CMS (Joomla / Drupal 7)";
-  else if (!a.title) note = "Site khulti hai par title/SEO nahi";
+  let note = "Site OK";
+  if (/wordpress [1-5]\./.test(gen)) note = "Old WordPress";
+  else if (/wix|weebly|godaddy website builder|jimdo/.test(gen)) note = "Site builder (Wix / Weebly)";
+  else if (/joomla|drupal 7/.test(gen)) note = "Old CMS (Joomla / Drupal 7)";
+  else if (!a.title) note = "No title / SEO";
   return { https: true, status: a.status, note, server: a.server, generator: a.generator };
 }
 
@@ -168,7 +168,7 @@ export function baselineScore(i: ScoreInput): ScoreOutput {
   if (wantsWeb) {
     if (i.site.https === false && i.site.status === null) { score += 20; reasons.push("website nahi khulti"); if (product !== "workspace" || i.mx === "google") product = "website"; }
     else if (i.site.https === false) { score += 15; reasons.push("SSL nahi hai"); if (i.mx === "google") product = "hosting"; }
-    else if (/purana|builder/i.test(i.site.note)) { score += 10; reasons.push(i.site.note); if (i.mx === "google") product = "website"; }
+    else if (/^old |builder/i.test(i.site.note)) { score += 10; reasons.push(i.site.note); if (i.mx === "google") product = "website"; }
   }
   if (i.description && /hiring|expand|new office|launch|funded|growing/i.test(i.description)) { score += 5; reasons.push("badh rahi hai"); }
   score = Math.max(0, Math.min(100, score));

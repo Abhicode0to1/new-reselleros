@@ -289,8 +289,8 @@ export function useLeadListColumns(leads: readonly unknown[]) {
     <span
       role="separator"
       aria-orientation="vertical"
-      aria-label={`${col} column ki chaudai badlein — double-click se default`}
-      title="Kheench kar chaudai badlein · double-click se text ke naap ka"
+      aria-label={`Resize ${col} column — double-click to fit`}
+      title="Drag to resize · double-click to fit"
       /* Sirf pointerdown. Move/up window par sunte hain — dekho `beginResize` ka comment:
          ye span har render par remount hota hai, to uspar lage move/up handler drag ke
          pehle hi step me gायab ho jate the. */

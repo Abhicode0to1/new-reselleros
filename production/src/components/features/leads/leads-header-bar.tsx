@@ -56,7 +56,7 @@ export function LeadsHeaderBar({ salesTab, isDealsPage = false, setAddOpen }: Le
               {isDealsPage ? "Deals" : "Sales & Pipeline"}
             </h1>
             {isDealsPage && (
-              <p className="mt-1 text-xs text-ink-3 truncate">Qualified deals — quote se won tak</p>
+              <p className="mt-1 text-xs text-ink-3 truncate">Quote Sent to Won</p>
             )}
           </div>
 
@@ -68,7 +68,7 @@ export function LeadsHeaderBar({ salesTab, isDealsPage = false, setAddOpen }: Le
             className="shrink-0"
             onClick={() => setAddOpen(true)}
           >
-            {salesTab === "raw" ? "Add Lead" : "Add Deal"}
+            {salesTab === "raw" ? "Add lead" : "Add deal"}
           </Button>
         </div>
 

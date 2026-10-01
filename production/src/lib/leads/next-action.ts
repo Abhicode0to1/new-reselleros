@@ -174,5 +174,5 @@ export function nextActionFor(input: NextActionInput): NextAction | null {
     return { label: "Convert trial · send quote", icon: "send", tone: "amber", target: { kind: "send_quote" } };
   }
   // Default: send quote (covers contact/demo stages with no quote yet)
-  return { label: "Send Quote", icon: "send", tone: "amber", target: { kind: "send_quote" } };
+  return { label: "Send quote", icon: "send", tone: "amber", target: { kind: "send_quote" } };
 }
