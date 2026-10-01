@@ -28,6 +28,8 @@ import { TaxInvoiceDialog } from "@/components/features/quotes/tax-invoice-dialo
 import { IssueCreditNoteDialog } from "@/components/features/invoices/issue-credit-note-dialog";
 import { useCreditNotesByInvoice } from "@/lib/queries/credit-notes";
 import { useDebitNotesByInvoice } from "@/lib/queries/debit-notes";
+import { useInvoiceNoteTotals } from "@/lib/queries/invoice-note-totals";
+import { netAfterNotes, type NoteTotals } from "@/lib/invoices/note-totals";
 import { ReceiptVoucherDialog } from "@/components/features/quotes/receipt-voucher-dialog";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { supplierIdentity, supplierIdentityMessage } from "@/lib/invoices/supplier-identity";
@@ -87,6 +89,8 @@ function InvoicesPageInner() {
 
   const { data: invoices, isLoading, error, refetch } = useInvoices();
   const { data: projectInvoiceIds } = useProjectInvoiceIds();
+  // R-009: credit / debit note totals for every invoice — one query for the whole list.
+  const { data: noteTotals } = useInvoiceNoteTotals();
   const { data: pending } = useQuotesAwaitingInvoice();
   const generateInvoice = useGenerateInvoice();
   // Combined by default — Subscription & Project invoices live in one list
@@ -719,12 +723,13 @@ function InvoicesPageInner() {
             </>
           }
           mobileCard={(inv) => (
-            <MobileInvoiceCard inv={inv} autoOpen={inv.id === openInvoiceId} />
+            <MobileInvoiceCard inv={inv} notes={noteTotals?.get(inv.id)} autoOpen={inv.id === openInvoiceId} />
           )}
           renderRow={(inv, ctx) => (
             <InvoiceRow
               inv={inv}
               ctx={ctx}
+              notes={noteTotals?.get(inv.id)}
               autoOpen={inv.id === openInvoiceId}
               isProject={projectInvoiceIds?.has(inv.id) ?? false}
             />
@@ -785,9 +790,30 @@ function InvoicesPageInner() {
 }
 
 // ============================================================
+// R-009 — credit / debit notes under the amount (row + phone card)
+// ============================================================
+/** "CN −₹1,180 · DN +₹500" and "Net ₹10,620" — only when the invoice has notes. */
+function InvoiceNoteLines({ notes, net }: { notes?: NoteTotals; net: number }) {
+  if (!notes || (notes.credit === 0 && notes.debit === 0)) return null;
+  return (
+    <>
+      <span className="block text-3xs font-medium tabular-nums leading-tight" title="Credit and debit notes on this invoice">
+        {notes.credit > 0 && <span className="text-rose">CN −{rupee(notes.credit)}</span>}
+        {notes.credit > 0 && notes.debit > 0 && <span className="text-ink-3"> · </span>}
+        {notes.debit > 0 && <span className="text-indigo-ink">DN +{rupee(notes.debit)}</span>}
+      </span>
+      <span className="block text-3xs font-medium tabular-nums leading-tight text-ink-3" title="Invoice amount after credit and debit notes">
+        Net <span className="text-ink-2">{rupee(net)}</span>
+      </span>
+    </>
+  );
+}
+
+// ============================================================
 // Mobile Invoice Card — phones only
 // ============================================================
-function MobileInvoiceCard({ inv, autoOpen = false }: { inv: Invoice; autoOpen?: boolean }) {
+function MobileInvoiceCard({ inv, notes, autoOpen = false }: { inv: Invoice; notes?: NoteTotals; autoOpen?: boolean }) {
+  const net = netAfterNotes(inv.amount, notes);
   const [previewOpen, setPreviewOpen] = React.useState(false);
   /* R-085: `?open=INV-…` used to open the dialog only from the desktop row, so below
      1280px (most laptops, every phone) the shared link landed on the list and nothing
@@ -816,9 +842,11 @@ function MobileInvoiceCard({ inv, autoOpen = false }: { inv: Invoice; autoOpen?:
           </div>
           <div className="text-right shrink-0">
             <p className="font-serif text-base tabular-nums text-ink">{rupee(inv.amount)}</p>
+            <InvoiceNoteLines notes={notes} net={net} />
             {/* Same rule as the desktop row. `net_payable && …` printed a bare "0" when
-                advances covered the whole invoice (net 0). */}
-            {inv.net_payable !== null && inv.net_payable < inv.amount && inv.status !== "paid" && (
+                advances covered the whole invoice (net 0). Compared with the value AFTER
+                notes, so a credit note alone does not also print a second "Net due". */}
+            {inv.net_payable !== null && inv.net_payable < net && inv.status !== "paid" && (
               <p className="text-3xs text-ink-3 tabular-nums">Net due {rupee(inv.net_payable)}</p>
             )}
           </div>
@@ -865,12 +893,15 @@ function MobileInvoiceCard({ inv, autoOpen = false }: { inv: Invoice; autoOpen?:
 function InvoiceRow({
   inv,
   ctx,
+  notes,
   autoOpen = false,
   isProject = false,
 }: {
   inv: Invoice;
   /** From DataTable — carries the selection checkbox cell. */
   ctx: RowCtx;
+  /** R-009: credit / debit note totals for this invoice (absent = none). */
+  notes?: NoteTotals;
   /** When true (set by `?open=INV-XX` deep link), opens the preview dialog
    *  immediately. Fires once via a ref guard so re-renders don't re-open. */
   autoOpen?: boolean;
@@ -891,6 +922,7 @@ function InvoiceRow({
   const { data: payMilestone } = useMilestoneByInvoice(payOpen && isProject ? inv.id : null);
   const [expanded, setExpanded] = React.useState(false);
   const autoOpenFired = React.useRef(false);
+  const net = netAfterNotes(inv.amount, notes);
 
   React.useEffect(() => {
     if (autoOpen && !autoOpenFired.current) {
@@ -929,12 +961,15 @@ function InvoiceRow({
       <td className="px-3 py-2.5 text-right align-top">
         <div className="flex flex-col items-end gap-0.5">
           <span className="font-serif text-[15px] font-semibold text-ink tabular-nums">{rupee(inv.amount)}</span>
+          <InvoiceNoteLines notes={notes} net={net} />
           {/* Net payable when advances were adjusted at issue (CGST Rule 53).
-              Clean single line; the advance breakdown rides in the tooltip. */}
-          {inv.net_payable !== null && inv.net_payable < inv.amount && inv.status !== "paid" && (
+              Clean single line; the advance breakdown rides in the tooltip. Measured
+              from the value after notes — a credit note also lowers net_payable, and
+              that gap is the note, not an advance. */}
+          {inv.net_payable !== null && inv.net_payable < net && inv.status !== "paid" && (
             <span
               className="text-3xs font-medium tabular-nums leading-tight text-ink-3 cursor-help"
-              title={`Net payable ${rupee(inv.net_payable)} · advance adjusted ${rupee(inv.amount - inv.net_payable)}`}
+              title={`Net payable ${rupee(inv.net_payable)} · advance adjusted ${rupee(net - inv.net_payable)}`}
             >
               Net due <span className="text-ink-2">{rupee(inv.net_payable)}</span>
             </span>
@@ -942,7 +977,7 @@ function InvoiceRow({
           {/* Part-received (project milestone receipts) — show what's still due. */}
           {(inv.paid_amount ?? 0) > 0 && inv.status !== "paid" && (
             <span className="text-3xs font-medium tabular-nums leading-tight text-emerald">
-              {rupee(inv.paid_amount)} paid · <span className="text-amber-ink">{rupee(Math.max(0, inv.amount - inv.paid_amount))} due</span>
+              {rupee(inv.paid_amount)} paid · <span className="text-amber-ink">{rupee(Math.max(0, net - inv.paid_amount))} due</span>
             </span>
           )}
         </div>
