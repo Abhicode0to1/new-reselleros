@@ -920,6 +920,7 @@ export default function SubscriptionsPage() {
             <div className="w-full sm:w-64">
               <Input
                 prefix={<Icon name="search" size={14} />}
+                aria-label="Search subscriptions"
                 placeholder="Customer, contact, plan, domain…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -1929,6 +1930,7 @@ function DomainCell({ sub, compact = false }: { sub: Subscription; compact?: boo
         autoFocus
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        aria-label="Domain"
         placeholder="e.g. acme.in"
         className="h-7 text-2xs font-mono py-0"
         onKeyDown={(e) => {

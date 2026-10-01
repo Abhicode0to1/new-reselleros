@@ -223,9 +223,9 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
             <div className="space-y-2">
               {rows.map((r, i) => (
                 <div key={i} className="flex items-start gap-2">
-                  <Input className="flex-1" placeholder="Label" value={r.label} onChange={(e) => setRow(i, { label: e.target.value })} />
-                  <Input className="w-28" inputMode="numeric" prefix="₹" placeholder="0" value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value })} />
-                  <Input className="w-36" type="date" value={r.due} onChange={(e) => setRow(i, { due: e.target.value })} />
+                  <Input className="flex-1" aria-label={`Milestone ${i + 1} label`} placeholder="Label" value={r.label} onChange={(e) => setRow(i, { label: e.target.value })} />
+                  <Input className="w-28" aria-label={`Milestone ${i + 1} amount`} inputMode="numeric" prefix="₹" placeholder="0" value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value })} />
+                  <Input className="w-36" aria-label={`Milestone ${i + 1} due date`} type="date" value={r.due} onChange={(e) => setRow(i, { due: e.target.value })} />
                   <button type="button" aria-label="Remove" onClick={() => removeRow(i)} className="mt-2 text-ink-3 hover:text-rose">
                     <Icon name="x" size={16} />
                   </button>

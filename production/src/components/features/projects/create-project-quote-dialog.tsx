@@ -282,15 +282,15 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
           {isNewCustomer && !isEdit && (
             <div className="rounded-md border border-hairline bg-paper-2/30 p-3 space-y-2">
               <p className="text-2xs text-ink-3 font-semibold uppercase tracking-wider">New customer details</p>
-              <Input placeholder="Company name *" value={newName} onChange={(e) => setNewName(e.target.value)} />
+              <Input aria-label="Company name" placeholder="Company name *" value={newName} onChange={(e) => setNewName(e.target.value)} />
               <div className="grid grid-cols-2 gap-2">
-                <Input placeholder="Contact person" value={contactName} onChange={(e) => setContactName(e.target.value)} />
-                <Input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Input aria-label="Contact person" placeholder="Contact person" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+                <Input aria-label="Phone" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
-              <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Input aria-label="Email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
               <div className="grid grid-cols-2 gap-2">
-                <Input placeholder="GSTIN" className="font-mono" value={gstin} onChange={(e) => setGstin(e.target.value)} />
-                <Input placeholder="State (e.g. Maharashtra)" value={stateName} onChange={(e) => setStateName(e.target.value)} />
+                <Input aria-label="GSTIN" placeholder="GSTIN" className="font-mono" value={gstin} onChange={(e) => setGstin(e.target.value)} />
+                <Input aria-label="State" placeholder="State (e.g. Maharashtra)" value={stateName} onChange={(e) => setStateName(e.target.value)} />
               </div>
               <p className="text-3xs text-ink-3">GSTIN + state make the tax invoice GST-correct (CGST/SGST vs IGST + the customer&apos;s ITC).</p>
             </div>
@@ -321,6 +321,7 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
                   <div className="flex items-center gap-2">
                     {oneTimeItems.length > 0 && !partialLock && (
                       <select
+                        aria-label={`Quick-fill line ${i + 1} from catalog`}
                         value="" onChange={(e) => pickItem(i, e.target.value)}
                         className="w-28 shrink-0 rounded-md border border-hairline bg-paper px-2 py-2 text-xs text-ink-2 focus:outline-none focus:ring-2 focus:ring-amber/40"
                         title="Quick-fill from catalog"
@@ -329,16 +330,16 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
                         {oneTimeItems.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
                       </select>
                     )}
-                    <Input className="flex-1" placeholder="Item / service" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} disabled={partialLock} />
+                    <Input className="flex-1" aria-label={`Item or service for line ${i + 1}`} placeholder="Item / service" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} disabled={partialLock} />
                     {!partialLock && (
                       <button type="button" aria-label="Remove" onClick={() => removeLine(i)} className="text-ink-3 hover:text-rose"><Icon name="x" size={16} /></button>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-2xs text-ink-3">Qty</label>
-                    <Input className="w-16" inputMode="numeric" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} disabled={partialLock} />
-                    <label className="text-2xs text-ink-3">Rate</label>
-                    <Input className="w-28" inputMode="numeric" prefix="₹" placeholder="0" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} disabled={partialLock} />
+                    <label htmlFor={`pq-line-${i}-qty`} className="text-2xs text-ink-3">Qty</label>
+                    <Input id={`pq-line-${i}-qty`} className="w-16" inputMode="numeric" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} disabled={partialLock} />
+                    <label htmlFor={`pq-line-${i}-rate`} className="text-2xs text-ink-3">Rate</label>
+                    <Input id={`pq-line-${i}-rate`} className="w-28" inputMode="numeric" prefix="₹" placeholder="0" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} disabled={partialLock} />
                     <span className="ml-auto text-sm font-mono text-ink">{rupee(lineAmount(l))}</span>
                   </div>
                 </div>
@@ -386,9 +387,9 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
             <div className="space-y-2">
               {rows.map((r, i) => (
                 <div key={i} className="flex items-start gap-2">
-                  <Input className="flex-1" placeholder="Label" value={r.label} onChange={(e) => setRow(i, { label: e.target.value })} />
-                  <Input className="w-28" inputMode="numeric" prefix="₹" placeholder="0" value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value })} />
-                  <Input className="w-36" type="date" min={todayISO} value={r.due} onChange={(e) => setRow(i, { due: e.target.value })} />
+                  <Input className="flex-1" aria-label={`Payment ${i + 1} label`} placeholder="Label" value={r.label} onChange={(e) => setRow(i, { label: e.target.value })} />
+                  <Input className="w-28" aria-label={`Payment ${i + 1} amount`} inputMode="numeric" prefix="₹" placeholder="0" value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value })} />
+                  <Input className="w-36" aria-label={`Payment ${i + 1} due date`} type="date" min={todayISO} value={r.due} onChange={(e) => setRow(i, { due: e.target.value })} />
                   <button type="button" aria-label="Remove" onClick={() => removeRow(i)} className="mt-2 text-ink-3 hover:text-rose"><Icon name="x" size={16} /></button>
                 </div>
               ))}

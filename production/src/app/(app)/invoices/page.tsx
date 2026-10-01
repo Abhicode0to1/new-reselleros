@@ -710,6 +710,7 @@ function InvoicesPageInner() {
               <div className="w-full sm:w-64">
                 <Input
                   prefix={<Icon name="search" size={14} />}
+                  aria-label="Search invoices"
                   placeholder="Invoice #, customer, status…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}

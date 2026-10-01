@@ -660,6 +660,7 @@ export default function QuotesPage() {
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <div className="w-full sm:w-64">
                     <Input
+                      aria-label="Search quotes"
                       prefix={<Icon name="search" size={14} />}
                       placeholder="Quote ID, customer, product…"
                       value={search}

@@ -103,6 +103,7 @@ export function CustomerCombobox({
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              aria-label="Search customers"
               placeholder="Search customers…"
               className="w-full bg-transparent text-sm focus:outline-none placeholder:text-ink-4"
             />

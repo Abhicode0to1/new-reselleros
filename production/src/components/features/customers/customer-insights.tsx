@@ -395,6 +395,7 @@ export function NextBestActionCard({ nba, customer }: { nba: Nba; customer: Cust
               <div className="rounded-md border border-hairline bg-paper p-2.5">
                 <Textarea
                   rows={channel === "email" ? 6 : 4}
+                  aria-label="Draft message"
                   value={draft.message}
                   onChange={(e) => setDraft({ ...draft, message: e.target.value })}
                 />

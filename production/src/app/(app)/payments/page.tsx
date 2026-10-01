@@ -534,6 +534,7 @@ function PaymentsPageInner() {
             <div className="w-full sm:w-72">
               <Input
                 prefix={<Icon name="search" size={14} />}
+                aria-label="Search payments"
                 placeholder="Quote ID, customer, reference, method…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

@@ -105,17 +105,17 @@ export function AddLabourDialog({
             </Select>
           </FormField>
 
-          <FormField label="Time on project (%)"><Input type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} /></FormField>
+          <FormField label="Time on project (%)" htmlFor="add-labour-percent"><Input id="add-labour-percent" type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} /></FormField>
 
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="From"><Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></FormField>
-            <FormField label="To"><Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></FormField>
+            <FormField label="From" htmlFor="add-labour-from"><Input id="add-labour-from" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></FormField>
+            <FormField label="To" htmlFor="add-labour-to"><Input id="add-labour-to" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></FormField>
           </div>
           {badRange && <p className="text-2xs text-rose">To date must be after From date.</p>}
           {beforeStart && <p className="text-2xs text-rose">Can&apos;t start before the project ({formatDate(projectStart!)}). Set the project&apos;s start earlier if needed.</p>}
           {afterTarget && <p className="text-2xs text-rose">Ends after the project target ({formatDate(projectTarget!)}). Extend the project&apos;s target date first.</p>}
 
-          <FormField label="Note (optional)"><Input placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} /></FormField>
+          <FormField label="Note (optional)" htmlFor="add-labour-note"><Input id="add-labour-note" placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} /></FormField>
 
           {emp && (
             <div className="rounded-lg border border-hairline bg-paper-2/50 px-3 py-2.5 text-sm">

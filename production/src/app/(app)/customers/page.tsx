@@ -582,6 +582,7 @@ export default function CustomersPage() {
             <div className="w-full sm:w-64 shrink-0">
               <Input
                 prefix={<Icon name="search" size={14} />}
+                aria-label="Search customers"
                 placeholder="Search customer, contact, phone or domain…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -989,6 +990,7 @@ export default function CustomersPage() {
             <div className="p-2 border-b border-hairline">
               <Input
                 prefix={<Icon name="search" size={14} />}
+                aria-label="Search customers"
                 placeholder="Search…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

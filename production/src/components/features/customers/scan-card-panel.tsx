@@ -124,6 +124,7 @@ export function ScanCardPanel({ onFields }: { onFields: (f: CardFields) => void 
                 value={pasted}
                 onChange={(e) => setPasted(e.target.value)}
                 rows={4}
+                aria-label="Pasted signature"
                 placeholder={"Paste the email or WhatsApp signature here —\nname, company, phone, email, address…"}
                 className="w-full rounded-md border border-hairline bg-paper p-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
               />

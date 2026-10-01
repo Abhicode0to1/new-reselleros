@@ -187,6 +187,7 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
           <div className="min-w-0">
             <div className="px-6 pt-4 pb-2">
               <Input
+                aria-label="Search items"
                 prefix={<Icon name="search" size={14} />}
                 placeholder="Search items by name or SKU…"
                 value={search}

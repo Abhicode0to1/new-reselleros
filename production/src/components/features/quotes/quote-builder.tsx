@@ -1450,8 +1450,9 @@ export function QuoteBuilder() {
                 bill monthly. Per-line PRICE tier (Monthly-flex vs Annual) is a
                 separate control in the items table. */}
             <div>
-              <label className="text-xs font-medium text-ink-3 mb-1.5 block">Billing cycle</label>
+              <label htmlFor="qb-billing-cycle" className="text-xs font-medium text-ink-3 mb-1.5 block">Billing cycle</label>
               <select
+                id="qb-billing-cycle"
                 value={effectiveCycle}
                 onChange={(e) => setBillingCycle(e.target.value as BillingCycle)}
                 disabled={hasFlexMonthly}
@@ -1775,6 +1776,7 @@ export function QuoteBuilder() {
                   <div className="text-2xs text-ink-3 inline-flex items-center gap-1 flex-wrap">
                     <span>Cost {isUsdBill ? "$" : "₹"}</span>
                     <input
+                      aria-label={`Cost for ${line.name}`}
                       type="number" min={0} step={isUsdBill ? "0.01" : "1"}
                       value={isUsdBill ? Number((displayCost / fxRate).toFixed(2)) : displayCost}
                       onChange={(e) => { const v = parseFloat(e.target.value) || 0; updateCost(line.id, (isUsdBill ? Math.round(v * fxRate) : Math.round(v)) * billingN); }}
@@ -1855,6 +1857,7 @@ export function QuoteBuilder() {
                       <div className="text-2xs text-ink-3 mt-0.5 tabular-nums flex items-center gap-1.5 flex-wrap">
                         <span>Cost {isUsdBill ? "$" : "₹"}</span>
                         <input
+                          aria-label={`Cost for ${line.name}`}
                           type="number"
                           min={0}
                           step={isUsdBill ? "0.01" : "1"}
@@ -1885,6 +1888,7 @@ export function QuoteBuilder() {
                         <div className="flex items-center gap-1">
                           <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Commit</span>
                           <select
+                            aria-label={`Commitment for ${line.name}`}
                             value={commitType}
                             onChange={(e) => handleCommitTypeChange(e.target.value as "monthly" | "annual")}
                             className="text-2xs px-1.5 py-0.5 border border-hairline rounded bg-paper focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
@@ -1896,6 +1900,7 @@ export function QuoteBuilder() {
                         <div className="flex items-center gap-1">
                           <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Starts</span>
                           <input
+                            aria-label={`Start date for ${line.name}`}
                             type="date"
                             value={line.start_date ?? ""}
                             onChange={(e) => updateStartDate(line.id, e.target.value)}
@@ -1910,6 +1915,7 @@ export function QuoteBuilder() {
                           <div className="flex items-center gap-1">
                             <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Domain</span>
                             <input
+                              aria-label={`Domain for ${line.name}`}
                               type="text"
                               value={line.domain ?? ""}
                               onChange={(e) => updateDomain(line.id, e.target.value)}
@@ -1928,6 +1934,7 @@ export function QuoteBuilder() {
                         <span className="inline-block w-20 px-2 py-1 text-sm text-right tabular-nums text-ink" title="Total seats across all domains">{line.qty}</span>
                       ) : (
                         <input
+                          aria-label={`Quantity for ${line.name}`}
                           type="number"
                           min={1}
                           value={line.qty}
@@ -1940,6 +1947,7 @@ export function QuoteBuilder() {
                       <div className="flex items-center justify-end gap-1">
                         <span className="text-xs text-ink-3">{isUsdBill ? "$" : "₹"}</span>
                         <input
+                          aria-label={`Rate for ${line.name}`}
                           type="number"
                           min={0}
                           step={isUsdBill ? "0.01" : "1"}
@@ -1998,8 +2006,9 @@ export function QuoteBuilder() {
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 p-4 border-t border-hairline">
             {/* Notes (left) */}
             <div>
-              <label className="text-xs font-medium text-ink-2 block mb-1.5">Notes for customer</label>
+              <label htmlFor="qb-notes" className="text-xs font-medium text-ink-2 block mb-1.5">Notes for customer</label>
               <Textarea
+                id="qb-notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={isInvoiceMode
@@ -2011,8 +2020,9 @@ export function QuoteBuilder() {
 
               {/* Terms & Conditions (Zoho-style) — document-level, separate from notes. */}
               <div className="mt-4">
-                <label className="text-xs font-medium text-ink-2 block mb-1.5">Terms &amp; conditions</label>
+                <label htmlFor="qb-terms" className="text-xs font-medium text-ink-2 block mb-1.5">Terms &amp; conditions</label>
                 <Textarea
+                  id="qb-terms"
                   value={termsConditions}
                   onChange={(e) => setTermsConditions(e.target.value)}
                   placeholder="Your standard terms — e.g. late-payment interest, jurisdiction, warranty. Printed at the bottom of the document."

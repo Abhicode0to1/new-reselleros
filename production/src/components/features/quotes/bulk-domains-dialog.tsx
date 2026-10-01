@@ -198,6 +198,7 @@ export function BulkDomainsDialog({ open, onOpenChange, catalog, customerId, onA
                   <div key={idx} className="flex items-center gap-2 px-2 py-1.5">
                     <Input
                       className="flex-1 h-8 text-sm font-mono"
+                      aria-label={`Domain ${idx + 1}`}
                       placeholder="e.g. domain.in"
                       value={row.domain}
                       onChange={(e) => setManual((arr) => arr.map((x, i) => i === idx ? { ...x, domain: e.target.value } : x))}
@@ -249,10 +250,10 @@ export function BulkDomainsDialog({ open, onOpenChange, catalog, customerId, onA
                 <p className="p-4 text-xs text-ink-3">No saved domains for this customer. Use "Link domains" on the Customers page, or upload a CSV.</p>
               ) : saved.map((s, idx) => (
                 <div key={s.domain} className="flex items-center gap-2 px-3 py-1.5 border-b border-hairline last:border-0">
-                  <input type="checkbox" className="accent-amber" checked={s.on}
+                  <input type="checkbox" aria-label={`Include ${s.domain}`} className="accent-amber" checked={s.on}
                     onChange={(e) => setSaved((arr) => arr.map((x, i) => i === idx ? { ...x, on: e.target.checked } : x))} />
                   <span className="font-mono text-2xs text-ink flex-1 truncate">{s.domain}</span>
-                  <Input type="number" className="w-20 h-7 text-xs" value={s.seats}
+                  <Input type="number" aria-label={`Seats for ${s.domain}`} className="w-20 h-7 text-xs" value={s.seats}
                     onChange={(e) => setSaved((arr) => arr.map((x, i) => i === idx ? { ...x, seats: Math.max(0, Number(e.target.value) || 0) } : x))} />
                   <span className="text-3xs text-ink-3">seats</span>
                 </div>

@@ -254,12 +254,12 @@ export default function ProjectDetailPage() {
         {datesEdit && (
           <div className="mt-3 flex items-end gap-3 flex-wrap">
             <div>
-              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Start</label>
-              <Input type="date" value={startVal} onChange={(e) => setStartVal(e.target.value)} />
+              <label htmlFor="project-start-date" className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Start</label>
+              <Input id="project-start-date" type="date" value={startVal} onChange={(e) => setStartVal(e.target.value)} />
             </div>
             <div>
-              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Target</label>
-              <Input type="date" value={targetVal} onChange={(e) => setTargetVal(e.target.value)} />
+              <label htmlFor="project-target-date" className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Target</label>
+              <Input id="project-target-date" type="date" value={targetVal} onChange={(e) => setTargetVal(e.target.value)} />
             </div>
             <Button size="sm" variant="primary" onClick={saveDates} loading={updateDates.isPending}>Save</Button>
             <Button size="sm" variant="ghost" onClick={() => setDatesEdit(false)}>Cancel</Button>
@@ -613,21 +613,21 @@ function LabourRow({ line, projectId, projectStart, projectTarget }: { line: Pro
         <div className="px-5 pb-4 pt-1 bg-paper-2/30">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Time (%)</label>
-              <Input type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} />
+              <label htmlFor={`labour-${line.id}-percent`} className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Time (%)</label>
+              <Input id={`labour-${line.id}-percent`} type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} />
             </div>
             <div>
-              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">From</label>
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <label htmlFor={`labour-${line.id}-from`} className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">From</label>
+              <Input id={`labour-${line.id}-from`} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
             <div>
-              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">To</label>
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              <label htmlFor={`labour-${line.id}-to`} className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">To</label>
+              <Input id={`labour-${line.id}-to`} type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
           </div>
           <div className="mt-3">
-            <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Note</label>
-            <Input placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} />
+            <label htmlFor={`labour-${line.id}-note`} className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Note</label>
+            <Input id={`labour-${line.id}-note`} placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
           {badRange && <p className="mt-2 text-2xs text-rose">To date must be after From date.</p>}
           {beforeStart && <p className="mt-2 text-2xs text-rose">Can&apos;t start before the project ({formatDate(projectStart!)}).</p>}

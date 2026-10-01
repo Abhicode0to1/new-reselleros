@@ -412,7 +412,7 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
                 <option value="Dr.">Dr.</option>
               </select>
               <Input id="contact_first_name" placeholder="First name" error={errors.contact_first_name?.message} {...register("contact_first_name")} />
-              <Input placeholder="Last name" {...register("contact_last_name")} />
+              <Input aria-label="Last name" placeholder="Last name" {...register("contact_last_name")} />
             </div>
           </Row>
 
@@ -465,7 +465,7 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
               {/* Catches the ten-digit landline, which looks perfect until somebody
                   tries to WhatsApp it. */}
               <FieldPill check={checkPhone(watch("contact_phone") ?? "")} />
-              <Input placeholder="Mobile" {...register("contact_mobile")} />
+              <Input aria-label="Mobile" placeholder="Mobile" {...register("contact_mobile")} />
             </div>
           </Row>
         </section>

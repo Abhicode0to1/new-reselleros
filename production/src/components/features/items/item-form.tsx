@@ -402,6 +402,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                       step="any"
                       prefix="₹"
                       suffix={row.unit === "yr" ? "/yr" : "/mo"}
+                      aria-label={`${row.label} customer price`}
                       value={displayMsrp || ""}
                       onChange={(e) => handleEdit("msrp", parseFloat(e.target.value) || 0)}
                       className="text-right tabular-nums"
@@ -414,6 +415,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                       step="any"
                       prefix="₹"
                       suffix={row.unit === "yr" ? "/yr" : "/mo"}
+                      aria-label={`${row.label} cost price`}
                       value={displayWholesale || ""}
                       onChange={(e) => handleEdit("wholesale", parseFloat(e.target.value) || 0)}
                       className="text-right tabular-nums"

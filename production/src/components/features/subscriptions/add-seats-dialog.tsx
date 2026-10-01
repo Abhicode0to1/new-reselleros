@@ -171,6 +171,7 @@ export default function AddSeatsDialog({ sub, open, onOpenChange, initialSeats }
                 type="number"
                 min={1}
                 max={5000}
+                aria-label="Additional seats"
                 value={seatsStr}
                 onChange={(e) => setSeatsStr(e.target.value)}
                 className="font-mono text-center"

@@ -37,6 +37,7 @@ export function ViewDomainsDialog({ open, onOpenChange, planName, domains }: Pro
 
         <Input
           type="search"
+          aria-label="Search domains"
           placeholder="Search domains…"
           value={q}
           onChange={(e) => setQ(e.target.value)}

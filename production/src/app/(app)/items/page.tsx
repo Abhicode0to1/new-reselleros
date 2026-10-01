@@ -22,6 +22,7 @@ import { Card } from "@/components/ui/card";
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { catalogCostCoverage } from "@/lib/catalog/cost-coverage";
 import {
   DropdownMenu,
@@ -196,6 +197,7 @@ export default function ItemsPage() {
           <div className="w-56">
             <Input
               prefix={<Icon name="search" size={14} />}
+              aria-label="Search items"
               placeholder="Search items…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -989,26 +991,22 @@ function DuplicateConfirmDialog(props: {
     wholesaleDiff < 0 ? "text-emerald" : "text-ink-3";
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onCancel}
-    >
-      <div
-        className="bg-paper rounded-lg shadow-xl border border-hairline-strong w-full max-w-md p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="text-xs uppercase tracking-wider text-amber-ink font-semibold mb-1 inline-flex items-center gap-1.5">
-          <Icon name="alert" size={11} /> Duplicate detected
-        </p>
-        <h3 className="font-serif text-lg text-ink mb-2">
-          You already have "{existing.name}"
-        </h3>
-        <p className="text-xs text-ink-3 mb-4 leading-relaxed">
-          Your catalog already has a SKU that matches the distributor's
-          ({existing.vendor} · {existing.kind}). What would you like to do?
-        </p>
+    // Radix Dialog gives the focus trap, Escape-to-close and click-outside-to-close
+    // (the old hand-made overlay closed on outside click too).
+    <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogContent hideClose className="md:!max-w-md">
+        <DialogHeader className="gap-0">
+          <p className="text-xs uppercase tracking-wider text-amber-ink font-semibold mb-1 inline-flex items-center gap-1.5">
+            <Icon name="alert" size={11} /> Duplicate detected
+          </p>
+          <DialogTitle className="font-serif text-lg text-ink mb-2">
+            You already have "{existing.name}"
+          </DialogTitle>
+          <DialogDescription className="text-xs text-ink-3 mb-4 leading-relaxed">
+            Your catalog already has a SKU that matches the distributor's
+            ({existing.vendor} · {existing.kind}). What would you like to do?
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="rounded-md bg-paper-2 p-3 text-xs space-y-1.5 mb-4">
           <div className="flex items-center justify-between gap-3">
@@ -1038,7 +1036,7 @@ function DuplicateConfirmDialog(props: {
             Cancel
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

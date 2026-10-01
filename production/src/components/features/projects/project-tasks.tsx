@@ -142,7 +142,7 @@ export function ProjectTasks({ projectId, team, project }: { projectId: string; 
       {/* Add task */}
       <div className="mt-3 pt-3 border-t border-hairline flex items-end gap-2 flex-wrap">
         <div className="flex-1 min-w-[12rem]">
-          <Input placeholder="e.g. Finalise database schema" value={title}
+          <Input aria-label="New task title" placeholder="e.g. Finalise database schema" value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") add(); }} />
         </div>
@@ -153,7 +153,7 @@ export function ProjectTasks({ projectId, team, project }: { projectId: string; 
             {team.map((m) => <SelectItem key={m.employee_id} value={m.employee_id}>{m.employeeName}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Input type="date" className="w-[9rem]" value={due} onChange={(e) => setDue(e.target.value)} />
+        <Input type="date" aria-label="New task due date" className="w-[9rem]" value={due} onChange={(e) => setDue(e.target.value)} />
         <Button variant="primary" icon="plus" loading={create.isPending} disabled={!title.trim()} onClick={add}>Add task</Button>
       </div>
 
@@ -330,7 +330,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
             <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold">
+                  <label htmlFor="ptq-project-details" className="block text-xs uppercase tracking-wider text-ink-3 font-bold">
                     1. Project Description / Client Requirements Brief *
                   </label>
                   {details && (
@@ -365,6 +365,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
                 </div>
 
                 <textarea
+                  id="ptq-project-details"
                   value={details}
                   onChange={(e) => setDetails(e.target.value)}
                   rows={5}
@@ -445,7 +446,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
 
                   return (
                     <div key={idx} className="p-3.5 bg-paper-2/50 border border-hairline rounded-xl space-y-2">
-                      <label className="block text-xs font-bold text-ink leading-snug">{qText}</label>
+                      <label htmlFor={`ptq-answer-${idx}`} className="block text-xs font-bold text-ink leading-snug">{qText}</label>
 
                       {/* 1-Click Objective Multiple Choice Chips */}
                       {opts.length > 0 && (
@@ -474,6 +475,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
                       )}
 
                       <Input
+                        id={`ptq-answer-${idx}`}
                         placeholder={lang === "hi" ? "Ya custom jawab yahan type karein..." : "Or type custom answer/notes here..."}
                         value={answers[idx] || ""}
                         onChange={(e) => setAnswers({ ...answers, [idx]: e.target.value })}

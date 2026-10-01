@@ -331,15 +331,15 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
                     <Icon name="x" size={14} />
                   </button>
                   <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="First name" {...register(`contact_persons.${i}.first_name`)} />
-                    <Input placeholder="Last name" {...register(`contact_persons.${i}.last_name`)} />
+                    <Input aria-label={`Contact ${i + 1} first name`} placeholder="First name" {...register(`contact_persons.${i}.first_name`)} />
+                    <Input aria-label={`Contact ${i + 1} last name`} placeholder="Last name" {...register(`contact_persons.${i}.last_name`)} />
                   </div>
-                  <Input placeholder="Email" type="email" {...register(`contact_persons.${i}.email`)} />
+                  <Input aria-label={`Contact ${i + 1} email`} placeholder="Email" type="email" {...register(`contact_persons.${i}.email`)} />
                   <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="Work phone" {...register(`contact_persons.${i}.phone`)} />
-                    <Input placeholder="Mobile" {...register(`contact_persons.${i}.mobile`)} />
+                    <Input aria-label={`Contact ${i + 1} work phone`} placeholder="Work phone" {...register(`contact_persons.${i}.phone`)} />
+                    <Input aria-label={`Contact ${i + 1} mobile`} placeholder="Mobile" {...register(`contact_persons.${i}.mobile`)} />
                   </div>
-                  <Input placeholder="Designation (e.g. Accounts)" {...register(`contact_persons.${i}.designation`)} />
+                  <Input aria-label={`Contact ${i + 1} designation`} placeholder="Designation (e.g. Accounts)" {...register(`contact_persons.${i}.designation`)} />
                 </div>
               ))}
             </div>

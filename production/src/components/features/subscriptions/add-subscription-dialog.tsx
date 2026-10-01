@@ -1019,7 +1019,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess, onNeedsPa
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Customer Selection or New Input */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Existing Customer (Select or Clear)">
+            <FormField label="Existing Customer (Select or Clear)" htmlFor="existingCustomerSelect">
               <Select value={selectedCustomerId} onValueChange={handleSelectExistingCustomer}>
                 <SelectTrigger id="existingCustomerSelect">
                   <SelectValue placeholder="-- Select Existing Customer --" />
