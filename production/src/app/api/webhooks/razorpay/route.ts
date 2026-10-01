@@ -7,13 +7,15 @@
  * Events we care about:
  *   - `payment.captured`  — money actually moved into our settlement balance
  *   - `order.paid`        — Razorpay considers the order complete
- *   - `payment.failed`    — log so Pardeep can follow up
+ *   - `payment.failed`    — note on the lead + a retry link to the SAME quote (R-079);
+ *                           never a new charge
  *
  * For each successful capture, we:
  *   1. Verify the HMAC signature using RAZORPAY_WEBHOOK_SECRET (must be set!)
  *   2. Look up the quote via the order's `receipt` (we stored quote ID there)
  *   3. Call record_payment RPC — flips quote/lead/customer atomically
- *   4. Send order-confirmation email to the customer
+ *   4. Issue the GST tax invoice through generate_invoice (R-079), once, idempotently
+ *   5. Send order-confirmation email to the customer, with the invoice link
  *
  * Security: this route is PUBLIC (no auth). Signature verification is the
  * ONLY thing that protects against forged payment events. If the secret
@@ -41,6 +43,9 @@ import {
 import { HOSTING_RENEWAL_PLAN, hostingRenewalEnabled } from "@/lib/hosting/renewal";
 import { commandsConfigured } from "@/lib/dms-engine/commands";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
+import { issueInvoiceForOnlinePayment } from "@/lib/checkout/online-invoice.server";
+import { isProductionDeployment } from "@/lib/checkout/live-guards";
+import { quoteAcceptUrl } from "@/lib/quotes/accept-link";
 
 import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
@@ -82,6 +87,10 @@ interface RazorpayPayment {
   email?:     string;
   contact?:   string;
   notes?:     Record<string, string>;
+  /** payment.failed only — Razorpay's own words for why. */
+  error_code?:        string | null;
+  error_description?: string | null;
+  error_reason?:      string | null;
 }
 
 interface RazorpayOrder {
@@ -226,8 +235,13 @@ export async function POST(request: NextRequest) {
     return handleMandateEvent(admin, event, rawBody, tenantParam);
   }
 
-  // Only act on payment-success events — ignore failure / authorized / etc.
-  // (We could log failed payments to a separate table for follow-up later.)
+  /* R-079: a failed payment is no longer only a log line — the lead gets a note and the
+     buyer gets a link back to the SAME quote. Nothing is charged again from here. */
+  if (event === "payment.failed") {
+    return handlePaymentFailed(admin, body, tenantParam, new URL(request.url).origin);
+  }
+
+  // Only act on payment-success events — ignore authorized / etc.
   if (event !== "payment.captured" && event !== "order.paid") {
     return NextResponse.json({ received: true, ignored: event });
   }
@@ -272,6 +286,25 @@ export async function POST(request: NextRequest) {
   if (quote.payment_status === "received") {
     console.log("[webhooks/razorpay] quote already marked paid:", receipt);
     return NextResponse.json({ received: true, alreadyProcessed: true });
+  }
+  /* R-079: once the invoice is issued the quote moves on to 'invoiced', so the status check
+     above no longer sees a repeat delivery. The payment row is the durable fact: THIS
+     payment id already recorded against THIS quote means the event was handled — no second
+     provisioning row, no second email, and no second invoice. */
+  {
+    const ref = payment?.id ?? orderId;
+    const { data: seen } = await admin
+      .from("payments")
+      .select("id")
+      .eq("tenant_id", quote.tenant_id)
+      .eq("quote_id", quote.id)
+      .eq("reference", ref)
+      .eq("status", "received")
+      .limit(1);
+    if (seen && seen.length) {
+      console.log("[webhooks/razorpay] payment already recorded:", ref, "on", receipt);
+      return NextResponse.json({ received: true, alreadyProcessed: true });
+    }
   }
 
   // ── Call record_payment RPC — atomically:
@@ -325,6 +358,17 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+
+  /* ── THE GST TAX INVOICE (R-079) ─────────────────────────────────────────
+     Through generate_invoice — the desk's own issuing path — right after the payment is
+     committed and before the confirmation email, which links it. A refusal (most often:
+     no state on record, so the place of supply is unknown) leaves a note on the lead and
+     never fails the webhook: the money is recorded either way. */
+  const invoice = await issueInvoiceForOnlinePayment(admin, {
+    quoteId: quote.id,
+    tenantId: quote.tenant_id,
+    logTag: "[webhooks/razorpay]",
+  });
 
   /* In-app khabar (audit B4) — record_payment COMMIT ke baad, best-effort. */
   await notifyTenantOwners({
@@ -584,7 +628,145 @@ Open quote:  ${APP_URL}/quotes/${quote.id}`,
     });
   });
 
-  return NextResponse.json({ received: true, quoteId: quote.id, paid: paymentAmount });
+  return NextResponse.json({
+    received: true,
+    quoteId: quote.id,
+    paid: paymentAmount,
+    invoiceId: invoice.status === "issued" || invoice.status === "exists" ? invoice.invoiceId : null,
+    invoice: invoice.status,
+  });
+}
+
+/**
+ * payment.failed (R-079).
+ *
+ * Before this the event was only logged, so a buyer whose card was declined simply
+ * vanished: the lead sat at "quote" with nothing on it, and nobody knew to call.
+ *
+ *   1. A note on the lead: "Payment failed — <Razorpay's reason>", with the payment id, so a
+ *      repeated delivery of the same event is recognised and written once.
+ *   2. The buyer is sent the quote's own public pay link — the SAME quote, the same amount,
+ *      priced when they checked out. Paying it goes through the normal webhook again.
+ *
+ * Never charges anything: no order is created and no saved method is used here. The buyer
+ * chooses to retry. Outside production the email is logged and not sent.
+ */
+async function handlePaymentFailed(
+  admin: ReturnType<typeof createAdminClient>,
+  body: RazorpayWebhookBody,
+  tenantParam: string | null,
+  publicBase: string,
+): Promise<NextResponse> {
+  const payment = body.payload.payment?.entity;
+  if (!payment?.id) {
+    return NextResponse.json({ received: true, ignored: "payment.failed (no payment)" });
+  }
+
+  /* The quote is found by the ORDER id we stored on it at checkout (`payment_reference`),
+     which Razorpay set server-side. The checkout's notes.quoteId is only a fallback, and
+     then only for a quote whose stored order is this one or unset. */
+  const cols = "id, tenant_id, lead_id, customer_name, amount, payment_status, invoice_id, public_token, payment_reference";
+  type FailedQuote = {
+    id: string; tenant_id: string; lead_id: string | null; customer_name: string | null; amount: number | null;
+    payment_status: string | null; invoice_id: string | null; public_token: string | null; payment_reference: string | null;
+  };
+  let quote: FailedQuote | null = null;
+  if (payment.order_id) {
+    const { data } = await admin.from("quotes").select(cols).eq("payment_reference", payment.order_id).limit(1);
+    quote = ((data ?? [])[0] as FailedQuote | undefined) ?? null;
+  }
+  const noteQuoteId = payment.notes?.quoteId?.trim();
+  if (!quote && noteQuoteId) {
+    const { data } = await admin.from("quotes").select(cols).eq("id", noteQuoteId).maybeSingle();
+    const q = data as FailedQuote | null;
+    if (q && (!q.payment_reference || q.payment_reference === payment.order_id)) quote = q;
+  }
+  if (!quote) {
+    console.warn(`[webhooks/razorpay] payment.failed ${payment.id}: no quote for order ${payment.order_id ?? "(none)"}`);
+    return NextResponse.json({ received: true, ignored: "payment.failed (unknown order)" });
+  }
+  if (tenantParam && quote.tenant_id !== tenantParam) {
+    console.error("[webhooks/razorpay] payment.failed tenant mismatch", { tenantParam, quoteTenant: quote.tenant_id });
+    return NextResponse.json({ error: "Tenant mismatch" }, { status: 403 });
+  }
+  // A later attempt already succeeded — an old failure is history, not a reason to chase.
+  if (quote.invoice_id || quote.payment_status === "received" || quote.payment_status === "invoiced") {
+    return NextResponse.json({ received: true, ignored: "payment.failed (quote already paid)" });
+  }
+
+  const reason =
+    payment.error_description?.trim() || payment.error_reason?.trim() || payment.error_code?.trim() || "no reason given by Razorpay";
+  const amountFmt = `₹${Math.round((payment.amount ?? 0) / 100).toLocaleString("en-IN")}`;
+
+  // Same event twice → one note, one email.
+  if (quote.lead_id) {
+    const { data: logged } = await admin
+      .from("lead_activities")
+      .select("id")
+      .eq("tenant_id", quote.tenant_id)
+      .eq("lead_id", quote.lead_id)
+      .ilike("detail", `%${payment.id}%`)
+      .limit(1);
+    if (logged && logged.length) {
+      return NextResponse.json({ received: true, alreadyProcessed: true });
+    }
+  }
+
+  const retryUrl = quote.public_token ? quoteAcceptUrl(publicBase, quote.id, quote.public_token) : null;
+  const to = (payment.email ?? payment.notes?.email ?? "").trim();
+  const live = isProductionDeployment();
+
+  let emailOutcome: string;
+  if (!retryUrl) {
+    emailOutcome = "No retry link (the quote has no public link)";
+  } else if (!to) {
+    emailOutcome = `No retry email (Razorpay sent no email address). Retry link: ${retryUrl}`;
+  } else if (!live) {
+    console.info(
+      `[webhooks/razorpay] payment.failed ${payment.id}: retry email NOT sent (not production). Would send to ${to}: ${retryUrl}`,
+    );
+    emailOutcome = `Retry link logged, not emailed (not production): ${retryUrl}`;
+  } else {
+    const { alert: owner, tenant: seller } = await loadOwnerAlert(admin, quote.tenant_id);
+    const sellerName = seller?.name?.trim() || "your reseller";
+    const r = await sendEmail({
+      to,
+      from: FROM_EMAIL,
+      replyTo: owner.ok ? owner.to : undefined,
+      kind: "razorpay_payment_failed_retry",
+      route: { tenantId: quote.tenant_id },
+      subject: `Your payment didn't go through · ${quote.id} · ${amountFmt}`,
+      text:
+`Hi,
+
+Your payment of ${amountFmt} for order ${quote.id} did not go through, so nothing was charged.
+Reason given by the bank / Razorpay: ${reason}
+
+You can try again — same order, same price — here:
+  ${retryUrl}
+
+If it fails again, just reply to this email and we'll help.
+
+— ${sellerName}`,
+    }).catch((e: unknown) => ({ status: "failed" as const, errorMessage: e instanceof Error ? e.message : String(e) }));
+    emailOutcome = r.status === "failed"
+      ? `Retry email to ${to} FAILED (${r.errorMessage ?? "unknown"}). Retry link: ${retryUrl}`
+      : `Retry link emailed to ${to}: ${retryUrl}`;
+  }
+
+  if (quote.lead_id) {
+    const { error: noteErr } = await admin.from("lead_activities").insert({
+      tenant_id: quote.tenant_id,
+      lead_id: quote.lead_id,
+      kind: "note",
+      detail:
+        `Payment failed — ${reason}. ${amountFmt} on quote ${quote.id} (Razorpay ${payment.id}, order ${payment.order_id ?? "—"}). ` +
+        `Nothing was charged and nothing will be charged automatically. ${emailOutcome}`,
+    });
+    if (noteErr) console.error(`[webhooks/razorpay] payment.failed ${payment.id}: lead note not written — ${noteErr.message}`);
+  }
+  console.warn(`[webhooks/razorpay] payment.failed ${payment.id} on ${quote.id}: ${reason}`);
+  return NextResponse.json({ received: true, failed: true, quoteId: quote.id, retryUrl: retryUrl ?? null });
 }
 
 /**
