@@ -270,7 +270,7 @@ export function DealDetailView({ leadId }: { leadId: string }) {
         />
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(140px,1fr))]">
-          <MetricCard label="Value" value={lead.value ? rupee(lead.value) : "—"} hint={lead.value ? "saal ka" : "Edit se bharo"} />
+          <MetricCard label="Value" value={lead.value ? rupee(lead.value) : "—"} hint={lead.value ? (lead.enquiry_type === "project" || lead.project_id ? "one-time, ex-GST" : "saal ka") : "Edit se bharo"} />
           <MetricCard label="Weighted" value={lead.value ? rupee(weightedValue(lead)) : "—"} hint={`${prob}% chance · ${STAGE_LABEL[lead.stage]}`} />
           <MetricCard
             label="Close date"

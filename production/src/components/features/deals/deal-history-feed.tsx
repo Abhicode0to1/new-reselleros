@@ -14,7 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, rupee } from "@/lib/utils";
 import {
-  DEAL_FILTERS, filterDealHistory, formatIstDateTime,
+  DEAL_FILTERS, filterDealHistory, formatIstDateTime, formatIstDate,
   type DealFilter, type DealHistory, type DealEventTone,
 } from "@/lib/deals/timeline";
 import type { useLogLeadActivity } from "@/lib/queries/lead-activities";
@@ -101,6 +101,12 @@ export function DealHistoryFeed({ lead, history, loading, failed, logActivity, o
           {filter === "all" ? "Abhi kuch record nahi hua." : "Is filter me abhi kuch nahi."}
         </p>
       ) : (
+        <>
+        {history.addedToAppOn && filter === "all" && (
+          <p className="mb-3 rounded-md bg-paper-2 p-2.5 text-xs text-ink-2">
+            Part of this deal happened before it was added to the app on {formatIstDate(history.addedToAppOn)}. Dates show when it happened.
+          </p>
+        )}
         <ol className="relative space-y-3">
           {rows.map((e) => (
             <li key={e.id} className="flex items-start gap-3">
@@ -124,12 +130,14 @@ export function DealHistoryFeed({ lead, history, loading, failed, logActivity, o
                   <p className="line-clamp-3 break-words text-xs text-ink-2" title={e.detail}>{e.detail}</p>
                 )}
                 <p className="text-xs text-ink-3">
-                  {e.who ? `${e.who} · ` : ""}{formatIstDateTime(e.at)}
+                  {e.who ? `${e.who} · ` : ""}{e.dateOnly ? formatIstDate(e.at) : formatIstDateTime(e.at)}
+                  {e.addedOn ? ` · added to app ${formatIstDate(e.addedOn)}` : ""}
                 </p>
               </div>
             </li>
           ))}
         </ol>
+        </>
       )}
 
       {(history.undated > 0 || failed.length > 0) && (

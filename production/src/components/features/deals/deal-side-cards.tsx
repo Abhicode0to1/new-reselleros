@@ -26,7 +26,10 @@ type TaskRow = NonNullable<ReturnType<typeof useTasksForLead>["data"]>[number];
 export function DealSummaryCard({ lead, latestQuote }: { lead: Lead; latestQuote: Quote | undefined }) {
   /* leads.value is the ANNUAL deal value (lib/leads/deal-rules.ts#autoDealValue = seats ×
      price × 12), so price per seat per month is value ÷ seats ÷ 12. */
-  const perSeat = lead.value && lead.seats ? Math.round(lead.value / lead.seats / 12) : null;
+  /* A project deal is one-time work, not a yearly seat subscription — no seats, no price/seat,
+     and its value is not "per year" (1 Oct 2026, Excel Technologies showed "Deal value (saal)"). */
+  const isProject = lead.enquiry_type === "project" || !!lead.project_id;
+  const perSeat = !isProject && lead.value && lead.seats ? Math.round(lead.value / lead.seats / 12) : null;
   const cycle = latestQuote?.billing_cycle ?? null;
   const hints = [
     cycle ? `Quote billing: ${cycle}` : null,
@@ -37,17 +40,17 @@ export function DealSummaryCard({ lead, latestQuote }: { lead: Lead; latestQuote
   return (
     <Card title="Deal summary">
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-        <Fact label="Plan" value={lead.enquiry_type === "project" ? (lead.requirement ?? "Project") : lead.plan} />
-        <Fact label="Seats" value={lead.seats?.toString()} mono />
-        <Fact label="Price / seat / mahina" value={perSeat ? rupee(perSeat) : null} mono />
-        <Fact label="Deal value (saal)" value={lead.value ? rupee(lead.value) : null} big />
+        <Fact label={isProject ? "Project" : "Plan"} value={isProject ? (lead.requirement ?? "Project") : lead.plan} />
+        {!isProject && <Fact label="Seats" value={lead.seats?.toString()} mono />}
+        {!isProject && <Fact label="Price / seat / mahina" value={perSeat ? rupee(perSeat) : null} mono />}
+        <Fact label={isProject ? "Deal value (one-time, ex-GST)" : "Deal value (saal)"} value={lead.value ? rupee(lead.value) : null} big />
       </div>
       {hints.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {hints.map((h) => <Badge key={h} kind="outline" size="sm">{h}</Badge>)}
         </div>
       )}
-      {!perSeat && (
+      {!isProject && !perSeat && (
         <p className="mt-2 text-xs text-ink-3">Price / seat tab dikhega jab value aur seats dono bhare hon — Edit se bharo.</p>
       )}
     </Card>

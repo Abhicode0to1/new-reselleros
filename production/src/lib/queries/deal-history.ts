@@ -132,7 +132,7 @@ export function useDealProjectSources(projectId: string | null | undefined) {
       const supabase = createClient();
       const [projects, projectMilestones, projectPayments] = await Promise.all([
         safe("Project quotation", failed, () => supabase.from("project_sales")
-          .select("id, title, status, total_amount, created_at, accepted_at, updated_at").eq("id", projectId)),
+          .select("id, title, status, total_amount, created_at, accepted_at, updated_at, start_date").eq("id", projectId)),
         safe("Project milestones", failed, () => supabase.from("project_milestones")
           .select("id, project_id, seq, label, total_amount, invoice_id").eq("project_id", projectId)),
         safe("Project payments", failed, () => supabase.from("project_payments")

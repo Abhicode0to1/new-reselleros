@@ -28,9 +28,19 @@ const QUOTE_BADGE: Record<string, DealQuoteBadge> = {
   draft: "muted", sent: "warning", viewed: "info", accepted: "success", rejected: "danger", expired: "danger",
 };
 
+/** start_date when the project was keyed in already accepted (created ≈ accepted) on a later
+    day than it started — a backfilled project; else null. */
+export function backfilledStart(p: { created_at?: string | null; accepted_at?: string | null; start_date?: string | null }): string | null {
+  if (!p.created_at || !p.accepted_at || !p.start_date) return null;
+  const made = Date.parse(p.created_at), acc = Date.parse(p.accepted_at);
+  if (Number.isNaN(made) || Number.isNaN(acc) || Math.abs(made - acc) > 60_000) return null;
+  const madeIstDay = new Date(made + 5.5 * 3_600_000).toISOString().slice(0, 10);
+  return madeIstDay > p.start_date.slice(0, 10) ? p.start_date.slice(0, 10) : null;
+}
+
 export function dealQuoteRows(
   quotes: ReadonlyArray<{ id: string; status?: string | null; amount?: number | null; created_at?: string | null; plan?: string | null }>,
-  projects: ReadonlyArray<{ id: string; title?: string | null; status?: string | null; total_amount?: number | null; created_at?: string | null; accepted_at?: string | null }>,
+  projects: ReadonlyArray<{ id: string; title?: string | null; status?: string | null; total_amount?: number | null; created_at?: string | null; accepted_at?: string | null; start_date?: string | null }>,
 ): DealQuoteRow[] {
   const rows: DealQuoteRow[] = [
     ...quotes.map((q): DealQuoteRow => ({
@@ -43,7 +53,9 @@ export function dealQuoteRows(
       return {
         key: `p:${p.id}`, kind: "project", ref: p.title || "Project quotation", sub: "Project",
         statusLabel: v.label, badge: v.kind, amount: p.total_amount ?? 0,
-        createdAt: p.created_at ?? null, href: `/projects/${p.id}`,
+        /* A project keyed in already accepted (backfill) shows its start date — the same date
+           the deal history uses (timeline.ts), so the two never disagree. */
+        createdAt: backfilledStart(p) ?? p.created_at ?? null, href: `/projects/${p.id}`,
       };
     }),
   ];

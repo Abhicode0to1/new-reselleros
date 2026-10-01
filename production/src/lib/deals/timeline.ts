@@ -27,6 +27,7 @@
 import { IST_OFFSET_MS } from "@/lib/dates/ist";
 import { STAGE_LABEL } from "@/lib/leads/stage-meta";
 import { invoiceAmountDue } from "@/lib/payments/amount-due";
+import { backfilledStart } from "@/lib/deals/deal-quotes";
 import type { Lead } from "@/lib/supabase/database.types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -61,6 +62,10 @@ export interface DealEvent {
   href?: string | null;
   icon: string;
   tone: DealEventTone;
+  /** The business date has no time of day (show the date only, not "12:00 am"). */
+  dateOnly?: boolean;
+  /** When the row was keyed into the app, if that was a later day than `at` (backfilled). */
+  addedOn?: string | null;
 }
 
 type Id = string;
@@ -82,7 +87,7 @@ export interface DealHistorySources {
   whatsapp?: ReadonlyArray<{ id: Id; direction?: string | null; text_body?: string | null; type?: string | null; template_name?: string | null; status?: string | null; created_at?: Ts }>;
   aiCalls?: ReadonlyArray<{ id: Id; status?: string | null; summary?: string | null; duration_sec?: number | null; created_at?: Ts }>;
   /** Project quotation(s) linked on leads.project_id (project_sales), and what hangs off them. */
-  projects?: ReadonlyArray<{ id: Id; title?: string | null; status?: string | null; total_amount?: number | null; created_at?: Ts; accepted_at?: Ts; updated_at?: Ts }>;
+  projects?: ReadonlyArray<{ id: Id; title?: string | null; status?: string | null; total_amount?: number | null; created_at?: Ts; accepted_at?: Ts; updated_at?: Ts; start_date?: string | null }>;
   projectMilestones?: ReadonlyArray<{ id: Id; project_id: Id; label?: string | null; total_amount?: number | null; invoice_id?: string | null }>;
   /** invoices rows reached through project_milestones.invoice_id. */
   projectInvoices?: ReadonlyArray<{ id: Id; amount?: number | null; net_payable?: number | null; paid_amount?: number | null; status?: string | null; invoice_date?: string | null; created_at?: Ts }>;
@@ -100,6 +105,9 @@ export interface DealHistory {
   counts: Record<DealFilter, number>;
   /** Stages the lead was recorded moving INTO (activity_log) — evidence for the stepper's ✓. */
   stageMoves: string[];
+  /** Set when part of the deal happened over a day before the lead was keyed in (backfill):
+      the lead's created_at, so the feed can say "added to the app on …". */
+  addedToAppOn: string | null;
 }
 
 /** id → display name. Unknown / null ids return null (never a bare uuid). */
@@ -132,7 +140,22 @@ function datedAt(date: string | null | undefined, createdAt: Ts): string | null 
   return day;
 }
 
+/** created_at when it is a LATER IST day than the business date — the row was backfilled. */
+function lateAdded(date: string | null | undefined, createdAt: Ts): string | null {
+  const made = iso(createdAt);
+  if (!date || !made) return null;
+  return new Date(Date.parse(made) + IST_OFFSET_MS).toISOString().slice(0, 10) > date.slice(0, 10) ? made : null;
+}
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "30 Sep 2026" in IST. */
+export function formatIstDate(at: string): string {
+  const t = Date.parse(at);
+  if (Number.isNaN(t)) return "";
+  const d = new Date(t + IST_OFFSET_MS);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
 
 /** "30 Sep 2026, 2:05 pm" in IST, whatever the browser's zone. */
 export function formatIstDateTime(at: string): string {
@@ -389,11 +412,27 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
     const name = p.title || "Project";
     /* create_project_quote writes the row straight as 'quoted' — a project quotation has no
        separate send step or send log, so the moment it was made is the moment it was out. */
-    push(iso(p.created_at), {
+    const st = (p.status ?? "").toLowerCase();
+    /* 1 Oct 2026, Pardeep: "ye history logical thik ho sakti hai" — Excel Technologies' project
+       ran 20 Apr → Aug but was keyed in on 26 Sep, created and accepted in the same second. The
+       feed then said "quote banaya 26 Sep 10:41" AFTER "won 9:50" and after Aug payments.
+       A project keyed in already accepted, with a start date days earlier, is a backfill: show
+       ONE "Project quote accepted" on its start date (date only) and say when it was added. */
+    const made = iso(p.created_at);
+    if (backfilledStart(p)) {
+      push(iso(p.start_date), {
+        id: `project-accept:${p.id}`, group: "money", icon: "check_circle", tone: "emerald",
+        title: "Project quote accepted", detail: `${name} · project started`, amount: p.total_amount ?? null,
+        href: projectHref(p.id), dateOnly: true, addedOn: made,
+      });
+      continue;
+    }
+    /* create_project_quote writes the row straight as 'quoted' — a project quotation has no
+       separate send step or send log, so the moment it was made is the moment it was out. */
+    push(made, {
       id: `project:${p.id}`, group: "money", icon: "file", tone: "amber",
       title: "Project quote banaya", detail: name, amount: p.total_amount ?? null, href: projectHref(p.id),
     });
-    const st = (p.status ?? "").toLowerCase();
     if (st === "cancelled") {
       push(iso(p.updated_at), {
         id: `project-status:${p.id}`, group: "money", icon: "x_circle", tone: "rose",
@@ -414,7 +453,9 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
   for (const m of src.projectMilestones ?? []) if (m.invoice_id) milestoneByInvoice.set(m.invoice_id, m);
   for (const inv of dedupeById(src.projectInvoices ?? [])) {
     const ms = milestoneByInvoice.get(inv.id);
+    const invLate = lateAdded(inv.invoice_date, inv.created_at);
     push(datedAt(inv.invoice_date, inv.created_at), {
+      dateOnly: !!invLate, addedOn: invLate,
       id: `project-invoice:${inv.id}`, group: "money", icon: "receipt", tone: inv.status === "void" ? "rose" : "indigo",
       title: inv.status === "void" ? "Project invoice (void)" : "Project invoice bana",
       detail: [inv.id, ms?.label, inv.status && inv.status !== "void" ? inv.status : null].filter(Boolean).join(" · "),
@@ -424,7 +465,9 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
   for (const p of dedupeById(src.projectPayments ?? [])) {
     const tds = p.method === "tds";
     const ms = p.milestone_id ? milestoneOf.get(p.milestone_id) : undefined;
+    const payLate = lateAdded(p.received_at, p.created_at);
     push(datedAt(p.received_at, p.created_at), {
+      dateOnly: !!payLate, addedOn: payLate,
       id: `project-payment:${p.id}`, group: "money", icon: "rupee", tone: "emerald",
       title: tds ? "TDS kata (customer ne) — project" : "Project payment mila",
       detail: [projectTitle.get(p.project_id), ms?.label, tds ? null : p.method].filter(Boolean).join(" · ") || null,
@@ -454,7 +497,9 @@ export function buildDealHistory(src: DealHistorySources, nameOf: NameOf = () =>
 
   const counts: Record<DealFilter, number> = { all: events.length, calls: 0, email: 0, money: 0, stage: 0 };
   for (const e of events) counts[e.group]++;
-  return { events, undated, counts, stageMoves: leadStageMoves };
+  const leadAt = lead ? iso(lead.created_at) : null;
+  const addedToAppOn = leadAt && events.some((e) => Date.parse(e.at) < Date.parse(leadAt) - 86_400_000) ? leadAt : null;
+  return { events, undated, counts, stageMoves: leadStageMoves, addedToAppOn };
 }
 
 export function filterDealHistory(events: readonly DealEvent[], filter: DealFilter): DealEvent[] {
