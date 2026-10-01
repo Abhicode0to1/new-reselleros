@@ -45,7 +45,7 @@ vi.mock("@/lib/checkout/hosting-limit", async (orig) => {
 import { POST } from "./route";
 
 type Line = { name: string; domain?: string; hostingPlan?: string; hostingDomain?: string };
-const buyer = { fullName: "Test Buyer", email: "buyer@example.invalid", phone: "9999999999", simulate: true };
+const buyer = { fullName: "Test Buyer", email: "buyer@example.invalid", phone: "9999999999", stateCode: "07", simulate: true };
 const req = (body: Record<string, unknown>) =>
   new NextRequest("https://example.invalid/api/public/checkout/cart", {
     method: "POST",

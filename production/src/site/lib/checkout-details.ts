@@ -27,6 +27,13 @@ export interface CheckoutDetails {
    * (30 Sep 2026, one domain per plan). Left out, the single `domain` above is the one plan's.
    */
   plans?: PlanDomainInput[];
+  /**
+   * A paid order needs the buyer's state (R-091, 1 Oct 2026): GST decides CGST+SGST or IGST
+   * from it, and generate_invoice refuses an invoice without it. A free trial alone does not.
+   */
+  needsState?: boolean;
+  /** The GST state code chosen ("07"), or "" when none. */
+  stateCode?: string;
   hasDomain: boolean;
   address: { line1: string; city: string; state: string; pin: string };
 }
@@ -41,10 +48,14 @@ export function missingCheckoutDetails(d: CheckoutDetails): string[] {
     const r = planDomains(d.plans && d.plans.length ? d.plans : [{ label: "hosting", typed: d.domain }]);
     if (!r.ok) missing.push(...r.problems);
   }
+  if (d.needsState && !/^\d{2}$/.test((d.stateCode ?? "").trim())) {
+    missing.push("your state (it decides the GST on your invoice)");
+  }
   if (d.hasDomain) {
+    // The state is its own field now (R-091) and is checked above.
     const a = d.address;
-    if (a.line1.trim().length < 3 || a.city.trim().length < 2 || a.state.trim().length < 2 || !/^\d{6}$/.test(a.pin.trim())) {
-      missing.push("the domain owner's postal address (address, city, state and a 6-digit PIN code)");
+    if (a.line1.trim().length < 3 || a.city.trim().length < 2 || !/^\d{6}$/.test(a.pin.trim())) {
+      missing.push("the domain owner's postal address (address, city and a 6-digit PIN code)");
     }
   }
   return missing;

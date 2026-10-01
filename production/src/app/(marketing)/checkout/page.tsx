@@ -17,6 +17,13 @@ import { rupee, cycleLabel } from "@/site/lib/money";
 import { missingCheckoutDetails, missingDetailsMessage } from "@/site/lib/checkout-details";
 import { BUY_A_DOMAIN_HREF } from "@/lib/checkout/hosting-domain";
 import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
+import { GST_STATE_BY_CODE } from "@/lib/utils";
+
+/* Indian states and union territories by GST code, A to Z, for the State field (R-091).
+   "97" (other territory) and "99" (centre jurisdiction) are not places a buyer lives. */
+const STATE_OPTIONS = Object.entries(GST_STATE_BY_CODE)
+  .filter(([code]) => Number(code) < 97)
+  .sort((a, b) => a[1].localeCompare(b[1]));
 import { razorpayContact } from "@/lib/checkout/razorpay-contact";
 import { BusyPanel } from "@/components/ui/busy-panel";
 
@@ -76,7 +83,9 @@ export default function CheckoutPage() {
   // Registrant address — asked only when the cart holds a domain (owner decision 22).
   const [addrLine1, setAddrLine1] = useState("");
   const [addrCity, setAddrCity] = useState("");
-  const [addrState, setAddrState] = useState("");
+  /* The buyer's GST state, as its code ("07"). One field for every paid order (R-091): the
+     place of supply on the GST invoice, and the domain owner's address state too. */
+  const [stateCode, setStateCode] = useState("");
   const [addrPin, setAddrPin] = useState("");
   const [method, setMethod] = useState<string>("UPI");
   const [agreed, setAgreed] = useState(false);
@@ -131,7 +140,7 @@ export default function CheckoutPage() {
       if (s.planDomain && typeof s.planDomain === "object") setPlanDomain(s.planDomain as Record<string, string>);
       if (typeof s.addrLine1 === "string") setAddrLine1(s.addrLine1);
       if (typeof s.addrCity === "string") setAddrCity(s.addrCity);
-      if (typeof s.addrState === "string") setAddrState(s.addrState);
+      if (typeof s.stateCode === "string") setStateCode(s.stateCode);
       if (typeof s.addrPin === "string") setAddrPin(s.addrPin);
     } catch { /* private window / blocked storage — just start empty */ }
   }, []);
@@ -143,9 +152,9 @@ export default function CheckoutPage() {
   }, [hasHosting, cartDomain]);
   useEffect(() => {
     try {
-      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain, planDomain, addrLine1, addrCity, addrState, addrPin }));
+      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain, planDomain, addrLine1, addrCity, stateCode, addrPin }));
     } catch { /* ignore */ }
-  }, [name, company, email, gstin, phone, domain, planDomain, addrLine1, addrCity, addrState, addrPin]);
+  }, [name, company, email, gstin, phone, domain, planDomain, addrLine1, addrCity, stateCode, addrPin]);
 
   if (cart.lines.length === 0) {
     return (
@@ -163,7 +172,8 @@ export default function CheckoutPage() {
      says what is still needed (lib/checkout-details). */
   const missing = missingCheckoutDetails({
     name, email, phone, domain, plans, hasHosting: hasHosting || hasTrial, hasDomain,
-    address: { line1: addrLine1, city: addrCity, state: addrState, pin: addrPin },
+    needsState: !isTrialCart, stateCode,
+    address: { line1: addrLine1, city: addrCity, state: GST_STATE_BY_CODE[stateCode] ?? "", pin: addrPin },
   });
   const missingMsg = missingDetailsMessage(missing);
   const detailsOk = missing.length === 0 && !trialMixed;
@@ -231,6 +241,7 @@ export default function CheckoutPage() {
           email: email.trim(),
           phone: phone.trim(),
           gstin: gstin.trim() || undefined,
+          stateCode: stateCode || undefined,
           domain: hasHosting ? domain.trim() : undefined,
           lines: cart.lines.map((l) => {
             const i = hostingLines.findIndex((h) => h.key === l.key);
@@ -238,7 +249,7 @@ export default function CheckoutPage() {
           }),
           coupon: cart.coupon.trim() || undefined,
           address: hasDomain
-            ? { line1: addrLine1.trim(), city: addrCity.trim(), state: addrState.trim(), zipcode: addrPin.trim(), country: "IN" }
+            ? { line1: addrLine1.trim(), city: addrCity.trim(), state: GST_STATE_BY_CODE[stateCode] ?? "", zipcode: addrPin.trim(), country: "IN" }
             : undefined,
         }),
       });
@@ -369,6 +380,21 @@ export default function CheckoutPage() {
                   )}
                 </>
               )}
+              {!isTrialCart && (
+                /* Required on every paid order (R-091): without it the GST invoice cannot be
+                   issued, because GST picks CGST+SGST or IGST by the buyer's state. */
+                <label style={{ display: "block", marginBottom: 14 }}>
+                  <span className="mono-label" style={{ color: "var(--text-muted)", display: "block", marginBottom: 6 }}>STATE — DECIDES THE GST ON YOUR INVOICE</span>
+                  <select
+                    value={stateCode}
+                    onChange={(e) => setStateCode(e.target.value)}
+                    style={{ width: "100%", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "11px 12px", fontSize: 15, fontFamily: "inherit", background: "#fff" }}
+                  >
+                    <option value="">Choose your state</option>
+                    {STATE_OPTIONS.map(([code, nameOf]) => <option key={code} value={code}>{nameOf}</option>)}
+                  </select>
+                </label>
+              )}
               {hasDomain && (
                 <>
                   <p className="meta" style={{ margin: "6px 0 2px" }}>
@@ -376,7 +402,6 @@ export default function CheckoutPage() {
                   </p>
                   <Field label="ADDRESS" value={addrLine1} onChange={setAddrLine1} />
                   <Field label="CITY" value={addrCity} onChange={setAddrCity} />
-                  <Field label="STATE" value={addrState} onChange={setAddrState} />
                   <Field label="PIN CODE" value={addrPin} onChange={setAddrPin} mono />
                 </>
               )}

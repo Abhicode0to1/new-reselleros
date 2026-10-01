@@ -64,7 +64,9 @@ function req(body: Record<string, unknown>) {
   return new NextRequest("https://example.invalid/api/public/checkout/cart", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ...buyer, ...body }),
+    /* A paid order must say the buyer's state (R-091). Tests that are not about the state
+       get Delhi; a test that gives a GSTIN or an address decides it that way instead. */
+    body: JSON.stringify({ ...buyer, ...(body.stateCode || body.gstin || body.address ? {} : { stateCode: "07" }), ...body }),
   });
 }
 
@@ -345,7 +347,7 @@ describe("the company name is optional (29 Sep 2026)", () => {
     const res = await POST(new NextRequest("https://example.invalid/api/public/checkout/cart", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...noCompany, lines: [hosting], domain: "acme.in" }),
+      body: JSON.stringify({ ...noCompany, stateCode: "07", lines: [hosting], domain: "acme.in" }),
     }));
     expect(res.status).toBe(200);
     expect(quote()!.customer_name).toBe("Test Buyer");
@@ -394,10 +396,31 @@ describe("R-079 — place of supply on the lead, and the live-site guards", () =
     expect(lead()).toEqual(expect.objectContaining({ gstin: "29AAGCB1286Q1Z0", state_code: "29", state: "Karnataka" }));
   });
 
-  it("an invalid GSTIN is not stored and decides nothing — the state stays unknown, never guessed", async () => {
+  it("an invalid GSTIN is not stored and decides nothing — with no state chosen the order is refused, never guessed (R-091)", async () => {
     const res = await POST(req({ gstin: "07XXXXX0000X1ZZ", domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ needState: true, error: expect.stringMatching(/choose your state.*Nothing was charged/) });
+    expect(lead()).toBeUndefined();
+    expect(quote()).toBeUndefined();
+  });
+
+  it("an invalid GSTIN with a chosen state: the GSTIN is not stored, the chosen state is", async () => {
+    const res = await POST(req({ gstin: "07XXXXX0000X1ZZ", stateCode: "27", domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
     expect(res.status).toBe(200);
-    expect(lead()).toEqual(expect.objectContaining({ gstin: null, state_code: null, state: null }));
+    expect(lead()).toEqual(expect.objectContaining({ gstin: null, state_code: "27", state: "Maharashtra" }));
+  });
+
+  it("R-091: a hosting-only order with no state is refused before anything is saved", async () => {
+    const res = await POST(req({ stateCode: "", domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).needState).toBe(true);
+    expect(quote()).toBeUndefined();
+    expect(rpc).not.toHaveBeenCalledWith("next_document_number", expect.anything());
+  });
+
+  it("R-091: the chosen state goes on the lead, which record_payment copies to the customer the invoice reads", async () => {
+    await POST(req({ stateCode: "07", domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+    expect(lead()).toEqual(expect.objectContaining({ state_code: "07", state: "Delhi" }));
   });
 
   it("a simulated payment is refused in production even with ALLOW_SIMULATED_CHECKOUT=1 — nothing saved", async () => {

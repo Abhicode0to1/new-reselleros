@@ -30,9 +30,15 @@ describe("what the checkout still needs", () => {
 
   it("a domain purchase needs the owner's address, a hosting-only one does not", () => {
     expect(missingCheckoutDetails({ ...ok, hasDomain: true })).toEqual([
-      "the domain owner's postal address (address, city, state and a 6-digit PIN code)",
+      "the domain owner's postal address (address, city and a 6-digit PIN code)",
     ]);
     expect(missingCheckoutDetails({ ...ok, hasHosting: false, domain: "" })).toEqual([]);
+  });
+
+  it("R-091: a paid order needs the buyer's state; a free trial on its own does not", () => {
+    expect(missingCheckoutDetails({ ...ok, needsState: true, stateCode: "" })).toEqual(["your state (it decides the GST on your invoice)"]);
+    expect(missingCheckoutDetails({ ...ok, needsState: true, stateCode: "07" })).toEqual([]);
+    expect(missingCheckoutDetails({ ...ok, needsState: false })).toEqual([]);
   });
 
   it("a word that is not a domain is still missing a domain (30 Sep 2026)", () => {

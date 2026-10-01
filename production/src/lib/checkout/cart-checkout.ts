@@ -596,6 +596,21 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       stateCode: stateCodeFromName(parsed.data.stateCode) ?? stateCodeFromName(address?.state),
       gstin: validGstin,
     });
+    /* R-091 (1 Oct 2026): a website order with no state paid, and then got NO GST invoice —
+       generate_invoice refuses one without the buyer's state. So it is asked for before
+       anything is saved. The DMS panel does not send a state for a hosting-only order yet,
+       so it is not refused here (that would stop panel purchases); its invoices stay manual. */
+    if (!panel && !buyerStateCode) {
+      return NextResponse.json(
+        {
+          error:
+            "Please choose your state. It decides whether your GST invoice shows CGST + SGST or IGST, " +
+            "and the invoice cannot be issued without it. Nothing was charged.",
+          needState: true,
+        },
+        { status: 400 },
+      );
+    }
 
     const { error: leadErr } = await admin.from("leads").insert({
       id: leadId,
