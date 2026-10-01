@@ -37,7 +37,6 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const FROM_EMAIL = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
 const TRIAL_DAYS = 15;
@@ -109,14 +108,7 @@ export async function GET(req: NextRequest) {
       notes: `${lead.notes || ""}\n\n[${startedAt.toISOString()}] EMAIL CONFIRMED — ${ownerStep}`,
     }).eq("id", lead.id);
 
-    const { alert: owner } = await loadOwnerAlert(admin, BUY_PAGE_TENANT_ID);
-    if (owner.ok) {
-      await sendEmail({
-        to: owner.to, from: FROM_EMAIL, kind: "buy_page_trial_owner", route: { tenantId: BUY_PAGE_TENANT_ID }, replyTo: email,
-        subject: `✅ HOSTING TRIAL CONFIRMED — ${lead.company} (${pkg})`,
-        text: `${lead.company} confirmed their email for a ${pkg} hosting trial.\n\n${domain ? `Domain: ${domain}\n` : ""}${ownerStep}\n\nContact: ${lead.contact_name} <${email}> · ${lead.contact_phone}\nOpen the lead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
-      }).catch(() => {});
-    }
+    // No owner email (owner, 30 Sep 2026); the "Provision hosting trial" task made at the start is the to-do.
     return done(req, !trialPlanOk ? "notrialplan" : domain ? "pending" : "needdomain");
   }
 
@@ -150,14 +142,17 @@ export async function GET(req: NextRequest) {
       trial_expires_at: expiresAt.toISOString(),
       notes: `${lead.notes || ""}\n\n[${startedAt.toISOString()}] EMAIL CONFIRMED — the trial account was NOT created automatically (${why}). Provision the Starter account by hand and send the login.`,
     }).eq("id", lead.id);
-    const { alert: owner } = await loadOwnerAlert(admin, BUY_PAGE_TENANT_ID);
-    if (owner.ok) {
-      await sendEmail({
-        to: owner.to, from: FROM_EMAIL, kind: "buy_page_trial_owner", route: { tenantId: BUY_PAGE_TENANT_ID }, replyTo: email,
-        subject: `⚠️ HOSTING TRIAL — not created automatically for ${lead.company}`,
-        text: `The Starter trial for ${domain} was confirmed, but the DMS engine did not create it:\n\n  ${why}\n\n${outcome.kind === "needs_reconciliation" ? "The request may have reached DirectAdmin: check DMS (Admin → Engine commands) before creating anything by hand.\n\n" : ""}Otherwise provision it by hand and send the login.\nLead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
-      }).catch(() => {});
-    }
+    /* No owner email (owner, 30 Sep 2026). A setup that failed still needs a person, so it
+       becomes a task on the lead instead of an alert — nothing is left only in the notes. */
+    const { error: taskErr } = await admin.from("tasks").insert({
+      tenant_id: BUY_PAGE_TENANT_ID,
+      title: `Trial NOT created automatically: ${lead.company} — set it up by hand`,
+      notes: `The Starter trial for ${domain} was confirmed, but the DMS engine did not create it (${why}). Check DMS for a partly created account, then provision the Starter account by hand and send the login to ${email}.`,
+      kind: "followup",
+      due_at: new Date().toISOString(),
+      lead_id: lead.id,
+    });
+    if (taskErr) console.error(`[trial/confirm] lead ${lead.id}: could not create the follow-up task: ${taskErr.message}`);
     return done(req, outcome.kind === "needs_reconciliation" || outcome.kind === "unreachable" ? "error" : "pending");
   }
 
@@ -187,13 +182,7 @@ export async function GET(req: NextRequest) {
     }).catch(() => {});
   }
 
-  if (owner.ok) {
-    await sendEmail({
-      to: owner.to, from: FROM_EMAIL, kind: "buy_page_trial_owner", route: { tenantId: BUY_PAGE_TENANT_ID },
-      subject: `🚀 HOSTING TRIAL LIVE — ${lead.company} · Starter · ${domain}`,
-      text: `The DMS engine created a Starter trial account.\n\nCompany: ${lead.company}\nDirectAdmin user: ${daUser}\nDomain: ${domain}\nContact: ${lead.contact_name} <${email}> · ${lead.contact_phone}\nTrial ends: ${expiresAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}\n\nLead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
-    }).catch(() => {});
-  }
+  // No owner email (owner, 30 Sep 2026); the lead notes record the account.
 
   return done(req, already ? "already" : "provisioned");
 }

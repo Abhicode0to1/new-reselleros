@@ -35,7 +35,7 @@ export interface EmailLogEntry {
   subject?: string | null;
   /** 'renewal_reminder', 'quote', 'invoice', … */
   kind?: string | null;
-  provider: "resend" | "gmail" | "stub";
+  provider: "resend" | "gmail" | "smtp" | "stub";
   userId?: string | null;
 }
 

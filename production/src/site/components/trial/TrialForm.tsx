@@ -25,6 +25,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { LICENCE_EDITIONS, type LicenceEdition } from "@/site/lib/data/catalog";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
+import { BusyPanel } from "@/components/ui/busy-panel";
 import type { MergedEdition } from "@/site/lib/live-catalog";
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -83,6 +84,11 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
   const [cardOk] = useState(false); // stays false on the marketing site (no client key)
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  /* Honest feedback (owner, 30 Sep 2026). Until then a failed send still showed the
+     "request received" screen — the fetch's errors were swallowed on purpose. */
+  const [submitErr, setSubmitErr] = useState<string | null>(null);
+  /** Did our system email the customer a copy? Only then do we say "check your inbox". */
+  const [ackSent, setAckSent] = useState(false);
   const [reqNo, setReqNo] = useState("");
   const [reqAt, setReqAt] = useState<Date | null>(null);
   const [delivered, setDelivered] = useState<"email" | "wa" | "">("");
@@ -188,14 +194,26 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
     try { n = (parseInt(window.localStorage.getItem("anutech-trial-seq") ?? "0", 10) || 0) + 1; window.localStorage.setItem("anutech-trial-seq", String(n)); } catch { /* private */ }
     const no = `AT-${ym}-${String(n).padStart(3, "0")}`;
     setSending(true);
+    setSubmitErr(null);
     try {
       const requirement = `TRIAL: ${labelOf(ed)}, ${seats} mailbox(es) on ${domain.trim().toLowerCase()}, ${migrate ? "migrate existing mail" : "clean start"}, mail today: ${current}${startWhen ? `, preferred start: ${startWhen}` : ""}. Continues at ${rateAfter} after trial. Card check: ${cardOk ? "verified (₹1 auth, refunded)" : "to be verified by a ₹1 link"}. (via anutech.in trial page)`;
-      await fetch("/api/enquiry", {
+      const res = await fetch("/api/enquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName: company, companyName: company, email, phone, product: `Trial — ${labelOf(ed)}`, seats, requirement, edition: ed, term: "annual" }),
+        body: JSON.stringify({ fullName: company, companyName: company, email, phone, product: `Trial — ${labelOf(ed)}`, seats, requirement, edition: ed, term: "annual", trial: true }),
       });
-    } catch { /* still confirm — the email/WhatsApp handoff carries it too */ }
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; ackSent?: boolean };
+      if (!res.ok || !json.ok) {
+        setSubmitErr(json.error || "We could not send your trial request. Nothing was saved — please press the button to try again.");
+        setSending(false);
+        return;
+      }
+      setAckSent(json.ackSent === true);
+    } catch {
+      setSubmitErr("We could not reach our server, so your trial request was not sent. Check your connection and press the button to try again.");
+      setSending(false);
+      return;
+    }
     setReqNo(no); setReqAt(now); setSent(true); setSending(false);
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
   }
@@ -216,11 +234,14 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
         <div style={{ display: "flex", alignItems: "center", gap: 14, ...card, padding: "18px 20px", marginBottom: 20 }}>
           <span aria-hidden style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 999, background: GREEN, color: "#fff", fontSize: 17, flex: "none" }}>✓</span>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)" }}>Trial request {reqNo} is ready</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)" }}>We have received trial request {reqNo}</div>
             <div style={{ fontSize: 13.5, color: "var(--text-muted)" }}>
-              {delivered === "email" ? "Your mail app opened with the request written — press send and we take it from there."
-                : delivered === "wa" ? "WhatsApp opened with the request written — press send and we take it from there."
-                : "Send it by email or WhatsApp and we will confirm the trial length and cap before switching anything on."}
+              {ackSent
+                ? <>A confirmation is on its way to <b style={{ color: "var(--text)" }}>{email}</b> — check your inbox, and the spam folder if it is not there in a few minutes.</>
+                : <>We could not email you a copy, so we will call or WhatsApp you on <b style={{ color: "var(--text)" }}>{phone}</b> to confirm the trial.</>}
+              {delivered === "email" ? " Your mail app also opened with the request written, if you want to add anything."
+                : delivered === "wa" ? " WhatsApp also opened with the request written, if you want to add anything."
+                : " We confirm the trial length and cap before switching anything on."}
             </div>
           </div>
         </div>
@@ -380,6 +401,8 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
                 <button onClick={() => setCardInfo((s) => !s)} style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "9px 14px", borderRadius: 8, border: "1px solid #E4C98C", background: "#B7791F", color: "#fff", fontFamily: "inherit" }}>{cardLive ? "Verify card — ₹1, refunded" : "How the ₹1 link works"}</button>
                 {cardInfo && !cardLive && <p style={{ fontSize: 12.5, color: "#6B4A18", lineHeight: 1.5, margin: "10px 0 0" }}>Send the request and we WhatsApp you a secure ₹1 Razorpay link — the trial starts once you tap it, and the ₹1 is refunded the same day. No card details are entered on this page.</p>}
               </div>
+              {submitErr && <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, margin: "12px 0" }}>{submitErr} If it keeps failing, email <a href={`mailto:${COMPANY.supportEmail}`} style={{ color: "#991B1B", fontWeight: 600 }}>{COMPANY.supportEmail}</a>.</div>}
+              <BusyPanel active={sending} title="Sending your trial request" steps={["Sending your details to our team", "Preparing your request reference"]} />
               <button onClick={submit} disabled={sending} className="btn btn-primary" style={{ width: "100%", marginTop: 16, opacity: sending ? 0.7 : 1 }}>
                 {sending ? "Requesting…" : cardLive ? (cardOk ? "Request the trial" : "Verify the card to continue") : "Request the trial — we send a ₹1 link"}
               </button>
@@ -432,6 +455,8 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
           <p className="meta" style={{ marginTop: 8 }}>If any of it does not work the way you need, tell us during the trial — that is what it is for.</p>
         </div>
 
+        {submitErr && <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, margin: "12px 0" }}>{submitErr} If it keeps failing, email <a href={`mailto:${COMPANY.supportEmail}`} style={{ color: "#991B1B", fontWeight: 600 }}>{COMPANY.supportEmail}</a>.</div>}
+        <BusyPanel active={sending} title="Sending your trial request" steps={["Sending your details to our team", "Preparing your request reference"]} />
         <button onClick={submit} disabled={sending} className="btn btn-primary" style={{ width: "100%", marginTop: 14, opacity: sending ? 0.7 : 1 }}>
           {sending ? "Requesting…" : cardLive ? (cardOk ? "Request the trial" : "Verify the card to continue") : "Request the trial — we send a ₹1 link"}
         </button>

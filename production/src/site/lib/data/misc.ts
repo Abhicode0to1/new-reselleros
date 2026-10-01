@@ -18,10 +18,13 @@ export const KB_ARTICLES = [
   { title: "What happens if a domain expires", cat: "BILLING" },
 ] as const;
 
+/* 30 Sep 2026: these cards said the migration desk confirms "on WhatsApp" (the site's
+   WhatsApp number is still a placeholder) and that SLA credits are "applied automatically"
+   (nothing measures uptime yet). They now say only what happens. */
 export const SUPPORT_CHANNELS = [
-  { title: "support@anutech.in", body: "Any time. Answered inside four working hours, usually sooner." },
-  { title: "Migration desk", body: "Send a site list or a portfolio. We schedule the move and confirm on WhatsApp." },
-  { title: "System status", body: "Ninety days of uptime per service, with SLA credits applied automatically." },
+  { title: "Moving from another host or mail provider", body: "Free. Email us what you have today and where it is, and we schedule the move with you." },
+  { title: "Bills and GST invoices", body: "Every order is billed by Anutech Digital in your business name. Ask for a copy of any bill by email." },
+  { title: "Renewals", body: "We email you before anything expires. Renew from the client area, or reply to the reminder." },
 ] as const;
 
 export interface StatusService {
@@ -81,15 +84,17 @@ export interface LegalPage {
 
 export const LEGAL: Readonly<Record<"terms" | "privacy" | "refund", LegalPage>> = {
   terms: {
-    title: "Terms of service",
-    updated: "Last updated 31 August 2026",
+    title: "Terms and conditions",
+    updated: "Last updated 30 September 2026",
     intro: "These terms govern services bought from Anutech Digital Pvt Ltd, Rohini, Delhi (GSTIN 07ABDCA0298H1ZP). Placeholder draft — have your counsel review before publishing.",
     blocks: [
       { h: "What we supply", p: "We resell Google Workspace, Microsoft 365 and Zoho subscriptions and supply domain registration, hosting, email and SSL services. Where a service originates with a vendor, that vendor's own terms apply alongside these." },
       { h: "Pricing and taxes", p: "Prices published on this site are in Indian rupees and exclusive of GST at 18% unless a page states otherwise. First-year and renewal prices are shown together; we give thirty days written notice before changing a renewal price on an active subscription." },
-      { h: "Payment and activation", p: "Orders are activated on receipt of cleared funds. UPI, netbanking and card payments activate immediately; NEFT and RTGS activate on credit. Licence orders are subject to vendor provisioning timelines." },
-      { h: "Renewals and expiry", p: "We notify you at thirty, fifteen and seven days before expiry. Auto-renew is configurable per subscription. Domains that lapse enter the registry redemption period, and redemption fees set by the registry apply." },
-      { h: "Support", p: "Support is provided on WhatsApp and by email, Monday to Saturday, 10:00 to 19:00 IST. Our target is a first reply inside four working hours; our published average is eleven minutes during working hours." },
+      { h: "Payment and activation", p: "Orders are paid online through Razorpay (UPI, netbanking, cards and wallets) and set up once the payment is confirmed. Licence orders are subject to vendor provisioning timelines. A GST tax invoice is issued in your name for every paid order." },
+      { h: "Hosting and domains", p: "Every hosting plan is attached to a domain you own or buy from us. Domains are registered in your name, with the owner details you give at checkout, and those details must be accurate: the registry can suspend a domain whose owner details are false." },
+      { h: "Free hosting trial", p: "The Starter hosting plan can be tried free for 15 days, once per customer. No card is taken, so nothing is charged when the trial ends." },
+      { h: "Renewals and expiry", p: "We send renewal reminders by email from thirty days before expiry. Auto-renew is configurable per subscription. Domains that lapse enter the registry redemption period, and redemption fees set by the registry apply." },
+      { h: "Support", p: "Support is provided by email at support@anutech.in, Monday to Saturday, 10:00 to 19:00 IST. Our target is a first reply inside four working hours." },
       { h: "Uptime and credits", p: "Hosting carries a 99.9% monthly uptime commitment. Where a calendar month falls below it, we credit the affected month to your account without you having to ask." },
       { h: "Your data", p: "You own your data. You may export it at any time and we delete it on written request, subject to statutory retention of invoices under GST law." },
       { h: "Limitation of liability", p: "Our aggregate liability for any claim is limited to the fees you paid for the affected service in the three months preceding the claim. We are not liable for indirect or consequential loss." },
@@ -98,7 +103,7 @@ export const LEGAL: Readonly<Record<"terms" | "privacy" | "refund", LegalPage>> 
   },
   privacy: {
     title: "Privacy policy",
-    updated: "Last updated 31 August 2026",
+    updated: "Last updated 30 September 2026",
     intro: "How Anutech Digital Pvt Ltd handles personal data, aligned to the Digital Personal Data Protection Act, 2023. Placeholder draft — have your counsel review before publishing.",
     blocks: [
       { h: "What we collect", p: "Contact details you give us (name, company, email, mobile), billing details including GSTIN, records of quotes, orders and invoices, support conversations, and basic technical logs needed to operate the service." },
@@ -108,19 +113,20 @@ export const LEGAL: Readonly<Record<"terms" | "privacy" | "refund", LegalPage>> 
       { h: "Sharing", p: "We share data only with the vendor whose product you bought, with payment processors to collect payment, and where compelled by law. Each processor is bound by contract to purpose limitation." },
       { h: "Retention", p: "Invoices and tax records are retained as long as GST law requires. Other personal data is deleted within ninety days of a valid deletion request or of the account closing, whichever is later." },
       { h: "Your rights", p: "You may ask for access to your data, correction of it, or its deletion, and you may nominate another person to exercise these rights on your behalf. Write to us and we respond inside thirty days." },
-      { h: "Grievances", p: "Write to the grievance officer at the address on the About page. If unresolved, you may escalate to the Data Protection Board of India." },
+      { h: "Grievances", p: "Write to support@anutech.in with \"Grievance\" in the subject. If it is not resolved, you may escalate to the Data Protection Board of India." },
     ],
   },
   refund: {
     title: "Refund policy",
-    updated: "Last updated 31 August 2026",
+    updated: "Last updated 30 September 2026",
     intro: "What is refundable, what is not, and how long it takes.",
     blocks: [
       { h: "Hosting", p: "Full refund inside thirty days of a first hosting order, less any domain registered free with it. Renewals are refundable inside seven days if the account was not used in that period." },
       { h: "Licences", p: "Google Workspace, Microsoft 365 and Zoho subscriptions follow the vendor's cancellation terms. Annual commitments generally cannot be cancelled mid-term; monthly plans stop at the end of the paid month." },
       { h: "Domains", p: "Domain registrations, renewals and transfers are non-refundable once submitted to the registry. This is a registry rule, not ours. If a registration fails we refund in full." },
       { h: "Certificates", p: "Paid SSL certificates are refundable inside fifteen days of issue provided the certificate has been revoked." },
-      { h: "How to claim", p: "Message us on WhatsApp or email support@anutech.in with the order number. We confirm eligibility the same working day." },
+      { h: "Free trial", p: "The free hosting trial takes no payment, so there is nothing to refund. Ending it early costs nothing." },
+      { h: "How to claim", p: "Email support@anutech.in from the address on the order, with the order number. We confirm eligibility the same working day." },
       { h: "Timelines", p: "Approved refunds are returned to the original payment method inside seven working days. GST already remitted is adjusted through a credit note." },
     ],
   },

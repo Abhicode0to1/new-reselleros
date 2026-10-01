@@ -1,5 +1,11 @@
 /** 760px legal measure: h1 40px, mono "Last updated", intro, blocks with 1px top rules. */
+import Link from "@/site/components/ui/SiteLink";
 import { LEGAL } from "@/site/lib/data/misc";
+
+/* Where each document lives. `/terms` is the ResellerOS software's own terms, so the
+   terms for what customers buy are at /terms-and-conditions (30 Sep 2026); likewise
+   /privacy is the software's, and the buyer's privacy policy is at /privacy-policy. */
+const HREF: Record<keyof typeof LEGAL, string> = { terms: "/terms-and-conditions", refund: "/refund", privacy: "/privacy-policy" };
 
 export function LegalDoc({ page }: { page: keyof typeof LEGAL }) {
   const doc = LEGAL[page];
@@ -15,6 +21,12 @@ export function LegalDoc({ page }: { page: keyof typeof LEGAL }) {
             <p style={{ fontSize: 16, lineHeight: 1.6, color: "var(--text-secondary)", margin: 0 }}>{b.p}</p>
           </div>
         ))}
+        <nav aria-label="Related documents" style={{ borderTop: "1px solid var(--border-light)", paddingTop: 22, display: "flex", gap: 20, flexWrap: "wrap" }}>
+          <span className="mono-label" style={{ color: "var(--text-muted)", alignSelf: "center" }}>Also read</span>
+          {(Object.keys(HREF) as (keyof typeof LEGAL)[]).filter((k) => k !== page).map((k) => (
+            <Link key={k} href={HREF[k]} style={{ color: "var(--primary)", fontWeight: 600, fontSize: 15 }}>{LEGAL[k].title}</Link>
+          ))}
+        </nav>
       </div>
     </section>
   );

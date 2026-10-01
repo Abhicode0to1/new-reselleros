@@ -50,6 +50,8 @@ const enquirySchema = z.object({
   seats:       z.coerce.number().int().min(1).max(100000).optional(),
   subscriptionType: z.enum(["fresh", "switch"]).optional(),
   message:     z.string().min(5, "Please describe what you need").max(2000),
+  /** A free-trial request from the site's trial form: no owner alert (owner, 30 Sep 2026). */
+  trial:       z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { fullName, companyName, email, phone, product, seats, subscriptionType, message } = parsed.data;
+    const { fullName, companyName, email, phone, product, seats, subscriptionType, message, trial } = parsed.data;
 
     const admin = createAdminClient();
     const tenantId = BUY_PAGE_TENANT_ID;
@@ -129,9 +131,11 @@ export async function POST(request: NextRequest) {
     const ownerEmail = tenant?.email;
     const firstName  = fullName.split(" ")[0];
 
-    await Promise.allSettled([
-      // 1. Reseller alert
-      ownerEmail
+    const settled = await Promise.allSettled([
+      /* 1. Reseller alert — not for a trial request. Owner, 30 Sep 2026, on trial alerts:
+         "Remove this feature completely. That will just annoy the owner." Staff still see
+         the trial as a lead. */
+      ownerEmail && !trial
         ? sendEmail({
             /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
                   me hai. Tenant ne Gmail chuna hai to mail wahi se jaye. */
@@ -179,15 +183,18 @@ If it's urgent, just reply to this email.
 
 — Team${tenant?.name ? ` ${tenant.name}` : ""}`,
       }),
-    ]).then((results) => {
-      results.forEach((r, i) => {
-        if (r.status === "rejected") {
-          console.error(`[enquiry/general] email ${i === 0 ? "to owner" : "to customer"} failed:`, r.reason);
-        }
-      });
+    ]);
+    settled.forEach((r, i) => {
+      if (r.status === "rejected") {
+        console.error(`[enquiry/general] email ${i === 0 ? "to owner" : "to customer"} failed:`, r.reason);
+      }
     });
+    /* Did the customer's copy really go? Returned so the form can say "check your inbox"
+       only when it is true (30 Sep 2026). */
+    const ack = settled[1];
+    const ackSent = ack.status === "fulfilled" && ack.value.status === "sent";
 
-    return NextResponse.json({ success: true, leadId });
+    return NextResponse.json({ success: true, leadId, ackSent });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[/api/public/enquiry/general] crashed:", message);

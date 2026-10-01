@@ -1,74 +1,42 @@
 /**
- * /buy/workspace/thanks?order=Q-XXX[&sim=1]
+ * /buy/workspace/thanks?order=Q-XXX&t=<public_token>[&sim=1]
  *
  * Post-purchase confirmation page. The Buy-now dialog redirects here on
  * successful payment (live Razorpay capture OR simulation). The page reads
  * the quote by ID via the admin client and renders a clear "what happens
- * next" timeline + WhatsApp Pardeep CTA.
+ * next" timeline + a support strip (contact from src/site/lib/config).
  *
  * Security posture
- *   Quote IDs (Q-2025-26-NNNN) are guessable, so we ONLY render order
- *   details when:
+ *   Quote IDs (Q-2025-26-NNNN) are sequential and guessable, so the number alone
+ *   shows nothing. Order details render ONLY when:
+ *     • `t` matches the quote's secret `public_token` (S11, 29 Sep 2026 — until
+ *       then anybody could read any paid order's name, seats and amount by
+ *       counting quote numbers), compared the same way the accept and pay pages do
  *     • the quote belongs to BUY_PAGE_TENANT_ID (ANUTECH's tenant)
  *     • payment_status is 'received' (paid) or 'partial'
- *   Anything else → friendly fallback page with no leaked data.
+ *   Anything else → the same friendly fallback page with no data, so a wrong
+ *   token and a wrong number look identical.
  */
 import type { Metadata } from "next";
-import { createAdminClient } from "@/lib/supabase/server";
-import { ThanksClient, type ThanksOrder } from "./thanks-client";
-
-const BUY_PAGE_TENANT_ID =
-  process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
+import { ThanksClient } from "./thanks-client";
+import { fetchOrder } from "./fetch-order";
 
 export const metadata: Metadata = {
   title: "Order confirmed · ResellerOS",
-  description: "Your Google Workspace order is confirmed. Pardeep will WhatsApp you within 4 hours to verify your domain.",
+  description: "Your Google Workspace order is confirmed. Our team will WhatsApp you within 4 hours to verify your domain.",
 };
 
 // Don't cache — different visitor = different order
 export const dynamic = "force-dynamic";
 
-/** Pull only the customer-safe slice of the quote row. Never expose cost,
- *  margin, internal notes, or other tenant data. */
-async function fetchOrder(quoteId: string): Promise<ThanksOrder | null> {
-  if (!/^Q-[0-9]{4}-[0-9]{2}-[0-9]{4}$/.test(quoteId)) return null;
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("quotes")
-    .select("id, tenant_id, customer_name, plan, seats, amount, payment_status, payment_received_at, line_items, created_date")
-    .eq("id", quoteId)
-    .eq("tenant_id", BUY_PAGE_TENANT_ID)
-    .in("payment_status", ["received", "partial"])
-    .maybeSingle();
-  if (error || !data) return null;
-
-  // Extract tier name + domain from line_items / notes if present.
-  const firstLine = Array.isArray(data.line_items) && data.line_items.length > 0
-    ? (data.line_items[0] as { name?: string })
-    : null;
-  const tierName = firstLine?.name?.replace(/^Google Workspace\s*[·\-]?\s*/i, "").replace(/\s*\(annual\)\s*$/i, "")
-                ?? data.plan
-                ?? "Google Workspace";
-
-  return {
-    quoteId:        data.id,
-    customerName:   data.customer_name ?? "",
-    tierName,
-    seats:          data.seats ?? 0,
-    amount:         data.amount ?? 0,
-    paymentStatus:  data.payment_status ?? "awaiting",
-    paymentDate:    data.payment_received_at ?? data.created_date ?? null,
-  };
-}
-
 export default async function ThanksPage(
   props: {
-    searchParams: Promise<{ order?: string; sim?: string }>;
+    searchParams: Promise<{ order?: string; t?: string; sim?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
   const quoteId = (searchParams.order ?? "").trim();
-  const order   = quoteId ? await fetchOrder(quoteId) : null;
+  const order   = quoteId ? await fetchOrder(quoteId, searchParams.t?.trim()) : null;
   const isSim   = searchParams.sim === "1";
 
   return <ThanksClient order={order} isSimulation={isSim} />;

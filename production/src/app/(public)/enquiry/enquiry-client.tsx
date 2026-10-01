@@ -16,6 +16,7 @@ import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { BusyPanel } from "@/components/ui/busy-panel";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
@@ -210,6 +211,7 @@ export function EnquiryClient({
                   </div>
                 )}
 
+                <BusyPanel active={isSubmitting} title="Sending your enquiry" steps={["Sending your details to our team", "Emailing you a copy"]} />
                 <Button type="submit" variant="primary" className="w-full" loading={isSubmitting}>
                   Send enquiry
                 </Button>

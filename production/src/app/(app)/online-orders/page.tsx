@@ -638,6 +638,15 @@ export default function OnlineOrdersPage() {
           <p className="mt-1 text-sm text-ink-3">
             Incoming orders from your online store · Paid + Trial
           </p>
+          {/* What every buyer ticked at checkout, so staff answering a refund or terms
+              question read the same text the customer agreed to (30 Sep 2026). */}
+          <p className="mt-1 text-xs text-ink-3">
+            Buyers agree to the{" "}
+            <a href="/terms-and-conditions" target="_blank" rel="noopener" className="text-amber font-medium hover:underline">terms and conditions</a>
+            {" "}and the{" "}
+            <a href="/refund" target="_blank" rel="noopener" className="text-amber font-medium hover:underline">refund policy</a>
+            {" "}at checkout.
+          </p>
         </div>
       </div>
 

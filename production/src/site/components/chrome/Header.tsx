@@ -15,6 +15,7 @@ import Link from "@/site/components/ui/SiteLink";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCart } from "@/site/components/cart/CartProvider";
+import { CLIENT_AREA_URL } from "@/site/lib/config";
 
 interface MenuItem { label: string; note: string; href: string }
 interface Menu {
@@ -47,11 +48,11 @@ const MENUS: readonly Menu[] = [
       [
         { label: "Shared hosting", note: "cPanel on NVMe, from ₹159/mo", href: "/hosting" },
         { label: "Full specification", note: "All 14 rows, nothing hidden", href: "/hosting#specs" },
-        { label: "Migration desk", note: "Free, done by us, overnight", href: "/support" },
+        { label: "Migration desk", note: "Free, done by us", href: "/contact" },
       ],
       [
         { label: "System status", note: "90-day uptime per service", href: "/status" },
-        { label: "Client area", note: "Domains, invoices, tickets", href: "/dashboard" },
+        { label: "Client area", note: "Your domains and hosting", href: CLIENT_AREA_URL },
         { label: "SSL & security", note: "Free DV on every site", href: "/ssl" },
       ],
     ],
@@ -118,7 +119,7 @@ const MOBILE_PAGES = [
   { label: "Reseller program", note: "No slabs, no deposit", href: "/reseller" },
   { label: "All prices", note: "Every rate on one page", href: "/pricing" },
   { label: "Why us", note: "Us vs the usual way", href: "/why-us" },
-  { label: "Support", note: "WhatsApp and knowledge base", href: "/support" },
+  { label: "Support", note: "Email and call-back", href: "/contact" },
   { label: "Status", note: "90-day uptime", href: "/status" },
 ] as const;
 

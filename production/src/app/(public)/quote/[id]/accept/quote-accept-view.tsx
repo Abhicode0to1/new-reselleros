@@ -8,6 +8,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { BusyPanel } from "@/components/ui/busy-panel";
 import { Icon } from "@/components/ui/icon";
 import { rupee, formatDate, cn } from "@/lib/utils";
 import { isForeignCurrency, formatForeign } from "@/lib/currency";
@@ -146,6 +147,12 @@ export function QuoteAcceptView({
   } | null>(null);
   const [pricing, setPricing] = React.useState(false);
   const [signerName, setSignerName] = React.useState("");
+  /* Set when Confirm is pressed with no name, so the press says why (29 Sep 2026: a
+     hover title was the only explanation, and a phone has no hover). */
+  const [nameNudge, setNameNudge] = React.useState(false);
+  /* True while the server prepares an online payment, until Razorpay's own window opens
+     (30 Sep 2026: show the customer that something is happening). */
+  const [preparingPay, setPreparingPay] = React.useState(false);
   const [signerTitle, setSignerTitle] = React.useState("");
   const [signerEmail, setSignerEmail] = React.useState("");
   const [changeRequested, setChangeRequested] = React.useState(false);
@@ -300,6 +307,7 @@ export function QuoteAcceptView({
 
   const handlePayOnline = async () => {
     setPaying(true);
+    setPreparingPay(true);
     try {
       const res = await fetch(`/api/public/quote/${quote.id}/pay?t=${encodeURIComponent(token)}`, { method: "POST" });
       const json = await res.json();
@@ -307,6 +315,7 @@ export function QuoteAcceptView({
 
       // Simulation (no live keys) — the server already recorded the payment.
       if (json.simulated) {
+        setPreparingPay(false);
         setPaid(true);
         return;
       }
@@ -331,8 +340,10 @@ export function QuoteAcceptView({
         setPaying(false);
       });
       rzp.open();
+      setPreparingPay(false); // Razorpay's window now shows its own progress
     } catch (e) {
       toast.error((e as Error).message);
+      setPreparingPay(false);
       setPaying(false);
     }
   };
@@ -776,6 +787,13 @@ export function QuoteAcceptView({
                   : `Pay online now · ${fmtC(dTotal)}`}
               </Button>
             )}
+            {payOnline && !liveConfig?.changed && (
+              <BusyPanel
+                active={preparingPay}
+                title="Preparing your secure payment"
+                steps={["Checking the quote and its total", "Creating your payment order", "Opening the Razorpay payment window"]}
+              />
+            )}
             {/* Said next to the button, because "why is this less than the total?"
                 is the question a customer asks with their card already out. */}
             {payOnline && !liveConfig?.changed && isFlex && (
@@ -938,6 +956,11 @@ export function QuoteAcceptView({
                 />
               </div>
             </div>
+            <BusyPanel
+              active={accepting}
+              title="Submitting your purchase order"
+              steps={["Recording your PO and your acceptance", `Letting ${tenantName} know`]}
+            />
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
               <Button
                 variant="ghost"
@@ -1010,6 +1033,11 @@ export function QuoteAcceptView({
                   placeholder="Name of the person confirming"
                   className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink"
                 />
+                {nameNudge && !signerName.trim() && (
+                  <p role="alert" className="mt-1 text-xs text-rose-ink">
+                    Type your full name to confirm — it records who accepted this quote.
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -1046,6 +1074,11 @@ export function QuoteAcceptView({
               </p>
             </div>
 
+            <BusyPanel
+              active={accepting}
+              title="Accepting your quote"
+              steps={["Recording who confirmed, and the figures shown", "Accepting the quote", `Letting ${tenantName} know`]}
+            />
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
               <Button
                 variant="ghost"
@@ -1059,9 +1092,14 @@ export function QuoteAcceptView({
                 variant="primary"
                 icon="check_circle"
                 loading={accepting}
-                disabled={!signerName.trim()}
-                title={!signerName.trim() ? "Type your name to confirm" : undefined}
-                onClick={handleAccept}
+                onClick={() => {
+                  if (!signerName.trim()) {
+                    setNameNudge(true);
+                    document.getElementById("signer-name")?.focus();
+                    return;
+                  }
+                  void handleAccept();
+                }}
                 className="sm:w-auto justify-center"
               >
                 {liveConfig?.changed && !liveConfig.selfAcceptable ? "Send to reseller" : "Confirm & accept"}

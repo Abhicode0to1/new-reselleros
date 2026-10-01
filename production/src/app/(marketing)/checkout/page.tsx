@@ -14,12 +14,20 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, cycleLabel } from "@/site/lib/money";
+import { missingCheckoutDetails, missingDetailsMessage } from "@/site/lib/checkout-details";
+import { BUY_A_DOMAIN_HREF } from "@/lib/checkout/hosting-domain";
+import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
+import { razorpayContact } from "@/lib/checkout/razorpay-contact";
+import { BusyPanel } from "@/components/ui/busy-panel";
 
+/* 30 Sep 2026: the choice was never sent anywhere, so every option opened the same Razorpay
+   window, and "Bank transfer — NEFT/RTGS, activated on credit" was not a path this checkout
+   has. Each option now opens Razorpay on that method (`prefill.method`); the customer can
+   still switch inside Razorpay's window. */
 const METHODS = [
-  { label: "UPI", note: "GPay, PhonePe, Paytm — instant" },
-  { label: "Netbanking", note: "All major Indian banks" },
-  { label: "Card", note: "Visa, Mastercard, RuPay" },
-  { label: "Bank transfer", note: "NEFT/RTGS — activated on credit" },
+  { label: "UPI", note: "GPay, PhonePe, Paytm or any UPI app", razorpay: "upi" },
+  { label: "Netbanking", note: "All major Indian banks", razorpay: "netbanking" },
+  { label: "Card", note: "Visa, Mastercard, RuPay", razorpay: "card" },
 ] as const;
 
 const RAZORPAY_SRC = "https://checkout.razorpay.com/v1/checkout.js";
@@ -62,6 +70,9 @@ export default function CheckoutPage() {
   const [gstin, setGstin] = useState("");
   const [phone, setPhone] = useState("");
   const [domain, setDomain] = useState("");
+  /* The domain for each hosting plan after the first, by cart line (30 Sep 2026: one domain
+     per plan). The first plan keeps using `domain`, so a one-plan cart is exactly as before. */
+  const [planDomain, setPlanDomain] = useState<Record<string, string>>({});
   // Registrant address — asked only when the cart holds a domain (owner decision 22).
   const [addrLine1, setAddrLine1] = useState("");
   const [addrCity, setAddrCity] = useState("");
@@ -70,7 +81,15 @@ export default function CheckoutPage() {
   const [method, setMethod] = useState<string>("UPI");
   const [agreed, setAgreed] = useState(false);
   const [paying, setPaying] = useState(false);
+  /* True while the server prepares a PAID order, until Razorpay's own window opens — the
+     progress panel must not keep counting behind Razorpay (30 Sep 2026). */
+  const [preparingPayment, setPreparingPayment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Set once the buyer presses Continue / Start trial with something missing, so the list
+     of what is missing shows from then on and shrinks as they type. */
+  const [showMissing, setShowMissing] = useState(false);
+  /* Set when Pay is pressed before the terms box is ticked, so the press says why. */
+  const [agreeNudge, setAgreeNudge] = useState(false);
   /* Set when the server's re-priced total differs from what this page showed. */
   const [priceCheck, setPriceCheck] = useState<{
     server: number; shown: number;
@@ -78,6 +97,10 @@ export default function CheckoutPage() {
   } | null>(null);
 
   const hasHosting = cart.lines.some((l) => (l.sku || "").startsWith("hosting:"));
+  /* Paid hosting plans in cart order. Each is its own account on its own domain. */
+  const hostingLines = cart.lines.filter((l) => (l.sku || "").startsWith("hosting:"));
+  const typedFor = (key: string, i: number) => (i === 0 ? domain : planDomain[key] ?? "");
+  const plans = hostingLines.length > 1 ? hostingLines.map((l, i) => ({ label: l.label, typed: typedFor(l.key, i) })) : undefined;
   const hasDomain = cart.lines.some((l) => (l.sku || "").startsWith("domain:"));
   /* A free hosting trial (24 Sep 2026: "Start free trial" goes straight to the cart,
      no form in between). It checks out on its own, with no payment step: the
@@ -85,6 +108,8 @@ export default function CheckoutPage() {
   const hasTrial = cart.lines.some((l) => (l.sku || "").startsWith("hosting-trial:"));
   const isTrialCart = hasTrial && cart.lines.length === 1;
   const trialMixed = hasTrial && cart.lines.length > 1;
+  /* More than one hosting account in the cart: the server refuses it at Pay, so say it here. */
+  const hostingWarning = hostingLimitWarning(cart.lines);
 
   // Remember the buyer's details across a refresh so nothing has to be re-typed.
   useEffect(() => {
@@ -96,6 +121,7 @@ export default function CheckoutPage() {
       if (typeof s.gstin === "string") setGstin(s.gstin);
       if (typeof s.phone === "string") setPhone(s.phone);
       if (typeof s.domain === "string") setDomain(s.domain);
+      if (s.planDomain && typeof s.planDomain === "object") setPlanDomain(s.planDomain as Record<string, string>);
       if (typeof s.addrLine1 === "string") setAddrLine1(s.addrLine1);
       if (typeof s.addrCity === "string") setAddrCity(s.addrCity);
       if (typeof s.addrState === "string") setAddrState(s.addrState);
@@ -110,9 +136,9 @@ export default function CheckoutPage() {
   }, [hasHosting, cartDomain]);
   useEffect(() => {
     try {
-      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain, addrLine1, addrCity, addrState, addrPin }));
+      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain, planDomain, addrLine1, addrCity, addrState, addrPin }));
     } catch { /* ignore */ }
-  }, [name, company, email, gstin, phone, domain, addrLine1, addrCity, addrState, addrPin]);
+  }, [name, company, email, gstin, phone, domain, planDomain, addrLine1, addrCity, addrState, addrPin]);
 
   if (cart.lines.length === 0) {
     return (
@@ -125,15 +151,22 @@ export default function CheckoutPage() {
     );
   }
 
-  const detailsOk =
-    name.trim().length >= 2 &&
-    company.trim().length >= 2 &&
-    email.includes("@") &&
-    phone.trim().length >= 10 &&
-    (!hasHosting || domain.trim().length >= 3) &&
-    !trialMixed &&
-    (!hasDomain ||
-      (addrLine1.trim().length >= 3 && addrCity.trim().length >= 2 && addrState.trim().length >= 2 && /^\d{6}$/.test(addrPin.trim())));
+  /* The company name is optional (owner, 29 Sep 2026); the server uses the buyer's name.
+     The buttons are never silently disabled for missing details any more — pressing one
+     says what is still needed (lib/checkout-details). */
+  const missing = missingCheckoutDetails({
+    name, email, phone, domain, plans, hasHosting: hasHosting || hasTrial, hasDomain,
+    address: { line1: addrLine1, city: addrCity, state: addrState, pin: addrPin },
+  });
+  const missingMsg = missingDetailsMessage(missing);
+  const detailsOk = missing.length === 0 && !trialMixed;
+  /** Go on only when the details are complete; otherwise show what is missing. */
+  function proceed(next: () => void) {
+    if (trialMixed) return;
+    if (hostingWarning) return; // the amber alert above the button says why and links back to the cart
+    if (!detailsOk) { setShowMissing(true); return; }
+    next();
+  }
 
   /** The trial path: no payment, no quote — the server starts the trial and we show the done page. */
   async function startTrial() {
@@ -153,13 +186,19 @@ export default function CheckoutPage() {
           lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle })),
         }),
       });
-      const json = (await res.json().catch(() => ({}))) as { success?: boolean; trial?: boolean; error?: string };
+      const json = (await res.json().catch(() => ({}))) as { success?: boolean; trial?: boolean; error?: string; confirmationSent?: boolean };
       if (!res.ok || !json.success || !json.trial) throw new Error(json.error || "Could not start your trial. Nothing was saved — please try again.");
-      try { window.sessionStorage.setItem("anutech.trial", email.trim()); window.sessionStorage.removeItem("anutech.order"); } catch { /* done page falls back */ }
+      try {
+        window.sessionStorage.setItem("anutech.trial", email.trim());
+        // Whether the confirmation link really left — the done page must not claim it did.
+        window.sessionStorage.setItem("anutech.trial.sent", json.confirmationSent === false ? "0" : "1");
+        window.sessionStorage.removeItem("anutech.order");
+      } catch { /* done page falls back */ }
       cart.clear();
       router.push("/done" as never);
     } catch (err) {
       setError((err as Error).message);
+      setPreparingPayment(false);
       setPaying(false);
     }
   }
@@ -173,6 +212,7 @@ export default function CheckoutPage() {
     if (!agreed || paying) return;
     setPriceCheck(null);
     setPaying(true);
+    setPreparingPayment(true);
     setError(null);
     try {
       const res = await fetch("/api/public/checkout/cart", {
@@ -185,7 +225,10 @@ export default function CheckoutPage() {
           phone: phone.trim(),
           gstin: gstin.trim() || undefined,
           domain: hasHosting ? domain.trim() : undefined,
-          lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain })),
+          lines: cart.lines.map((l) => {
+            const i = hostingLines.findIndex((h) => h.key === l.key);
+            return { sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain, ...(i >= 0 ? { hostingDomain: typedFor(l.key, i).trim() || undefined } : {}) };
+          }),
           coupon: cart.coupon.trim() || undefined,
           address: hasDomain
             ? { line1: addrLine1.trim(), city: addrCity.trim(), state: addrState.trim(), zipcode: addrPin.trim(), country: "IN" }
@@ -220,12 +263,14 @@ export default function CheckoutPage() {
       const shown = Math.round(t.payable);
       if (typeof order.totalRupees === "number" && Math.abs(order.totalRupees - shown) > 1) {
         setPriceCheck({ server: order.totalRupees, shown, order });
+        setPreparingPayment(false);
         setPaying(false);
         return;
       }
       await openPayment(order);
     } catch (err) {
       setError((err as Error).message);
+      setPreparingPayment(false);
       setPaying(false);
     }
   }
@@ -242,7 +287,10 @@ export default function CheckoutPage() {
         name: "ANUTECH DIGITAL PVT LTD",
         description: `Order ${order.quoteId ?? ""}`,
         order_id: order.orderId,
-        prefill: { name, email, contact: phone },
+        prefill: {
+          name, email, contact: razorpayContact(phone),
+          method: METHODS.find((m) => m.label === method)?.razorpay,
+        },
         notes: { quoteId: order.quoteId ?? "", domain: hasHosting ? domain.trim() : "" },
         theme: { color: "#C2410C" },
         handler: () => {
@@ -257,8 +305,10 @@ export default function CheckoutPage() {
         setPaying(false);
       });
       rzp.open();
+      setPreparingPayment(false); // Razorpay's window now shows its own progress
     } catch (err) {
       setError((err as Error).message);
+      setPreparingPayment(false);
       setPaying(false);
     }
   }
@@ -276,16 +326,41 @@ export default function CheckoutPage() {
 
           {step === "details" ? (
             <div style={{ maxWidth: 460 }}>
+              {/* Required first, optional last (owner, 30 Sep 2026): a buyer fills top to
+                  bottom and can stop at the "Optional" line. */}
               <Field label="YOUR NAME" value={name} onChange={setName} />
-              <Field label="COMPANY / BUSINESS NAME — ON THE GST INVOICE" value={company} onChange={setCompany} />
               <Field label="EMAIL — THE GST INVOICE GOES HERE" value={email} onChange={setEmail} type="email" />
-              <Field label="GSTIN (OPTIONAL — FOR INPUT CREDIT)" value={gstin} onChange={setGstin} mono />
               <Field label="MOBILE" value={phone} onChange={setPhone} type="tel" />
-              {hasHosting && (
-                <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
-              )}
-              {hasTrial && !hasHosting && (
-                <Field label="YOUR WEBSITE DOMAIN — LEAVE BLANK IF YOU DON'T HAVE ONE YET" value={domain} onChange={setDomain} mono />
+              {(hasHosting || hasTrial) && (
+                <>
+                  {hostingLines.length > 1 ? (
+                    /* One box per plan: two plans cannot share a domain (planDomains says so). */
+                    hostingLines.map((l, i) => (
+                      <Field
+                        key={l.key}
+                        label={`DOMAIN FOR ${l.label.toUpperCase()} (e.g. yourcompany.in)`}
+                        value={typedFor(l.key, i)}
+                        onChange={(v) => (i === 0 ? setDomain(v) : setPlanDomain((m) => ({ ...m, [l.key]: v })))}
+                        mono
+                      />
+                    ))
+                  ) : (
+                    <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
+                  )}
+                  {/* Required for hosting and the trial alike (owner, 30 Sep 2026), so a buyer
+                      without one is shown where to get one rather than left stuck. */}
+                  {!cartDomain && (
+                    <p className="meta" style={{ margin: "-6px 0 14px" }}>
+                      Don&apos;t have a domain yet?{" "}
+                      <a href={BUY_A_DOMAIN_HREF} style={{ color: "var(--primary)", fontWeight: 600 }}>
+                        {hasTrial ? "Register one first" : "Find and add one to this order"}
+                      </a>
+                      {hasTrial
+                        ? " — then come back and start your free trial."
+                        : " — the domain is free with yearly hosting."}
+                    </p>
+                  )}
+                </>
               )}
               {hasDomain && (
                 <>
@@ -298,6 +373,13 @@ export default function CheckoutPage() {
                   <Field label="PIN CODE" value={addrPin} onChange={setAddrPin} mono />
                 </>
               )}
+
+              <div className="mono-label" style={{ color: "var(--text-muted)", borderTop: "1px solid var(--border-hairline)", paddingTop: 16, margin: "8px 0 14px" }}>
+                OPTIONAL
+              </div>
+              <Field label="COMPANY / BUSINESS NAME — YOUR NAME IS USED IF BLANK" value={company} onChange={setCompany} />
+              <Field label="GSTIN — FOR INPUT CREDIT" value={gstin} onChange={setGstin} mono />
+
               {trialMixed && (
                 <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
                   The free trial checks out on its own. Remove the other items to start the trial now, or
@@ -305,12 +387,32 @@ export default function CheckoutPage() {
                   <button type="button" className="btn btn-outline btn-sm" onClick={() => router.push("/cart" as never)}>Back to cart</button>
                 </div>
               )}
+              {hostingWarning && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  {hostingWarning}{" "}
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => router.push("/cart" as never)}>Back to cart</button>
+                </div>
+              )}
               {isTrialCart && error && (
                 <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
               )}
+              {showMissing && missingMsg && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  {missingMsg}
+                </div>
+              )}
               {isTrialCart ? (
                 <>
-                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk || paying} onClick={() => void startTrial()}>
+                  <BusyPanel
+                    active={paying}
+                    title="Starting your free trial"
+                    steps={[
+                      "Saving your trial request",
+                      "Checking this is your first trial with us",
+                      "Emailing your confirmation link",
+                    ]}
+                  />
+                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={paying || trialMixed} onClick={() => proceed(() => void startTrial())}>
                     {paying ? "Starting your trial…" : "Start my 15-day free trial"}
                   </button>
                   <p className="meta" style={{ marginTop: 10 }}>
@@ -318,7 +420,7 @@ export default function CheckoutPage() {
                   </p>
                 </>
               ) : (
-                <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk} onClick={() => setStep("payment")}>
+                <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={trialMixed} onClick={() => proceed(() => setStep("payment"))}>
                   Continue
                 </button>
               )}
@@ -351,7 +453,10 @@ export default function CheckoutPage() {
               <label style={{ display: "flex", gap: 10, alignItems: "flex-start", margin: "16px 0", cursor: "pointer" }}>
                 <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ marginTop: 3, accentColor: "var(--primary)" }} />
                 <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>
-                  I have read the terms of service and the refund policy, including that domain
+                  I have read the{" "}
+                  <a href="/terms-and-conditions" target="_blank" rel="noopener" style={{ color: "var(--primary)", fontWeight: 600 }}>terms and conditions</a>{" "}
+                  and the{" "}
+                  <a href="/refund" target="_blank" rel="noopener" style={{ color: "var(--primary)", fontWeight: 600 }}>refund policy</a>, including that domain
                   registrations are non-refundable once submitted to the registry.
                 </span>
               </label>
@@ -373,7 +478,23 @@ export default function CheckoutPage() {
               {error && (
                 <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
               )}
+              {agreeNudge && !agreed && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  Please tick the box above to accept the terms and the refund policy, then press Pay.
+                </div>
+              )}
 
+              <BusyPanel
+                active={preparingPayment}
+                title="Preparing your secure payment"
+                steps={[
+                  "Re-checking every price on our server",
+                  ...(hasDomain ? ["Checking the live price of your domain with the registry"] : []),
+                  "Creating your order",
+                  "Opening the Razorpay payment window",
+                ]}
+              />
+              {/* Not disabled until the box is ticked: a press says why (29 Sep 2026). */}
               <button
                 className="btn"
                 style={{
@@ -382,8 +503,8 @@ export default function CheckoutPage() {
                   color: "#fff",
                   cursor: agreed && !paying ? "pointer" : "not-allowed",
                 }}
-                disabled={!agreed || paying}
-                onClick={() => void placeOrder()}
+                disabled={paying}
+                onClick={() => { if (!agreed) { setAgreeNudge(true); return; } void placeOrder(); }}
               >
                 {paying ? "Starting secure payment…" : `Pay ${rupee(t.payable)}`}
               </button>

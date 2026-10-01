@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/marketing/utm", () => ({ captureFromRequest: () => ({}) }));
-vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ status: "sent" })) }));
-vi.mock("@/lib/email/owner-alert.server", () => ({ loadOwnerAlert: async () => ({ alert: { ok: false, reason: "test" }, tenant: null }) }));
+const sendEmail = vi.hoisted(() => vi.fn());
+const loadOwnerAlert = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/email/send", () => ({ sendEmail }));
+vi.mock("@/lib/email/owner-alert.server", () => ({ loadOwnerAlert }));
 
 const checkTrialHistory = vi.hoisted(() => vi.fn());
 const recordTrialInDms = vi.hoisted(() => vi.fn());
@@ -43,6 +45,8 @@ beforeEach(() => {
   calls.or = []; calls.inserts = 0; calls.leadUpdates = [];
   checkTrialHistory.mockReset().mockResolvedValue({ ok: true, trialled: false });
   recordTrialInDms.mockReset().mockResolvedValue({ ok: true });
+  sendEmail.mockReset().mockResolvedValue({ status: "sent", providerId: "m1", errorMessage: null, provider: "smtp" });
+  loadOwnerAlert.mockReset().mockResolvedValue({ alert: { ok: false, reason: "test" }, tenant: null });
 });
 
 describe("one free trial per customer (owner, 24 Sep 2026)", () => {
@@ -130,5 +134,32 @@ describe("one trial per customer across BOTH apps — DMS is the shared record",
     const r = await startHostingTrial(adminWith({}), input, req, {});
     expect(r.ok).toBe(true);
     expect(String(calls.leadUpdates[0]?.notes)).toContain("NOT RECORDED IN DMS (DMS answered HTTP 503)");
+  });
+});
+
+describe("trial emails: the customer only (30 Sep 2026)", () => {
+  const ownerOk = { alert: { ok: true, to: "owner@example.invalid", ownerName: "Owner" }, tenant: { name: "T" } };
+
+  it("the confirmation link is sent even when there is no owner alert address", async () => {
+    const r = await startHostingTrial(adminWith({}), input, req, {});
+    expect(r).toMatchObject({ ok: true, confirmationSent: true });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail.mock.calls[0][0]).toMatchObject({ to: input.email, kind: "buy_page_trial_customer" });
+  });
+
+  it("a confirmation that did not go out is reported, not claimed — the trial still stands", async () => {
+    sendEmail.mockResolvedValue({ status: "failed", providerId: null, errorMessage: "SMTP: 550 mailbox unavailable", provider: "smtp" });
+    const r = await startHostingTrial(adminWith({}), input, req, {});
+    expect(r).toMatchObject({ ok: true, confirmationSent: false });
+  });
+
+  it("sends the owner NO email at all — only the customer's confirmation (owner, 30 Sep 2026)", async () => {
+    loadOwnerAlert.mockResolvedValue(ownerOk);
+    const r = await startHostingTrial(adminWith({}), input, req, {});
+    expect(r).toMatchObject({ ok: true, confirmationSent: true });
+    const kinds = sendEmail.mock.calls.map((c) => (c[0] as { kind: string }).kind);
+    expect(kinds).toEqual(["buy_page_trial_customer"]);
+    // The owner's address is still used — as the reply-to on the customer's email.
+    expect(sendEmail.mock.calls[0][0]).toMatchObject({ replyTo: "owner@example.invalid" });
   });
 });

@@ -13,6 +13,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { COMPANY, WHATSAPP_NUMBER, WHATSAPP_READY, whatsappDisplay } from "@/site/lib/config";
 
 export interface ThanksOrder {
   quoteId:        string;
@@ -24,12 +25,20 @@ export interface ThanksOrder {
   paymentDate:    string | null;
 }
 
-const PARDEEP_PHONE_E164    = "919999930300";
-const PARDEEP_PHONE_DISPLAY = "+91 99999 30300";
-const PARDEEP_EMAIL         = "Pardeep@exceltechnologies.in";
+/* Contact comes from the site config, one place for the whole site (owner, 29 Sep 2026).
+   Until then this page carried one person's phone and a retired-brand email address.
+   While the site's WhatsApp number is still the placeholder, WHATSAPP_READY is false and
+   the WhatsApp / call links are not shown: a dead button in front of somebody who has
+   just paid is worse than an email address. */
+const SUPPORT_EMAIL = COMPANY.supportEmail;
+const phoneDisplay = () => whatsappDisplay(WHATSAPP_NUMBER);
 
 function whatsappLink(message: string): string {
-  return `https://wa.me/${PARDEEP_PHONE_E164}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+}
+
+function mailtoLink(subject: string): string {
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}`;
 }
 
 /** Multi-color "Google Workspace" inline logo — same as buy page. */
@@ -67,19 +76,30 @@ export function ThanksClient({
           <p className="text-sm text-ink-3 mb-6 leading-relaxed">
             We couldn&apos;t find an order matching that ID. If you just paid and
             landed here, check your email for the order confirmation — or
-            WhatsApp Pardeep on {PARDEEP_PHONE_DISPLAY} and he&apos;ll sort it.
+            {WHATSAPP_READY ? <> WhatsApp us on {phoneDisplay()}</> : <> write to {SUPPORT_EMAIL}</>}
+            {" "}and we&apos;ll sort it.
           </p>
           <div className="flex flex-col sm:flex-row gap-2 justify-center">
-            <a
-              href={whatsappLink("Hi Pardeep, I just paid for Google Workspace but the confirmation page can't find my order.")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-5 h-11 rounded-lg font-medium text-paper"
-              style={{ background: "#25D366" }}
-            >
-              <Icon name="whatsapp" size={18} />
-              WhatsApp Pardeep
-            </a>
+            {WHATSAPP_READY ? (
+              <a
+                href={whatsappLink("Hi, I just paid for Google Workspace but the confirmation page can't find my order.")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-5 h-11 rounded-lg font-medium text-paper"
+                style={{ background: "#25D366" }}
+              >
+                <Icon name="whatsapp" size={18} />
+                WhatsApp us
+              </a>
+            ) : (
+              <a
+                href={mailtoLink("I paid but the confirmation page can't find my order")}
+                className="inline-flex items-center justify-center gap-2 px-5 h-11 rounded-lg font-medium text-paper bg-ink"
+              >
+                <Icon name="mail" size={18} />
+                Email us
+              </a>
+            )}
             <Button asChild variant="default">
               <Link href="/buy/workspace">Back to buy page</Link>
             </Button>
@@ -92,7 +112,7 @@ export function ThanksClient({
   const isFullyPaid    = order.paymentStatus === "received";
   const firstName      = order.customerName.split(/[\s,&]/)[0] || "there";
   const amountFmt      = `₹${order.amount.toLocaleString("en-IN")}`;
-  const waSupportMsg   = `Hi Pardeep, I just placed order ${order.quoteId} (${order.tierName}, ${order.seats} users). Wanted to confirm next steps for domain verification.`;
+  const waSupportMsg   = `Hi, I just placed order ${order.quoteId} (${order.tierName}, ${order.seats} users). Wanted to confirm next steps for domain verification.`;
 
   return (
     <div className="min-h-screen bg-paper">
@@ -163,8 +183,8 @@ export function ThanksClient({
             Welcome aboard, {firstName}.
           </h1>
           <p className="text-base md:text-lg text-ink-3 leading-relaxed max-w-2xl mx-auto">
-            Your <GWInline /> order is confirmed. Pardeep will WhatsApp you
-            personally within 4 hours to verify your domain and start
+            Your <GWInline /> order is confirmed. Our team will WhatsApp you
+            within 4 hours to verify your domain and start
             provisioning.
           </p>
         </div>
@@ -245,8 +265,8 @@ export function ThanksClient({
             },
             {
               done: false,
-              title: "Within 4 hours — Pardeep WhatsApps you",
-              body:  "He'll confirm your domain ownership (DNS TXT record method) and answer any pre-provisioning questions.",
+              title: "Within 4 hours — our team WhatsApps you",
+              body:  "We'll confirm your domain ownership (DNS TXT record method) and answer any pre-provisioning questions.",
               accent: true,
             },
             {
@@ -294,37 +314,41 @@ export function ThanksClient({
             Need help right now?
           </div>
           <h2 className="font-serif text-2xl md:text-3xl tracking-tight mb-2">
-            Pardeep picks up the phone.
+            A real person answers.
           </h2>
           <p className="text-sm text-ink-3 leading-relaxed mb-6">
-            One person, fast answers, no ticket queue. Most domain-verification
-            questions take under 5 minutes on WhatsApp.
+            Fast answers, no ticket queue. Most domain-verification
+            questions take a few minutes.
           </p>
 
-          <a
-            href={whatsappLink(waSupportMsg)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium text-paper transition-transform hover:scale-[1.02] text-base mb-4"
-            style={{ background: "#25D366", boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
-          >
-            <Icon name="whatsapp" size={20} className="text-paper" />
-            WhatsApp Pardeep — {PARDEEP_PHONE_DISPLAY}
-          </a>
+          {WHATSAPP_READY && (
+            <a
+              href={whatsappLink(waSupportMsg)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium text-paper transition-transform hover:scale-[1.02] text-base mb-4"
+              style={{ background: "#25D366", boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
+            >
+              <Icon name="whatsapp" size={20} className="text-paper" />
+              WhatsApp us — {phoneDisplay()}
+            </a>
+          )}
 
           <div className="text-xs text-ink-3 flex flex-wrap gap-x-4 gap-y-1 items-center justify-center">
-            <a href={`tel:+${PARDEEP_PHONE_E164}`} className="inline-flex items-center gap-1.5 hover:text-ink transition-colors">
-              <Icon name="phone" size={12} />
-              Call {PARDEEP_PHONE_DISPLAY}
-            </a>
-            <a href={`mailto:${PARDEEP_EMAIL}?subject=${encodeURIComponent(`Re: order ${order.quoteId}`)}`}
+            {WHATSAPP_READY && (
+              <a href={`tel:+${WHATSAPP_NUMBER}`} className="inline-flex items-center gap-1.5 hover:text-ink transition-colors">
+                <Icon name="phone" size={12} />
+                Call {phoneDisplay()}
+              </a>
+            )}
+            <a href={mailtoLink(`Re: order ${order.quoteId}`)}
                className="inline-flex items-center gap-1.5 hover:text-ink transition-colors">
               <Icon name="mail" size={12} />
-              {PARDEEP_EMAIL}
+              {SUPPORT_EMAIL}
             </a>
             <span className="inline-flex items-center gap-1.5">
               <Icon name="clock" size={12} />
-              Mon–Sat · 9am–7pm IST
+              {COMPANY.hours}
             </span>
           </div>
         </div>
@@ -334,7 +358,7 @@ export function ThanksClient({
       <footer className="py-8 text-center text-xs text-ink-3">
         <div className="max-w-[800px] mx-auto px-6 space-y-1">
           <div>
-            ANUTECH DIGITAL PVT LTD · Google Premier Partner since 2014 ·
+            ANUTECH DIGITAL PVT LTD · {COMPANY.partnerLine} ·
             GSTIN registered · Indian SMEs trust us with their email.
           </div>
           <div>

@@ -41,6 +41,8 @@ interface EnquiryBody {
   edition?: string;
   /** annual | monthly — the workspace endpoint's `billing`. */
   term?: string;
+  /** Sent by the trial form: the app then emails the customer but not the owner. */
+  trial?: boolean;
 }
 
 const PRODUCTS = new Set(["google-workspace", "microsoft-365", "zoho", "other"]);
@@ -73,10 +75,11 @@ export async function POST(req: NextRequest) {
       : "Quote request from the website form.";
 
   const tier = typeof body.edition === "string" ? gwTierFor(body.edition) : null;
+  const trial = body.trial === true;
 
   const fail = () =>
     NextResponse.json(
-      { ok: false, error: "Could not record the enquiry right now. WhatsApp us and we will price it by hand." },
+      { ok: false, error: "We could not record your request just now, so nothing was saved. Please try again in a moment." },
       { status: 502 },
     );
 
@@ -105,28 +108,31 @@ export async function POST(req: NextRequest) {
         tierId: tier,
         billing: body.term === "monthly" ? "monthly" : "annual",
         message,
+        ...(trial ? { trial: true } : {}),
       });
       if (!res.ok) {
         console.error("[enquiry-proxy] workspace upstream refused:", res.status, await res.text().catch(() => ""));
         return fail();
       }
-      const data = (await res.json()) as { success?: boolean; draftQuoteId?: string | null; autoSent?: boolean };
+      const data = (await res.json()) as { success?: boolean; draftQuoteId?: string | null; autoSent?: boolean; ackSent?: boolean };
       /* draftQuoteId can be null (doc-number retries exhausted) — the lead still exists
          and the operator was alerted, so that is a success with no number to show. */
-      return NextResponse.json({ ok: true, quoteId: data.draftQuoteId ?? null, sent: data.autoSent === true });
+      return NextResponse.json({ ok: true, quoteId: data.draftQuoteId ?? null, sent: data.autoSent === true, ackSent: data.ackSent === true });
     }
 
     /* ── GENERAL PATH: everything else ────────────────────────────────────── */
     const payload: Record<string, unknown> = { fullName, companyName, email, phone, message };
     if (typeof body.product === "string" && PRODUCTS.has(body.product)) payload.product = body.product;
     if (seats) payload.seats = seats;
+    if (trial) payload.trial = true;
 
     const res = await post(ENQUIRY_API, payload);
     if (!res.ok) {
       console.error("[enquiry-proxy] general upstream refused:", res.status, await res.text().catch(() => ""));
       return fail();
     }
-    return NextResponse.json({ ok: true, quoteId: null, sent: false });
+    const general = (await res.json().catch(() => ({}))) as { ackSent?: boolean };
+    return NextResponse.json({ ok: true, quoteId: null, sent: false, ackSent: general.ackSent === true });
   } catch (err) {
     console.error("[enquiry-proxy] upstream unreachable:", err);
     return fail();

@@ -92,6 +92,19 @@ export function isSingleUnit(line: Pick<CartLine, "sku">): boolean {
   return sku.startsWith("hosting-trial:") || sku.startsWith("domain:") || sku.startsWith("hosting:");
 }
 
+/**
+ * Why a single-unit line is fixed at 1, in the words shown under its locked quantity
+ * control (owner, 30 Sep 2026: "there should be a quantity option like others but it
+ * should stay locked at 1"). Null for a line whose quantity can change.
+ */
+export function singleUnitNote(line: Pick<CartLine, "sku">): string | null {
+  const sku = (line.sku ?? "").toLowerCase();
+  if (sku.startsWith("hosting-trial:")) return "1 per customer";
+  if (sku.startsWith("hosting:")) return "1 per order";
+  if (sku.startsWith("domain:")) return "1 per domain";
+  return null;
+}
+
 export function isTrialLine(line: Pick<CartLine, "sku">): boolean {
   return (line.sku ?? "").toLowerCase().startsWith("hosting-trial:");
 }

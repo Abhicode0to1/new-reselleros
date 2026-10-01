@@ -263,6 +263,16 @@ function LoginPageInner() {
           Sign up
         </Link>
       </p>
+
+      {/* This page is also the site's "Client login", so a customer of Anutech Digital lands
+          here too: the documents they bought under are one click away (30 Sep 2026). */}
+      <p className="mt-3 text-center text-xs text-ink-3">
+        <Link href={"/terms-and-conditions" as never} className="hover:text-ink hover:underline">Terms and conditions</Link>
+        {" · "}
+        <Link href={"/refund" as never} className="hover:text-ink hover:underline">Refund policy</Link>
+        {" · "}
+        <Link href={"/privacy-policy" as never} className="hover:text-ink hover:underline">Privacy policy</Link>
+      </p>
     </Card>
   );
 }

@@ -28,7 +28,6 @@ import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
    (CLAUDE.md §1). Resolved from the storefront tenant's row now — see
    lib/email/owner-alert.ts for why there is no fallback constant. */
 const FROM_EMAIL    = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
-const APP_URL       = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
 
@@ -182,37 +181,14 @@ export async function POST(request: NextRequest) {
     });
 
     const { alert: owner, tenant: ownerTenant } = await loadOwnerAlert(admin, BUY_PAGE_TENANT_ID);
+    const ownerName = owner.ok ? owner.ownerName : "";
     if (!owner.ok) {
-      console.error(`[trial/workspace] lead ${leadId} saved, but no owner alert: ${owner.reason}`);
+      console.warn(`[trial/workspace] lead ${leadId}: no owner address, so the customer email has no reply-to: ${owner.reason}`);
     }
 
     await Promise.allSettled([
-      // Owner alert
-      owner.ok && sendEmail({
-        to:      owner.to,
-        from:    FROM_EMAIL,
-        kind:    "buy_page_trial_owner",
-        route:   { tenantId: BUY_PAGE_TENANT_ID },
-        replyTo: email,
-        subject: `🎯 TRIAL REQUEST — ${companyName} · ${seats} users · ${cleanDomain}`,
-        text:
-`A new trial request just landed. The customer wants to try Google Workspace
-${tierName} for ${seats} users on domain "${cleanDomain}" for ${TRIAL_DAYS} days.
-
-COMPANY     ${companyName}
-CONTACT     ${fullName} <${email}>
-PHONE       ${phone}
-DOMAIN      ${cleanDomain}
-PLAN        Google Workspace ${tierName}
-SEATS       ${seats}
-TRIAL ENDS  ${trialEndsFmt} (${TRIAL_DAYS} days from today)
-${message ? `MESSAGE     ${message}\n` : ""}
-Open the lead to provision:
-${APP_URL}/leads/${leadId}
-
-— ResellerOS`,
-      }),
-
+      /* No owner email for a trial (owner, 30 Sep 2026: "that will just annoy the owner").
+         The request is a lead with its follow-up task, where staff see it. */
       /* Customer trial acknowledgement.
          Named from the tenant row. This body previously said "through Excel
          Technologies", "Pardeep will WhatsApp you", a fixed phone number, and
@@ -220,10 +196,12 @@ ${APP_URL}/leads/${leadId}
          tenant, four statements about a company and a person the customer has no
          relationship with, one of them a partner certification this code cannot
          know is held. Absent details are omitted, never invented. */
-      owner.ok && sendEmail({
+      /* Sent whatever the owner-alert lookup returns — it used to need it (owner.ok), so a
+         workspace with no owner address sent the customer nothing. */
+      sendEmail({
         to:      email,
         from:    FROM_EMAIL,
-        replyTo: owner.to,
+        ...(owner.ok ? { replyTo: owner.to } : {}),
         kind:    "buy_page_trial_customer",
         route:   { tenantId: BUY_PAGE_TENANT_ID },
         subject: `Your ${TRIAL_DAYS}-day Google Workspace trial — ${cleanDomain}`,
@@ -249,16 +227,16 @@ DAY 12
 NO CREDIT CARD until you decide to convert. ${TRIAL_DAYS} days fully free, no
 strings attached. Trial period ends ${trialEndsFmt}.
 
-If you want to talk before then, just reply to this email${ownerTenant?.phone?.trim() ? ` — or call/WhatsApp ${owner.ownerName || "us"} on ${ownerTenant.phone.trim()}` : ""}.
+If you want to talk before then, just reply to this email${ownerTenant?.phone?.trim() ? ` — or call/WhatsApp ${ownerName || "us"} on ${ownerTenant.phone.trim()}` : ""}.
 
-— ${owner.ownerName || ownerTenant?.name?.trim() || "Your reseller"}${
-  ownerTenant?.name?.trim() && owner.ownerName !== ownerTenant.name.trim()
+— ${ownerName || ownerTenant?.name?.trim() || "Your reseller"}${
+  ownerTenant?.name?.trim() && ownerName !== ownerTenant.name.trim()
     ? `\n   ${ownerTenant.name.trim()}`
     : ""
 }`,
       }),
     ]).then((results) => {
-      const labels = ["owner alert", "customer acknowledgement"];
+      const labels = ["customer acknowledgement"];
       results.forEach((r, i) => {
         /* A skipped send settles as the literal `false`, so this must not be read
            as a send result — otherwise "not sent" logs as "sent fine". */

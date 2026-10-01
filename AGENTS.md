@@ -118,7 +118,13 @@ There is no trial form any more: `/hosting/trial` is only where the confirm-your
 **One trial per customer across BOTH apps**, matched on email, phone (last 10 digits) or domain.
 This app checks its own `buy-hosting-trial` leads, then asks DMS, which holds the shared record
 (`lib/dms-engine/trials.ts`). If DMS does not answer, the trial is refused. A trial line is
-always quantity 1.
+always quantity 1. **A trial needs a real domain, the same as paid hosting** (owner, 30 Sep 2026;
+`lib/checkout/hosting-domain.ts`, with a "buy a domain" link when the customer has none).
+**A trial sends the owner no email** (owner, 30 Sep 2026: "Remove this feature completely. That
+will just annoy the owner."): staff see it as a lead, and a setup that fails becomes a `tasks` row.
+`lib/hosting/no-trial-owner-email.test.ts` fails if an owner email comes back, including the "new
+enquiry" alert for a request from the site's trial form (`trial: true`). The nightly
+`cron/trial-expiry` still emails the owner; it is Pardeep's, raised as R-065.
 The one rule is `lib/hosting/trial-plan.ts`. DMS enforces the same rule on its in-panel trial,
 which on monthly renews one month at a time (`Hosting.billingCycle`).
 It was **run once against the live DirectAdmin on 24 Sep 2026** (test, create, replay,
@@ -166,6 +172,13 @@ ResellerOS cart; they are not built yet (the parts that are Abhishek's and Parde
 in `Todos.md`), and until they are, **checkout refuses a second hosting plan or a hosting quantity
 above 1** (`lib/checkout/hosting-limit.ts`) — before that, such an order was charged in full and only
 the first account was set up. Do not lift that stop-gap before one hosting request per plan exists.
+
+**Email goes to every recipient, from both apps** (owner, 30 Sep 2026: "Fix this permanently. It
+should remain on by default for both DMS and Reseller OS app"). SMTP (`lib/email/smtp-transport.ts`,
+the `SMTP_*` variables) is the platform sender ahead of Resend, and a tenant's own working Gmail
+still wins. There is no recipient allow-list in either app, and a scan test fails in each if one
+comes back (`lib/email/send-smtp.test.ts` here, `tests/unit/lib/email/no-recipient-filter.test.ts` in DMS). SMTP connects over
+IPv4 with the real host name kept for TLS: the IPv6 attempt hung the first send for 21 s.
 
 Open items for the integration are tracked in `Todos.md`, not here.
 
@@ -343,17 +356,13 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **8,249 tests
-passing across 490 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
-with 0 errors** — measured 30 Sep 2026 after R-013's review (see L114) on top of R-014 (an
-issued GST invoice can no longer be deleted, and deleting one never removes a bank receipt)
-and R-015 (IST financial year, 16-character document numbers, `paid_amount` written on a
-partial payment).
-Earlier markers: 8,177/489 the same day after R-014 + R-015;
-8,154/487 on 29 Sep after the board batch R-021 / R-025 / R-034 / R-038+S27
-(paid-order PDF wording, invoice bank details, IST dates and raw-DB-error leaks);
-8,049/480 the same day after the fourth `pardeep-sir` merge (`ddde2754`);
-7,972/477 the same day after the Tailwind dev-server fix; 7,933/472 on 28 Sep
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **8,410 tests
+passing across 517 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
+with 0 errors** — measured 30 Sep 2026 on `website-pawan` after merging `manager-pardeep` (C-053).
+Earlier markers: 8,242/504 the same day before that merge; 8,193/499 after `9ad95378` (trials send the
+owner no email); 8,111/486 on 29 Sep after merging `abhishek-pre-merge` (`3bebf671`: R-012 renewal quote,
+R-018 dunning pay link); 8,049/480 the same day after the fourth
+`pardeep-sir` merge (`ddde2754`); 7,972/477 the same day after the Tailwind dev-server fix; 7,933/472 on 28 Sep
 after the third `pardeep-sir` merge (`9054977f`, which brought Next 15.5 / React 19: run
 `npm ci` after pulling it);
 7,085/404 the same day after the quote-notes fix, 7,083/403 on 26 Sep after the second `pardeep-sir` merge, 7,054/400 the same day after `/api/dms/trial-eligibility`, 7,047/399 the same day after `/api/dms/start-trial`, 7,041/398 the same day after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work), 6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
@@ -371,8 +380,9 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,444 passing across 442 files, zero failures**
-on 28 Sep 2026, after four never-rendered components were deleted (DMS `c75dba79`); 6,470 / 446 just
+`C:/xampp/htdocs/Domain-Management-Project`, **6,452 passing across 444 files, zero failures**
+on 30 Sep 2026, after the recipient allow-list was removed and SMTP moved to IPv4 (DMS `e55b5132`,
+`79a415f4`). 6,444 / 442 on 28 Sep, after four never-rendered components were deleted (DMS `c75dba79`); 6,470 / 446 just
 before, after hosting prices moved to a live read from ResellerOS (DMS `46092c10`), and 6,450 / 444 the
 same day after in-panel renewal payment. The count FELL on purpose: 26 tests went with the deleted
 components. Earlier: 6,422 / 442 on 26 Sep 2026, after round 5 (DMS `c1e52acd`: the trial pre-check asks ResellerOS, admin package
@@ -479,7 +489,7 @@ working in. What is true today:
 | | |
 |---|---|
 | Folder | `C:/xampp/htdocs/anutechbilling-new` |
-| Branch | `pawan-api-system` |
+| Branch | `website-pawan` (renamed from `pawan-api-system` on 30 Sep 2026, C-053; the other branches are `manager-pardeep`, `billing-abhishek`, `accounts-hitesh`) |
 | Dev server | port 4320 (`npm run dev -- -p 4320`) — DMS holds 4310 |
 | Commit author | `Excel Technologies <pawan@exceltechnologies.in>` |
 

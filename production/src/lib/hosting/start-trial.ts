@@ -7,7 +7,7 @@
  * `hosting-trial:starter` line; nothing else does.
  *
  * Unchanged from the route it came from: it CAPTURES the request as a qualified
- * lead (stage='trial'), alerts the owner, emails the customer a confirmation
+ * lead (stage='trial'), emails the customer a confirmation
  * link, and schedules follow-up tasks. It does NOT create a cPanel account —
  * that happens only after the customer confirms their email
  * (api/public/trial/hosting/confirm), behind HOSTING_TRIAL_LIVE.
@@ -41,7 +41,14 @@ export interface StartTrialInput {
 }
 
 export type StartTrialResult =
-  | { ok: true; leadId: string; trialEnds: string }
+  | {
+      ok: true;
+      leadId: string;
+      trialEnds: string;
+      /** Did the confirmation link actually leave? The page must not say "we sent a link"
+          when it did not (30 Sep 2026). */
+      confirmationSent: boolean;
+    }
   | { ok: false; error: string; alreadyTrialled?: true };
 
 /** Escape LIKE wildcards, so an email containing `_` or `%` matches only itself. */
@@ -316,47 +323,28 @@ days fully free. Trial ends ${trialEndsFmt}.
 
 ${signOff}`;
 
-  await Promise.allSettled([
-    owner.ok && sendEmail({
-      to: owner.to,
-      from: FROM_EMAIL,
-      kind: "buy_page_trial_owner",
-      route: { tenantId: BUY_PAGE_TENANT_ID },
-      replyTo: email,
-      subject: `🎯 HOSTING TRIAL — ${companyName} · ${tierName} · ${cleanDomain || (domainStatus === "need" ? "needs domain" : "no domain")}`,
-      text:
-`A new hosting trial request just landed. The customer wants to try the
-${tierName} plan for ${TRIAL_DAYS} days, no card.
+  /* ── The customer's confirmation link: the one email the customer is waiting for ──
+     Sent first, on its own, and whatever the owner alert does. Until 30 Sep 2026 both
+     emails were awaited together AND gated on the owner alert resolving: the customer sat
+     on "Starting your trial…" while the owner was emailed (25 s of a 30 s wait, measured),
+     and a workspace with no owner alert address sent the customer no link at all while
+     the page still said "We sent a link". */
+  const confirmation = await sendEmail({
+    to: email,
+    from: FROM_EMAIL,
+    ...(owner.ok ? { replyTo: owner.to } : {}),
+    kind: "buy_page_trial_customer",
+    route: { tenantId: BUY_PAGE_TENANT_ID },
+    subject: customerSubject,
+    text: customerText,
+  }).catch((e: unknown) => ({ status: "failed" as const, errorMessage: (e as Error).message }));
+  const confirmationSent = confirmation.status === "sent";
+  if (!confirmationSent) {
+    console.error(`[trial/hosting] lead ${leadId}: the confirmation link did NOT reach ${email}: ${confirmation.errorMessage ?? confirmation.status}`);
+  }
 
-COMPANY     ${companyName}
-CONTACT     ${fullName} <${email}>
-PHONE       ${phone}
-PLAN        ${tierName} hosting (cPanel on Google Cloud)
-DOMAIN      ${cleanDomain || (domainStatus === "need" ? "needs a new domain" : "not specified")}
-TRIAL ENDS  ${trialEndsFmt} (${TRIAL_DAYS} days from today)
-To start the trial, provision the cPanel account, then send the login.
-Open the lead:
-${new URL(`/leads/${leadId}`, request.url).toString()}
-
-— ResellerOS`,
-    }),
-
-    owner.ok && sendEmail({
-      to: email,
-      from: FROM_EMAIL,
-      replyTo: owner.to,
-      kind: "buy_page_trial_customer",
-      route: { tenantId: BUY_PAGE_TENANT_ID },
-      subject: customerSubject,
-      text: customerText,
-    }),
-  ]).then((results) => {
-    const labels = ["owner alert", "customer acknowledgement"];
-    results.forEach((r, i) => {
-      if (r.status === "rejected") console.error(`[trial/hosting] ${labels[i]} failed:`, r.reason);
-      else if (r.value && r.value.status === "failed") console.error(`[trial/hosting] ${labels[i]} failed:`, r.value.errorMessage);
-    });
-  });
-
-  return { ok: true, leadId, trialEnds: trialExpiresAt.toISOString() };
+  /* No owner email for a trial (owner, 30 Sep 2026: "remove this feature completely — that
+     will just annoy the owner"). The trial is on the lead (stage trial) with its follow-up
+     tasks, which is where staff see it. */
+  return { ok: true, leadId, trialEnds: trialExpiresAt.toISOString(), confirmationSent };
 }

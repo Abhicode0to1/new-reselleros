@@ -9,7 +9,7 @@ import Image from "next/image";
 import Link from "@/site/components/ui/SiteLink";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { COMPANY, WHATSAPP_URL } from "@/site/lib/config";
+import { COMPANY, WHATSAPP_URL, CLIENT_AREA_URL } from "@/site/lib/config";
 
 export function UtilityBar() {
   const pathname = usePathname();
@@ -26,7 +26,7 @@ export function UtilityBar() {
         )}
         <span className="hide-mobile" style={{ display: "flex", gap: 18 }}>
           <Link href="/pricing">All prices</Link>
-          <Link href="/support">Knowledge base</Link>
+          <Link href="/contact">Support</Link>
           <Link href="/status">Status</Link>
           <Link href="/login">Client login</Link>
         </span>
@@ -44,7 +44,9 @@ const CRUMBS: Record<string, string> = {
   "/ssl": "SSL & security",
   "/login": "Client login",
   "/terms": "Terms of service",
+  "/terms-and-conditions": "Terms and conditions",
   "/privacy": "Privacy policy",
+  "/privacy-policy": "Privacy policy",
   "/refund": "Refund policy",
   "/reselleros": "ResellerOS — software for resellers",
   "/reseller": "Reseller program",
@@ -52,6 +54,7 @@ const CRUMBS: Record<string, string> = {
   "/why-us": "Why us",
   "/about": "About Anutech Digital",
   "/support": "Support & knowledge base",
+  "/contact": "Support",
   "/status": "System status",
   "/quote": "Get a quote",
   "/cart": "Cart",
@@ -100,10 +103,10 @@ export function CtaBand() {
 
 const FOOTER_COLS = [
   { title: "DOMAINS", links: [["Search a domain", "/domains"], ["Rate card", "/domains#rates"], ["Transfer in", "/domains"], ["All prices", "/pricing"]] },
-  { title: "HOSTING", links: [["Shared hosting", "/hosting"], ["Full specification", "/hosting#specs"], ["Client area", "/dashboard"], ["System status", "/status"]] },
+  { title: "HOSTING", links: [["Shared hosting", "/hosting"], ["Full specification", "/hosting#specs"], ["Client area", CLIENT_AREA_URL], ["System status", "/status"]] },
   { title: "EMAIL & SECURITY", links: [["Compare editions", "/email/compare-editions"], ["Business email", "/email"], ["Google Workspace", "/quote"], ["Microsoft 365", "/quote"], ["SSL certificates", "/ssl"]] },
   { title: "RESELLEROS", links: [["What it is", "/reselleros"], ["Modules", "/reselleros#modules"], ["Interactive demo", "/reselleros"], ["Pricing — free in beta", "/reselleros#pricing"]] },
-  { title: "COMPANY", links: [["About Anutech", "/about"], ["Reseller program", "/reseller"], ["Why us", "/why-us"], ["Support", "/support"], ["Get a quote", "/quote"], ["Client login", "/login"], ["Terms", "/terms"], ["Privacy", "/privacy"], ["Refunds", "/refund"]] },
+  { title: "COMPANY", links: [["About Anutech", "/about"], ["Reseller program", "/reseller"], ["Why us", "/why-us"], ["Support", "/contact"], ["Get a quote", "/quote"], ["Client login", "/login"], ["Terms", "/terms-and-conditions"], ["Privacy", "/privacy-policy"], ["Refunds", "/refund"]] },
 ] as const;
 
 export function Footer() {

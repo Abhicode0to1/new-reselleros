@@ -74,6 +74,30 @@ export const ENQUIRY_WORKSPACE_API = `${RESELLEROS_URL}/api/public/enquiry/works
 export const WHATSAPP_NUMBER = "919800000000";
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}`;
 
+/** The fake number above. While WHATSAPP_NUMBER still equals it, a page that must not
+    show a dead button to a paying customer (the /buy/workspace thanks page) hides its
+    WhatsApp and call links and offers COMPANY.supportEmail instead. */
+export const WHATSAPP_PLACEHOLDER = "919800000000";
+export const WHATSAPP_READY: boolean = WHATSAPP_NUMBER !== WHATSAPP_PLACEHOLDER;
+
+/**
+ * Where a customer manages what they bought: the DMS customer panel's sign-in (30 Sep 2026).
+ * The site's footer and menu said "Client area" and opened /dashboard, which is the STAFF app.
+ * Built from NEXT_PUBLIC_DMS_PORTAL_URL, the same variable the login page's "Hosting &
+ * domains sign-in" uses, so the two cannot point at different panels. Unset, it falls back to
+ * the site's own /login, which carries that same sign-in link, never a guessed host.
+ */
+export const CLIENT_AREA_URL: string = (() => {
+  const base = (process.env.NEXT_PUBLIC_DMS_PORTAL_URL ?? "").trim();
+  if (!base) return "/login";
+  try { return new URL("/login", base).toString(); } catch { return "/login"; }
+})();
+
+/** "919800000000" → "+91 98000 00000". */
+export function whatsappDisplay(e164: string = WHATSAPP_NUMBER): string {
+  return `+${e164.slice(0, 2)} ${e164.slice(2, 7)} ${e164.slice(7)}`;
+}
+
 export const COMPANY = {
   name: "Anutech Digital Pvt Ltd",
   short: "Anutech Digital",
