@@ -44,7 +44,12 @@ export function usePrepaidAdvances() {
     queryFn: async (): Promise<PrepaidAdvance[]> => {
       const supabase = createClient();
       const { data, error } = await supabase
-        .from("prepaid_advances").select("*").order("paid_date", { ascending: false });
+        .from("prepaid_advances").select("*")
+        /* Staff advances (R-101) share the table but live on Accounting → Advances —
+           they are not vendor top-ups, so the Prepaid page, Marketing spend and the bank
+           reconcile picker leave them out. */
+        .neq("category", "Employee advance")
+        .order("paid_date", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((r) => ({ ...r, balance: r.total_amount - r.consumed_amount }));
     },

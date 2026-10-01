@@ -57,6 +57,7 @@ import { uploadBillAttachment } from "@/lib/queries/vendor-bills";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { expenseCategoryError } from "@/lib/accounting/expense-category";
 import { istToday } from "@/lib/dates/ist";
+import { useEmployeeAdvances, EMPLOYEE_ADVANCE_METHOD } from "@/lib/queries/advances";
 
 const CURRENCY_OPTIONS = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD", "CAD"] as const;
 
@@ -90,8 +91,14 @@ export function AddExpenseDialog({
   projectId,
   projectTitle,
   defaultCategory,
+  advanceId: presetAdvanceId,
 }: {
   onClose: () => void;
+  /**
+   * Paid out of a staff advance (R-101) — the Advances page opens this form with the
+   * advance already picked. The person picks it themselves from "Paid by" otherwise.
+   */
+  advanceId?: string | null;
   /** Category a NEW expense starts on — e.g. "Advertising" from /marketing/spend. */
   defaultCategory?: string;
   expense?: Expense | null;
@@ -108,6 +115,16 @@ export function AddExpenseDialog({
   const cashAccounts = (bankAccounts ?? []).filter((a) => a.account_type === "cash");
   const bankOnlyAccounts = (bankAccounts ?? []).filter((a) => a.account_type !== "cash");
   const [pettyCashAccountId, setPettyCashAccountId] = React.useState<string>("");
+  /* Staff advances still open — "Paid by → Employee advance" lists them with what is left. */
+  const { data: allAdvances } = useEmployeeAdvances();
+  const [advanceId, setAdvanceId] = React.useState<string>(
+    presetAdvanceId ?? (expense?.payment_method === EMPLOYEE_ADVANCE_METHOD ? expense?.prepaid_advance_id ?? "" : ""),
+  );
+  const openAdvances = React.useMemo(
+    () => (allAdvances ?? []).filter((a) => a.status === "active" || a.id === advanceId),
+    [allAdvances, advanceId],
+  );
+  const pickedAdvance = openAdvances.find((a) => a.id === advanceId) ?? null;
   // Source bank account for a bank/UPI/card/cheque payment (which bank the money left).
   const [bankAccountId, setBankAccountId] = React.useState<string>(expense?.bank_account_id ?? "");
 
@@ -151,7 +168,9 @@ export function AddExpenseDialog({
   // input tax credit — and only a GST-invoice vendor joins the Vendors master.
   // Default a NEW expense to "No bill" — most day-to-day entries are small
   // cash spends; a GST invoice is one click away when needed.
-  const [billType, setBillType] = React.useState<string>(expense?.bill_type ?? "none");
+  /* From a staff advance (R-101) the bill is the proof of where the money went — start on
+     "Kaccha bill" so "Upload bill" is on screen straight away. */
+  const [billType, setBillType] = React.useState<string>(expense?.bill_type ?? (presetAdvanceId ? "kaccha" : "none"));
   const isGstBill = billType === "gst";
   // Itemise on demand — simple note by default; line items only when there's a
   // multi-line bill (or the AI fills them).
@@ -433,8 +452,8 @@ export function AddExpenseDialog({
         }
       : {
           expense_date: today,
-          category: defaultCategory ?? "Hosting",
-          payment_method: "bank_transfer",
+          category: defaultCategory ?? (presetAdvanceId ? "Staff Welfare" : "Hosting"),
+          payment_method: presetAdvanceId ? EMPLOYEE_ADVANCE_METHOD : "bank_transfer",
           amount: 0,
           gst_paid: 0,
           tds_amount: 0,
@@ -572,6 +591,12 @@ export function AddExpenseDialog({
       return;
     }
 
+    const fromAdvance = paid && values.payment_method === EMPLOYEE_ADVANCE_METHOD;
+    if (fromAdvance && !advanceId) {
+      toast.error("Pick whose advance this was paid from.");
+      return;
+    }
+
     const payee = values.vendor_name?.trim() || "";
     /* A commission with no payee cannot be totalled per person, so s.194H cannot be checked —
        and the question "who did we pay commission to?" has no answer. */
@@ -636,7 +661,10 @@ export function AddExpenseDialog({
       rcm_tax: rcm ? (rcmTax.trim() !== "" ? Math.max(0, Math.round(Number(rcmTax) || 0)) : Math.round(inr(Number(values.amount) || 0) * 0.18)) : 0,
       tds_amount:  Math.round(values.tds_amount || 0),
       // Source bank account for a bank/UPI/card/cheque payment (not cash).
-      bank_account_id: paid && values.payment_method !== "cash" ? (bankAccountId || null) : null,
+      bank_account_id: paid && values.payment_method !== "cash" && !fromAdvance ? (bankAccountId || null) : null,
+      /* Paid from a staff advance: the database takes it off that advance's balance and
+         refuses more than is left (trigger, migration 20261001150000). */
+      prepaid_advance_id: fromAdvance ? advanceId : (expense?.payment_method === EMPLOYEE_ADVANCE_METHOD ? null : expense?.prepaid_advance_id ?? null),
       // Longer free-text comment / extra detail (optional).
       notes: values.notes?.trim() || null,
     };
@@ -763,7 +791,9 @@ export function AddExpenseDialog({
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {/* The mutation already shows the reason (e.g. "Only ₹4800 is left …"); catching here
+            stops the same refusal also landing in the console as an uncaught promise. */}
+        <form onSubmit={handleSubmit(async (v) => { try { await onSubmit(v); } catch { /* toast shown by the mutation */ } })} className="space-y-4">
           {/* ── STEP 1: What kind of bill? This shapes the whole form. ── */}
           <div>
             <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Is kharche ka bill?</p>
@@ -1219,6 +1249,9 @@ export function AddExpenseDialog({
                   {PAYMENT_METHODS.map((m) => (
                     <SelectItem key={m} value={m}>{m.replace(/_/g, " ")}</SelectItem>
                   ))}
+                  {(openAdvances.length > 0 || watch("payment_method") === EMPLOYEE_ADVANCE_METHOD) && (
+                    <SelectItem value={EMPLOYEE_ADVANCE_METHOD}>employee advance</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </FormField>
@@ -1229,8 +1262,32 @@ export function AddExpenseDialog({
             </FormField>
           )}
 
+          {/* Paid from a staff advance → whose, and how much is left (R-101). */}
+          {paid && !reimburse && watch("payment_method") === EMPLOYEE_ADVANCE_METHOD && (
+            <FormField label="Whose advance?" required htmlFor="employee_advance">
+              <Select value={advanceId || "none"} onValueChange={(v) => setAdvanceId(v === "none" ? "" : v)}>
+                <SelectTrigger id="employee_advance"><SelectValue placeholder="Pick an advance" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Pick an advance</SelectItem>
+                  {openAdvances.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.employee_name} · ₹{a.remaining_balance.toLocaleString("en-IN")} left
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-ink-3 mt-1">
+                {pickedAdvance
+                  ? <>Taken from the money already with <b>{pickedAdvance.employee_name}</b>. No bank or cash moves now.</>
+                  : openAdvances.length === 0
+                    ? "No open advance. Give one on Accounting → Advances first."
+                    : "Money already given to a staff member in advance."}
+              </p>
+            </FormField>
+          )}
+
           {/* Bank/UPI/card/cheque → which bank account did the money leave from? */}
-          {paid && !reimburse && watch("payment_method") !== "cash" && watch("payment_method") !== "statutory" && bankOnlyAccounts.length > 0 && (
+          {paid && !reimburse && watch("payment_method") !== "cash" && watch("payment_method") !== "statutory" && watch("payment_method") !== EMPLOYEE_ADVANCE_METHOD && bankOnlyAccounts.length > 0 && (
             <FormField label="From which account?" htmlFor="bank_account">
               <Select value={bankAccountId || "none"} onValueChange={(v) => setBankAccountId(v === "none" ? "" : v)}>
                 <SelectTrigger id="bank_account"><SelectValue placeholder="Select bank account" /></SelectTrigger>

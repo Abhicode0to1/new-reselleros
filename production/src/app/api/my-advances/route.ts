@@ -26,7 +26,11 @@ import { isOwnAdvance, visibleAdvances } from "@/lib/expenses/advance-visibility
 
 type ExpenseRow = Database["public"]["Tables"]["expenses"]["Row"];
 
-const ADVANCE_CATEGORY = "Employee Advance Disbursal";
+/* R-101 (1 Oct 2026): a staff advance is a prepaid_advances row (an asset), not an
+   'Employee Advance Disbursal' expense. Spends are expenses with payment_method
+   'employee_advance' + prepaid_advance_id; the trigger in 20261001150000 keeps
+   consumed_amount right. */
+const ADVANCE_CATEGORY = "Employee advance";
 
 /** The shape the client's `EmployeeAdvance` type expects (lib/queries/advances.ts). */
 interface AdvanceView {
@@ -48,8 +52,14 @@ interface AdvanceView {
   linked_expenses: ExpenseRow[];
 }
 
+/* A Supabase/PostgREST error is a plain object, not an Error — String() of it is the
+   "[object Object]" toast seen on 1 Oct (R-101). Read its message. */
 function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
+    return (err as { message: string }).message;
+  }
+  return String(err);
 }
 
 export async function GET(_request: NextRequest) {
@@ -77,16 +87,18 @@ export async function GET(_request: NextRequest) {
 
     const [{ data: disbursals, error: dErr }, { data: claims, error: cErr }] = await Promise.all([
       admin
-        .from("expenses")
+        .from("prepaid_advances")
         .select("*")
         .eq("tenant_id", tenant_id)
         .eq("category", ADVANCE_CATEGORY)
-        .order("expense_date", { ascending: false }),
+        .order("paid_date", { ascending: false }),
       admin
         .from("expenses")
         .select("*")
         .eq("tenant_id", tenant_id)
-        .not("prepaid_advance_id", "is", null),
+        .eq("payment_method", "employee_advance")
+        .not("prepaid_advance_id", "is", null)
+        .order("expense_date", { ascending: false }),
     ]);
 
     if (dErr) throw dErr;
@@ -102,8 +114,10 @@ export async function GET(_request: NextRequest) {
 
     const allAdvances: AdvanceView[] = (disbursals ?? []).map((d) => {
       const linked = claimMap.get(d.id) ?? [];
-      const total_spent = linked.reduce((sum, x) => sum + (x.amount ?? 0), 0);
-      const remaining_balance = Math.max(0, (d.amount ?? 0) - total_spent);
+      /* consumed_amount is kept by the database trigger — the one number the
+         over-spend check also uses, so the page and the refusal never disagree. */
+      const total_spent = d.consumed_amount ?? 0;
+      const remaining_balance = Math.max(0, (d.total_amount ?? 0) - total_spent);
 
       return {
         id: d.id,
@@ -115,12 +129,13 @@ export async function GET(_request: NextRequest) {
          * honest answer is null. */
         employee_id: null,
         employee_name: d.vendor_name || "Employee",
-        disbursed_amount: d.amount ?? 0,
-        disbursed_date: d.expense_date,
+        disbursed_amount: d.total_amount ?? 0,
+        disbursed_date: d.paid_date,
         payment_method: d.payment_method || "cash",
         bank_account_id: d.bank_account_id ?? null,
-        purpose: d.description ?? null,
-        status: remaining_balance === 0 ? "closed" : "active",
+        purpose: (d.notes ?? "").split("\n")[0] || null,
+        /* Closed only when settled. Spent down to ₹0 is still open — a top-up refills it. */
+        status: d.closed_at ? "closed" : "active",
         notes: d.notes ?? null,
         created_at: d.created_at,
         updated_at: d.updated_at,
@@ -190,7 +205,7 @@ export async function POST(request: NextRequest) {
      * tenant pointing at a row in another one. Loading the advance under an explicit
      * tenant_id filter closes both at once. */
     const { data: advance, error: advErr } = await admin
-      .from("expenses")
+      .from("prepaid_advances")
       .select("id, vendor_name, tenant_id, category")
       .eq("id", String(advance_id))
       .eq("tenant_id", profile.tenant_id)
@@ -235,11 +250,16 @@ export async function POST(request: NextRequest) {
         paid: true,
         paid_date: String(expense_date),
         prepaid_advance_id: advance.id,
-        payment_method: "advance_deduction",
+        payment_method: "employee_advance",
       })
       .select()
       .single();
 
+    /* The database trigger refuses more than what is left, or a settled advance —
+       that is the person's mistake to fix (400 with the sentence), not a crash (500). */
+    if (insErr && (insErr as { code?: string }).code === "23514") {
+      return NextResponse.json({ error: insErr.message }, { status: 400 });
+    }
     if (insErr) throw insErr;
 
     return NextResponse.json({ success: true, expense: newExpense });

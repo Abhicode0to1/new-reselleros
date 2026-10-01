@@ -1,9 +1,15 @@
 /**
  * Employee Expense Advances & Petty Cash Management — TanStack Query hooks.
  *
- * Uses existing `expenses` table with category='Employee Advance Disbursal' and
- * `prepaid_advance_id` linking for 100% zero-migration compatibility across
- * local and production Supabase environments.
+ * R-101 (1 Oct 2026): an advance is a `prepaid_advances` row with category
+ * 'Employee advance' — company money in a person's hand, an ASSET. It used to be an
+ * 'Employee Advance Disbursal' EXPENSE, which (a) counted the money in the P&L once when
+ * handed over and again for every bill, and (b) could never take a spend: the
+ * prepaid_advance_id FK points at prepaid_advances, so every insert failed.
+ *
+ * A spend is an ordinary expense — written by the normal Expense form (bill attach and
+ * all) with payment_method 'employee_advance' + prepaid_advance_id. The database trigger
+ * (migration 20261001150000) refuses more than what is left and keeps consumed_amount.
  */
 "use client";
 
@@ -39,19 +45,16 @@ export const ADVANCE_PAYMENT_METHODS: Record<string, string> = {
   cheque: "Cheque",
 };
 
-const ADVANCE_CATEGORY = "Employee Advance Disbursal";
+/** The payment_method an expense carries when it was paid from a staff advance. */
+export const EMPLOYEE_ADVANCE_METHOD = "employee_advance";
 
-async function getTenantId(): Promise<string> {
-  const supabase = createClient();
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData?.user) throw new Error("Not authenticated");
-  const { data: me, error } = await supabase
-    .from("users")
-    .select("tenant_id")
-    .eq("id", authData.user.id)
-    .single();
-  if (error || !me) throw new Error("User not linked to a tenant");
-  return me.tenant_id;
+/** Everything that shows an advance balance, refreshed after any change. */
+function refresh(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["employee_expense_advances"] });
+  qc.invalidateQueries({ queryKey: ["expenses"] });
+  qc.invalidateQueries({ queryKey: ["prepaid_advances"] });
+  qc.invalidateQueries({ queryKey: ["balance-sheet"] });
+  qc.invalidateQueries({ queryKey: ["bank"] });
 }
 
 export function useEmployeeAdvances() {
@@ -73,45 +76,53 @@ export function useDisburseAdvance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
-      employee_id?: string | null;
       employee_name: string;
       disbursed_amount: number;
       disbursed_date: string;
       payment_method: string;
       bank_account_id?: string | null;
       purpose?: string | null;
-      notes?: string | null;
     }) => {
       const supabase = createClient();
-      const tenant_id = await getTenantId();
-
-      const { data, error } = await supabase.from("expenses")
-        .insert({
-          id: crypto.randomUUID(),
-          tenant_id,
-          category: ADVANCE_CATEGORY,
-          amount: input.disbursed_amount,
-          expense_date: input.disbursed_date,
-          vendor_name: input.employee_name,
-          description: input.purpose || "Employee Expense Advance",
-          payment_method: input.payment_method,
-          bank_account_id: input.bank_account_id || null,
-          paid: true,
-          paid_date: input.disbursed_date,
-          notes: input.notes || null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { data, error } = await supabase.rpc("give_employee_advance", {
+        p_name: input.employee_name,
+        p_amount: Math.round(input.disbursed_amount),
+        p_date: input.disbursed_date,
+        p_method: input.payment_method,
+        p_account: input.bank_account_id || undefined,
+        p_note: input.purpose || undefined,
+      });
+      if (error) throw new Error(error.message);
       return data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["employee_expense_advances"] });
-      qc.invalidateQueries({ queryKey: ["expenses"] });
-      toast.success("Employee advance disbursed successfully!");
+      refresh(qc);
+      toast.success("Advance given", { description: "Held as company money with them — not an expense until bills come in." });
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toast.error("Could not give the advance", { description: (err as Error).message }),
+  });
+}
+
+/** Add money to an open advance (the weekly / monthly refill). */
+export function useTopUpAdvance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { advance_id: string; amount: number; date: string; bank_account_id?: string | null }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("top_up_employee_advance", {
+        p_advance_id: input.advance_id,
+        p_amount: Math.round(input.amount),
+        p_date: input.date,
+        p_account: input.bank_account_id || undefined,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (left) => {
+      refresh(qc);
+      toast.success("Top-up added", { description: `₹${Number(left).toLocaleString("en-IN")} now with them.` });
+    },
+    onError: (err) => toast.error("Could not add the top-up", { description: (err as Error).message }),
   });
 }
 
@@ -142,29 +153,31 @@ export function useRecordAdvanceExpense() {
       return data.expense;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["employee_expense_advances"] });
-      qc.invalidateQueries({ queryKey: ["expenses"] });
-      toast.success("Expense recorded & deducted from employee advance!");
+      refresh(qc);
+      toast.success("Expense recorded", { description: "Taken from the advance balance." });
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toast.error("Could not record the expense", { description: (err as Error).message }),
   });
 }
 
+/** The person hands back what is left; the advance is closed. */
 export function useSettleAdvance() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (advance_id: string) => {
+    mutationFn: async (input: { advance_id: string; date: string; bank_account_id?: string | null }) => {
       const supabase = createClient();
-      const { error } = await supabase.from("expenses")
-        .update({ notes: "[SETTLED] Employee advance closed", updated_at: new Date().toISOString() })
-        .eq("id", advance_id);
-
-      if (error) throw error;
+      const { data, error } = await supabase.rpc("settle_employee_advance", {
+        p_advance_id: input.advance_id,
+        p_date: input.date,
+        p_account: input.bank_account_id || undefined,
+      });
+      if (error) throw new Error(error.message);
+      return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["employee_expense_advances"] });
-      toast.success("Advance settled & closed successfully!");
+    onSuccess: (returned) => {
+      refresh(qc);
+      toast.success("Advance settled", { description: `₹${Number(returned).toLocaleString("en-IN")} returned.` });
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toast.error("Could not settle", { description: (err as Error).message }),
   });
 }

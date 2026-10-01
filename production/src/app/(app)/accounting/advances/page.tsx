@@ -27,14 +27,15 @@ import { rupee, formatDate } from "@/lib/utils";
 import {
   useEmployeeAdvances,
   useDisburseAdvance,
-  useRecordAdvanceExpense,
+  useTopUpAdvance,
   useSettleAdvance,
   ADVANCE_PAYMENT_METHODS,
   type EmployeeAdvance,
 } from "@/lib/queries/advances";
 import { useEmployees } from "@/lib/queries/payroll";
 import { useBankAccounts } from "@/lib/queries/bank";
-import { EXPENSE_CATEGORIES } from "@/lib/queries/expenses";
+import { AddExpenseDialog } from "@/components/features/accounting/add-expense-dialog";
+import { getBillAttachmentUrl } from "@/lib/queries/vendor-bills";
 import { toast } from "sonner";
 import { istToday } from "@/lib/dates/ist";
 
@@ -46,6 +47,15 @@ export default function EmployeeAdvancesPage() {
   const { data: advances = [], isLoading } = useEmployeeAdvances();
   const [disburseOpen, setDisburseOpen] = React.useState(false);
   const [recordExpenseFor, setRecordExpenseFor] = React.useState<EmployeeAdvance | null>(null);
+  const [topUpFor, setTopUpFor] = React.useState<EmployeeAdvance | null>(null);
+
+  async function openBill(path: string) {
+    try {
+      const url = await getBillAttachmentUrl(path);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      else toast.error("Could not open the bill", { description: "Try again in a moment." });
+    } catch { toast.error("Could not open the bill", { description: "Try again in a moment." }); }
+  }
   const [settleFor, setSettleFor] = React.useState<EmployeeAdvance | null>(null);
 
   const activeAdvances = advances.filter((a) => a.status === "active");
@@ -135,7 +145,15 @@ export default function EmployeeAdvancesPage() {
                       onClick={() => setRecordExpenseFor(adv)}
                     >
                       <Icon name="plus" size={14} />
-                      Record Expense from Advance
+                      Record expense
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setTopUpFor(adv)}
+                    >
+                      Top-up
                     </Button>
 
                     <Button
@@ -143,7 +161,7 @@ export default function EmployeeAdvancesPage() {
                       variant="outline"
                       onClick={() => setSettleFor(adv)}
                     >
-                      Settle / Close Advance
+                      Settle
                     </Button>
                   </div>
                 </div>
@@ -183,7 +201,14 @@ export default function EmployeeAdvancesPage() {
 
                           <div className="text-right">
                             <span className="font-bold text-ink">{rupee(exp.amount)}</span>
-                            <p className="text-xs text-emerald font-medium">✓ Adjusted vs Advance</p>
+                            {exp.attachment_url ? (
+                              <button type="button" onClick={() => openBill(exp.attachment_url!)}
+                                className="flex items-center gap-1 ml-auto text-xs text-amber-ink hover:underline">
+                                <Icon name="file" size={12} /> Bill
+                              </button>
+                            ) : (
+                              <p className="text-xs text-ink-3">No bill</p>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -224,11 +249,20 @@ export default function EmployeeAdvancesPage() {
       <DisburseAdvanceDialog open={disburseOpen} onOpenChange={setDisburseOpen} />
 
       {/* Record Expense Modal */}
+      {/* R-101: the normal Expense form (bill attach, GST, categories) with this
+          advance already picked under "Paid by". */}
       {recordExpenseFor && (
-        <RecordAdvanceExpenseDialog
-          advance={recordExpenseFor}
-          open={!!recordExpenseFor}
-          onOpenChange={(open) => !open && setRecordExpenseFor(null)}
+        <AddExpenseDialog
+          advanceId={recordExpenseFor.id}
+          onClose={() => setRecordExpenseFor(null)}
+        />
+      )}
+
+      {topUpFor && (
+        <TopUpAdvanceDialog
+          advance={topUpFor}
+          open={!!topUpFor}
+          onOpenChange={(open) => !open && setTopUpFor(null)}
         />
       )}
 
@@ -276,7 +310,6 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
     disburse.mutate(
       {
-        employee_id: selectedEmpId || null,
         employee_name: empName,
         disbursed_amount: parsedAmount,
         disbursed_date: date,
@@ -403,116 +436,48 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   );
 }
 
-/** Record Expense from Advance Modal */
-function RecordAdvanceExpenseDialog({ advance, open, onOpenChange }: { advance: EmployeeAdvance; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const record = useRecordAdvanceExpense();
-
-  const [category, setCategory] = React.useState<string>("Travel & Local Conveyance");
-  const [amount, setAmount] = React.useState<string>("");
+/** Top-up — the weekly / monthly refill of the same advance. */
+function TopUpAdvanceDialog({ advance, open, onOpenChange }: { advance: EmployeeAdvance; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const topUp = useTopUpAdvance();
+  const spent = advance.total_spent;
+  const [amount, setAmount] = React.useState<string>(spent > 0 ? String(spent) : "");
   const [date, setDate] = React.useState<string>(todayISO());
-  const [vendor, setVendor] = React.useState<string>("");
-  const [description, setDescription] = React.useState<string>("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      toast.error("Valid expense amount daalo");
-      return;
-    }
-
-    record.mutate(
-      {
-        advance_id: advance.id,
-        category,
-        amount: parsedAmount,
-        expense_date: date,
-        vendor_name: vendor.trim() || null,
-        description: description.trim() || null,
-      },
-      {
-        onSuccess: () => {
-          onOpenChange(false);
-          setAmount("");
-          setDescription("");
-        },
-      }
-    );
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Record Expense from Advance</DialogTitle>
+          <DialogTitle>Top-up for {advance.employee_name}</DialogTitle>
           <DialogDescription>
-            Record an official expense incurred by <strong>{advance.employee_name}</strong> out of their advance balance. Hits P&amp;L as an expense and reduces available advance.
+            {rupee(advance.remaining_balance)} is with them now.{" "}
+            {spent > 0 ? <>Bills so far add up to {rupee(spent)}, so that is filled in.</> : null}
           </DialogDescription>
         </DialogHeader>
-
-        <div className="p-3 bg-amber-soft/30 border border-amber/30 rounded-lg text-xs space-y-1 my-1">
-          <p className="font-semibold text-amber-ink">Advance Balance Available: {rupee(advance.remaining_balance)}</p>
-          <p className="text-ink-3">Total Disbursed: {rupee(advance.disbursed_amount)} · Total Spent: {rupee(advance.total_spent)}</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <FormField htmlFor="advances-expense-category" label="Expense Category" required>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger id="advances-expense-category" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EXPENSE_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormField>
-
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const n = Math.round(Number(amount));
+            if (!n || n <= 0) { toast.error("Enter the top-up amount", { description: "More than ₹0." }); return; }
+            topUp.mutate({ advance_id: advance.id, amount: n, date }, { onSuccess: () => onOpenChange(false) });
+          }}
+        >
           <div className="grid grid-cols-2 gap-3">
-            <FormField htmlFor="advances-spent-amount" label="Spent Amount (₹)" required>
-              <Input id="advances-spent-amount"
-                type="number"
-                placeholder="1200"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-              />
+            <FormField label="Amount (₹)" required htmlFor="topup-amount">
+              <Input id="topup-amount" type="number" min={1} inputMode="numeric" autoFocus
+                value={amount} onChange={(e) => setAmount(e.target.value)} />
             </FormField>
-
-            <FormField htmlFor="advances-bill-date" label="Bill Date">
-              <Input id="advances-bill-date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
+            <FormField label="Date" htmlFor="topup-date">
+              <Input id="topup-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </FormField>
           </div>
-
-          <FormField htmlFor="advances-vendor-paid-to-optional" label="Vendor / Paid To (Optional)">
-            <Input id="advances-vendor-paid-to-optional"
-              placeholder="e.g. Uber / Indian Oil / Restaurant"
-              value={vendor}
-              onChange={(e) => setVendor(e.target.value)}
-            />
-          </FormField>
-
-          <FormField htmlFor="advances-description-bill-details" label="Description / Bill Details">
-            <Input id="advances-description-bill-details"
-              placeholder="e.g. Travel fare for client site visit"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </FormField>
-
-          <DialogFooter className="pt-3">
+          <p className="text-xs text-ink-3">
+            Paid the same way as the advance ({ADVANCE_PAYMENT_METHODS[advance.payment_method] || advance.payment_method}).
+            From petty cash, the cash balance goes down by this much.
+          </p>
+          <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" variant="primary" loading={record.isPending}>
-              Record &amp; Adjust Expense
-            </Button>
+            <Button type="submit" variant="primary" loading={topUp.isPending}>Add top-up</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -546,7 +511,7 @@ function SettleAdvanceDialog({ advance, open, onOpenChange }: { advance: Employe
 
           {advance.remaining_balance > 0 ? (
             <p className="text-ink-2 bg-amber-soft/20 p-2.5 rounded border border-amber/30">
-              💡 <strong>Employee has {rupee(advance.remaining_balance)} cash remaining.</strong> Marking this settled assumes the remaining cash has been returned to petty cash or company bank.
+              💡 <strong>Employee has {rupee(advance.remaining_balance)} cash remaining.</strong> Settling records that they handed it back. Given from petty cash, it goes back into petty cash.
             </p>
           ) : (
             <p className="text-emerald font-medium">
@@ -561,7 +526,7 @@ function SettleAdvanceDialog({ advance, open, onOpenChange }: { advance: Employe
             variant="primary"
             loading={settle.isPending}
             onClick={() => {
-              settle.mutate(advance.id, {
+              settle.mutate({ advance_id: advance.id, date: todayISO() }, {
                 onSuccess: () => onOpenChange(false),
               });
             }}

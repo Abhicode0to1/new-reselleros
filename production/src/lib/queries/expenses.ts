@@ -424,6 +424,7 @@ export function useCreateExpense() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["employee_expense_advances"] }); // R-101: a spend / delete moves an advance balance
       qc.invalidateQueries({ queryKey: ["bank_accounts"] });
       qc.invalidateQueries({ queryKey: ["bank_transactions"] });
       qc.invalidateQueries({ queryKey: ["project_sales"] });   // project cost → refresh project P&L
@@ -562,6 +563,7 @@ export function useMarkExpensePaid() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["employee_expense_advances"] }); // R-101: a spend / delete moves an advance balance
       qc.invalidateQueries({ queryKey: ["bank_accounts"] });
       qc.invalidateQueries({ queryKey: ["bank_transactions"] });
       toast.success("Marked paid");
@@ -593,6 +595,7 @@ export function useBulkMarkExpensesPaid() {
     },
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["employee_expense_advances"] }); // R-101: a spend / delete moves an advance balance
       toast.success(`${count} ${count === 1 ? "expense" : "expenses"} marked paid`);
     },
     onError: (err) => toast.error((err as Error).message),
@@ -615,6 +618,7 @@ export function useUpdateExpense() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["employee_expense_advances"] }); // R-101: a spend / delete moves an advance balance
       qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Expense updated");
     },
@@ -633,6 +637,7 @@ export function useDeleteExpense() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["employee_expense_advances"] }); // R-101: a spend / delete moves an advance balance
       qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Expense deleted");
     },

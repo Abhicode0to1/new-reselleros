@@ -6798,6 +6798,7 @@ export type Database = {
           bank_txn_id: string | null
           category: string
           channel: string | null
+          closed_at: string | null
           consumed_amount: number
           created_at: string
           created_by: string | null
@@ -6816,6 +6817,7 @@ export type Database = {
           bank_txn_id?: string | null
           category?: string
           channel?: string | null
+          closed_at?: string | null
           consumed_amount?: number
           created_at?: string
           created_by?: string | null
@@ -6834,6 +6836,7 @@ export type Database = {
           bank_txn_id?: string | null
           category?: string
           channel?: string | null
+          closed_at?: string | null
           consumed_amount?: number
           created_at?: string
           created_by?: string | null
@@ -11872,6 +11875,30 @@ export type Database = {
           p_date?: string
           p_gst?: number
           p_note?: string
+        }
+        Returns: number
+      }
+      give_employee_advance: {
+        Args: {
+          p_account?: string
+          p_amount: number
+          p_date?: string
+          p_method?: string
+          p_name: string
+          p_note?: string
+        }
+        Returns: string
+      }
+      settle_employee_advance: {
+        Args: { p_account?: string; p_advance_id: string; p_date?: string }
+        Returns: number
+      }
+      top_up_employee_advance: {
+        Args: {
+          p_account?: string
+          p_advance_id: string
+          p_amount: number
+          p_date?: string
         }
         Returns: number
       }
