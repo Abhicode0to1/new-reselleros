@@ -56,35 +56,6 @@ Ek line (insaan) → Planner AI poora card likhta hai (kyun, kya, kahan, Done ja
 
 Team Pulse (Pardeep ka private page) har insaan ke liye dikhata hai: 30 din mein kitne card Done, **unme se kitne AI ne khud banaye**, aur kitne card insaan ke login/haan par ruke hain. Lakshya: AI ka hissa har hafte badhe, "ruke hue" ghatein.
 
-## 7. Roz ka tareeka — 4 log ek saath (1 Oct 2026, Pardeep)
+## 7. Roz ka tareeka — ab TEAM-PROTOCOL mein (1 Oct 2026)
 
-**Ek niyam:** har insaan apne area ka malik, uska AI karigar. Kisi aur ke area ka code nahi badalna — board par uske naam card, uska AI uthayega.
-
-**Har insaan, roz ~15 min:**
-1. Subah apna Claude kholo, "hi" likho — wo board padh ke 10 line mein aaj ka kaam batata hai.
-2. 📣 notice par "Padh liya" — baaki AI shuru karta hai.
-3. "👤 Sirf aapke kaam" — sirf wo jo AI nahi kar sakta (login, CA/customer se baat, faisla).
-4. Code, test, merge, bug dhoondhna — AI.
-5. Shaam board dekho; apna kadam baaki ho to kal subah sabse pehle.
-
-**Card ka safar:** card → AI code + test → gate green → merge → jaanch wala AI ✓ → jisne kaam diya wo Done → deploy par live.
-- Card saaf: kya dikhta hai, kahan, aur "Done jab". Adhoora card = AI andaza lagata hai.
-- Kisi insaan ke kadam par ruka ho to card par `humanStep` + `waitingOn` likho — board use "🙋 team ke kadam par ruke hain" mein dikhata hai, AI wale mein nahi.
-- Done sirf jisne kaam diya; karne wala Review mein daalta hai. Har bug ke saath test.
-
-**Hafta:**
-- Somvaar — har insaan apne area ke top 3 (P0 pehle), Pardeep manzoor.
-- Deploy ka ek pakka din — pehle migration, phir app; Abhishek ka AI chalata hai.
-- Shukravaar — 15 min review: kya atka, kaunsa bug insaan ko mila (AI se chhoota), system mein kya sudhaarna.
-
-**Jahan confusion hua, uske niyam:**
-| Problem | Niyam |
-|---|---|
-| Kaam doosre insaan par atka, pata nahi chala | Card par `humanStep`/`waitingOn` — kiska kadam baaki |
-| Do branch ke migration ulte kram mein | Naye migration se pehle sab `origin/*` dekho, sabse naya time |
-| Purani branch se galti | Har session shuru mein `origin/manager-pardeep` merge |
-| Board ke button samajh nahi aaye | Naye button kam, seedhi bhasha; board par sirf insaan ka kaam |
-| Live data galti se badle | Testing sirf localhost + AITEST data |
-| App mein Hinglish/faltu label | App ke button/label chhoti seedhi English; highlight jo kahe use dobara mat likho |
-
-**Manager (Pardeep), roz 10 min:** "👤 Sirf aapke kaam" niptao; faisle wale card usi din (ek din ka faisla = team ka ek din); hafte mein Team Pulse.
+Team ka tareeka ab ek AI custom-software company ka hai: AI code, docs, tests, notes karta hai; 4 log sirf wo karte hain jo AI nahi kar sakta (client, faisla, paisa, login/live). Poora — kaun kya, ek project ke 7 kadam, board: [`docs/TEAM-PROTOCOL.md`](TEAM-PROTOCOL.md) → "Team model". Naye client project ke liye: [`docs/project-template/`](project-template/).

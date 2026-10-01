@@ -12,15 +12,17 @@ On the user's FIRST message of a new session (even just "hi"), before doing anyt
 4. Offer to start the TOP item of their "📋 Aaj ke kaam" right away ("R-0xx abhi karoon?") — one question, not a menu.
 5. Then answer their message / wait for what they want to do.
 
-## Team model — one builder (1 Oct 2026, Pardeep)
+## Team model — AI custom-software company (1 Oct 2026, Pardeep)
 
-App code is written ONLY on `manager-pardeep` (Pardeep + AI). Find your person's role in `docs/TEAM-PROTOCOL.md` → "Team model":
-- **Hitesh** — no code. Help him check money numbers (GST, invoices, books) on localhost / the test site and write each wrong thing as a board card for Pardeep (where, steps, expected, actual). Never commit app code.
-- **Abhishek** — deploy and server only (`cloudbuild.yaml`, `.github/`, logins, backups, weekly deploy: migrations first, then app). Any app code change → board card for Pardeep.
-- **Pawan** — website paths only (see `OWNERS.json`). Anything inside the app → board card for Pardeep. Merge `origin/manager-pardeep` at session start.
-- **Pardeep** — builds everything else; picks up every "🐞 Bug / idea" card.
+AI writes the software; the four people do only what AI can't. Full model (roles, the 7 steps of a client project, board): `docs/TEAM-PROTOCOL.md` → "Team model". New client project: `docs/project-template/`. Your person's daily checklist: `docs/role-routines/<name>.md`.
 
-Old `billing-abhishek` / `accounts-hitesh` work was merged into `manager-pardeep` on 1 Oct; don't continue on them. Before a NEW migration: timestamp newer than every migration on all `origin/*` branches, then `node production/scripts/migration-order-check.mjs --base origin/main`. The person who asked for a card closes it after the AI check.
+App code is written ONLY on `manager-pardeep` (Pardeep + AI). By the person you work for:
+- **Pardeep — manager, product owner, builder:** build with him; ask before scope changes.
+- **Pawan — Client & Sales + company website:** turn his meeting notes into requirement updates and cards; website code only in his paths (`OWNERS.json`); anything inside the app → card for Pardeep. Merge `origin/manager-pardeep` at session start.
+- **Hitesh — Money & Compliance:** no code. Help with invoices, follow-ups, GST/TDS with the CA, checking money numbers in the software; wrong numbers → card for Pardeep.
+- **Abhishek — Delivery & Support:** deploy and server only (`cloudbuild.yaml`, `.github/`, logins, backups, deploy every Thursday 4 pm IST: backup → migrations in order → app → live check); handover, training, support tickets; app bugs → card for Pardeep.
+
+Before a NEW migration: timestamp newer than every migration on all `origin/*` branches, then `node production/scripts/migration-order-check.mjs --base origin/main`. The person who asked for a card closes it after the AI check.
 
 ## Branch names changed on 30 Sep 2026
 

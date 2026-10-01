@@ -30,20 +30,48 @@ person, or a fix on a page Hitesh reported (his retest still decides).
 Ownership of code is in [`OWNERS.json`](../OWNERS.json) (repo root). `node production/scripts/areas.mjs`
 tells you whose area a branch touched.
 
-## Team model — one builder, 1 Oct 2026
+## Team model — an AI custom-software company, 1 Oct 2026
 
-Goal (Pardeep): run an AI software company with four people — AI writes the software, each person owns one part of the company.
+Pardeep (manager): "hum AI se custom software banate hain — 4 logon ka role sirf wo ho jo AI na kar sake, baaki sab AI kare." Four people writing code in parallel made the work slow and confusing, so code is written in **one place per project** by Pardeep's AI, and people do only what needs a human. `OWNERS.json` is the truth for this repo.
 
-Pardeep decided on 1 Oct 2026: four people writing code in parallel made the work slow and confusing (merges, cross-area cards, waiting). Code is now written by AI, so the app is built from **one branch** and the others do what only they can do. `OWNERS.json` is the truth.
+### What the AI does vs. what only a person does
+| AI does (not a person) | Only a person (AI can't) |
+|---|---|
+| Requirement doc, screen sketches, estimate draft — from the client's call notes | Meeting / calling the client, trust, getting "yes, this is what we want" |
+| Code, database, tests, bug fixes, docs | Deciding what to build and in what order; client's yes when scope changes |
+| Daily progress note, board updates, release notes | Price, payment terms, sending invoices, GST / CA |
+| Testing on localhost / test site with AITEST data | Real logins (server, domain, payment gateway, the client's accounts) |
+| Running the deploy steps, post-deploy checklist | Saying "yes, go live"; handover and training for the client |
+| First draft of a support reply, the bug card | An unhappy client, refund / discount decisions |
 
-| Who | Does | Writes app code? |
-|---|---|---|
-| **Pardeep + AI — CEO & Product** | Decides what to build and in what order; builds the whole app on `manager-pardeep` with AI (Sell, Customer, Money, app shell, crons, tests, docs) | Yes — the only app branch |
-| **Hitesh — Finance & Compliance** | The company's own books, GST and TDS with the CA; checks every money number the app shows (invoices, GST, books) on localhost / test site; writes what is wrong as a card | No |
-| **Abhishek — Operations & Customer Delivery** | Weekly deploy **every Thursday 4 pm IST** (backup → migrations in order → app → version check); after each deploy a live run of quote → invoice → payment → renewal; new customer setup (Workspace / Microsoft / domain / hosting); technical support tickets; Cloud Run / Supabase / GitHub logins, CI, backups | Only `cloudbuild.yaml`, `.github/` |
-| **Pawan — Growth & Website** | Website and sign-up / checkout funnel, customer portal, public API; demos for prospects and turning website visitors into leads | Only the website paths |
+### Four people, four roles (same on every project)
+| Person | Role | When in a project | Does |
+|---|---|---|---|
+| **Pardeep** | Manager + product owner + builder | Start to end | Turns what the client wants into clear work for the AI, fixes scope and priority, builds with his AI on the project's one branch, looks at every piece on localhost for 5 minutes |
+| **Pawan** | Client & Sales | Start + demos | Brings clients, first meeting, listens (AI writes the notes), demos at every milestone, gets the client's sign-off; the company website and leads (website code with his own AI, website paths only) |
+| **Hitesh** | Money & Compliance | Quote, every milestone, end | Final price and milestones, advance / milestone invoices, payment follow-up, GST / TDS with the CA; checks every money number inside the software |
+| **Abhishek** | Delivery & Support | Every release + after go-live | Logins to the client's server / domain / accounts, weekly deploy (**every Thursday 4 pm IST** for ResellerOS: backup → migrations in order → app → version check), live check, handover + training, support tickets, AMC; repo `cloudbuild.yaml`, `.github/` |
 
-**Board = 2 lists:** "🐞 Bug / idea" (anyone writes one line; Pardeep's AI picks it up) and "🔎 Ye check karo" (what the AI built that a person should check — e.g. GST numbers → Hitesh). Old branches (`billing-abhishek`, `accounts-hitesh`) were merged into `manager-pardeep` on 1 Oct and are no longer worked on.
+### One client project, seven steps
+1. **Lead → meeting (Pawan).** The AI turns the call notes into `REQUIREMENTS.md`, screen sketches and an estimate draft (`docs/project-template/`).
+2. **Scope + price (Pardeep + Hitesh).** Pardeep fixes scope, Hitesh the price and milestones; the AI writes the quote → Pawan gets it signed + advance (Hitesh invoices).
+3. **Build (Pardeep + AI).** Code + tests on the project's one branch; the AI writes a daily progress note (also for the client). Pardeep checks on localhost daily.
+4. **Demo (Pawan).** At each milestone; changes go into `REQUIREMENTS.md` by the AI; new work = new price → Hitesh.
+5. **Go live (Abhishek).** Deploy day: login + "yes"; the AI runs the steps; Abhishek checks live.
+6. **Handover (Abhishek + Hitesh).** Training, logins to the client (`HANDOVER.md`); final invoice + payment.
+7. **Support / AMC (Abhishek).** Tickets; the AI drafts the first reply and the bug card; Pardeep's AI fixes.
+
+### Board — only this (all projects on one board)
+- Every card names its **project** ("ResellerOS", "Client X ERP"); a project filter at the top.
+- Each person sees one list, **"🔎 Aapka kadam"** — only what they must do themselves (meeting, decision, invoice, login / yes).
+- One line **"🤖 AI kar raha hai"**, one line **"⏳ Deploy din"**.
+- The form on top: **"🐞 Bug / idea / client ki baat"** — one line; the AI turns it into a card.
+
+### Code rule (no collisions)
+- Every client project has its **own repo with one working branch**, written by Pardeep's AI. Nobody else writes app code.
+- The company website is Pawan's (separate paths / repo), built with his own AI.
+- One fixed deploy day a week per project.
+- Old branches (`billing-abhishek`, `accounts-hitesh`) were merged into `manager-pardeep` on 1 Oct and are no longer worked on.
 
 ## Testing — 30 Sep 2026
 
