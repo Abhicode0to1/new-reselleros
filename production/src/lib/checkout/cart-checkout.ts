@@ -371,7 +371,17 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
         request,
         body as Record<string, unknown>,
       );
-      if (!started.ok) return NextResponse.json({ error: started.error }, { status: 500 });
+      if (!started.ok) {
+        /* One trial per customer is a refusal, not a fault (409) — and the checkout shows it as
+           its own pop-up with a way forward (buy the plan, ask for more time), so say which. */
+        if (started.alreadyTrialled) {
+          return NextResponse.json(
+            { error: started.error, alreadyTrialled: true, ...(started.trialStartedOn ? { trialStartedOn: started.trialStartedOn } : {}) },
+            { status: 409 },
+          );
+        }
+        return NextResponse.json({ error: started.error }, { status: 500 });
+      }
       return NextResponse.json({ success: true, trial: true, leadId: started.leadId, trialEnds: started.trialEnds, confirmationSent: started.confirmationSent });
     }
 

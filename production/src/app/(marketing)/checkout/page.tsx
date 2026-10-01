@@ -10,7 +10,7 @@
  * flips the quote to paid, creates the customer/subscription/invoice and queues provisioning.
  * A line with no server-priceable SKU is refused with a clear message (request a quote).
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, cycleLabel } from "@/site/lib/money";
@@ -26,6 +26,12 @@ const STATE_OPTIONS = Object.entries(GST_STATE_BY_CODE)
   .sort((a, b) => a[1].localeCompare(b[1]));
 import { razorpayContact } from "@/lib/checkout/razorpay-contact";
 import { BusyPanel } from "@/components/ui/busy-panel";
+import { CheckoutNotice } from "@/site/components/cart/CheckoutNotice";
+import { checkoutProblem, actionLabel, type ProblemAction, type ProblemFlags } from "@/site/lib/checkout-problem";
+import { paidHostingLine } from "@/site/lib/hosting-cart-line";
+import { HOSTING_TIERS } from "@/site/lib/data/hosting-landing-v2";
+import { COMPANY } from "@/site/lib/config";
+import { TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 
 /* 30 Sep 2026: the choice was never sent anywhere, so every option opened the same Razorpay
    window, and "Bank transfer — NEFT/RTGS, activated on credit" was not a path this checkout
@@ -93,7 +99,13 @@ export default function CheckoutPage() {
   /* True while the server prepares a PAID order, until Razorpay's own window opens — the
      progress panel must not keep counting behind Razorpay (30 Sep 2026). */
   const [preparingPayment, setPreparingPayment] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /* What stopped the order or the trial, shown as a pop-up with the ways to fix it
+     (1 Oct 2026, Pawan: a red line above the button "looks flimsy" for this). */
+  const [problem, setProblem] = useState<{ during: "trial" | "order" | "payment"; message: string; flags: ProblemFlags } | null>(null);
+  const closeProblem = useCallback(() => setProblem(null), []);
+  /* The Razorpay order a failed payment belongs to, so "Try again" reopens the same order
+     instead of taking a second quote number for one purchase. */
+  const lastOrder = useRef<StartedOrder | null>(null);
   /* Set once the buyer presses Continue / Start trial with something missing, so the list
      of what is missing shows from then on and shrinks as they type. */
   const [showMissing, setShowMissing] = useState(false);
@@ -189,7 +201,7 @@ export default function CheckoutPage() {
   async function startTrial() {
     if (paying) return;
     setPaying(true);
-    setError(null);
+    setProblem(null);
     try {
       const res = await fetch("/api/public/checkout/cart", {
         method: "POST",
@@ -203,8 +215,12 @@ export default function CheckoutPage() {
           lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle })),
         }),
       });
-      const json = (await res.json().catch(() => ({}))) as { success?: boolean; trial?: boolean; error?: string; confirmationSent?: boolean };
-      if (!res.ok || !json.success || !json.trial) throw new Error(json.error || "Could not start your trial. Nothing was saved — please try again.");
+      const json = (await res.json().catch(() => ({}))) as { success?: boolean; trial?: boolean; error?: string; confirmationSent?: boolean } & ProblemFlags;
+      if (!res.ok || !json.success || !json.trial) {
+        setProblem({ during: "trial", message: json.error || "Could not start your trial. Nothing was saved — please try again.", flags: json });
+        setPaying(false);
+        return;
+      }
       try {
         window.sessionStorage.setItem("anutech.trial", email.trim());
         // Whether the confirmation link really left — the done page must not claim it did.
@@ -213,8 +229,8 @@ export default function CheckoutPage() {
       } catch { /* done page falls back */ }
       cart.clear();
       router.push("/done" as never);
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setProblem({ during: "trial", message: "We couldn't reach our server, so nothing was saved. Check your internet connection and try again.", flags: {} });
       setPreparingPayment(false);
       setPaying(false);
     }
@@ -230,7 +246,7 @@ export default function CheckoutPage() {
     setPriceCheck(null);
     setPaying(true);
     setPreparingPayment(true);
-    setError(null);
+    setProblem(null);
     try {
       const res = await fetch("/api/public/checkout/cart", {
         method: "POST",
@@ -257,8 +273,13 @@ export default function CheckoutPage() {
         success?: boolean; simulated?: boolean; orderId?: string; amount?: number;
         currency?: string; razorpayKeyId?: string; quoteId?: string; error?: string;
         totalRupees?: number;
-      };
-      if (!res.ok || !json.success) throw new Error(json.error || "Could not start checkout. Please retry.");
+      } & ProblemFlags;
+      if (!res.ok || !json.success) {
+        setProblem({ during: "order", message: json.error || "Could not start checkout. Nothing was charged — please try again.", flags: json });
+        setPreparingPayment(false);
+        setPaying(false);
+        return;
+      }
 
       if (json.simulated) {
         try { window.sessionStorage.removeItem("anutech.trial"); window.sessionStorage.setItem("anutech.order", json.quoteId || ""); } catch { /* default shown */ }
@@ -287,7 +308,7 @@ export default function CheckoutPage() {
       }
       await openPayment(order);
     } catch (err) {
-      setError((err as Error).message);
+      setProblem({ during: "order", message: (err as Error).message, flags: {} });
       setPreparingPayment(false);
       setPaying(false);
     }
@@ -296,6 +317,7 @@ export default function CheckoutPage() {
   async function openPayment(order: StartedOrder) {
     setPriceCheck(null);
     setPaying(true);
+    lastOrder.current = order;
     try {
       const Razorpay = await loadRazorpay();
       const rzp = new Razorpay({
@@ -319,20 +341,84 @@ export default function CheckoutPage() {
         modal: { ondismiss: () => setPaying(false), escape: true },
       });
       rzp.on("payment.failed", (resp) => {
-        setError(`Payment failed: ${resp.error?.description ?? "Please retry or WhatsApp us."}`);
+        setProblem({ during: "payment", message: resp.error?.description ?? "", flags: {} });
         setPaying(false);
       });
       rzp.open();
       setPreparingPayment(false); // Razorpay's window now shows its own progress
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setProblem({ during: "order", message: "The secure payment window didn't load, so nothing was charged. Check your internet connection and try again.", flags: {} });
       setPreparingPayment(false);
       setPaying(false);
     }
   }
 
+  /* The paid plan the trial would have become, on the same billing cycle — what
+     "Buy Starter" puts in the cart. */
+  const trialLine = cart.lines.find((l) => (l.sku || "").startsWith("hosting-trial:"));
+  const trialYearly = trialLine?.cycle !== "monthly";
+  const paidTier = HOSTING_TIERS.find((p) => p.name === TRIAL_PLAN_NAME);
+  const paidPrice = paidTier
+    ? `${rupee(Math.round(trialYearly ? paidTier.yearlyTotal : paidTier.monthly))}/${trialYearly ? "year" : "month"} + GST`
+    : undefined;
+
+  function runAction(a: ProblemAction, field?: string) {
+    const was = problem;
+    setProblem(null);
+    const mail = (subject: string, body: string) => {
+      window.location.href = `mailto:${COMPANY.supportEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    };
+    switch (a) {
+      case "buy-paid-plan":
+        if (!paidTier) { router.push("/hosting" as never); return; }
+        // Add first, then take the trial out, so the cart is never empty in between.
+        cart.add(paidHostingLine(paidTier, trialYearly));
+        for (const l of cart.lines) if ((l.sku || "").startsWith("hosting-trial:")) cart.remove(l.key);
+        setShowMissing(false);
+        return;
+      case "ask-more-time":
+        mail("More time on my free hosting trial", `Hi Anutech team,\n\nCould I have more time on my free hosting trial?\n\nEmail: ${email.trim()}\nMobile: ${phone.trim()}\nDomain: ${domain.trim()}\n\nThanks,\n${name.trim()}`);
+        return;
+      case "edit-details":
+        window.setTimeout(() => {
+          const el = document.getElementById(`checkout-${field ?? "email"}`);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          (el as HTMLInputElement | null)?.focus();
+        }, 50);
+        return;
+      case "register-domain":
+        router.push(BUY_A_DOMAIN_HREF as never);
+        return;
+      case "retry":
+        if (was?.during === "trial") void startTrial();
+        else if (was?.during === "payment" && lastOrder.current) void openPayment(lastOrder.current);
+        else void placeOrder();
+        return;
+      case "email-support":
+        mail("Problem at checkout", `Hi Anutech team,\n\nI couldn't finish my order. The page said:\n"${was?.message ?? ""}"\n\nEmail: ${email.trim()}\nMobile: ${phone.trim()}\n\nThanks,\n${name.trim()}`);
+        return;
+      case "back-to-cart":
+        router.push("/cart" as never);
+        return;
+    }
+  }
+  const shownProblem = problem ? checkoutProblem(problem.during, problem.message, problem.flags, TRIAL_PLAN_NAME) : null;
+
   return (
     <section className="section rise">
+      {shownProblem && (
+        <CheckoutNotice
+          tone={shownProblem.tone}
+          title={shownProblem.title}
+          body={shownProblem.body}
+          footnote={shownProblem.footnote}
+          buttons={shownProblem.actions.map((a) => ({
+            label: actionLabel(a, shownProblem, paidPrice, TRIAL_PLAN_NAME),
+            onClick: () => runAction(a, shownProblem.field),
+          }))}
+          onClose={closeProblem}
+        />
+      )}
       <div className="wrap" style={{ display: "grid", gridTemplateColumns: "1.2fr .8fr", gap: 40, alignItems: "start" }} data-grid>
         <div>
           <h1 className="h1-narrow" style={{ marginBottom: 6 }}>Checkout</h1>
@@ -347,7 +433,7 @@ export default function CheckoutPage() {
               {/* Required first, optional last (owner, 30 Sep 2026): a buyer fills top to
                   bottom and can stop at the "Optional" line. */}
               <Field label="YOUR NAME" value={name} onChange={setName} />
-              <Field label="EMAIL — THE GST INVOICE GOES HERE" value={email} onChange={setEmail} type="email" />
+              <Field id="checkout-email" label="EMAIL — THE GST INVOICE GOES HERE" value={email} onChange={setEmail} type="email" />
               <Field label="MOBILE" value={phone} onChange={setPhone} type="tel" />
               {(hasHosting || hasTrial) && (
                 <>
@@ -356,6 +442,7 @@ export default function CheckoutPage() {
                     hostingLines.map((l, i) => (
                       <Field
                         key={l.key}
+                        id={i === 0 ? "checkout-domain" : undefined}
                         label={`DOMAIN FOR ${planName(i).toUpperCase()} (e.g. yourcompany.in)`}
                         value={typedFor(l.key, i)}
                         onChange={(v) => (i === 0 ? setDomain(v) : setPlanDomain((m) => ({ ...m, [l.key]: v })))}
@@ -363,7 +450,7 @@ export default function CheckoutPage() {
                       />
                     ))
                   ) : (
-                    <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
+                    <Field id="checkout-domain" label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
                   )}
                   {/* Required for hosting and the trial alike (owner, 30 Sep 2026), so a buyer
                       without one is shown where to get one rather than left stuck. */}
@@ -386,6 +473,7 @@ export default function CheckoutPage() {
                 <label style={{ display: "block", marginBottom: 14 }}>
                   <span className="mono-label" style={{ color: "var(--text-muted)", display: "block", marginBottom: 6 }}>STATE — DECIDES THE GST ON YOUR INVOICE</span>
                   <select
+                    id="checkout-state"
                     value={stateCode}
                     onChange={(e) => setStateCode(e.target.value)}
                     style={{ width: "100%", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "11px 12px", fontSize: 15, fontFamily: "inherit", background: "#fff" }}
@@ -424,9 +512,6 @@ export default function CheckoutPage() {
                   {hostingWarning}{" "}
                   <button type="button" className="btn btn-outline btn-sm" onClick={() => router.push("/cart" as never)}>Back to cart</button>
                 </div>
-              )}
-              {isTrialCart && error && (
-                <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
               )}
               {showMissing && missingMsg && (
                 <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
@@ -507,9 +592,6 @@ export default function CheckoutPage() {
                   </div>
                 </div>
               )}
-              {error && (
-                <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
-              )}
               {agreeNudge && !agreed && (
                 <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
                   Please tick the box above to accept the terms and the refund policy, then press Pay.
@@ -588,11 +670,12 @@ export default function CheckoutPage() {
   );
 }
 
-function Field({ label, value, onChange, type = "text", mono }: { label: string; value: string; onChange: (v: string) => void; type?: string; mono?: boolean }) {
+function Field({ id, label, value, onChange, type = "text", mono }: { id?: string; label: string; value: string; onChange: (v: string) => void; type?: string; mono?: boolean }) {
   return (
     <label style={{ display: "block", marginBottom: 14 }}>
       <span className="mono-label" style={{ color: "var(--text-muted)", display: "block", marginBottom: 6 }}>{label}</span>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}

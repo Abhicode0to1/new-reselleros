@@ -286,6 +286,20 @@ describe("a free Starter trial in the cart (24 Sep 2026: no form in between)", (
     expect(rpc).not.toHaveBeenCalledWith("next_document_number", expect.anything());
   });
 
+  it("a second trial is a 409 the checkout can name — the date and alreadyTrialled, not a bare 500 (1 Oct 2026)", async () => {
+    startHostingTrial.mockResolvedValueOnce({ ok: false, alreadyTrialled: true, trialStartedOn: "30 Sept 2026", error: "You've already had a free hosting trial with us." });
+    const res = await POST(req({ lines: [trial], domain: "acme.in" }));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "You've already had a free hosting trial with us.", alreadyTrialled: true, trialStartedOn: "30 Sept 2026" });
+  });
+
+  it("a trial that fails on our side stays a 500 with no alreadyTrialled flag", async () => {
+    startHostingTrial.mockResolvedValueOnce({ ok: false, error: "Could not start your trial." });
+    const res = await POST(req({ lines: [trial], domain: "acme.in" }));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "Could not start your trial." });
+  });
+
   it("a trial with other items is refused whole — no trial started, nothing charged", async () => {
     const res = await POST(req({ lines: [trial, { sku: "hosting:starter", qty: 1, cycle: "yearly" }], domain: "acme.in" }));
     expect(res.status).toBe(400);

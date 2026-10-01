@@ -49,7 +49,7 @@ export type StartTrialResult =
           when it did not (30 Sep 2026). */
       confirmationSent: boolean;
     }
-  | { ok: false; error: string; alreadyTrialled?: true };
+  | { ok: false; error: string; alreadyTrialled?: true; trialStartedOn?: string };
 
 /** Escape LIKE wildcards, so an email containing `_` or `%` matches only itself. */
 export function likeEscape(v: string): string {
@@ -71,7 +71,7 @@ export function quoteForOr(v: string): string {
  */
 export type TrialEligibility =
   | { ok: true; eligible: true }
-  | { ok: true; eligible: false; error: string }
+  | { ok: true; eligible: false; error: string; /** "30 Sept 2026" — when the earlier trial began, if known. */ startedOn?: string }
   | { ok: false; error: string };
 
 /** The domain as the trial stores it: lower-case, no scheme, no trailing slash. */
@@ -117,6 +117,7 @@ export async function checkTrialEligibility(
     return {
       ok: true,
       eligible: false,
+      startedOn: when,
       error:
         `You've already had a free hosting trial with us (started ${when}), and it's one per customer — matched on this email, phone number or domain. ` +
         `Nothing was saved. You can buy ${tierName} from the hosting page, or reply to our earlier email if you need more time on the trial.`,
@@ -132,12 +133,14 @@ export async function checkTrialEligibility(
     return { ok: false, error: "We couldn't check whether you've had a trial before, so we haven't started one. Nothing was saved. Please try again in a minute." };
   }
   if (dmsHistory.trialled) {
-    const when = dmsHistory.startedAt
-      ? ` (started ${new Date(dmsHistory.startedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})`
-      : "";
+    const startedOn = dmsHistory.startedAt
+      ? new Date(dmsHistory.startedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+      : undefined;
+    const when = startedOn ? ` (started ${startedOn})` : "";
     return {
       ok: true,
       eligible: false,
+      ...(startedOn ? { startedOn } : {}),
       error:
         `You've already had a free hosting trial with us${when}, and it's one per customer — matched on this email, phone number or domain. ` +
         `Nothing was saved. You can buy ${tierName} from the hosting page, or reply to our earlier email if you need more time on the trial.`,
@@ -165,7 +168,9 @@ export async function startHostingTrial(
   // (checkTrialEligibility above), so the two can never disagree.
   const eligibility = await checkTrialEligibility(admin, { email, phone, domain });
   if (!eligibility.ok) return { ok: false, error: eligibility.error };
-  if (!eligibility.eligible) return { ok: false, alreadyTrialled: true, error: eligibility.error };
+  if (!eligibility.eligible) {
+    return { ok: false, alreadyTrialled: true, error: eligibility.error, ...(eligibility.startedOn ? { trialStartedOn: eligibility.startedOn } : {}) };
+  }
   // The same keys the check matched on, for DMS's shared trial record below.
   const emailKey = email.trim().toLowerCase();
   const phoneKey = phone.replace(/\D/g, "").slice(-10);

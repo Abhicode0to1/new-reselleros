@@ -66,6 +66,8 @@ describe("site cart lines are chargeable", () => {
         // A ternary add (`cart.add(yearly ? {...} : {...})`) must carry a sku in each branch.
         const objects = call.split(/\?\s*\{|:\s*\{/).length > 2 ? call.split(/(?=\{)/).filter((p) => p.includes("label")) : [call];
         for (const o of objects) {
+          // The paid-hosting builder (lib/hosting-cart-line.ts) carries the sku itself — pinned below.
+          if (/^cart\.add\(paidHostingLine\(/.test(o)) continue;
           expect(o, `no sku in:\n${o}`).toMatch(/\bsku\s*:/);
           if (/sku\s*:\s*`domain:/.test(o)) expect(o, `domain line without its name:\n${o}`).toMatch(/\bdomain\s*:/);
           expect(o).not.toMatch(/your(name|business)/i);
@@ -73,6 +75,11 @@ describe("site cart lines are chargeable", () => {
       }
     });
   }
+
+  it("the paid-hosting builder the hosting page and the checkout pop-up share carries the hosting sku", () => {
+    const src = readFileSync(join(ROOT, "lib/hosting-cart-line.ts"), "utf8");
+    expect(src).toContain("sku: `hosting:${p.name.toLowerCase()}`");
+  });
 
   it("the two old components with SKU-less adds stay deleted, and nothing imports them", () => {
     for (const rel of DELETED) expect(existsSync(join(ROOT, rel)), rel).toBe(false);

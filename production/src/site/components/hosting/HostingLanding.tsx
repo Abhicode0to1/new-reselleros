@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { Manrope, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { isTrialPlan, TRIAL_PLAN_ID, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
+import { paidHostingLine } from "@/site/lib/hosting-cart-line";
 import {
   HOSTING_TIERS,
   REC_WHY,
@@ -111,17 +112,7 @@ export function HostingLanding() {
   });
   /* One add-to-cart for both card layouts (trial plan: secondary button; others:
      the main one), so the two can never charge differently. */
-  const addPlanToCart = (p: (typeof plans)[number]) => cart.add({
-    label: `${p.name} hosting`,
-    detail: `${p.storage} · ${p.bandwidth} · cPanel on Google Cloud`,
-    /* Whole rupees, exactly as the checkout API charges (Math.round of the
-       same figure) — ₹599.88 here against ₹600 there made the shown total
-       and the charged total disagree. */
-    unitPrice: Math.round(yearly ? p.yearlyTotal : p.monthly),
-    unit: yearly ? "year" : "month",
-    cycle: yearly ? "yearly" : "monthly",
-    sku: `hosting:${p.name.toLowerCase()}`,
-  });
+  const addPlanToCart = (p: (typeof plans)[number]) => cart.add(paidHostingLine(p, yearly));
   /* "Start free trial" goes straight to the cart (Pardeep, 24 Sep 2026: no page in
      between). A ₹0 trial line on the billing cycle being viewed; checkout then asks
      for the details and starts the trial with no payment step. Any earlier trial
