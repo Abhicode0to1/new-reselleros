@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { grossAmount, quoteAmountGap, isQuoteAmountConsistent, QUOTE_AMOUNT_TOLERANCE } from "./amounts";
+import { grossAmount, quoteAmountGap, isQuoteAmountConsistent, QUOTE_AMOUNT_TOLERANCE, taxableAfterDiscount } from "./amounts";
 
 describe("quote amount integrity", () => {
   it("clears the 26 production quotes whose numbers agree", () => {
@@ -58,5 +58,23 @@ describe("grossAmount", () => {
   it("supports other GST rates", () => {
     expect(grossAmount(1000, 5)).toBe(1050);
     expect(grossAmount(1000, 0)).toBe(1000);
+  });
+});
+
+describe("coupon / discount quotes (R-082)", () => {
+  it("taxable value is subtotal net of the rounded discount, like generate_invoice", () => {
+    expect(taxableAfterDiscount(600, 10)).toBe(540);
+    expect(taxableAfterDiscount(999, 15)).toBe(999 - 150);
+    expect(taxableAfterDiscount(600, 0)).toBe(600);
+  });
+
+  it("a 10% coupon quote (₹600 − 10% + 18% = ₹637) is consistent once the discount is counted", () => {
+    expect(isQuoteAmountConsistent(600, 18, 637, 10)).toBe(true);
+    expect(isQuoteAmountConsistent(600, 18, 637)).toBe(false); // the old check, which refused it
+  });
+
+  it("still catches a coupon quote whose GST is missing", () => {
+    expect(isQuoteAmountConsistent(600, 18, 540, 10)).toBe(false);
+    expect(quoteAmountGap(600, 18, 540, 10)).toBe(97);
   });
 });

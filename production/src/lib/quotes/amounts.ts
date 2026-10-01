@@ -34,8 +34,20 @@ export function grossAmount(subtotal: number, taxRatePct = 18): number {
  * that question is open — an invoice is a GST document, and its numbers stop being
  * editable the moment it exists.
  */
-export function quoteAmountGap(subtotal: number, taxRatePct: number, amount: number): number {
-  return grossAmount(subtotal, taxRatePct) - Math.round(amount);
+export function quoteAmountGap(subtotal: number, taxRatePct: number, amount: number, discountPct = 0): number {
+  return grossAmount(taxableAfterDiscount(subtotal, discountPct), taxRatePct) - Math.round(amount);
+}
+
+/**
+ * The taxable value after a quote-level discount (coupon) — the same figure
+ * `generate_invoice` puts on the tax invoice: subtotal − round(subtotal × pct / 100).
+ * R-082 (1 Oct 2026): the consistency check ignored the discount, so every coupon quote
+ * looked "wrong" (₹600 − 10% + 18% = ₹637 was compared with ₹708) and both the
+ * customer's pay / retry link and staff "Generate invoice" refused it.
+ */
+export function taxableAfterDiscount(subtotal: number, discountPct = 0): number {
+  const base = Math.round(subtotal);
+  return base - Math.round((base * (discountPct || 0)) / 100);
 }
 
 /**
@@ -44,6 +56,6 @@ export function quoteAmountGap(subtotal: number, taxRatePct: number, amount: num
  */
 export const QUOTE_AMOUNT_TOLERANCE = 1;
 
-export function isQuoteAmountConsistent(subtotal: number, taxRatePct: number, amount: number): boolean {
-  return Math.abs(quoteAmountGap(subtotal, taxRatePct, amount)) <= QUOTE_AMOUNT_TOLERANCE;
+export function isQuoteAmountConsistent(subtotal: number, taxRatePct: number, amount: number, discountPct = 0): boolean {
+  return Math.abs(quoteAmountGap(subtotal, taxRatePct, amount, discountPct)) <= QUOTE_AMOUNT_TOLERANCE;
 }

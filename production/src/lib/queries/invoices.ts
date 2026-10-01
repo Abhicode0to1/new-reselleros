@@ -8,7 +8,7 @@ import type { SeriesState } from "@/lib/actions/consequence";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
-import { grossAmount, isQuoteAmountConsistent } from "@/lib/quotes/amounts";
+import { grossAmount, isQuoteAmountConsistent, taxableAfterDiscount } from "@/lib/quotes/amounts";
 import type { Invoice } from "@/lib/supabase/database.types";
 import { fetchAllRows } from "@/lib/ops/fetch-all";
 
@@ -179,16 +179,18 @@ export function useGenerateInvoice() {
          why, and the next step. */
       const check = await supabase
         .from("quotes")
-        .select("subtotal, tax_rate, amount")
+        .select("subtotal, tax_rate, amount, discount_pct")
         .eq("id", quoteId)
         .single();
       if (check.error) throw check.error;
-      const { subtotal, tax_rate, amount } = check.data;
-      if (!isQuoteAmountConsistent(subtotal ?? 0, tax_rate ?? 0, amount ?? 0)) {
-        const should = grossAmount(subtotal ?? 0, tax_rate ?? 0);
+      const { subtotal, tax_rate, amount, discount_pct } = check.data;
+      // R-082: net of the quote's discount, as generate_invoice computes it.
+      if (!isQuoteAmountConsistent(subtotal ?? 0, tax_rate ?? 0, amount ?? 0, discount_pct ?? 0)) {
+        const taxable = taxableAfterDiscount(subtotal ?? 0, discount_pct ?? 0);
+        const should = grossAmount(taxable, tax_rate ?? 0);
         throw new Error(
           `Is quote ka total apne hi GST se mel nahi khata — invoice nahi ban sakti. `
-          + `Subtotal ₹${(subtotal ?? 0).toLocaleString("en-IN")} par ${tax_rate ?? 0}% GST = `
+          + `Subtotal ₹${(subtotal ?? 0).toLocaleString("en-IN")}${discount_pct ? ` − ${discount_pct}% discount = ₹${taxable.toLocaleString("en-IN")}` : ""} par ${tax_rate ?? 0}% GST = `
           + `₹${should.toLocaleString("en-IN")}, par quote me ₹${(amount ?? 0).toLocaleString("en-IN")} likha hai `
           + `(₹${Math.abs(should - (amount ?? 0)).toLocaleString("en-IN")} ka farak). `
           + `Invoice banne ke baad ye number badla nahi ja sakta. Pehle quote edit karke total theek karo — `

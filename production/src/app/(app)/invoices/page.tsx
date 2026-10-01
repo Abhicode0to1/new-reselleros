@@ -527,7 +527,9 @@ function InvoicesPageInner() {
                                 variant="primary"
                                 icon="receipt"
                                 loading={generateInvoice.isPending}
-                                onClick={() => generateInvoice.mutate(q.id)}
+                                /* Same confirmation as the phone button and the bulk issue (R-082 jaanch,
+                                   1 Oct): this one issued a GST invoice on a bare click. */
+                                onClick={() => setConfirmSingle(q.id)}
                               >
                                 Generate
                               </Button>

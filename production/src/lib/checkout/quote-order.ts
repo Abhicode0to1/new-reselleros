@@ -98,7 +98,7 @@ export async function startQuotePayment(
      Measured 21 Aug 2026: 26 of 27 production quotes pass this, so nothing legitimate
      is blocked. Wording stays customer-facing — the arithmetic is the reseller's
      problem, not the buyer's. */
-  if (!isQuoteAmountConsistent(subtotal, taxRate, quote.amount ?? 0)) {
+  if (!isQuoteAmountConsistent(subtotal, taxRate, quote.amount ?? 0, quote.discount_pct ?? 0)) {
     return {
       status: 409,
       body: {

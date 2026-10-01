@@ -84,6 +84,17 @@ describe("the order", () => {
       notes: { kind: "quote", quoteId: "Q-T-0001", tenantId: "t-1", customerName: "Asha Co" },
     });
   });
+  it("a coupon quote (₹600 − 10% + 18% = ₹637) can be paid — R-082", async () => {
+    db.quote = { ...baseQuote(), discount_pct: 10, amount: 637 };
+    const res = await call();
+    expect(res.status).toBe(200);
+    expect(rzp.create.mock.calls[0][0]).toMatchObject({ amount: 63700 });
+  });
+  it("a coupon quote missing its GST is still refused", async () => {
+    db.quote = { ...baseQuote(), discount_pct: 10, amount: 540 };
+    expect((await call()).status).toBe(409);
+    expect(rzp.create).not.toHaveBeenCalled();
+  });
   it("a Razorpay failure is a retryable message, not a raw error", async () => {
     rzp.create.mockRejectedValue(new Error("boom"));
     const res = await call();
