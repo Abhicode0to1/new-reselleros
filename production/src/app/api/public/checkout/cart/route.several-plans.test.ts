@@ -74,9 +74,29 @@ describe("several hosting plans, each on its own domain", () => {
     expect(quote()!.domain).toBe("a.in");
   });
 
-  it("no hosting line carries `domain`, which provisioning would read as a name to REGISTER", async () => {
+  it("each hosting line also names its domain in `domain`, so record_payment gives each plan's subscription its own domain (R-032)", async () => {
     await POST(req({ lines: lines("a.in", "b.in") }));
-    for (const l of quote()!.line_items as Line[]) expect(l.domain).toBeUndefined();
+    expect((quote()!.line_items as Line[]).map((l) => l.domain)).toEqual(["a.in", "b.in"]);
+  });
+
+  it("…and none of them is ever queued for REGISTRATION: provisioning makes hosting accounts, not domains", async () => {
+    await POST(req({ lines: lines("a.in", "b.in") }));
+    const { provisioningProducts, domainsInLines } = await import("@/lib/provisioning/products");
+    const { domainSubscriptionsToCreate } = await import("@/lib/domains/renewal");
+    const items = quote()!.line_items;
+    expect(domainsInLines(items)).toEqual([]);
+    expect(domainSubscriptionsToCreate(items)).toEqual([]);
+    expect(provisioningProducts({ lineItems: items, vendor: "hosting", domain: "a.in", seats: 0 }).map((p) => `${p.vendor}:${p.domain}:${p.plan}`))
+      .toEqual(["hosting:a.in:hosting-starter", "hosting:b.in:hosting-plus"]);
+  });
+
+  it("two of the SAME plan on two domains are told apart in messages", async () => {
+    const res = await POST(req({ lines: [
+      { sku: "hosting:starter", cycle: "yearly", qty: 1, hostingDomain: "a.in" },
+      { sku: "hosting:starter", cycle: "yearly", qty: 1, hostingDomain: "a.in" },
+    ] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/your Starter hosting · 2 — a\.in is already on your Starter hosting · 1/);
   });
 
   it("the first plan may use the top-level domain field, as a one-plan cart does", async () => {

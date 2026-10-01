@@ -100,7 +100,18 @@ async function alertOwner(tenantId: string, subject: string, text: string) {
  * Two lines of the SAME tier for two domains still cannot be told apart from the line
  * alone — that needs R-032's per-request domain on the line.
  */
-function lineForRequest(lineItems: unknown, requestPlan: string | null) {
+function lineForRequest(lineItems: unknown, requestPlan: string | null, requestDomain?: string | null) {
+  /* R-032 (1 Oct 2026): each hosting line names its own domain, so the request's domain
+     picks its line exactly — two lines of the same tier on two domains included. */
+  const want = (requestDomain ?? "").trim().toLowerCase();
+  if (want && Array.isArray(lineItems)) {
+    const byDomain = lineItems.filter((l) => {
+      const line = (l ?? {}) as { hostingPlan?: unknown; hostingDomain?: unknown; domain?: unknown };
+      const d = typeof line.hostingDomain === "string" ? line.hostingDomain : typeof line.domain === "string" ? line.domain : "";
+      return typeof line.hostingPlan === "string" && d.trim().toLowerCase() === want;
+    });
+    if (byDomain.length) return hostingLineFor(byDomain, requestPlan);
+  }
   const tier = (requestPlan ?? "").replace(/^hosting-/, "").trim().toLowerCase();
   if (tier && Array.isArray(lineItems)) {
     const mine = lineItems.filter((l) => String((l as { hostingPlan?: unknown } | null)?.hostingPlan ?? "").toLowerCase() === tier);
@@ -156,7 +167,7 @@ async function handle(req: Request) {
 
     const domain = (row.domain || quote.domain || "").toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
     const email = (lead?.contact_email ?? "").trim().toLowerCase();
-    const plan = lineForRequest(quote.line_items, row.plan);
+    const plan = lineForRequest(quote.line_items, row.plan, row.domain);
     const missing = [!domain && "a domain", !email && "the buyer's email", !plan && "a plan"].filter(Boolean);
     if (missing.length) {
       await noteProvisioning(row.id, `Held: the order has no ${missing.join(", ")}, so the account cannot be created automatically. Contact the customer and set it up by hand.`);

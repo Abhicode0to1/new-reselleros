@@ -73,6 +73,8 @@ export function domainSubscriptionsToCreate(lineItems: unknown): DomainSubscript
   const seen = new Set<string>();
   for (const l of lineItems) {
     if (!l || typeof l !== "object") continue;
+    // A hosting line names the domain its account sits on, not a domain bought (R-032).
+    if (typeof (l as { hostingPlan?: unknown }).hostingPlan === "string") continue;
     const line = l as { domain?: unknown; rate?: unknown; qty?: unknown };
     const domain = typeof line.domain === "string" ? line.domain.trim().toLowerCase() : "";
     if (!domain || seen.has(domain) || !splitDomain(domain)) continue;

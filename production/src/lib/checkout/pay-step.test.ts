@@ -16,8 +16,8 @@ const code = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g,
 
 describe("hostingLimitWarning — the same rule, said before Pay", () => {
   const two = [{ sku: "hosting:standard", qty: 1 }, { sku: "hosting:plus", qty: 1 }];
-  it("warns on two hosting plans, in words that fit before paying", () => {
-    const w = hostingLimitWarning(two);
+  it("with the switch OFF it warned on two hosting plans, in words that fit before paying", () => {
+    const w = hostingLimitWarning(two, false);
     expect(w).toMatch(/Your cart has 2 hosting plans/);
     expect(w).not.toMatch(/Nothing was charged/);
   });
@@ -70,9 +70,16 @@ describe("the payment picker", () => {
 });
 
 describe("the several-plans switch", () => {
-  it("stays OFF until provisioning queues one request per hosting line (board R-032)", async () => {
+  it("is ON since provisioning queues one request per hosting line (R-032, 1 Oct 2026)", async () => {
     const { SEVERAL_HOSTING_PLANS_READY } = await import("./hosting-limit");
-    expect(SEVERAL_HOSTING_PLANS_READY).toBe(false);
+    expect(SEVERAL_HOSTING_PLANS_READY).toBe(true);
+    // And the half it waited for is really there: one product per hosting line.
+    const { provisioningProducts } = await import("@/lib/provisioning/products");
+    const p = provisioningProducts({
+      vendor: "hosting", domain: "a.in", seats: 0,
+      lineItems: [{ hostingPlan: "starter", hostingDomain: "a.in", domain: "a.in" }, { hostingPlan: "plus", hostingDomain: "b.in", domain: "b.in" }],
+    });
+    expect(p.map((x) => [x.vendor, x.domain, x.plan])).toEqual([["hosting", "a.in", "hosting-starter"], ["hosting", "b.in", "hosting-plus"]]);
   });
   it("on: two plans pass, a quantity above one is still refused", () => {
     const two = [{ sku: "hosting:starter", qty: 1 }, { sku: "hosting:plus", qty: 1 }];

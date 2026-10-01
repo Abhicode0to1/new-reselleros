@@ -147,11 +147,13 @@ describe("a paid hosting order renews (25 Sep 2026: it created no subscription)"
     expect(line.commitment).toBe("monthly");
   });
 
-  it("the hosting line carries NO domain, or provisioning would try to REGISTER the customer's own domain", async () => {
+  it("the hosting line names its account's domain, yet provisioning never tries to REGISTER it (R-032)", async () => {
     await POST(req({ domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
     const [line] = quote()!.line_items as Line[];
-    expect(line.domain).toBeUndefined();
-    expect(quote()!.domain).toBe("acme.in"); // where the subscription takes its domain from
+    expect(line.domain).toBe("acme.in"); // record_payment gives the subscription this line's own domain
+    expect(quote()!.domain).toBe("acme.in");
+    const { domainsInLines } = await import("@/lib/provisioning/products");
+    expect(domainsInLines(quote()!.line_items)).toEqual([]); // nothing to register
   });
 
   it("links the tenant's own hosting catalogue item, so the subscription is filed under vendor hosting", async () => {

@@ -10,11 +10,14 @@ describe("one hosting account per order", () => {
     expect(hostingLimitProblem([{ sku: "domain:in", qty: 1 }])).toBeNull();
     expect(hostingLimitProblem([])).toBeNull();
   });
-  it("refuses two plans, naming what was found and what to do", () => {
-    const m = hostingLimitProblem([{ sku: "hosting:starter", qty: 1 }, { sku: "hosting:plus", qty: 1 }]);
+  it("with the switch OFF it refused two plans, naming what was found and what to do", () => {
+    const m = hostingLimitProblem([{ sku: "hosting:starter", qty: 1 }, { sku: "hosting:plus", qty: 1 }], false);
     expect(m).toMatch(/2 hosting plans/);
     expect(m).toMatch(/Nothing was charged/);
     expect(m).toMatch(/separate order/);
+  });
+  it("with the switch ON (R-032, 1 Oct 2026) two plans are one order", () => {
+    expect(hostingLimitProblem([{ sku: "hosting:starter", qty: 1 }, { sku: "hosting:plus", qty: 1 }])).toBeNull();
   });
   it("refuses one plan with quantity above 1", () => {
     expect(hostingLimitProblem([{ sku: "hosting:standard", qty: 3 }])).toMatch(/quantity 3/);

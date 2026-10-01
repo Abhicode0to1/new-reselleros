@@ -168,10 +168,15 @@ the bill stay ResellerOS's; DMS's Renew dialog asks `POST /api/dms/renewal-order
 customer's email matched exactly, renewal quotes only) for the Razorpay order and pays it in the
 panel. `/api/v1` quotes carry `renews` (vendor + domain), so a service's Renew offers only the bill
 that renews THAT service. Multi-year domains and several hosting plans in one order are for the
-ResellerOS cart; they are not built yet (the parts that are Abhishek's and Pardeep's are written up
-in `Todos.md`), and until they are, **checkout refuses a second hosting plan or a hosting quantity
-above 1** (`lib/checkout/hosting-limit.ts`) — before that, such an order was charged in full and only
-the first account was set up. Do not lift that stop-gap before one hosting request per plan exists.
+ResellerOS cart. **Multi-year domains are not built yet** (R-030, R-031). **Several hosting plans
+in one order work since R-032 (1 Oct 2026)** (until then checkout refused a second plan). Now each plan is its own cart line with its own domain box (two plans
+cannot share a domain, `planDomains` in `lib/checkout/hosting-domain.ts`); each hosting line
+carries that domain as `domain` (so `record_payment` gives each plan's subscription its own domain)
+and `hostingDomain`; `domainsInLines` and `domainSubscriptionsToCreate` skip hosting lines, so a
+hosting domain is never queued for registration; the webhook queues one hosting request per line
+with its own plan, and `cron/provision-hosting` finds a request's line by domain. Only a single
+hosting line with quantity above 1 is still refused (`SEVERAL_HOSTING_PLANS_READY`,
+`lib/checkout/hosting-limit.ts`).
 
 **Email goes to every recipient, from both apps** (owner, 30 Sep 2026: "Fix this permanently. It
 should remain on by default for both DMS and Reseller OS app"). SMTP (`lib/email/smtp-transport.ts`,

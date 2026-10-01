@@ -468,8 +468,9 @@ export async function POST(request: NextRequest) {
         vendor:      product.vendor,
         seats:       product.seats,
         domain:      product.domain,
-        // Renewal rows carry their plan marker; the new-sale workers skip them.
-        plan:        renewalPlan ?? quote.plan ?? null,
+        // Renewal rows carry their plan marker; the new-sale workers skip them. A hosting
+        // account in a several-plan order carries ITS plan, not the quote's first (R-032).
+        plan:        renewalPlan ?? product.plan ?? quote.plan ?? null,
         amountPaid:  paymentAmount,
         paymentMode: razorpayMode(keyIdForMode),
         blocker:     provisioning.action === "queue" ? provisioning.blocker : null,

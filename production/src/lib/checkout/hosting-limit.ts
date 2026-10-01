@@ -22,7 +22,7 @@ const isHosting = (sku: string | undefined) => /^hosting:/i.test(sku ?? "");
  * `hostingDomain` (30 Sep 2026); this switch is the only thing still keeping a second plan out.
  * Turning it on before R-032 lands charges for accounts that are never set up.
  */
-export const SEVERAL_HOSTING_PLANS_READY = false;
+export const SEVERAL_HOSTING_PLANS_READY = true; // R-032 landed, 1 Oct 2026
 
 /** What makes the order too big, or null when it holds at most one hosting account. */
 function tooManyHosting(lines: HostingLimitLine[], ready: boolean = SEVERAL_HOSTING_PLANS_READY): string | null {

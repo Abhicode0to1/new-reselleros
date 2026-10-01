@@ -23,7 +23,9 @@ describe("the payment webhook", () => {
 
   it("a paid renewal is queued with its renewal plan, behind the renewal switch — domain and hosting alike", () => {
     expect(w).toMatch(/renewedSub\?\.vendor === "domain" \? DOMAIN_RENEWAL_PLAN : renewedSub\?\.vendor === "hosting" \? HOSTING_RENEWAL_PLAN : null/);
-    expect(w).toMatch(/plan:\s*renewalPlan \?\? quote\.plan/);
+    // The renewal plan still wins first; a new sale's hosting account then carries its own
+    // plan (R-032), and only after that the quote's.
+    expect(w).toMatch(/plan:\s*renewalPlan \?\? product\.plan \?\? quote\.plan/);
     expect(w).toMatch(/renewalPlan \? domainRenewalEnabled\(\) : domainRegistrationEnabled\(\)/);
     expect(w).toMatch(/renewalPlan \? hostingRenewalEnabled\(\) : hostingProvisioningEnabled\(\)/);
   });

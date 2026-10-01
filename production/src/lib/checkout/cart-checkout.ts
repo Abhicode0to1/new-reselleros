@@ -452,7 +452,8 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
         companyName: companyName.trim() || undefined,
         address: { line1: a.line1.trim(), city: a.city.trim(), state: a.state.trim(), zipcode: a.zipcode.trim(), country },
       };
-      for (const line of items) if (line.domain) line.registrant = registrant;
+      // Domain lines only: a hosting line's domain is where the account sits, not a purchase.
+      for (const line of items) if (line.domain && !line.hostingPlan) line.registrant = registrant;
     }
 
     // Each hosting plan is set up on its own domain (30 Sep 2026): the one typed for it, or —
@@ -461,7 +462,13 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
     let cleanDomain = "";
     if (hasHosting) {
       const resolved = planDomains(
-        hostingItems.map((h) => ({ label: h.line.name.replace(/ \(billed .*\)$/, ""), typed: h.typed })),
+        hostingItems.map((h, i) => {
+          // Two of the same plan are told apart as "Starter hosting · 1" / "· 2" (R-032).
+          const base = (x: typeof h) => x.line.name.replace(/ \(billed .*\)$/, "");
+          const same = hostingItems.filter((x) => base(x) === base(h));
+          const n = hostingItems.slice(0, i + 1).filter((x) => base(x) === base(h)).length;
+          return { label: same.length > 1 ? `${base(h)} · ${n}` : base(h), typed: h.typed };
+        }),
         domainNames,
       );
       if (!resolved.ok) {
@@ -476,7 +483,13 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
           { status: 400 },
         );
       }
-      hostingItems.forEach((h, i) => { h.line.hostingDomain = resolved.domains[i]; });
+      /* Each hosting line names its account's domain twice, on purpose (R-032):
+           `domain` — record_payment gives a subscription its line's own domain (0172), so
+             each plan's subscription renews the right account; and
+           `hostingDomain` — what provisioning reads. domainsInLines and
+             domainSubscriptionsToCreate skip hosting lines, so neither is ever treated as a
+             domain to register. */
+      hostingItems.forEach((h, i) => { h.line.hostingDomain = resolved.domains[i]; h.line.domain = resolved.domains[i]; });
       // The quote's own domain stays the first plan's, so everything that reads it is unchanged.
       cleanDomain = resolved.domains[0];
     }

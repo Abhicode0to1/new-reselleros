@@ -100,7 +100,14 @@ export default function CheckoutPage() {
   /* Paid hosting plans in cart order. Each is its own account on its own domain. */
   const hostingLines = cart.lines.filter((l) => (l.sku || "").startsWith("hosting:"));
   const typedFor = (key: string, i: number) => (i === 0 ? domain : planDomain[key] ?? "");
-  const plans = hostingLines.length > 1 ? hostingLines.map((l, i) => ({ label: l.label, typed: typedFor(l.key, i) })) : undefined;
+  /* Two of the same plan (two websites on Starter) read "Starter hosting · 1" and "· 2", so
+     each domain box and each message says which one it means (R-032). */
+  const planName = (i: number) => {
+    const label = hostingLines[i].label;
+    const same = hostingLines.filter((l) => l.label === label);
+    return same.length > 1 ? `${label} · ${hostingLines.slice(0, i + 1).filter((l) => l.label === label).length}` : label;
+  };
+  const plans = hostingLines.length > 1 ? hostingLines.map((l, i) => ({ label: planName(i), typed: typedFor(l.key, i) })) : undefined;
   const hasDomain = cart.lines.some((l) => (l.sku || "").startsWith("domain:"));
   /* A free hosting trial (24 Sep 2026: "Start free trial" goes straight to the cart,
      no form in between). It checks out on its own, with no payment step: the
@@ -338,7 +345,7 @@ export default function CheckoutPage() {
                     hostingLines.map((l, i) => (
                       <Field
                         key={l.key}
-                        label={`DOMAIN FOR ${l.label.toUpperCase()} (e.g. yourcompany.in)`}
+                        label={`DOMAIN FOR ${planName(i).toUpperCase()} (e.g. yourcompany.in)`}
                         value={typedFor(l.key, i)}
                         onChange={(v) => (i === 0 ? setDomain(v) : setPlanDomain((m) => ({ ...m, [l.key]: v })))}
                         mono

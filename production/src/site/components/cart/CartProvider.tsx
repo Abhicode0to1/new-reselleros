@@ -15,6 +15,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { cartTotals, isSingleUnit, type CartLine, type CartTotals } from "@/site/lib/money";
+import { SEVERAL_HOSTING_PLANS_READY } from "@/lib/checkout/hosting-limit";
 
 const STORAGE_KEY = "anutech.cart.v1";
 const NO_DRAWER_ROUTES = ["/cart", "/checkout", "/done"];
@@ -100,11 +101,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setLines((prev) => {
         /* Same label + same unit price = the same thing; bump qty instead of a duplicate
            row. A cart with two "Positive SSL ₹899" rows reads like a billing mistake. */
-        const existing = prev.find((l) => l.label === line.label && l.unitPrice === line.unitPrice);
+        /* A hosting plan is one account on one domain, so a second Starter is a second
+           website, not a quantity of 2 (R-032, 1 Oct 2026): it gets its own line, and its own
+           domain box at checkout. Only once several plans can be set up in one order. */
+        const ownLine = SEVERAL_HOSTING_PLANS_READY && (line.sku ?? "").startsWith("hosting:");
+        const existing = ownLine ? undefined : prev.find((l) => l.label === line.label && l.unitPrice === line.unitPrice);
         const single = isSingleUnit(line);
         const next = existing
           ? prev.map((l) => (l.key === existing.key ? { ...l, qty: single ? 1 : l.qty + (line.qty ?? 1) } : l))
-          : [...prev, { ...line, qty: single ? 1 : line.qty ?? 1, key: `${line.label}-${Date.now()}` }];
+          : [...prev, { ...line, qty: single ? 1 : line.qty ?? 1, key: `${line.label}-${Date.now()}-${prev.length}` }];
         save(next);
         return next;
       });

@@ -22,13 +22,27 @@ export interface ProvisioningProduct {
   domain: string | null;
   /** Seats for a licence; 1 for a domain or a hosting account. */
   seats: number;
+  /**
+   * Hosting only: this account's own plan label ("hosting-plus"), when the order has more
+   * than one hosting plan. Without it every request carried the quote's one plan.
+   */
+  plan?: string;
 }
 
-/** The exact domain names paid for, read from the quote's line items. */
+/** A hosting plan line: it names the domain the account is set up ON, not one to buy. */
+const isHostingLine = (l: unknown) =>
+  !!l && typeof l === "object" && typeof (l as { hostingPlan?: unknown }).hostingPlan === "string";
+
+/**
+ * The exact domain names paid for, read from the quote's line items. Hosting lines are
+ * skipped: since 1 Oct 2026 (R-032) a hosting line carries the domain its account is set up
+ * on — usually the customer's own, which must never be queued for REGISTRATION.
+ */
 export function domainsInLines(lineItems: unknown): string[] {
   if (!Array.isArray(lineItems)) return [];
   const out: string[] = [];
   for (const l of lineItems) {
+    if (isHostingLine(l)) continue;
     const d = l && typeof l === "object" ? (l as { domain?: unknown }).domain : undefined;
     if (typeof d === "string" && d.trim()) {
       const name = d.trim().toLowerCase();
@@ -56,6 +70,23 @@ export function provisioningProducts(input: {
     // Domain-only order: the named domains ARE the products. With none named (a quote
     // raised in the app), fall back to the single request it always produced.
     return named.length ? named : [{ vendor: "domain", domain: input.domain, seats: 1 }];
+  }
+
+  /* Hosting: one request per hosting LINE, each on its own domain and plan (R-032,
+     1 Oct 2026). Until then an order with Starter on a.in and Plus on b.in queued one
+     request and only the first account was ever created. A line written before per-plan
+     domains existed names none, and keeps the old single request below. */
+  if (input.vendor === "hosting" && Array.isArray(input.lineItems)) {
+    const accounts: ProvisioningProduct[] = [];
+    for (const l of input.lineItems) {
+      if (!isHostingLine(l)) continue;
+      const line = l as { hostingPlan: string; hostingDomain?: unknown; domain?: unknown };
+      const raw = typeof line.hostingDomain === "string" ? line.hostingDomain : typeof line.domain === "string" ? line.domain : "";
+      const domain = raw.trim().toLowerCase();
+      if (!domain || accounts.some((a) => a.domain === domain)) continue;
+      accounts.push({ vendor: "hosting", domain, seats: 1, plan: `hosting-${line.hostingPlan.toLowerCase()}` });
+    }
+    if (accounts.length) return [...named, ...accounts];
   }
 
   const main: ProvisioningProduct = {

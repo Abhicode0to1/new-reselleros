@@ -118,6 +118,22 @@ describe("what it sends and does", () => {
     ]);
   });
 
+  it("R-032: two Starter plans on two domains — each request finds ITS line by domain", async () => {
+    // Same tier, different terms: only the domain tells which line a request belongs to.
+    tables.quotes = { id: "Q1", lead_id: "L1", customer_name: "Acme", domain: "a.in", line_items: [
+      { name: "Starter hosting (billed yearly)", hostingPlan: "starter", months: 12, domain: "a.in", hostingDomain: "a.in" },
+      { name: "Starter hosting (billed monthly)", hostingPlan: "starter", months: 1, domain: "b.in", hostingDomain: "b.in" },
+    ] };
+    prov.listReadyHostingRequests.mockResolvedValue([
+      { id: "RA", tenant_id: "T1", quote_id: "Q1", domain: "a.in", plan: "hosting-starter" },
+      { id: "RB", tenant_id: "T1", quote_id: "Q1", domain: "b.in", plan: "hosting-starter" },
+    ]);
+    engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { daUsername: "x" }, replayed: false });
+    await GET(req());
+    const sent = engine.sendEngineCommand.mock.calls.map((c) => ({ subject: c[0].subject, months: c[0].payload.months }));
+    expect(sent).toEqual([{ subject: "a.in", months: 12 }, { subject: "b.in", months: 1 }]);
+  });
+
   it("lost response → note + owner alert, not failed", async () => {
     engine.sendEngineCommand.mockResolvedValue({ kind: "needs_reconciliation", reason: "no answer" });
     await GET(req());
