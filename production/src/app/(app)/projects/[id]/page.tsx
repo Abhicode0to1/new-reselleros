@@ -36,6 +36,7 @@ import { EditProjectDialog } from "@/components/features/projects/edit-project-d
 import { ProjectTasks } from "@/components/features/projects/project-tasks";
 import { useRemoveProjectLabour, useSaveProjectLabour, useUpdateProjectDates, type ProjectLabourLine } from "@/lib/queries/projects";
 import { Input } from "@/components/ui/input";
+import { istToday } from "@/lib/dates/ist";
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -94,7 +95,7 @@ export default function ProjectDetailPage() {
   const pct = (profit: number, rev: number) => (rev > 0 ? Math.round((profit / rev) * 100) : 0);
 
   // ── Timeline: start → target, duration, days-left / overdue ──
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = istToday();     // R-025 — UTC "today" is yesterday before 05:30 IST.
   const durationDays = project.start_date && project.target_date ? daysBetween(project.start_date, project.target_date) : null;
   // Auto-suggest labour months from the project duration (full automation:
   // labour cost period follows the real project length).

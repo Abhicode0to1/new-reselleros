@@ -26,11 +26,12 @@
  * clock on a deal nobody has paid for, and would count it in MRR. The same rule the banner
  * uses to stay quiet is the rule this route uses to say no.
  */
-import { istToday } from "@/lib/dates/ist";
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { orphanState, isOrphan, missingLines } from "@/lib/subscriptions/orphan-quote";
 import { rebuildTerm } from "@/lib/subscriptions/rebuild-term";
+import { istToday } from "@/lib/dates/ist";
+import { safeDbMessage, logDbError } from "@/lib/errors/db-error";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -161,6 +162,9 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
   /* The term starts when the deal did, not today. Backdating matters: a subscription paid
      for in April and rebuilt in August must renew next April, not next August — otherwise
      the customer gets four months free and the renewal chase fires late. */
+  /* R-025: and this one runs on Cloud Run, which is UTC all the time — so the fallback
+     start (and therefore the renewal date derived from it) was a day early whenever the
+     request landed before 05:30 IST. */
   const fallbackStart = quote.created_date ?? istToday();
   const customerId = quote.customer_id;
 
@@ -201,7 +205,12 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     .from("subscriptions").insert(rows).select("id, plan, seats, mrr, renewal_date");
 
   if (insErr) {
-    return NextResponse.json({ error: insErr.message }, { status: 500 });
+    // R-025 — raw Postgres text named the subscriptions table and its constraints.
+    logDbError("quotes/recreate-subscription", insErr);
+    return NextResponse.json(
+      { error: safeDbMessage(insErr, "Could not recreate the subscriptions. Nothing was created — check the quote's line items and try again.") },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({

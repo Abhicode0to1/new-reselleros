@@ -343,10 +343,17 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **8,049 tests
-passing across 480 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
-with 0 errors** — measured 29 Sep 2026 after the fourth `pardeep-sir` merge (`ddde2754`).
-Earlier markers: 7,972/477 the same day after the Tailwind dev-server fix; 7,933/472 on 28 Sep
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **8,249 tests
+passing across 490 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
+with 0 errors** — measured 30 Sep 2026 after R-013's review (see L114) on top of R-014 (an
+issued GST invoice can no longer be deleted, and deleting one never removes a bank receipt)
+and R-015 (IST financial year, 16-character document numbers, `paid_amount` written on a
+partial payment).
+Earlier markers: 8,177/489 the same day after R-014 + R-015;
+8,154/487 on 29 Sep after the board batch R-021 / R-025 / R-034 / R-038+S27
+(paid-order PDF wording, invoice bank details, IST dates and raw-DB-error leaks);
+8,049/480 the same day after the fourth `pardeep-sir` merge (`ddde2754`);
+7,972/477 the same day after the Tailwind dev-server fix; 7,933/472 on 28 Sep
 after the third `pardeep-sir` merge (`9054977f`, which brought Next 15.5 / React 19: run
 `npm ci` after pulling it);
 7,085/404 the same day after the quote-notes fix, 7,083/403 on 26 Sep after the second `pardeep-sir` merge, 7,054/400 the same day after `/api/dms/trial-eligibility`, 7,047/399 the same day after `/api/dms/start-trial`, 7,041/398 the same day after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work), 6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
@@ -3080,3 +3087,54 @@ not representative of the rest.
 - **When a classification has been wrong once, do not restate it — re-derive it.**
   Leaving "the rest are internal" in a comment as reassurance would have carried
   my error forward in the place most likely to be trusted.
+
+## L114. A migration that REPAIRS A STATE is undone by the next migration that rebuilds it
+
+*30 Sep 2026, reviewing R-013 — and the thing it caught was my own work from the day before.*
+
+`20260927100000_definer_rpc_hardening.sql` closed three real holes, correctly. It closed
+them the only way a repair can: a `do $$ … regexp_replace … $$` that rewrote 17
+SECURITY DEFINER bodies in place, and a loop that revoked `anon` EXECUTE from the definer
+functions **that existed at that moment**.
+
+Both are one-shot sweeps over a state that keeps regenerating. Twenty-four hours later,
+R-014 and R-015 recreated four of those functions — `delete_project_invoice`,
+`delete_subscription_invoice`, `raise_project_milestone_invoice`, `next_document_number` —
+from bodies read with `pg_get_functiondef` on a database where the hardening had never been
+applied. Every one carried the pre-hardening guard straight back in, and by timestamp they
+run *after* it, so production would have ended with the hole reopened and
+`definer_rpc_hardening.test.sql` red.
+
+**Two distinct mechanisms, and the second is the one nobody would see:**
+
+- **The body.** `pg_get_functiondef` returns whatever is installed *here*. On a database
+  missing 44 migrations, "the live body" is a body from before the fix.
+- **The grants.** `create or replace function` **keeps** a function's ACL.
+  `drop function` + `create` **resets it to the PUBLIC default.** Six of my functions were
+  replaced in place and kept their hardened grants; the one that needed a new parameter had
+  to be dropped, and silently handed `anon` back the gapless CGST document counter — where
+  one anon call burns a number that is never reissued.
+
+**The rules:**
+
+- **Before recreating any function from `pg_get_functiondef`, check the migrations your
+  database has NOT applied.** A local body is a snapshot of your own drift, not of
+  production. Diff the guard list before and after (L9) — and diff the *grants* too.
+- **`create or replace` keeps grants; `drop` + `create` does not.** If a signature change
+  forces a drop, re-state the grants deliberately rather than copying the old `proacl`,
+  which is exactly the state a hardening migration may have been written to change.
+- **Prefer a mechanism over a sweep.** A sweep is a repair; `alter default privileges …
+  revoke execute on functions from public` is a rule, and a rule covers what is written
+  tomorrow. Recommended to the owner of that area rather than applied unilaterally.
+- **Put the regression check where it actually runs.** The SQL test that catches this
+  (`FAIL 4`, a repo-wide `pg_get_functiondef` scan) is correct, needs a database, and is not
+  in CI — so it had not run in a while. `src/lib/security/definer-hardening-holds.test.ts`
+  scans the migration *files* instead: no Docker, runs on every `npm run test`, red-checked
+  both ways. It does not replace the SQL test; it catches the case at the moment somebody is
+  writing the migration, which is the moment it is cheap.
+- **Exempt what the rule must not fire on, by name and with the reason.** RLS policy helpers
+  genuinely need `anon` EXECUTE — a policy runs as the querying role. The first version of
+  the scan went red on `hierarchy_sees_all` / `visible_owner_ids`, which are right. A guard
+  that fires on the right answer gets deleted within a week (L103), so they are allow-listed
+  individually, each with the policy that evaluates it, plus an assertion that the policy
+  still exists.

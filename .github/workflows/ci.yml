@@ -22,12 +22,12 @@ name: CI
 # setting — not something this file can switch on).
 #
 # ─── THE THREE WORKING BRANCHES WERE NOT WATCHED EITHER (WC-ci, 30 Sep 2026) ──
-# Day-to-day work lands on pardeep-sir / abhishek-pre-merge / pawan-api-system (and QA on
-# hitesh-qa), not on main — so until today CI ran on none of it until somebody opened a PR.
+# Day-to-day work lands on manager-pardeep / billing-abhishek / website-pawan (and QA on
+# accounts-hitesh), not on main — so until today CI ran on none of it until somebody opened a PR.
 # They are pushed to directly, so they are listed here directly.
 on:
   push:
-    branches: [main, deploy, 'session/**', pardeep-sir, abhishek-pre-merge, pawan-api-system, hitesh-qa]
+    branches: [main, deploy, 'session/**', manager-pardeep, billing-abhishek, website-pawan, accounts-hitesh, pardeep-sir, abhishek-pre-merge, pawan-api-system, hitesh-qa]
   pull_request:
 jobs:
   checks:

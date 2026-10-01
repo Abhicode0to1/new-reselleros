@@ -14,6 +14,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { safeDbMessage, logDbError } from "@/lib/errors/db-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,13 +59,27 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
   const { error: upErr } = await admin.storage
     .from("documents").upload(path, buf, { upsert: true, contentType: f.type || undefined });
-  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+  if (upErr) {
+    /* R-025: this was `upErr.message` — storage's own text, which names the bucket and
+       the object path (which contains the tenant id). */
+    logDbError("payments/receipt:upload", upErr);
+    return NextResponse.json(
+      { error: "Could not store the receipt file. Try again, or attach it from the payment row." },
+      { status: 500 },
+    );
+  }
 
   const { error: updErr } = await admin
     .from("payments").update({ receipt_file_path: path }).eq("id", paymentId).eq("tenant_id", me.tenant_id);
   if (updErr) {
     await admin.storage.from("documents").remove([path]);
-    return NextResponse.json({ error: updErr.message }, { status: 500 });
+    /* R-025. A guard of ours (P0001) still speaks for itself — its message is the next
+       step. Anything else is Postgres naming our columns and constraints. */
+    logDbError("payments/receipt:link", updErr);
+    return NextResponse.json(
+      { error: safeDbMessage(updErr, "The file uploaded but could not be linked to the payment. Nothing was saved — try again.") },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true, path });

@@ -21,13 +21,13 @@
  * mint five GST documents, each taking an irreversible number from the gapless Rule 46
  * series.
  */
-import { toIstDate } from "@/lib/dates/ist";
 import type { createAdminClient } from "@/lib/supabase/server";
 import { isEmailConfigured } from "@/lib/email/send";
 import { planQuoteFromEnquiry, type CatalogueItemPrice } from "./quote-from-enquiry";
 import { decideAutoSend } from "./auto-send-quote";
 import { sendAutoQuote } from "./send-auto-quote";
 import type { BillingCycle } from "@/lib/supabase/database.types";
+import { toIstDate } from "@/lib/dates/ist";
 
 /* Typed as the RETURN of createAdminClient — hand-rolling this shape is what produced the
    TS2589 "excessively deep" failure in lib/email/owner-alert.ts. */
@@ -324,6 +324,10 @@ export async function autoQuoteForLead(
          subtotal. */
       status:        "draft",
       owner_id:      null,
+      /* R-025. Both are INSTANTS (`new Date()`, and a copy moved forward by days), so a
+         UTC slice is yesterday before 05:30 IST — and this runs on the inbound-mail
+         webhook, which fires at whatever hour a customer writes. A quote emailed to a
+         customer dated yesterday, with a validity window one day short. */
       created_date:  toIstDate(today),
       expires_date:  toIstDate(expires),
       notes:         noteText,

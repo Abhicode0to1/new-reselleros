@@ -34,6 +34,7 @@ import {
 } from "@/lib/quotes/billing";
 import { lineIsPerInvoice, perInvoiceDivisor, annualContractValue } from "./invoice-divisor";
 import { isRenderableLogo } from "./logo";
+import { quoteDocumentLabel } from "./quote-document-kind";
 
 import { PDF_FONT, PDF_FONT_BOLD, registerPdfFonts } from "./fonts";
 
@@ -98,6 +99,16 @@ export interface QuotePDFProps {
   /** When true, renders "Renewal Quotation" label + visible "RENEWAL" stamp.
    *  Set by lib/renewals/create-renewal-quote.ts on the source quote. */
   isRenewal?:    boolean;
+  /**
+   * R-034. The money is already in, so this sheet is the customer's record of a paid
+   * order rather than an offer: the heading says so, and the two sentences that ask
+   * for payment — "Valid until" and "Payment terms: Net 7 days from acceptance" —
+   * are dropped instead of contradicting the payment they already made.
+   *
+   * Decided by `quoteIsPaid()` in the prop builder, never re-derived here (the same
+   * reason `upiQrDataUrl` is the caller's call).
+   */
+  isPaid?:       boolean;
   /** Scan-to-pay QR as a PNG data-URL, from buildQuoteUpiQr(). Null → no block.
    *  The decision of WHETHER to offer a QR belongs to the caller, not here: it
    *  depends on currency and payment status, which this component doesn't see. */
@@ -387,6 +398,7 @@ export function QuotePDF(props: QuotePDFProps) {
     createdDate, expiresDate, validityDays,
     lineItems, subtotal, discountPct, discount, taxable, taxRate, tax, total,
     interState, isExport = false, currency, exchangeRate, billingCycle, notes, termsConditions, isRenewal,
+    isPaid = false,
     upiQrDataUrl, upiVpa,
   } = props;
 
@@ -460,9 +472,9 @@ export function QuotePDF(props: QuotePDFProps) {
 
   return (
     <Document
-      title={`Quote ${quoteId}`}
+      title={`${isPaid ? "Paid order" : "Quote"} ${quoteId}`}
       author={tenantName}
-      subject={`Quotation ${quoteId} for ${customerName}`}
+      subject={`${quoteDocumentLabel({ paid: isPaid, isRenewal })} ${quoteId} for ${customerName}`}
     >
       <Page size="A4" style={s.page}>
 
@@ -488,10 +500,14 @@ export function QuotePDF(props: QuotePDFProps) {
             </View>
           </View>
           <View style={s.quoteMetaBlock}>
-            <Text style={s.quoteLabel}>{isRenewal ? "Renewal Quotation" : "Quotation"}</Text>
+            <Text style={s.quoteLabel}>{quoteDocumentLabel({ paid: isPaid, isRenewal })}</Text>
             <Text style={s.quoteId}>{quoteId}</Text>
             <Text style={s.quoteDate}>Dated: {formatDate(created)}</Text>
-            <Text style={s.quoteDate}>Valid until: {formatDate(expires)}</Text>
+            {/* R-034: an expiry on a document the customer has already paid reads as
+                "you still have to act". Only an open offer has a validity window. */}
+            {!isPaid && (
+              <Text style={s.quoteDate}>Valid until: {formatDate(expires)}</Text>
+            )}
             {isRenewal && (
               <Text style={s.renewalStamp}>RENEWAL</Text>
             )}
@@ -719,14 +735,31 @@ export function QuotePDF(props: QuotePDFProps) {
 
         {/* ── Terms footer ────────────────────────────────────────── */}
         <View style={s.footer}>
-          <Text style={s.footerLine}>
-            <Text style={s.footerBold}>Payment terms: </Text>
-            Net 7 days from acceptance. UPI / NEFT / Razorpay accepted.
-          </Text>
-          <Text style={s.footerLine}>
-            <Text style={s.footerBold}>Quote validity: </Text>
-            {validityDays} days from issue date.
-          </Text>
+          {/* R-034. Both of these ask for money. On a paid order they contradict the
+              payment the customer already made — "Net 7 days from acceptance" was
+              printed on an order paid minutes earlier. Replaced by the one sentence
+              that is true: nothing is due. */}
+          {/* Three sibling conditionals rather than a fragment: @react-pdf walks its own
+              children, and a Fragment in the middle of a View makes React ask for keys
+              on primitives that have no business carrying them. */}
+          {isPaid && (
+            <Text style={s.footerLine}>
+              <Text style={s.footerBold}>Payment: </Text>
+              Received in full — nothing further is due on this order.
+            </Text>
+          )}
+          {!isPaid && (
+            <Text style={s.footerLine}>
+              <Text style={s.footerBold}>Payment terms: </Text>
+              Net 7 days from acceptance. UPI / NEFT / Razorpay accepted.
+            </Text>
+          )}
+          {!isPaid && (
+            <Text style={s.footerLine}>
+              <Text style={s.footerBold}>Quote validity: </Text>
+              {validityDays} days from issue date.
+            </Text>
+          )}
 
           {/* Scan-to-pay. Drawn only when the caller supplied a QR — which it
               does only for an INR quote that is still awaiting payment. The

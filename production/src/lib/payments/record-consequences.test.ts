@@ -23,7 +23,7 @@ describe("recordPaymentConsequences", () => {
     /* A receipt voucher is a GST document under Section 31(3)(d) and takes a number from
        the same gapless series as an invoice. This dialog was a bare title. */
     const t = text(recordPaymentConsequences({ payment: P, receiptSeries: RV }));
-    expect(t).toContain("RV-ADPL-2026-27-0040");
+    expect(t).toContain("RV-ADPL-27-0040");
     expect(t).toMatch(/31\(3\)\(d\)/);
     expect(t).toMatch(/used up whether or not/i);
   });

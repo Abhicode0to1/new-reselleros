@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useRecordProjectPayment, type ProjectMilestoneRow } from "@/lib/queries/projects";
 import { rupee, formatDate } from "@/lib/utils";
+import { istToday } from "@/lib/dates/ist";
 
 interface Props {
   open:         boolean;
@@ -63,7 +64,7 @@ export function RecordProjectPaymentDialog({ open, onOpenChange, milestone, proj
       setAmount(String(milestone.total_amount));
       setMethod("bank_transfer");
       setReference("");
-      setDate(milestone.due_date ?? new Date().toISOString().slice(0, 10));
+      setDate(milestone.due_date ?? istToday());     // R-025 — UTC default was yesterday.
       setBankTxnId("");
     }
   }, [open, milestone]);

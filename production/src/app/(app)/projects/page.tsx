@@ -21,6 +21,7 @@ import { useProjectSales, type ProjectSaleWithTotals } from "@/lib/queries/proje
 import { rupee, formatDate, daysBetween } from "@/lib/utils";
 import { CreateProjectDialog } from "@/components/features/projects/create-project-dialog";
 import { CreateProjectQuoteDialog } from "@/components/features/projects/create-project-quote-dialog";
+import { istToday } from "@/lib/dates/ist";
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -132,7 +133,9 @@ function Stat({ label, value, tone = "ink" }: { label: string; value: string; to
 function ProjectCard({ project, onOpen }: { project: ProjectSaleWithTotals; onOpen: () => void }) {
   const pct = project.total_amount > 0 ? Math.round((project.paid / project.total_amount) * 100) : 0;
   const done = project.status === "completed" || project.status === "cancelled";
-  const daysLeft = project.target_date ? daysBetween(new Date().toISOString().slice(0, 10), project.target_date) : null;
+  // R-025: UTC "today" is yesterday before 05:30 IST, so this read one day MORE left
+  // than there was — on the card an operator uses to decide what is urgent.
+  const daysLeft = project.target_date ? daysBetween(istToday(), project.target_date) : null;
   return (
     <button
       type="button"

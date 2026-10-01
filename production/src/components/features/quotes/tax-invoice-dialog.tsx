@@ -29,6 +29,8 @@ import { rupee, formatDate, toWhatsAppDigits } from "@/lib/utils";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
 import type { Invoice, Payment, QuoteLineItem } from "@/lib/supabase/database.types";
+import { splitTaxHeads } from "@/lib/gst/tax-split";
+import { SAAS_HSN } from "@/lib/gst/hsn";
 
 /** Display-shape for advance rows in the dialog — works for both frozen + live data */
 interface DisplayAdvance {
@@ -117,10 +119,13 @@ export function TaxInvoiceDialog({
   tenantAddress,
   tenantState,
 }: Props) {
-  /* Logo yahan se aata hai, parent se nahi. Chaar parent in dialogs ko render karte hain
-     (invoices ×2, payments, quotes/[id]) — ek prop thread karne ka matlab hota chaar jagah
-     yaad rakhna, aur unme se ek bhoolne par us document par logo chup-chaap gayab. Hook
-     parent me pehle se chal raha hai, to ye query muft hai. */
+  /* Logo yahan se aata hai, parent se nahi — ek prop thread karne ka matlab hota har
+     parent me yaad rakhna, aur ek bhoolne par us document par logo chup-chaap gayab.
+     Hook parent me pehle se chal raha hai, to ye query muft hai.
+     (30 Sep 2026: yahan "chaar parent — invoices ×2, payments, quotes/[id]" likha tha.
+     Ginne par ab EK hai: app/(app)/invoices/page.tsx. §25 niyam 1 — purani ginti thik ki,
+     chhodi nahi; par wajah waise ki waise hai, aur doosra parent kabhi bhi wapas aa sakta
+     hai.) */
   const { data: me } = useCurrentUser();
   const router = useRouter();
   const [downloadingPdf, setDownloadingPdf] = React.useState(false);
@@ -137,9 +142,14 @@ export function TaxInvoiceDialog({
   const fRate    = invoice.tax_rate      ?? taxRate;
   const fTotal   = invoice.amount        ?? total;
 
-  const cgst = fInter ? 0 : Math.round(fTax / 2);
-  const sgst = fInter ? 0 : fTax - cgst;
-  const igst = fInter ? fTax : 0;
+  /* R-046: one definition of the CGST/SGST split, shared with the GSTR-1 return.
+     For a positive whole-rupee tax this is EXACTLY what `Math.round(tax / 2)` gave, so
+     nothing on an ordinary invoice moves — said plainly rather than sold as a fix. What it
+     removes is the divergence at the edges: a NEGATIVE tax (a credit note reverses an
+     invoice) rounds the wrong way in JS — Math.round(-90.5) is -90, so the odd rupee flips
+     heads and the note reverses CGST/SGST differently from the invoice it credits. Six
+     copies of this arithmetic existed; this is the one the statutory documents use. */
+  const { cgst, sgst, igst } = splitTaxHeads(fTax, fInter);
 
   // Export (international) supply → zero-rated under LUT; the invoice carries an
   // export declaration instead of a CGST/SGST/IGST split.
@@ -181,7 +191,33 @@ export function TaxInvoiceDialog({
    *  WhatsApp share flow (so the file is ready for the owner to attach). */
   async function downloadPdf(): Promise<void> {
     const { downloadInvoicePDF } = await import("@/lib/pdf");
+    const { payMethods } = await import("@/lib/pdf/pay-methods");
+    /* R-038. Whether Razorpay exists lives in tenant_secrets, which is owner-only under
+       RLS — so the browser asks the server for the yes/no rather than guessing. An
+       unreadable answer resolves to FALSE, because the defect being fixed is an invoice
+       naming a gateway the seller may not have (AGENTS.md §2: a failure must not become
+       a plausible value). Understating costs the customer one line of information;
+       overstating sends them to a payment route that does not open. */
+    let razorpayConfigured = false;
+    try {
+      const r = await fetch("/api/tenant/pay-methods", { cache: "no-store" });
+      if (r.ok) razorpayConfigured = Boolean((await r.json())?.razorpayConfigured);
+    } catch { /* stays false */ }
+
     await downloadInvoicePDF({
+      /* Same helper as the server builder, so the file this button produces and the one
+         the customer is emailed cannot disagree about how they may pay. */
+      payMethods: payMethods({
+        upiVpa: me?.tenantUpiVpa ?? null,
+        bank: {
+          bankName:      me?.tenantRemitBankName      ?? null,
+          accountName:   me?.tenantRemitAccountName   ?? me?.tenantName ?? null,
+          accountNumber: me?.tenantRemitAccountNumber ?? null,
+          ifsc:          me?.tenantRemitIfsc          ?? null,
+          branch:        me?.tenantRemitBranch        ?? null,
+        },
+        razorpayConfigured,
+      }),
       invoice, lineItems, subtotal, discountPct, discount,
       taxable: fTaxable, taxRate: fRate, tax: fTax, total: fTotal, interState: fInter,
       customerGstin, customerEmail, customerAddress, customerState, customerCountry,
@@ -390,8 +426,15 @@ export function TaxInvoiceDialog({
               <tbody>
                 {lineItems.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-3 text-center text-sm text-ink-3 italic">
-                      No line items recorded on the parent quote.
+                    {/* R-010 §24. This used to read "No line items recorded on the parent
+                        quote." on every project invoice, which named the wrong cause (a
+                        project invoice HAS no parent quote) and gave the operator nothing
+                        to do. A tax invoice without a description is defective under CGST
+                        Rule 46(g) and the buyer's credit is what is at risk, so the line
+                        says that and says the next step. */}
+                    <td colSpan={6} className="p-3 text-center text-sm text-rose italic">
+                      No description on this invoice — GST Rule 46 requires one.
+                      Raise a credit note and issue it again with line items.
                     </td>
                   </tr>
                 ) : (
@@ -404,7 +447,11 @@ export function TaxInvoiceDialog({
                           <p className="text-2xs text-ink-3 mt-0.5">{li.description}</p>
                         )}
                       </td>
-                      <td className="p-2.5 font-mono text-2xs text-ink-2">998313</td>
+                      {/* R-010. Was the literal 998313 on every line of every invoice —
+                          the third copy of a value lib/gst/hsn.ts exists to hold one copy
+                          of. A project line carries its own SAC (998314, IT design and
+                          development); a SaaS line carries none and falls back here. */}
+                      <td className="p-2.5 font-mono text-2xs text-ink-2">{li.hsn ?? SAAS_HSN}</td>
                       <td className="p-2.5 text-right tabular-nums text-sm">{li.qty}</td>
                       <td className="p-2.5 text-right tabular-nums text-sm">{money(li.rate)}</td>
                       <td className="p-2.5 text-right tabular-nums text-sm font-medium">

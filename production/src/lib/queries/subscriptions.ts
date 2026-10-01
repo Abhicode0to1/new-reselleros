@@ -8,18 +8,28 @@ import { toast } from "sonner";
 import { guardErrorToast } from "@/lib/ui/guard-toast";
 import { createClient } from "@/lib/supabase/client";
 import type { Subscription } from "@/lib/supabase/database.types";
+import { fetchAllRows } from "@/lib/ops/fetch-all";
 
 export function useSubscriptions() {
   return useQuery({
     queryKey: ["subscriptions"],
     queryFn: async (): Promise<Subscription[]> => {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .order("renewal_date", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
+      /* R-046: PostgREST answers at most 1000 rows (supabase/config.toml max_rows) and says
+         NOTHING when it cut the answer short. At 1001 subscriptions this list silently lost the
+         rest — no error, no warning, just a page that looks complete and is not. That is
+         the worst shape a data bug takes (AGENTS.md §2).
+
+         fetchAllRows pages until a short page comes back. The order ENDS ON id because an
+         offset page over an order with ties can repeat or skip a row across a page
+         boundary — see the helper header; renewal_date alone is not a total order. */
+      return await fetchAllRows<Subscription>((from, to) =>
+        supabase
+          .from("subscriptions")
+          .select("*")
+          .order("renewal_date", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to));
     },
   });
 }

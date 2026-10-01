@@ -22,6 +22,9 @@ import { formatDate } from "@/lib/utils";
 import { pdfRupee } from "./pdf-money";
 import { pdfText } from "./pdf-text";
 import { isRenderableLogo } from "./logo";
+import { splitTaxHeads } from "@/lib/gst/tax-split";
+import { SAAS_HSN, SAAS_HSN_LABEL } from "@/lib/gst/hsn";
+import type { PayMethods } from "./pay-methods";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
 import type {
@@ -86,6 +89,15 @@ export interface InvoicePDFProps {
   upiQrDataUrl?: string | null;
   /** Printed under the QR so a payer whose camera struggles can type it. */
   upiVpa?:       string | null;
+
+  /**
+   * R-038. What this tenant can actually be paid with, decided by `payMethods()` in
+   * the prop builder. `null` (or omitted) means the methods line and the bank block
+   * are both left off — which is the point: this footer used to promise "UPI / NEFT /
+   * Razorpay accepted" on every invoice regardless, offering a transfer with no
+   * account to send it to and naming a gateway that might not exist.
+   */
+  payMethods?:   PayMethods | null;
 }
 
 // ─── Styles (shared shape with QuotePDF) ──────────────────────────────────
@@ -353,6 +365,21 @@ const s = StyleSheet.create({
   },
   footerBold:   { fontFamily: PDF_FONT_BOLD, color: COLORS.ink2 },
 
+  // Bank remittance block (R-038). Boxed rather than another footer line, because a
+  // customer's accounts clerk copies these four values by hand off a printout and a
+  // run-on sentence is where a digit gets dropped.
+  bankBox: {
+    marginTop:       8,
+    padding:         7,
+    borderWidth:     1,
+    borderColor:     COLORS.hairline,
+    borderRadius:    3,
+  },
+  bankTitle: { fontSize: 9, fontFamily: PDF_FONT_BOLD, color: COLORS.ink2, marginBottom: 3 },
+  bankLine:  { fontSize: 9, color: COLORS.ink3, marginBottom: 2, lineHeight: 1.4 },
+  // Account number and IFSC in mono: 0/O and 1/l are the two pairs that get mistyped.
+  bankMono:  { fontFamily: PDF_FONT_BOLD, color: COLORS.ink },
+
   // Scan-to-pay block. ~28mm square at 72dpi — comfortably scannable from a
   // printed page, without dominating a document whose job is to be a tax record.
   upiRow: {
@@ -385,12 +412,28 @@ export function InvoicePDF(props: InvoicePDFProps) {
     customerGstin, customerEmail, customerAddress, customerState, customerCountry,
     currency, exchangeRate, termsConditions,
     tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress, tenantState, tenantLogo,
-    upiQrDataUrl, upiVpa,
+    upiQrDataUrl, upiVpa, payMethods = null,
   } = props;
 
-  const cgst = interState ? 0 : Math.round(tax / 2);
-  const sgst = interState ? 0 : tax - cgst;
-  const igst = interState ? tax : 0;
+  /* R-046: one definition of the CGST/SGST split, shared with the GSTR-1 return.
+     For a positive whole-rupee tax this is EXACTLY what `Math.round(tax / 2)` gave, so
+     nothing on an ordinary invoice moves — said plainly rather than sold as a fix. What it
+     removes is the divergence at the edges: a NEGATIVE tax (a credit note reverses an
+     invoice) rounds the wrong way in JS — Math.round(-90.5) is -90, so the odd rupee flips
+     heads and the note reverses CGST/SGST differently from the invoice it credits. Six
+     copies of this arithmetic existed; this is the one the statutory documents use. */
+  const { cgst, sgst, igst } = splitTaxHeads(tax, interState);
+
+  /* R-010. The codes this invoice actually carries, for the footer summary. Derived, so
+     it cannot say one thing while the table above says another — which is exactly what
+     the old hardcoded 998313 did on a project invoice. The SaaS code keeps its GSTR-1
+     Table 12 description; a project's SAC has none here, and printing a borrowed label
+     would be worse than printing the bare code. */
+  const sacs = Array.from(new Set(lineItems.map((li) => li.hsn ?? SAAS_HSN)));
+  const sacSummary = sacs.length === 1 && sacs[0] === SAAS_HSN
+    ? `${SAAS_HSN} (${SAAS_HSN_LABEL})`
+    : sacs.join(" · ");
+
   // Export supply (recipient outside India) → zero-rated under LUT, no GST.
   const isExport = isExportSupply(customerCountry);
   const isForeign = isForeignCurrency(currency);
@@ -478,7 +521,14 @@ export function InvoicePDF(props: InvoicePDFProps) {
             <Text style={s.thAmt}>Amount</Text>
           </View>
           {lineItems.length === 0 ? (
-            <Text style={s.emptyRow}>No line items recorded on the parent quote.</Text>
+            /* R-010. Named the wrong cause — a project invoice has no parent quote — and
+               said nothing about what it means. A tax invoice with no description is
+               defective under CGST Rule 46(g), and it is the BUYER's input credit that is
+               at risk, so the document says so rather than looking merely untidy. */
+            <Text style={s.emptyRow}>
+              No description recorded. This invoice does not meet CGST Rule 46(g) — raise a
+              credit note and issue it again with line items.
+            </Text>
           ) : (
             lineItems.map((li, i) => (
               <View
@@ -495,7 +545,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
                     </Text>
                   )}
                 </View>
-                <Text style={s.tdHsn}>998313</Text>
+                <Text style={s.tdHsn}>{li.hsn ?? SAAS_HSN}</Text>
                 <Text style={s.tdQty}>{li.qty}</Text>
                 <Text style={s.tdRate}>{money(li.rate)}</Text>
                 <Text style={s.tdAmt}>{money(li.qty * li.rate)}</Text>
@@ -591,15 +641,63 @@ export function InvoicePDF(props: InvoicePDFProps) {
           <Text style={s.reverseCharge}>
             Whether tax is payable under reverse charge: <Text style={{ fontFamily: PDF_FONT }}>No</Text>
           </Text>
+          {/* R-010. Was the literal "998313 (Software licensing / SaaS)" — a fourth copy of
+              the code, and on a PROJECT invoice it contradicted the 998314 printed one
+              table above. It is now whatever the lines actually carry. The bracketed
+              wording was wrong too: lib/gst/hsn.ts records that 998313 is IT consulting
+              and support, not software licensing, and that this string goes into GSTR-1
+              Table 12 as the Description. */}
           <Text style={[s.footerLine, { marginTop: 6 }]}>
             <Text style={s.footerBold}>HSN/SAC: </Text>
-            998313 (Software licensing / SaaS) · <Text style={s.footerBold}>GSTR-1 month: </Text>
+            {sacSummary} · <Text style={s.footerBold}>GSTR-1 month: </Text>
             {formatDate(invoice.invoice_date)}
           </Text>
-          <Text style={s.footerLine}>
-            <Text style={s.footerBold}>Payment terms: </Text>
-            {invoice.due_date ? `Due by ${formatDate(invoice.due_date)}. ` : ""}UPI / NEFT / Razorpay accepted.
-          </Text>
+          {/* R-038. The methods half of this line was the fixed string "UPI / NEFT /
+              Razorpay accepted", printed whatever the tenant had configured — it offered
+              a transfer with no account on the page to send it to, and named a gateway
+              that may not exist. It is derived now, and absent when nothing is set up.
+              The DUE DATE half is unconditional: that is a fact about this invoice, not
+              about the seller's payment plumbing, and it must not disappear with it. */}
+          {(invoice.due_date || payMethods?.line) && (
+            <Text style={s.footerLine}>
+              <Text style={s.footerBold}>Payment terms: </Text>
+              {invoice.due_date ? `Due by ${formatDate(invoice.due_date)}. ` : ""}
+              {payMethods?.line ?? ""}
+            </Text>
+          )}
+
+          {/* Bank block — drawn only with a full account number AND an IFSC, because
+              either alone is not something anybody can transfer to (see pay-methods.ts). */}
+          {payMethods?.bank && (
+            <View style={s.bankBox}>
+              <Text style={s.bankTitle}>Bank transfer (NEFT / RTGS / IMPS)</Text>
+              {payMethods.bank.accountName && (
+                <Text style={s.bankLine}>
+                  <Text style={s.footerBold}>Account name: </Text>
+                  {pdfText(payMethods.bank.accountName)}
+                </Text>
+              )}
+              {payMethods.bank.bankName && (
+                <Text style={s.bankLine}>
+                  <Text style={s.footerBold}>Bank: </Text>
+                  {pdfText(payMethods.bank.bankName)}
+                  {payMethods.bank.branch ? ` · ${pdfText(payMethods.bank.branch)}` : ""}
+                </Text>
+              )}
+              <Text style={s.bankLine}>
+                <Text style={s.footerBold}>A/c no: </Text>
+                <Text style={s.bankMono}>{payMethods.bank.accountNumber}</Text>
+                <Text style={s.footerBold}>   IFSC: </Text>
+                <Text style={s.bankMono}>{payMethods.bank.ifsc}</Text>
+              </Text>
+              {/* The reference is what makes the money reconcilable at our end. Without
+                  it a transfer lands as an unidentified credit and somebody chases it. */}
+              <Text style={s.bankLine}>
+                <Text style={s.footerBold}>Reference: </Text>
+                {invoice.id}
+              </Text>
+            </View>
+          )}
 
           {/* Scan-to-pay. Drawn only when the tenant has set a UPI ID — no
               placeholder box, because an un-scannable QR on a tax invoice is

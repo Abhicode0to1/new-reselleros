@@ -112,6 +112,19 @@ const companySchema = z.object({
   upi_vpa: z.string().trim().max(80).optional()
     .refine((v) => !v || isValidVpa(v), "Enter a valid UPI ID, e.g. yourname@okhdfcbank"),
   upi_payee_name: z.string().trim().max(50).optional(),
+  /* R-038 — bank details for the invoice PDF's NEFT/RTGS block.
+     Deliberately permissive: an account number is 9–18 digits at most Indian banks but
+     not all, and a validator that refuses a real account is worse than none here —
+     nothing downstream parses these, they are printed. IFSC has a genuine fixed shape
+     (4 letters, 0, 6 alphanumeric) so a typo IS catchable, and a bounced transfer costs
+     the customer a week. */
+  remit_bank_name:      z.string().trim().max(80).optional(),
+  remit_account_name:   z.string().trim().max(80).optional(),
+  remit_account_number: z.string().trim().max(30).optional(),
+  remit_ifsc: z.string().trim().max(11).optional()
+    .refine((v) => !v || /^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(v),
+            "11 characters, e.g. HDFC0001234 (4 letters, a zero, then 6)"),
+  remit_branch:         z.string().trim().max(80).optional(),
   grace_period_days: z.coerce
     .number({ invalid_type_error: "Must be a number" })
     .int("Whole days only")
@@ -140,6 +153,11 @@ function CompanyTab() {
       lut_valid_upto: me?.tenantLutValidUpto ?? "",
       upi_vpa:        me?.tenantUpiVpa       ?? "",
       upi_payee_name: me?.tenantUpiPayeeName ?? "",
+      remit_bank_name:      me?.tenantRemitBankName      ?? "",
+      remit_account_name:   me?.tenantRemitAccountName   ?? "",
+      remit_account_number: me?.tenantRemitAccountNumber ?? "",
+      remit_ifsc:           me?.tenantRemitIfsc          ?? "",
+      remit_branch:         me?.tenantRemitBranch        ?? "",
       grace_period_days: me?.tenantGracePeriodDays ?? 0,
     }),
     [me],
@@ -186,6 +204,13 @@ function CompanyTab() {
       lut_valid_upto: values.lut_valid_upto?.trim() || null,
       upi_vpa:        values.upi_vpa?.trim()        || null,
       upi_payee_name: values.upi_payee_name?.trim() || null,
+      remit_bank_name:      values.remit_bank_name?.trim()      || null,
+      remit_account_name:   values.remit_account_name?.trim()   || null,
+      remit_account_number: values.remit_account_number?.trim() || null,
+      // Upper-cased on the way in: IFSC is officially upper case and a lower-case one
+      // printed on an invoice invites a "is this right?" call it does not need.
+      remit_ifsc:           values.remit_ifsc?.trim().toUpperCase() || null,
+      remit_branch:         values.remit_branch?.trim()         || null,
       grace_period_days: values.grace_period_days,
     };
     updateTenant.mutate(patch, { onSuccess: () => reset(values) });
@@ -386,6 +411,65 @@ function CompanyTab() {
                     an unexpected name at the moment of paying is when customers stop.
                   </p>
                 </Field>
+              </div>
+
+              {/* Bank transfer (R-038). Until this existed the invoice PDF said
+                  "NEFT accepted" and gave the customer nowhere to send it — one phone
+                  call per invoice, and a week of delay on each. Blank means the PDF
+                  says nothing about NEFT, which is the honest output. */}
+              <div className="pt-2">
+                <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-3">
+                  Bank transfer details (optional)
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Bank name">
+                    <Input
+                      placeholder="e.g. HDFC Bank"
+                      error={errors.remit_bank_name?.message}
+                      {...register("remit_bank_name")}
+                    />
+                  </Field>
+                  <Field label="Branch (optional)">
+                    <Input
+                      placeholder="e.g. Nehru Place, New Delhi"
+                      error={errors.remit_branch?.message}
+                      {...register("remit_branch")}
+                    />
+                  </Field>
+                  <Field label="Account name (beneficiary)">
+                    <Input
+                      placeholder="Defaults to your company name"
+                      error={errors.remit_account_name?.message}
+                      {...register("remit_account_name")}
+                    />
+                    <p className="mt-1 text-xs text-ink-3">
+                      Exactly as your bank holds it. A transfer to a name that does not match
+                      is what gets bounced.
+                    </p>
+                  </Field>
+                  <Field label="Account number">
+                    <Input
+                      placeholder="e.g. 50200012345678"
+                      className="font-mono"
+                      error={errors.remit_account_number?.message}
+                      {...register("remit_account_number")}
+                    />
+                  </Field>
+                  <Field label="IFSC">
+                    <Input
+                      placeholder="e.g. HDFC0001234"
+                      className="font-mono uppercase"
+                      error={errors.remit_ifsc?.message}
+                      {...register("remit_ifsc")}
+                    />
+                    <p className="mt-1 text-xs text-ink-3">
+                      Account number and IFSC together switch on the bank block on every
+                      invoice PDF, with the invoice number as the payment reference. Either
+                      one alone is not something a customer can transfer to, so neither is
+                      printed until both are filled.
+                    </p>
+                  </Field>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">

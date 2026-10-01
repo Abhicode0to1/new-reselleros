@@ -184,12 +184,14 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess, onNeedsPa
   /** The catalog row being sold → subscriptions.item_id. Null on a custom plan. */
   const [itemId, setItemId] = React.useState<string | null>(null);
   const [paymentTerms, setPaymentTerms] = React.useState<"paid" | "credit">("credit");
-  const [startDate, setStartDate] = React.useState(() => new Date().toISOString().split("T")[0]);
+  // R-025: `toISOString()` is UTC, so before 05:30 IST this seeded YESTERDAY — and a
+  // subscription's start date is what every renewal date is then counted from.
+  const [startDate, setStartDate] = React.useState(() => todayIST());
   /* Seeded from the DEFAULT term (12 months), and re-derived whenever the start date or
      the billing period moves — see changeStartDate / changeBillingChoice. It stays an
      editable field: the derived value is the sensible default, not a cage. */
   const [renewalDate, setRenewalDate] = React.useState(
-    () => termEndInclusive(new Date().toISOString().split("T")[0], 12),
+    () => termEndInclusive(todayIST(), 12),        // R-025 — same UTC trap.
   );
 
   /**
@@ -501,8 +503,8 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess, onNeedsPa
          A fallback here would quietly reintroduce the collision this replaced. */
       throw new Error(
         numErr?.message
-          ? `Could not allocate a quote number: ${numErr.message}. Try again — if it keeps failing, your document series needs setting up under Admin & Control.`
-          : "Could not allocate a quote number. Try again — if it keeps failing, your document series needs setting up under Admin & Control.",
+          ? `Could not allocate a quote number: ${numErr.message}. Try again — if it keeps failing, your document series needs setting up under Settings.`
+          : "Could not allocate a quote number. Try again — if it keeps failing, your document series needs setting up under Settings.",
       );
     }
     return minted as unknown as string;

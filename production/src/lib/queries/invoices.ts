@@ -10,6 +10,7 @@ import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import { grossAmount, isQuoteAmountConsistent } from "@/lib/quotes/amounts";
 import type { Invoice } from "@/lib/supabase/database.types";
+import { fetchAllRows } from "@/lib/ops/fetch-all";
 
 // ============================================================
 // List
@@ -19,19 +20,25 @@ export function useInvoices(filter?: { status?: Invoice["status"] | "all" }) {
     queryKey: ["invoices", filter?.status ?? "all"],
     queryFn: async (): Promise<Invoice[]> => {
       const supabase = createClient();
-      let q = supabase
-        .from("invoices")
-        .select("*")
-        .order("invoice_date", { ascending: false });
-      if (filter?.status && filter.status !== "all") {
-        q = q.eq("status", filter.status);
-      }
-      const { data, error } = await q;
-      if (error) {
-        console.warn("Supabase invoices query error:", error.message);
-        return [];
-      }
-      return data ?? [];
+      /* R-046: PostgREST answers at most 1000 rows (supabase/config.toml max_rows) and says
+         NOTHING when it cut the answer short. At 1001 invoices this list silently lost the
+         rest — no error, no warning, just a page that looks complete and is not. That is
+         the worst shape a data bug takes (AGENTS.md §2).
+
+         fetchAllRows pages until a short page comes back. The order ENDS ON id because an
+         offset page over an order with ties can repeat or skip a row across a page
+         boundary — see the helper header; invoice_date alone is not a total order. */
+      return await fetchAllRows<Invoice>((from, to) => {
+        let q = supabase
+          .from("invoices")
+          .select("*")
+          .order("invoice_date", { ascending: false })
+          .order("id", { ascending: true });
+        if (filter?.status && filter.status !== "all") {
+          q = q.eq("status", filter.status);
+        }
+        return q.range(from, to);
+      });
     },
   });
 }
@@ -277,9 +284,21 @@ export function useCreateDirectInvoice() {
 }
 
 /**
- * Delete a PROJECT invoice + everything tied to it (payments, bank reconcile,
- * milestone reset, number roll-back) atomically via delete_project_invoice.
- * Only valid for project-milestone invoices.
+ * Delete a DRAFT project invoice and re-open its milestones, via delete_project_invoice.
+ *
+ * ⚠️ This docstring said "payments, bank reconcile, milestone reset, number roll-back"
+ * and every clause of that was wrong or dangerous (R-014, 29 Sep 2026):
+ *
+ *   - **There is no number roll-back.** `document_series.last_number` only ever rises, so
+ *     the number is spent whatever happens here. Deleting an issued invoice leaves a
+ *     permanent gap in a series that CGST Rule 46 requires to be unbroken.
+ *   - **Payments are no longer removed, and must not be.** The RPC used to
+ *     `delete from project_payments` — money that actually arrived, carrying a
+ *     `bank_txn_id` back to a real bank statement line — and reset the milestone to
+ *     'pending' as though the customer had never paid.
+ *   - **Only a DRAFT is deletable now.** An issued invoice is corrected with a credit
+ *     note (CGST Section 34). The RPC and a BEFORE DELETE trigger both refuse, and the
+ *     refusal names that route (migration 20260930171000).
  */
 export function useDeleteProjectInvoice() {
   const qc = useQueryClient();
@@ -296,16 +315,22 @@ export function useDeleteProjectInvoice() {
       qc.invalidateQueries({ queryKey: ["project_milestones"] });
       qc.invalidateQueries({ queryKey: ["bank_transactions"] });
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
-      toast.success("Project invoice deleted — payment reversed, milestone re-opened");
+      // R-014: no payment is reversed any more — the old wording described the bug.
+      toast.success("Draft invoice deleted — milestone re-opened. Payments recorded against it are untouched.");
     },
     onError: (err) => toastError(err),
   });
 }
 
 /**
- * Delete a SUBSCRIPTION (quote-generated) invoice — SAFE reversal via
- * delete_subscription_invoice: removes the GST document + re-opens the quote
- * for re-invoicing. Does NOT touch payments / subscriptions.
+ * Delete a DRAFT subscription (quote-generated) invoice and re-open its quote for
+ * re-invoicing, via delete_subscription_invoice. Does NOT touch payments / subscriptions.
+ *
+ * ⚠️ This said "SAFE reversal … removes the GST document" (R-014, 29 Sep 2026). Removing
+ * an ISSUED GST document is not a reversal and is not safe: the number stays spent, the
+ * series gets a permanent hole, and nothing is left on the record to explain it. Since
+ * `generate_invoice` never writes 'draft', in practice almost nothing that reaches this
+ * hook is deletable at all — the route for a wrong invoice is a credit note.
  */
 export function useDeleteSubscriptionInvoice() {
   const qc = useQueryClient();
@@ -319,7 +344,7 @@ export function useDeleteSubscriptionInvoice() {
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
-      toast.success("Invoice deleted — quote re-opened for re-invoicing");
+      toast.success("Draft invoice deleted — quote re-opened for re-invoicing");
     },
     onError: (err) => toastError(err),
   });
