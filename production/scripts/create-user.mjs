@@ -30,7 +30,13 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 // Inputs
 const USER_EMAIL = "pardeep@anutech.in";
-const USER_PASSWORD = "ResellerOS@2026";
+/* R-059: never a password in source. Pass it for this one run:
+     NEW_USER_PASSWORD='…' node scripts/create-user.mjs */
+const USER_PASSWORD = process.env.NEW_USER_PASSWORD;
+if (!USER_PASSWORD) {
+  console.error("❌ Set NEW_USER_PASSWORD for this run (never write it in the file).");
+  process.exit(1);
+}
 const USER_NAME = "Pardeep Sharma";
 const COMPANY_NAME = "Excel Technologies Pvt Ltd";
 const GSTIN = "27AABCE9876D1Z3";

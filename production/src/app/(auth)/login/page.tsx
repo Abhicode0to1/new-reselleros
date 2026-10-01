@@ -45,19 +45,16 @@ const DMS_LOGIN_URL = (() => {
   }
 })();
 
-const DEMO_USERS: Array<{ label: string; email: string; password: string }> = [
-  /* 26 Aug 2026: yahan teesri entry thi — `darshan@exceltechnologies.in`. DB me wo user
-     MAUJOOD NAHI HAI, to wo button dabane par sirf login fail hota tha. Upar likha comment
-     ("kept in sync with the actual tenants in Supabase") sach nahi nikla, jo aisi list ke
-     saath hota hi hai.
-
-     Aur dono bachi entry ke naam SAHI hain: "Excel Technologies" yahan purana naam nahi
-     hai — wo ek ASLI doosra tenant hai (uska apna GSTIN aur apna paisa hai). Baaki public
-     pages par wahi naam hata diya gaya kyunki wahan wo ResellerOS ko CHALANE WALI entity
-     bata raha tha, jo wo nahi hai. Ek hi shabd, do bilkul alag matlab. */
-  { label: "Anutech Digital",            email: "pardeep@anutech.in",           password: "ResellerOS@2026" },
-  { label: "Excel Technologies · Owner", email: "pardeep@exceltechnologies.in", password: "ExcelTech@2026"  },
-];
+/* 1 Oct 2026 (R-059): this list used to carry two REAL owner passwords in source — and so in
+   GitHub and in every dev bundle. Now it holds no password at all, and no email in code either:
+   a local developer lists their own test logins in .env.local as
+   NEXT_PUBLIC_DEV_DEMO_LOGINS="Label|email,Label|email" and types the password themselves.
+   Unset (the default, and always in production) → the panel shows nothing. */
+const DEMO_USERS: Array<{ label: string; email: string }> = String(process.env.NEXT_PUBLIC_DEV_DEMO_LOGINS ?? "")
+  .split(",")
+  .map((pair) => pair.split("|").map((x) => x.trim()))
+  .filter(([label, email]) => !!label && !!email && email.includes("@"))
+  .map(([label, email]) => ({ label, email }));
 
 function LoginPageInner() {
   const searchParams = useSearchParams();
@@ -75,11 +72,9 @@ function LoginPageInner() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
-  // Quick-fill from demo banner — only used in dev
-  const fillDemo = (email: string, password: string) => {
+  // Quick-fill from the dev panel — email only; the password is never in code (R-059)
+  const fillDemo = (email: string) => {
     setValue("email", email, { shouldValidate: true });
-    setValue("password", password, { shouldValidate: true });
-    setShowPassword(true);
   };
 
   const showDemoHint = process.env.NODE_ENV !== "production";
@@ -130,17 +125,17 @@ function LoginPageInner() {
       )}
 
       {/* Dev-only demo credentials — hidden in production builds */}
-      {showDemoHint && configured && (
+      {showDemoHint && configured && DEMO_USERS.length > 0 && (
         <DevDemoPanel
           title="demo accounts"
           entries={DEMO_USERS.map((u) => ({
             label: u.label,
             mono: (
               <>
-                {u.email} · <span className="text-amber-ink">{u.password}</span>
+                {u.email}
               </>
             ),
-            onClick: () => fillDemo(u.email, u.password),
+            onClick: () => fillDemo(u.email),
           }))}
           /* A LINK, not a third autofill row. A hosting/domains customer cannot
              be a credential here: this form is signInWithPassword against a

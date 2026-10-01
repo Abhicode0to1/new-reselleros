@@ -294,10 +294,10 @@ experience now.
 
 | Email | Password | Tenant | Role |
 |---|---|---|---|
-| `pardeep@exceltechnologies.in` | `ExcelTech@2026` | Excel Technologies (distributor) | owner |
-| `darshan@exceltechnologies.in` | `ExcelSales@2026` | Excel Technologies | sales |
+| `pardeep@exceltechnologies.in` | (apne paas — code/docs mein nahi) | Excel Technologies (distributor) | owner |
+| `darshan@exceltechnologies.in` | (apne paas — code/docs mein nahi) | Excel Technologies | sales |
 | `pardeep.webmaster@gmail.com` | (in DB) | Excel Technologies | sales |
-| `pardeep@anutech.in` | `ResellerOS@2026` | Anutech Digital (reseller) | owner |
+| `pardeep@anutech.in` | (apne paas — code/docs mein nahi) | Anutech Digital (reseller) | owner |
 
 ---
 

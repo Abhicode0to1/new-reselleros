@@ -25,11 +25,11 @@ describe("checkNewPassword", () => {
     expect(msg(" chai-samosa-42")).toMatch(/space/i);
   });
 
-  it("refuses the credential this repo had sitting in its own login page", () => {
-    /* `ResellerOS@2026` was in login/page.tsx's dev demo list against the live owner
-       account. A value that looks deliberate is exactly the one that gets reused. */
-    expect(ok("ResellerOS@2026")).toBe(false);
-    expect(ok("reselleros@2026")).toBe(false);
+  it("refuses company / product names (R-059: such passwords sat in this repo)", () => {
+    expect(ok("Anutech@2025")).toBe(false);
+    expect(ok("excel tech 2025!")).toBe(false);
+    expect(ok("MyResellerOS#99")).toBe(false);
+    expect(ok("chai-samosa-42")).toBe(true);
   });
 
   it("refuses the usual guess-list entries whatever the case", () => {

@@ -16,13 +16,13 @@ export const PASSWORD_MIN_LENGTH = 8;
 
 /**
  * Rejected outright. Not a strength meter — just the handful that show up in real breach lists
- * and in this repo's own history: `ResellerOS@2026` sat in the login page's dev demo list as a
- * live owner credential, which is exactly the kind of value that gets reused because it looks
- * deliberate.
+ * and in this repo's own history: a "<Product>@<year>" value sat in the login page's dev demo
+ * list as a live owner credential (R-059), which is exactly the kind of value that gets reused
+ * because it looks deliberate — so the company and product names are refused below as well.
  */
 const BANNED = [
   "password", "12345678", "123456789", "qwerty123", "admin123",
-  "welcome1", "letmein1", "iloveyou", "resellerost", "reselleros@2026",
+  "welcome1", "letmein1", "iloveyou", "resellerost",
 ] as const;
 
 export interface PasswordProblem {
@@ -51,6 +51,11 @@ export function checkNewPassword(password: string, confirm?: string): PasswordPr
   }
   if (BANNED.includes(password.toLowerCase() as (typeof BANNED)[number])) {
     return { message: "That one is on every guess list. Pick something only you would think of." };
+  }
+  /* R-059: "<Company>@<year>" passwords were found in this repo. A name everyone in the
+     company knows is the first thing anyone tries. */
+  if (/reseller\s*os|anutech|excel\s*tech/i.test(password)) {
+    return { message: "Don't use the company or product name in your password — it is the first thing anyone guesses." };
   }
   if (/^(.)\1+$/.test(password)) {
     return { message: "That is the same character repeated. Mix it up." };
