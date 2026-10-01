@@ -36,6 +36,7 @@ import {
 } from "@/lib/queries/payments";
 import { useQuotes } from "@/lib/queries/quotes";
 import { useAllProjectPayments } from "@/lib/queries/projects";
+import { collectedInMonth } from "@/lib/company/summary";
 import { useCustomers } from "@/lib/queries/customers";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -205,10 +206,9 @@ function PaymentsPageInner() {
   // Partial payments (quotes with status=partial)
   const partialQuotes = (quotes ?? []).filter((q) => q.payment_status === "partial");
 
-  const mtdStart = new Date(); mtdStart.setDate(1);
-  const mtdCollected =
-    allReceived.filter((p) => new Date(p.received_at) >= mtdStart).reduce((s, p) => s + p.amount, 0) +
-    projPays.filter((p) => new Date(p.received_at) >= mtdStart).reduce((s, p) => s + p.amount, 0);
+  /* Collected this IST month — one helper (lib/company/summary.ts), shared with the dashboard
+     Company section. It used to start at "the 1st at this time of day", browser clock. */
+  const mtdCollected = collectedInMonth(payments ?? [], projPays);
 
   // Method breakdown
   const methodBreakdown: Record<string, number> = {};
