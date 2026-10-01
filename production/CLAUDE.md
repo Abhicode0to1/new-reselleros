@@ -236,7 +236,7 @@ Use serif for **moments that matter** (page titles, big numbers, customer-facing
 ## 7. Routing conventions
 
 - Internal app routes under `(app)/`: `/dashboard`, `/leads`, `/customers`, `/customers/[id]`, `/quotes`, `/quotes/[id]`, `/invoices`, `/online-orders`, `/setup`, etc.
-- Customer-facing under `(public)/`: `/buy/workspace`, `/buy/m365`, `/buy/zoho`, `/quote/[id]/accept`, `/portal`
+- Customer-facing under `(public)/`: `/buy/workspace`, `/quote/[id]/accept`, `/terms`, `/privacy`. There is no `/buy/m365` or `/buy/zoho` (Microsoft 365 and Zoho are quoted, not bought online) and no `/portal` (deleted 19 Sep 2026; DMS owns the customer panel). The shop's own pages are under `(marketing)/`: `/`, `/hosting`, `/domains`, `/cart`, `/checkout`, `/contact`, `/terms-and-conditions`, `/refund`, `/privacy-policy`.
 - Auth under `(auth)/`: `/login`, `/signup`, `/forgot-password`
 - API under `/api/`: `/api/webhooks/razorpay`, `/api/webhooks/csp`, `/api/cron/renewals`
 - Dev-only under `/dev/`: 404'd in production by `middleware.ts` unless `ALLOW_DEV_PAGES=1`.

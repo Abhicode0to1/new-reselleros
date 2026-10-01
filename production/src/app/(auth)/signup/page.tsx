@@ -260,8 +260,11 @@ export default function SignupPage() {
 
         <p className="text-2xs text-ink-3 text-center leading-relaxed">
           By signing up you agree to our{" "}
-          <a href="#" className="underline">Terms</a> and{" "}
-          <a href="#" className="underline">Privacy Policy</a>. DPDP Act 2023 compliant.
+          {/* Were href="#" until 1 Oct 2026 (R-047). ResellerOS's own documents: a reseller
+              signing up agrees to the software's terms, not the Anutech shop's. A new tab, so
+              the half-filled form is kept. */}
+          <a href="/terms" target="_blank" rel="noopener" className="underline">Terms</a> and{" "}
+          <a href="/privacy" target="_blank" rel="noopener" className="underline">Privacy Policy</a>. DPDP Act 2023 compliant.
         </p>
       </form>
 

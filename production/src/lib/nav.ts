@@ -510,22 +510,11 @@ export const APP_NAV: NavSection[] = [
   },
 ];
 
-// ============================================================
-// Customer-facing pages (chromeless — used in nav switcher)
-// ============================================================
-export const CUSTOMER_NAV: NavSection[] = [
-  {
-    section: "Customer-facing",
-    items: [
-      { id: "landing",          href: "/",                  label: "Marketing Landing", icon: "globe" },
-      { id: "buy-workspace",    href: "/buy/workspace",     label: "Buy · Workspace",   icon: "sparkles" },
-      { id: "buy-m365",         href: "/buy/m365",          label: "Buy · Microsoft 365", icon: "package" },
-      { id: "buy-zoho",         href: "/buy/zoho",          label: "Buy · Zoho",        icon: "package" },
-      { id: "quote-accept",     href: "/quote/Q-2026-0042", label: "Quote Accept & Pay", icon: "check_circle" },
-      { id: "support-customer", href: "/support-customer",  label: "Customer Support",  icon: "question" },
-    ],
-  },
-];
+/* CUSTOMER_NAV was here until 1 Oct 2026 (R-047): a "Customer-facing" menu that nothing ever
+   rendered (no import anywhere since the first commit), holding three links to pages that do
+   not exist (/buy/m365, /buy/zoho, /support-customer) and one to a made-up quote id. Deleted
+   rather than repaired. The site's real customer pages are the marketing site's own menu
+   (src/site/components/chrome). nav-links-resolve.test.ts now checks every href in this file. */
 
 // ============================================================
 // Breadcrumb titles — by URL path, DERIVED from APP_NAV (S30)
