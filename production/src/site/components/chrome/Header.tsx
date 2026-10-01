@@ -35,7 +35,7 @@ const MENUS: readonly Menu[] = [
         { label: "Transfer in", note: "We pull auth codes for you", href: "/domains#rates" },
       ],
       [
-        { label: "All prices", note: "Every rate on one page", href: "/pricing" },
+        { label: "All prices", note: "Every rate on one page", href: "/rates" },
         { label: "WHOIS privacy", note: "Free where the registry permits", href: "/domains#included" },
         { label: "Bulk operations", note: "Whole portfolios in one action", href: "/domains#included" },
       ],
@@ -96,7 +96,7 @@ const MENUS: readonly Menu[] = [
       [
         { label: "Reseller program", note: "No slabs, no deposit", href: "/reseller" },
         { label: "Margin calculator", note: "Your numbers, our rates", href: "/reseller#margin" },
-        { label: "Rate card", note: "Published, not behind a panel", href: "/pricing" },
+        { label: "Rate card", note: "Published, not behind a panel", href: "/rates" },
       ],
       [
         { label: "GW / M365 / Zoho resellers", note: "Built by one, in Delhi", href: "/reselleros" },
@@ -117,7 +117,7 @@ const MOBILE_PAGES = [
   { label: "SSL & security", note: "Free DV on every site", href: "/ssl" },
   { label: "ResellerOS", note: "Software for resellers · free in beta", href: "/reselleros" },
   { label: "Reseller program", note: "No slabs, no deposit", href: "/reseller" },
-  { label: "All prices", note: "Every rate on one page", href: "/pricing" },
+  { label: "All prices", note: "Every rate on one page", href: "/rates" },
   { label: "Why us", note: "Us vs the usual way", href: "/why-us" },
   { label: "Support", note: "Email and call-back", href: "/contact" },
   { label: "Status", note: "90-day uptime", href: "/status" },

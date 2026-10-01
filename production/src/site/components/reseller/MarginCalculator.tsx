@@ -42,7 +42,7 @@ export function MarginCalculator() {
           <div className="mono-label" style={{ color: "var(--text-muted)" }}>YOUR MONTHLY MARGIN</div>
           <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: "-0.04em" }}>{rupee(monthly)}</div>
           <div className="meta" style={{ marginBottom: 16 }}>{rupee(monthly * 12)} a year, at the published rates</div>
-          <Link href="/pricing" className="btn btn-primary">See the full rate card</Link>
+          <Link href="/rates" className="btn btn-primary">See the full rate card</Link>
         </div>
       </div>
     </div>

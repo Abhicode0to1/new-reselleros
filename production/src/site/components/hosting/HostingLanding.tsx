@@ -218,7 +218,7 @@ export function HostingLanding() {
               ))}
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 14.5 }}><span style={{ color: C.muted }}>Charged during trial</span><span style={{ fontWeight: 700, color: C.success }}>₹0</span></div>
             </div>
-            <p style={{ marginTop: 16, fontSize: 13.5, lineHeight: 1.5, color: C.muted }}>Domains, business email and Google Workspace are separate line items — never bundled into the headline price. <a href="/pricing">See the full rate card</a>.</p>
+            <p style={{ marginTop: 16, fontSize: 13.5, lineHeight: 1.5, color: C.muted }}>Domains, business email and Google Workspace are separate line items — never bundled into the headline price. <a href="/rates">See the full rate card</a>.</p>
           </div>
         </div>
       </section>
@@ -379,7 +379,7 @@ export function HostingLanding() {
               ))}
             </div>
           </div>
-          <p style={{ marginTop: 14, fontSize: 13.5, color: C.muted, lineHeight: 1.55 }}>Figures are 36 months of the current list price with 18% GST applied. Domain registration, business email and Google Workspace are billed separately — <a href="/pricing">see the rate card</a> or <a href="/quote">ask for a written quote</a> with your exact requirement.</p>
+          <p style={{ marginTop: 14, fontSize: 13.5, color: C.muted, lineHeight: 1.55 }}>Figures are 36 months of the current list price with 18% GST applied. Domain registration, business email and Google Workspace are billed separately — <a href="/rates">see the rate card</a> or <a href="/quote">ask for a written quote</a> with your exact requirement.</p>
         </div>
       </section>
 

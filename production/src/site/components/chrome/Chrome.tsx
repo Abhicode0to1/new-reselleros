@@ -25,7 +25,7 @@ export function UtilityBar() {
           <span>Free migration on every plan · GST invoice on every order</span>
         )}
         <span className="hide-mobile" style={{ display: "flex", gap: 18 }}>
-          <Link href="/pricing">All prices</Link>
+          <Link href="/rates">All prices</Link>
           <Link href="/contact">Support</Link>
           <Link href="/status">Status</Link>
           <Link href="/login">Client login</Link>
@@ -50,7 +50,8 @@ const CRUMBS: Record<string, string> = {
   "/refund": "Refund policy",
   "/reselleros": "ResellerOS — software for resellers",
   "/reseller": "Reseller program",
-  "/pricing": "Every price",
+  "/rates": "Every price",
+  "/pricing": "ResellerOS pricing",
   "/why-us": "Why us",
   "/about": "About Anutech Digital",
   "/support": "Support & knowledge base",
@@ -102,7 +103,7 @@ export function CtaBand() {
 }
 
 const FOOTER_COLS = [
-  { title: "DOMAINS", links: [["Search a domain", "/domains"], ["Rate card", "/domains#rates"], ["Transfer in", "/domains"], ["All prices", "/pricing"]] },
+  { title: "DOMAINS", links: [["Search a domain", "/domains"], ["Rate card", "/domains#rates"], ["Transfer in", "/domains"], ["All prices", "/rates"]] },
   { title: "HOSTING", links: [["Shared hosting", "/hosting"], ["Full specification", "/hosting#specs"], ["Client area", CLIENT_AREA_URL], ["System status", "/status"]] },
   { title: "EMAIL & SECURITY", links: [["Compare editions", "/email/compare-editions"], ["Business email", "/email"], ["Google Workspace", "/quote"], ["Microsoft 365", "/quote"], ["SSL certificates", "/ssl"]] },
   { title: "RESELLEROS", links: [["What it is", "/reselleros"], ["Modules", "/reselleros#modules"], ["Interactive demo", "/reselleros"], ["Pricing — free in beta", "/reselleros#pricing"]] },

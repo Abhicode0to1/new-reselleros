@@ -168,7 +168,7 @@ export const HOSTING_CHANNELS: readonly { t: string; d: string; a: string; href:
   { t: "WhatsApp", d: "Fastest for one quick question before you buy", a: "Chat now", href: WHATSAPP_URL },
   { t: "Written quote", d: "Prices, GST split and renewal in writing", a: "Request a quote", href: "/quote" },
   { t: "Support", d: "Setup and migration questions, answered by a person", a: "Ask us", href: "/contact" },
-  { t: "All prices", d: "Domains, email and add-ons, itemised", a: "Open the rate card", href: "/pricing" },
+  { t: "All prices", d: "Domains, email and add-ons, itemised", a: "Open the rate card", href: "/rates" },
 ];
 
 export const HOSTING_FAQS_V2: readonly { q: string; a: string }[] = [
