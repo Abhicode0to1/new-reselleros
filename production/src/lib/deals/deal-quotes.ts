@@ -6,6 +6,7 @@
  * A project's status is read in quote language by lib/projects/quotation-view.ts, the same
  * mapping Customer 360 uses — nothing is copied into `quotes`.
  */
+import { toIstDate } from "@/lib/dates/ist";
 import { projectQuotationView } from "@/lib/projects/quotation-view";
 
 export type DealQuoteBadge = "muted" | "warning" | "success" | "info" | "danger";
@@ -34,7 +35,7 @@ export function backfilledStart(p: { created_at?: string | null; accepted_at?: s
   if (!p.created_at || !p.accepted_at || !p.start_date) return null;
   const made = Date.parse(p.created_at), acc = Date.parse(p.accepted_at);
   if (Number.isNaN(made) || Number.isNaN(acc) || Math.abs(made - acc) > 60_000) return null;
-  const madeIstDay = new Date(made + 5.5 * 3_600_000).toISOString().slice(0, 10);
+  const madeIstDay = toIstDate(made);
   return madeIstDay > p.start_date.slice(0, 10) ? p.start_date.slice(0, 10) : null;
 }
 

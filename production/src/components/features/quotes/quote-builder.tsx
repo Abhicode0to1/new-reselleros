@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { istToday, addDaysISO } from "@/lib/dates/ist";
 import * as React from "react";
 import { convertRateForCommitment } from "@/lib/quotes/commitment-rate";
 import { useDraftGuard } from "@/lib/hooks/useDraftGuard";
@@ -406,7 +407,7 @@ export function QuoteBuilder() {
   // Today's date (IST) as YYYY-MM-DD — the default service start date for new
   // line items (operator can still change or clear it). Cheap to recompute per
   // render; not memoised on purpose so an overnight session stays correct.
-  const todayISO = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const todayISO = istToday();
 
   // ── Pre-fill the line items (runs once — waits for catalog so we use real prices) ──
   //
@@ -877,9 +878,6 @@ export function QuoteBuilder() {
       return;
     }
 
-    const expiresDate = new Date();
-    expiresDate.setDate(expiresDate.getDate() + validityDays);
-
     try {
       // Allocate the sequential quote ID via the central numbering RPC.
       // Reuse if user clicked save twice (e.g., draft → send) — don't waste numbers.
@@ -948,7 +946,7 @@ export function QuoteBuilder() {
         terms_conditions:   termsConditions.trim() || null,
         status,
         notes:         notes || null,
-        expires_date:  expiresDate.toISOString().slice(0, 10),
+        expires_date:  addDaysISO(istToday(), validityDays),
         seats:         lineItems.reduce((s, l) => s + l.qty, 0),
         plan:          lineItems[0]?.name ?? null,
         // Direct invoice: a one-time invoice must NOT create a subscription on

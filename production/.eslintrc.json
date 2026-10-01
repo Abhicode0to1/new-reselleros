@@ -1,15 +1,31 @@
 {
-  "extends": ["next/core-web-vitals"],
-  "ignorePatterns": ["src/lib/supabase/database.generated.ts"],
+  "extends": [
+    "next/core-web-vitals"
+  ],
+  "ignorePatterns": [
+    "src/lib/supabase/database.generated.ts"
+  ],
   "rules": {
     "react/no-unescaped-entities": "off",
     "@next/next/no-img-element": "warn",
-    "max-lines": ["warn", { "max": 800, "skipBlankLines": true, "skipComments": true }]
+    "max-lines": [
+      "warn",
+      {
+        "max": 800,
+        "skipBlankLines": true,
+        "skipComments": true
+      }
+    ]
   },
   "overrides": [
     {
-      "files": ["*.ts", "*.tsx"],
-      "plugins": ["@typescript-eslint"],
+      "files": [
+        "*.ts",
+        "*.tsx"
+      ],
+      "plugins": [
+        "@typescript-eslint"
+      ],
       "rules": {
         "@typescript-eslint/no-explicit-any": "warn"
       }
@@ -36,7 +52,6 @@
         "src/app/(app)/vendor-portal/**",
         "src/app/(public)/unsubscribe/**",
         "src/app/(public)/expense-claim/**",
-        "src/app/api/cron/**",
         "src/app/api/marketing/**",
         "src/app/api/leads/**",
         "src/app/api/public/health/**",
@@ -66,13 +81,59 @@
         "src/components/features/compliance/**",
         "src/components/features/attendance/**",
         "src/components/features/purchase-orders/**",
-        "src/components/features/site-promos/**"
+        "src/components/features/site-promos/**",
+        "src/app/(app)/quotes/**",
+        "src/app/api/quotes/**",
+        "src/lib/quotes/**",
+        "src/components/features/quotes/**",
+        "src/app/(app)/dashboard/**",
+        "src/app/(app)/today/**",
+        "src/lib/today/**",
+        "src/lib/deals/**",
+        "src/components/features/deals/**",
+        "src/components/features/dashboard/**",
+        "src/app/api/cron/ads-sync/**",
+        "src/app/api/cron/ai-reflection/**",
+        "src/app/api/cron/ai-reply-retry/**",
+        "src/app/api/cron/ai-sales-loop/**",
+        "src/app/api/cron/ai-support-sla/**",
+        "src/app/api/cron/ai-telecall-renewals/**",
+        "src/app/api/cron/attendance-reminders/**",
+        "src/app/api/cron/attendance-retention/**",
+        "src/app/api/cron/backup/**",
+        "src/app/api/cron/billing/**",
+        "src/app/api/cron/birthday-greetings/**",
+        "src/app/api/cron/compliance-reminders/**",
+        "src/app/api/cron/gbp-sync/**",
+        "src/app/api/cron/gmail-inbox/**",
+        "src/app/api/cron/google-contacts-sync/**",
+        "src/app/api/cron/health-digest/**",
+        "src/app/api/cron/indiamart-leads/**",
+        "src/app/api/cron/invoice-dunning/**",
+        "src/app/api/cron/lead-finder/**",
+        "src/app/api/cron/mrr-snapshot/**",
+        "src/app/api/cron/provision-hosting/**",
+        "src/app/api/cron/register-domains/**",
+        "src/app/api/cron/renew-domains/**",
+        "src/app/api/cron/renew-hosting/**",
+        "src/app/api/cron/renewals/**",
+        "src/app/api/cron/trial-expiry/**"
       ],
-      "excludedFiles": ["**/*.test.ts", "**/*.test.tsx"],
+      "excludedFiles": [
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ],
       "rules": {
-        "no-restricted-syntax": ["error",
-          {"selector":"CallExpression[callee.property.name='slice'][callee.object.type='CallExpression'][callee.object.callee.property.name='toISOString'][arguments.0.value=0][arguments.1.value=10]","message":"S21 / AGENTS.md §6: toISOString() UTC ki tareekh deta hai — 00:00–05:30 IST me KAL. Aaj ke liye istToday(), kisi instant ki IST tareekh ke liye toIstDate(d), UTC-parts se bani Date ke liye utcDateISO(d) — sab @/lib/dates/ist se."},
-          {"selector":"MemberExpression[object.type='CallExpression'][object.callee.property.name='split'][object.callee.object.type='CallExpression'][object.callee.object.callee.property.name='toISOString']","message":"S21 / AGENTS.md §6: toISOString() UTC ki tareekh deta hai — 00:00–05:30 IST me KAL. Aaj ke liye istToday(), kisi instant ki IST tareekh ke liye toIstDate(d), UTC-parts se bani Date ke liye utcDateISO(d) — sab @/lib/dates/ist se."}
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "CallExpression[callee.property.name='slice'][callee.object.type='CallExpression'][callee.object.callee.property.name='toISOString'][arguments.0.value=0][arguments.1.value=10]",
+            "message": "S21 / AGENTS.md §6: toISOString() UTC ki tareekh deta hai — 00:00–05:30 IST me KAL. Aaj ke liye istToday(), kisi instant ki IST tareekh ke liye toIstDate(d), UTC-parts se bani Date ke liye utcDateISO(d) — sab @/lib/dates/ist se."
+          },
+          {
+            "selector": "MemberExpression[object.type='CallExpression'][object.callee.property.name='split'][object.callee.object.type='CallExpression'][object.callee.object.callee.property.name='toISOString']",
+            "message": "S21 / AGENTS.md §6: toISOString() UTC ki tareekh deta hai — 00:00–05:30 IST me KAL. Aaj ke liye istToday(), kisi instant ki IST tareekh ke liye toIstDate(d), UTC-parts se bani Date ke liye utcDateISO(d) — sab @/lib/dates/ist se."
+          }
         ]
       }
     }

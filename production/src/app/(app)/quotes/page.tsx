@@ -3,6 +3,7 @@
  */
 "use client";
 
+import { istToday } from "@/lib/dates/ist";
 import * as React from "react";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { useTeamTree } from "@/lib/queries/team-tree";
@@ -663,7 +664,7 @@ export default function QuotesPage() {
                     variant="outline"
                     icon="download"
                     onClick={() => {
-                      downloadCSV(`quotes-${new Date().toISOString().slice(0, 10)}.csv`, [...QUOTES_CSV_HEADERS], quotesCsvRows(quotes ?? []));
+                      downloadCSV(`quotes-${istToday()}.csv`, [...QUOTES_CSV_HEADERS], quotesCsvRows(quotes ?? []));
                       toast.success(`Exported ${(quotes ?? []).length} quotes to CSV`);
                     }}
                   >

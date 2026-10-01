@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { istToday } from "@/lib/dates/ist";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -206,7 +207,7 @@ export function RecordPaymentDialog({
     defaultValues: {
       amount:       remaining,
       method:       "upi",
-      receivedDate: new Date().toISOString().slice(0, 10),
+      receivedDate: istToday(),
       domain:       defaultDomain ?? "",
       tdsDeducted:  false,
       tdsSection:   "194J",
@@ -251,7 +252,7 @@ export function RecordPaymentDialog({
       reset({
         amount:       remaining,
         method:       "upi",
-        receivedDate: new Date().toISOString().slice(0, 10),
+        receivedDate: istToday(),
         tdsDeducted:  false,
         tdsSection:   customerTdsDefaults.section,
         tdsRatePct:   customerTdsDefaults.ratePct,
@@ -322,7 +323,7 @@ export function RecordPaymentDialog({
             p_tds_rate_pct: tdsRatePct,
             p_customer_tan: data.customerTan?.trim() || null,
             p_invoice_id:   invoiceId ?? null,
-            p_fiscal_year:  fiscalYearFromDate(new Date().toISOString().slice(0, 10)),
+            p_fiscal_year:  fiscalYearFromDate(istToday()),
           })
         : await supabase.rpc("record_payment", {
             p_quote_id:  quoteId,

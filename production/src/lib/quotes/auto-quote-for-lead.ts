@@ -21,6 +21,7 @@
  * mint five GST documents, each taking an irreversible number from the gapless Rule 46
  * series.
  */
+import { toIstDate } from "@/lib/dates/ist";
 import type { createAdminClient } from "@/lib/supabase/server";
 import { isEmailConfigured } from "@/lib/email/send";
 import { planQuoteFromEnquiry, type CatalogueItemPrice } from "./quote-from-enquiry";
@@ -323,8 +324,8 @@ export async function autoQuoteForLead(
          subtotal. */
       status:        "draft",
       owner_id:      null,
-      created_date:  today.toISOString().slice(0, 10),
-      expires_date:  expires.toISOString().slice(0, 10),
+      created_date:  toIstDate(today),
+      expires_date:  toIstDate(expires),
       notes:         noteText,
     });
     if (!quoteErr) { draftQuoteId = quoteId as string; break; }

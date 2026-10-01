@@ -30,13 +30,25 @@ person, or a fix on a page Hitesh reported (his retest still decides).
 Ownership of code is in [`OWNERS.json`](../OWNERS.json) (repo root). `node production/scripts/areas.mjs`
 tells you whose area a branch touched.
 
-## Team areas — re-split 30 Sep 2026
+## Team areas — split by customer journey, 1 Oct 2026 (R-074)
 
-Pardeep (manager) re-split the areas on 30 Sep 2026 (`OWNERS.json` is the truth):
-- **Pardeep** — manager; CRM/leads, deals, enquiries, referrals, partners, Marketing & Advertising, attendance/HR, reports, team docs, and the QA system (`production/e2e/`, `docs/qa/`).
-- **Hitesh** — Accounts: the app's Accounting module (books, GST, TDS, compliance, payroll, banking, expenses, purchases, vendor portal). Branch `accounts-hitesh`.
-- **Abhishek** — Billing & Subscriptions + technical/infra: deploy, `cloudbuild.yaml`, CI (`.github/`), crons, backups, ops scripts.
-- **Pawan** — website and everything customer-facing (public/marketing pages, auth, checkout, customer portal, `/api/v1`).
+Team agreed on 1 Oct 2026 (`OWNERS.json` is the truth). Each person owns one stretch of the customer's journey, so one change rarely needs another person:
+
+```
+Lead → Deal → Quote sent/accepted   Subscription → Renewal → Provisioning   Invoice → Payment → GST → Books
+└──────── PARDEEP (Sell) ─────────┘ └──────── ABHISHEK (Customer) ───────┘ └─────── HITESH (Money) ───────┘
+            Website + login + checkout + portal = PAWAN      App shell + deploy + CI = ABHISHEK
+```
+
+- **Pardeep — Sell:** leads, deals, enquiries, **quotes**, referrals, partners, Marketing & Advertising, dashboard, today, reports, attendance/HR, team docs, QA system (`production/e2e/`, `docs/qa/`).
+- **Hitesh — Money:** **invoices, payments**, GST, TDS, books, compliance, payroll, banking, expenses, purchases, vendor portal. Branch `accounts-hitesh`.
+- **Abhishek — Customer + Platform:** customers, subscriptions, renewals, projects delivery, provisioning, Razorpay, items/catalog; **app shell** (workspace tabs `lib/workspace`, layout, providers, `nav.ts`); deploy, CI, cron runner, backups, ops scripts; keeps the migration order.
+- **Pawan — Website:** public & marketing pages, login/signup, checkout, customer portal, `/api/public`, `/api/v1`, online orders.
+
+**Three rules so areas don't collide:**
+1. **Call, don't edit.** Need another area's behaviour? Use its function / RPC (e.g. Hitesh's "create invoice"); if it doesn't exist, card the owner. Never edit their file.
+2. **Shared files (migrations, `lib/queries`): add, don't rewrite.** New query file or new migration is fine; changing someone's existing query/table needs their card. Abhishek checks migration order before deploy.
+3. **A cron lives with its feature** (`app/api/cron/<name>/` is listed under the feature owner in `OWNERS.json`); Abhishek only runs the scheduler.
 
 ## Testing — 30 Sep 2026
 

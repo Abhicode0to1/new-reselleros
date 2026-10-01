@@ -26,6 +26,7 @@
  * clock on a deal nobody has paid for, and would count it in MRR. The same rule the banner
  * uses to stay quiet is the rule this route uses to say no.
  */
+import { istToday } from "@/lib/dates/ist";
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { orphanState, isOrphan, missingLines } from "@/lib/subscriptions/orphan-quote";
@@ -160,7 +161,7 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
   /* The term starts when the deal did, not today. Backdating matters: a subscription paid
      for in April and rebuilt in August must renew next April, not next August — otherwise
      the customer gets four months free and the renewal chase fires late. */
-  const fallbackStart = quote.created_date ?? new Date().toISOString().slice(0, 10);
+  const fallbackStart = quote.created_date ?? istToday();
   const customerId = quote.customer_id;
 
   const rows = missing.map((l) => {

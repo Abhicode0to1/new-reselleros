@@ -24,7 +24,7 @@
  * for updates since 27 Sep 2026) and from 'stage' lead_activities. When neither says how the
  * deal reached its current stage, one derived event marks it at `stage_changed_at`.
  */
-import { IST_OFFSET_MS } from "@/lib/dates/ist";
+import { IST_OFFSET_MS, toIstDate } from "@/lib/dates/ist";
 import { STAGE_LABEL } from "@/lib/leads/stage-meta";
 import { invoiceAmountDue } from "@/lib/payments/amount-due";
 import { backfilledStart } from "@/lib/deals/deal-quotes";
@@ -136,7 +136,7 @@ function datedAt(date: string | null | undefined, createdAt: Ts): string | null 
   const day = iso(date);
   const made = iso(createdAt);
   if (!day) return made;
-  if (made && date && new Date(Date.parse(made) + IST_OFFSET_MS).toISOString().slice(0, 10) === date.slice(0, 10)) return made;
+  if (made && date && toIstDate(made) === date.slice(0, 10)) return made;
   return day;
 }
 
@@ -144,7 +144,7 @@ function datedAt(date: string | null | undefined, createdAt: Ts): string | null 
 function lateAdded(date: string | null | undefined, createdAt: Ts): string | null {
   const made = iso(createdAt);
   if (!date || !made) return null;
-  return new Date(Date.parse(made) + IST_OFFSET_MS).toISOString().slice(0, 10) > date.slice(0, 10) ? made : null;
+  return toIstDate(made) > date.slice(0, 10) ? made : null;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
