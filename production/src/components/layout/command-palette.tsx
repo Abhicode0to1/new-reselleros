@@ -27,6 +27,7 @@ import { Command } from "cmdk";
 import { Dialog, DialogContent, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { APP_NAV, filterNavForRole, flattenNav, type UserRole } from "@/lib/nav";
+import { buildSidebarApps, appLabelForHref } from "@/lib/nav-apps";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { rupee, cn } from "@/lib/utils";
 // Real-data queries — Linear/Notion-style universal search. Each hook is
@@ -129,12 +130,15 @@ export function CommandPalette({
   // twice. First section to claim an href wins.
   const pageItems = React.useMemo(() => {
     const nav = filterNavForRole(APP_NAV, me?.role as UserRole | undefined, { canViewDeals: me?.canViewDeals });
+    /* R-088 follow-up: label each page with its sidebar app ("Billing", "Accounts"), not
+       the old section name ("Bill", "Books") the sidebar no longer shows. */
+    const apps = buildSidebarApps(me?.role as UserRole | undefined);
     const seen = new Set<string>();
     /* flattenNav: accordion children and directory rows (S30) are pages too — P&L now
        lives in the Reports directory, and must still come up when you type "P&L". */
     return flattenNav(nav)
       .filter(({ item }) => !seen.has(item.href) && seen.add(item.href))
-      .map(({ item, section }) => ({ ...item, section: section.section }));
+      .map(({ item, section }) => ({ ...item, section: appLabelForHref(apps, item.href) ?? section.section }));
   }, [me?.role, me?.canViewDeals]);
 
   const go = (href: string) => {
@@ -177,6 +181,21 @@ export function CommandPalette({
     [searching],
   );
 
+  // Pages — role-filtered + href-deduped (see pageItems). Placed first while searching.
+  const pagesGroup = (
+    <Command.Group heading="Pages">
+      {pageItems.map((item) => (
+        <PaletteItem
+          key={item.id}
+          icon={item.icon}
+          label={item.label}
+          meta={item.section}
+          onSelect={() => go(item.href)}
+        />
+      ))}
+    </Command.Group>
+  );
+
   // Which subscription the seats dialog is open for, if any.
   const [addSeatsSub, setAddSeatsSub] = React.useState<Subscription | null>(null);
 
@@ -216,6 +235,12 @@ export function CommandPalette({
               <Command.Empty className="py-8 text-center text-sm text-ink-3">
                 No results found.
               </Command.Empty>
+
+              {/* Typing a page's name ("Invoices") should open that page on Enter — with
+                  the actions first, Enter ran "Create invoice" instead (R-088 jaanch,
+                  1 Oct). So while searching, Pages come first; on an empty palette the
+                  actions still lead. */}
+              {searching && pagesGroup}
 
               {/* Quick actions */}
               <Command.Group heading="Quick Actions" className="cmdk-group">
@@ -263,18 +288,7 @@ export function CommandPalette({
                 />
               </Command.Group>
 
-              {/* Pages — role-filtered + href-deduped (see pageItems) */}
-              <Command.Group heading="Pages">
-                {pageItems.map((item) => (
-                  <PaletteItem
-                    key={item.id}
-                    icon={item.icon}
-                    label={item.label}
-                    meta={item.section}
-                    onSelect={() => go(item.href)}
-                  />
-                ))}
-              </Command.Group>
+              {!searching && pagesGroup}
 
               {/* Customers — real, tenant-scoped */}
               {customers && customers.length > 0 && (

@@ -127,6 +127,18 @@ export function appForPath(model: SidebarModel, pathname: string): string | null
   return null;
 }
 
+/**
+ * The name the command palette shows under a page: the sidebar app that holds it
+ * ("Billing", "Accounts"…), or "Home" for Today/Dashboard — so Ctrl+K and the sidebar
+ * use the same words. null when the page is in no app (the palette then falls back to
+ * the old section name).
+ */
+export function appLabelForHref(model: SidebarModel, href: string): string | null {
+  if (model.pinned.some((p) => itemWithDescendants(p).some((d) => d.href === href))) return "Home";
+  const id = appForPath(model, href);
+  return id ? model.apps.find((a) => a.id === id)?.label ?? null : null;
+}
+
 /** The pages the command palette lists for a role (same source as the route guard). */
 export function paletteHrefs(role: UserRole | undefined, nav: NavSection[] = APP_NAV): string[] {
   return [...new Set(flattenNav(filterNavForRole(nav, role)).map((e) => e.item.href))];

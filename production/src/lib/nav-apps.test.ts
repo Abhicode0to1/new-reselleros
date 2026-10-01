@@ -3,6 +3,7 @@
  * not show a page the role cannot open, and must keep each app short.
  */
 import { describe, it, expect } from "vitest";
+import { appLabelForHref } from "./nav-apps";
 
 import { APP_NAV, allowedRoutesForRole, type UserRole } from "./nav";
 import { USER_ROLES } from "./auth/roles";
@@ -112,5 +113,20 @@ describe("appForPath", () => {
   it("returns null for pinned and unknown pages (the sidebar keeps the current app)", () => {
     expect(appForPath(owner, "/dashboard")).toBeNull();
     expect(appForPath(owner, "/platform")).toBeNull();
+  });
+});
+
+describe("appLabelForHref (Ctrl+K labels match the sidebar)", () => {
+  const model = buildSidebarApps("owner");
+  it("names the app that holds a page", () => {
+    expect(appLabelForHref(model, "/invoices")).toBe("Billing");
+    expect(appLabelForHref(model, "/accounting/pnl")).toBe("Accounts");
+    expect(appLabelForHref(model, "/leads")).toBe("Sales");
+  });
+  it("Today and Dashboard are Home", () => {
+    expect(appLabelForHref(model, "/dashboard")).toBe("Home");
+  });
+  it("null for a page outside every app", () => {
+    expect(appLabelForHref(model, "/no-such-page")).toBeNull();
   });
 });
