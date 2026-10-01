@@ -1,7 +1,7 @@
 # <Project name> — instructions for the AI (copy to the repo root)
 
 Client: <client name> · Builder: Pardeep (+ this AI) · Client & demos: Pawan · Money: Hitesh · Delivery & support: Abhishek.
-Repo lives at: <short path>. Team board: https://claude.ai/artifact/2E442MT5zCLxm2oE1Lipos — every card for this project carries `project: "<Project name>"`.
+Repo lives at: <short path>. Team board: https://claude.ai/artifact/84m2bpzzSYoir48DrhFD5n — every card for this project carries `project: "<Project name>"`.
 
 ## How you work here
 1. **One branch.** All code goes on `main` (or the one branch named here). Nobody else writes app code; never keep parallel feature branches longer than a day.

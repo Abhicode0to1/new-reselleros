@@ -8,7 +8,7 @@ each other informed through one shared place — the board — instead of throug
 
 ## The board is the shared memory
 
-**URL:** https://claude.ai/artifact/2E442MT5zCLxm2oE1Lipos (org-shared; each person needs
+**URL:** https://claude.ai/artifact/84m2bpzzSYoir48DrhFD5n (org-shared; each person needs
 "can edit"). An agent reads and writes it with the `ArtifactData` tool against that URL.
 Collections:
 
@@ -150,7 +150,7 @@ is open". Set it up once in the Claude app: **Scheduled → New task**, schedule
 ```
 Morning digest for <me> on ResellerOS. READ AND REPORT ONLY: no code edits, no commits,
 no pushes, no status changes, no messages. Reply in Hinglish.
-Board: https://claude.ai/artifact/2E442MT5zCLxm2oE1Lipos (use the ArtifactData tool).
+Board: https://claude.ai/artifact/84m2bpzzSYoir48DrhFD5n (use the ArtifactData tool).
 1. tasks where owner in [<me>, "sab"] and status in [open, doing, blocked, review]:
    list by priority (P0 first) with id, title and days since createdAt/statusAt.
 2. tasks where from = <me> and status = review: these wait for MY check ("Done jab").
