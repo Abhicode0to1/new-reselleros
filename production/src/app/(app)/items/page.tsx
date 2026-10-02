@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useItems, useDeleteItem, useLoadDefaultCatalog, useSyncHostingCatalog, useSyncDomainCatalog } from "@/lib/queries/items";
+import { productCount } from "@/lib/items/catalog-state";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { OneTimeItemForm } from "@/components/features/items/one-time-item-form";
 import { ItemForm } from "@/components/features/items/item-form";
@@ -332,6 +333,20 @@ export default function ItemsPage() {
               ))}
             </tbody>
           </table>
+        </Card>
+      )}
+
+      {/* Only the seeded support tiers, no products yet — the empty state below never shows
+          for such a tenant, so offer the default catalog here (lib/items/catalog-state.ts). */}
+      {!isLoading && !error && items && items.length > 0 && productCount(items) === 0 && (
+        <Card className="mb-4 p-4 flex flex-wrap items-center justify-between gap-3 border-amber/40 bg-amber-soft/20">
+          <div>
+            <p className="text-sm font-semibold text-ink">No products yet</p>
+            <p className="text-xs text-ink-3">Only support plans (add-ons) are here. Load Google Workspace, Microsoft 365, Zoho and add-ons, then edit rates anytime.</p>
+          </div>
+          <Button variant="primary" icon="package" loading={loadDefaults.isPending} onClick={() => loadDefaults.mutate()}>
+            Load default catalog
+          </Button>
         </Card>
       )}
 

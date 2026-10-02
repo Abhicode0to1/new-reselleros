@@ -29,6 +29,7 @@ import { GST_STATE_BY_CODE, gstStateFromGstin, isValidGstin, validateGstin } fro
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import { ImportCustomersDialog } from "@/components/features/customers/import-customers-dialog";
 import { useItems, useLoadDefaultCatalog } from "@/lib/queries/items";
+import { productCount } from "@/lib/items/catalog-state";
 
 // ─── Step config ──────────────────────────────────────────────────────────────
 
@@ -349,7 +350,7 @@ function StepImport({
      to dono yahin. */
   const { data: catalogItems } = useItems();
   const loadCatalog = useLoadDefaultCatalog();
-  const catalogCount = catalogItems?.length ?? 0;
+  const catalogCount = productCount(catalogItems); // support tiers are not a catalog
 
   return (
     <div className="space-y-4">
