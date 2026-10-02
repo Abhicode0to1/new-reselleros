@@ -593,6 +593,11 @@ export default function DashboardPage() {
               <Link href={"/setup" as any}>Re-run setup</Link>
             </Button>
           )}
+          {/* The R-099 4-field lead form (a phone is enough) — opened by /leads?action=quick-add,
+              the same door the topbar Quick actions and Ctrl+K use. */}
+          <Button asChild icon="plus">
+            <Link href={"/leads?action=quick-add" as any}>Quick add lead</Link>
+          </Button>
           <Button asChild variant="primary" icon="plus">
             <Link href={"/quotes/new" as any}>Quick add quote</Link>
           </Button>
