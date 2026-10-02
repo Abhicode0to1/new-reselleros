@@ -524,7 +524,7 @@ function LeadsPageInner() {
     <div className="h-[calc(100vh-3.5rem-4rem)] md:h-[calc(100vh-3.5rem)] max-w-[1800px] mx-auto p-3 sm:p-4 flex flex-col overflow-hidden min-w-0">
       {/* The sticky title bar, and why its offsets and this wrapper's height are what they
           are — see leads-header-bar.tsx. */}
-      <LeadsHeaderBar salesTab={salesTab} isDealsPage={isDealsPage} setAddOpen={setAddOpen} />
+      <LeadsHeaderBar salesTab={salesTab} isDealsPage={isDealsPage} setAddOpen={setAddOpen} setQuickOpen={setQuickOpen} />
 
 
       {/* Expanded Intelligence Drawer */}
