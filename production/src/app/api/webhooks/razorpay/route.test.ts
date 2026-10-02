@@ -16,6 +16,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 type Row = Record<string, unknown>;
+/* S24: the global (env) secret, read by the route at import — set before it loads. */
+const GLOBAL_SECRET = vi.hoisted(() => { process.env.RAZORPAY_WEBHOOK_SECRET = "whsec_global_aitest"; return "whsec_global_aitest"; });
 const db = vi.hoisted(() => ({
   tables: {} as Record<string, Row[]>,
   rpcCalls: [] as { name: string; args: Row }[],
@@ -108,6 +110,11 @@ function seed() {
   db.rpcImpl = (name, args) => {
     const q = db.tables.quotes.find((r) => r.id === args.p_quote_id)!;
     if (name === "record_payment") {
+      /* As the SQL does under its row lock: a payment id it already holds is answered,
+         not written again. */
+      if (db.tables.payments.some((r) => r.quote_id === q.id && r.reference === args.p_reference && r.status === "received")) {
+        return { data: { payment_id: "p1", already_recorded: true, idempotent_replay: true }, error: null };
+      }
       db.tables.payments.push({ tenant_id: q.tenant_id, quote_id: q.id, reference: args.p_reference, status: "received", amount: args.p_amount });
       q.payment_status = "received";
       return { data: { payment_id: "p1" }, error: null };
@@ -122,10 +129,11 @@ function seed() {
   };
 }
 
-function signed(event: Row) {
+function signed(event: Row, opts: { secret?: string; tenant?: string | null } = {}) {
   const raw = JSON.stringify(event);
-  const sig = crypto.createHmac("sha256", SECRET).update(raw).digest("hex");
-  return new NextRequest(`https://shop.example.invalid/api/webhooks/razorpay?tenant=${TENANT}`, {
+  const sig = crypto.createHmac("sha256", opts.secret ?? SECRET).update(raw).digest("hex");
+  const tenant = opts.tenant === undefined ? TENANT : opts.tenant;
+  return new NextRequest(`https://shop.example.invalid/api/webhooks/razorpay${tenant ? `?tenant=${tenant}` : ""}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-razorpay-signature": sig },
     body: raw,
@@ -275,6 +283,46 @@ describe("payment.failed — a note on the lead and a retry link, never a charge
     const forged = new NextRequest(r.url, { method: "POST", headers: { "x-razorpay-signature": "00" }, body: JSON.stringify(failed()) });
     const res = await POST(forged);
     expect(res.status).toBe(401);
+    expect(db.tables.lead_activities).toHaveLength(0);
+  });
+});
+
+describe("S24 — one payment, one run; a global-secret event cannot reach a tenant with its own secret", () => {
+  it("payment.captured and order.paid arriving TOGETHER run the invoice, provisioning and emails once", async () => {
+    const [a, b] = await Promise.all([POST(signed(captured())), POST(signed(captured("order.paid")))]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    const bodies = [await a.json(), await b.json()];
+    expect(bodies.filter((x) => x.alreadyProcessed)).toHaveLength(1);
+    expect(rpcNames().filter((n) => n === "generate_invoice")).toHaveLength(1);
+    expect(db.tables.payments).toHaveLength(1);
+    expect(queueProvisioning.mock.calls.length).toBeLessThanOrEqual(1);
+    const customerMails = sendEmail.mock.calls.filter((c) => (c[0] as { kind: string }).kind === "razorpay_payment_customer");
+    expect(customerMails).toHaveLength(1);
+  });
+
+  it("no ?tenant=, signed with the global secret, on a tenant that HAS its own secret is refused, nothing recorded", async () => {
+    const res = await POST(signed(captured(), { secret: GLOBAL_SECRET, tenant: null }));
+    expect(res.status).toBe(403);
+    expect(rpcNames()).toEqual([]);
+    expect(db.tables.payments).toHaveLength(0);
+  });
+
+  it("?tenant= of a tenant with no secret (falls back to global) cannot settle another tenant's quote", async () => {
+    const res = await POST(signed(captured(), { secret: GLOBAL_SECRET, tenant: "22222222-2222-4222-8222-222222222222" }));
+    expect(res.status).toBe(403);
+    expect(rpcNames()).toEqual([]);
+  });
+
+  it("the global secret still settles a tenant that has no secret of its own (the checkout env-key fallback)", async () => {
+    db.tables.tenant_secrets = [];
+    const res = await POST(signed(captured(), { secret: GLOBAL_SECRET, tenant: null }));
+    expect(res.status).toBe(200);
+    expect(rpcNames()[0]).toBe("record_payment");
+  });
+
+  it("payment.failed signed with the global secret cannot write on a tenant with its own secret", async () => {
+    const res = await POST(signed(failed(), { secret: GLOBAL_SECRET, tenant: null }));
+    expect(res.status).toBe(403);
     expect(db.tables.lead_activities).toHaveLength(0);
   });
 });

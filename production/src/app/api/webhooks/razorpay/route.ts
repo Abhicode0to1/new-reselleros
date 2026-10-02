@@ -169,6 +169,34 @@ async function vendorForQuote(
 }
 
 /** Verify Razorpay's HMAC SHA256 signature header against a given secret. */
+/**
+ * S24 (2 Oct 2026): which tenant's records may a VERIFIED event act on?
+ *
+ * Verified with a tenant's OWN secret (the ?tenant= URL we hand out) → only that tenant.
+ * Verified with the GLOBAL env secret → only a tenant that has NO secret of its own: the
+ * env keys are the checkout fallback for exactly those tenants (api/public/checkout).
+ *
+ * Before this, a global-secret event — no ?tenant=, or a ?tenant= whose tenant has no
+ * secret, which silently fell back to the global one — skipped the cross-check entirely,
+ * so one signing key could settle any tenant's quote or mandate.
+ */
+function makeTenantGate(
+  admin: ReturnType<typeof createAdminClient>,
+  tenantParam: string | null,
+  verifiedWithOwnSecret: boolean,
+) {
+  return async (recordTenant: string): Promise<boolean> => {
+    if (verifiedWithOwnSecret) return recordTenant === tenantParam;
+    if (tenantParam && recordTenant !== tenantParam) return false;
+    const { data: ts } = await admin
+      .from("tenant_secrets")
+      .select("razorpay_webhook_secret")
+      .eq("tenant_id", recordTenant)
+      .maybeSingle();
+    return !decryptTenantSecrets(ts)?.razorpay_webhook_secret;
+  };
+}
+
 function verifySignature(rawBody: string, signature: string | null, secret: string): boolean {
   if (!secret || !signature) return false;
   const expected = crypto
@@ -195,6 +223,7 @@ export async function POST(request: NextRequest) {
   // stored webhook secret. Fall back to a global env secret for legacy setups.
   const tenantParam = request.nextUrl.searchParams.get("tenant");
   let signingSecret = WEBHOOK_SECRET;
+  let verifiedWithOwnSecret = false;
   let keyIdForMode: string | null = null;
   if (tenantParam) {
     const { data: ts } = await admin
@@ -205,7 +234,7 @@ export async function POST(request: NextRequest) {
     // Decrypt before use — an envelope string would never match the HMAC and the
     // failure would look like Razorpay sending bad signatures.
     const tsPlain = decryptTenantSecrets(ts);
-    if (tsPlain?.razorpay_webhook_secret) signingSecret = tsPlain.razorpay_webhook_secret;
+    if (tsPlain?.razorpay_webhook_secret) { signingSecret = tsPlain.razorpay_webhook_secret; verifiedWithOwnSecret = true; }
     /* The KEY, not a stored mode column. Razorpay encodes live-vs-test in the key prefix and a
        separate column can drift from the key it describes — razorpay-readiness.ts says so. */
     keyIdForMode = tsPlain?.razorpay_key_id ?? null;
@@ -215,6 +244,8 @@ export async function POST(request: NextRequest) {
     console.error("[webhooks/razorpay] signature verification FAILED", { tenant: tenantParam ?? "(none)", hadSecret: Boolean(signingSecret) });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
+
+  const mayActOn = makeTenantGate(admin, tenantParam, verifiedWithOwnSecret);
 
   let body: RazorpayWebhookBody;
   try {
@@ -232,13 +263,13 @@ export async function POST(request: NextRequest) {
      already been verified against THIS tenant's secret above; nothing downstream of
      that check can be forged. See lib/payments/mandate.ts. */
   if (event.startsWith("subscription.")) {
-    return handleMandateEvent(admin, event, rawBody, tenantParam);
+    return handleMandateEvent(admin, event, rawBody, tenantParam, mayActOn);
   }
 
   /* R-079: a failed payment is no longer only a log line — the lead gets a note and the
      buyer gets a link back to the SAME quote. Nothing is charged again from here. */
   if (event === "payment.failed") {
-    return handlePaymentFailed(admin, body, tenantParam, new URL(request.url).origin);
+    return handlePaymentFailed(admin, body, tenantParam, new URL(request.url).origin, mayActOn);
   }
 
   // Only act on payment-success events — ignore authorized / etc.
@@ -277,7 +308,8 @@ export async function POST(request: NextRequest) {
 
   // Defense: the quote must belong to the tenant whose secret verified this
   // event (prevents a valid-for-tenant-A signature acting on tenant-B's quote).
-  if (tenantParam && quote.tenant_id !== tenantParam) {
+  // S24: checked for EVERY event now, including ones verified by the global secret.
+  if (!(await mayActOn(quote.tenant_id))) {
     console.error("[webhooks/razorpay] tenant mismatch", { tenantParam, quoteTenant: quote.tenant_id });
     return NextResponse.json({ error: "Tenant mismatch" }, { status: 403 });
   }
@@ -339,7 +371,7 @@ export async function POST(request: NextRequest) {
     .eq("renewal_quote_id", quote.id)
     .maybeSingle();
 
-  const { error: rpcErr } = await admin.rpc("record_payment", {
+  const { data: recorded, error: rpcErr } = await admin.rpc("record_payment", {
     p_quote_id:  quote.id,
     p_amount:    paymentAmount,
     p_method:    paymentMethod,
@@ -357,6 +389,17 @@ export async function POST(request: NextRequest) {
       { error: safeDbMessage(rpcErr, "Payment processing failed") },
       { status: 500 },
     );
+  }
+
+  /* S24: the checks above are read-then-act, so two deliveries of one payment arriving
+     together (Razorpay sends payment.captured AND order.paid, and retries) both pass them.
+     record_payment is the serialising point — it locks the quote row and, for a payment id
+     it already holds, answers already_recorded instead of writing again. Exactly one
+     delivery gets past this line; the other stops before the invoice, provisioning and
+     every email below. */
+  if ((recorded as { already_recorded?: boolean } | null)?.already_recorded) {
+    console.log("[webhooks/razorpay] concurrent duplicate stopped at record_payment:", paymentRef, "on", receipt);
+    return NextResponse.json({ received: true, alreadyProcessed: true });
   }
 
   /* ── THE GST TAX INVOICE (R-079) ─────────────────────────────────────────
@@ -657,6 +700,7 @@ async function handlePaymentFailed(
   body: RazorpayWebhookBody,
   tenantParam: string | null,
   publicBase: string,
+  mayActOn: (tenantId: string) => Promise<boolean>,
 ): Promise<NextResponse> {
   const payment = body.payload.payment?.entity;
   if (!payment?.id) {
@@ -686,7 +730,7 @@ async function handlePaymentFailed(
     console.warn(`[webhooks/razorpay] payment.failed ${payment.id}: no quote for order ${payment.order_id ?? "(none)"}`);
     return NextResponse.json({ received: true, ignored: "payment.failed (unknown order)" });
   }
-  if (tenantParam && quote.tenant_id !== tenantParam) {
+  if (!(await mayActOn(quote.tenant_id))) {
     console.error("[webhooks/razorpay] payment.failed tenant mismatch", { tenantParam, quoteTenant: quote.tenant_id });
     return NextResponse.json({ error: "Tenant mismatch" }, { status: 403 });
   }
@@ -793,6 +837,7 @@ async function handleMandateEvent(
   event: string,
   rawBody: string,
   tenantParam: string | null,
+  mayActOn: (tenantId: string) => Promise<boolean>,
 ): Promise<NextResponse> {
   let entity: { id?: string; status?: string; end_at?: number; plan_id?: string } | undefined;
   let planAmountPaise: number | undefined;
@@ -828,7 +873,7 @@ async function handleMandateEvent(
 
   /* Same defence the payment path uses: a signature valid for tenant A must not act
      on tenant B's mandate. */
-  if (tenantParam && mandate.tenant_id !== tenantParam) {
+  if (!(await mayActOn(mandate.tenant_id))) {
     console.error("[webhooks/razorpay] mandate tenant mismatch", { tenantParam, mandateTenant: mandate.tenant_id });
     return NextResponse.json({ error: "Tenant mismatch" }, { status: 403 });
   }
