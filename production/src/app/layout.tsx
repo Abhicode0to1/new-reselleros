@@ -6,6 +6,7 @@ import "@/app/globals.css";
 import { cn } from "@/lib/utils";
 import { PLATFORM_OPERATOR } from "@/lib/platform";
 import { Toaster } from "@/components/ui/toaster";
+import { UxObserver } from "@/components/shared/ux-observer";
 import { Providers } from "@/components/providers";
 
 const fontSans = Plus_Jakarta_Sans({
@@ -100,6 +101,8 @@ export default function RootLayout({
         <SentryBoot />
         <Providers>{children}</Providers>
         <Toaster />
+        {/* Friction signals while a person is active — lib/ux/signals.ts (3 Oct 2026). */}
+        <UxObserver />
       </body>
     </html>
   );

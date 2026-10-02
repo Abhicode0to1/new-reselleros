@@ -85,6 +85,7 @@ export function QuickActionsPanel({ open, onOpenChange }: QuickActionsPanelProps
         <div className="flex-1 overflow-y-auto px-5 py-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
           {/* AI Entry (2 Oct 2026) — on every page: paste or photograph anything, review, save. */}
           <AiEntryLink onClose={() => onOpenChange(false)} />
+          <UxInsightsLink onClose={() => onOpenChange(false)} />
           {isLeadsContext ? (
             <LeadsActions onClose={() => onOpenChange(false)} />
           ) : (
@@ -346,6 +347,26 @@ function AiEntryLink({ onClose }: { onClose: () => void }) {
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-ink">AI Entry</span>
         <span className="block text-2xs text-ink-3">Paste a chat, note or email — or add a bill or card. It fills the entry and checks GST/TDS rules.</span>
+      </span>
+    </button>
+  );
+}
+
+/** UX Insights (3 Oct 2026) — owner / manager only; the page explains itself. */
+export function UxInsightsLink({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const { data: me } = useCurrentUser();
+  if (me?.role !== "owner" && me?.role !== "manager") return null;
+  return (
+    <button
+      type="button"
+      onClick={() => { onClose(); router.push("/ux-insights" as Route); }}
+      className="mb-5 -mt-3 w-full flex items-center gap-3 rounded-lg border border-hairline bg-paper px-4 py-3 text-left hover:bg-paper-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+    >
+      <Icon name="sparkles" size={18} className="text-indigo shrink-0" />
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-ink">UX Insights</span>
+        <span className="block text-2xs text-ink-3">Where people get stuck in the app and website — and what to fix.</span>
       </span>
     </button>
   );
