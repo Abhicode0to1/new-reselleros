@@ -25,6 +25,8 @@ export const TASK_TABS = ["today", "overdue", "upcoming", "done", "all"] as cons
 export const RENEWAL_BUCKETS = ["urgent", "upcoming", "future", "risk"] as const;
 export const CUSTOMER_VIEWS = ["all", "unpaid", "subscribed", "projects", "nosub", "credit", "received"] as const;
 export const PAYMENT_TABS = ["all", "received", "refunded"] as const;
+/** /purchase-orders ?tab= */
+export const PO_TABS = ["open", "draft", "placed", "provisioned", "closed"] as const;
 /** /accounting/tds-receivable ?tab= (claimable = cert received + 26AS verified). */
 export const TDS_TABS = ["all", "claimable", "pending_cert", "cert_received", "verified_26as", "claimed", "disputed", "written_off"] as const;
 /** /accounting/bills ?status= ("" = all; owed = unpaid + partial, the Outstanding tile). */

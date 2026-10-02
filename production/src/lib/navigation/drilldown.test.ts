@@ -253,3 +253,28 @@ describe("customers strip opens the customers behind each figure", () => {
     expect(page).toMatch(/onClick: \(\) => setView\("subscribed"\)/);
   });
 });
+
+describe("hissa 3: accounting, purchase orders, online orders", () => {
+  it("bills Outstanding opens owed bills; TDS tiles open their statuses", () => {
+    const bills = read("app/(app)/accounting/bills/page.tsx");
+    expect(bills).toMatch(/onClick=\{\(\) => setStatusFilter\("owed"\)\}/);
+    expect(read("lib/queries/vendor-bills.ts")).toMatch(/if \(status === "owed"\) q = q\.in\("status", \["unpaid", "partial"\]\)/);
+    const tds = read("app/(app)/accounting/tds-receivable/page.tsx");
+    for (const t of ["all", "pending_cert", "claimable", "claimed"]) expect(tds).toContain(`onClick={() => setActiveTab("${t}")}`);
+    expect(read("lib/queries/tds-receivable.ts")).toMatch(/q\.in\("status", \["cert_received", "verified_26as"\]\)/);
+  });
+  it("purchase-order tiles open their tabs", () => {
+    const po = read("app/(app)/purchase-orders/page.tsx");
+    for (const t of ["draft", "placed", "provisioned"]) expect(po).toContain(`onClick={() => setTab("${t}")}`);
+  });
+  it("online-order tiles count and filter with the same predicate, in IST", async () => {
+    const { orderInFocus } = await import("@/lib/online-orders/focus");
+    const now = new Date("2026-10-15T06:30:00Z");
+    expect(orderInFocus({ status: "active", type: "paid", paid: true, createdIso: "2026-10-14T20:00:00Z" }, "today", now)).toBe(true); // 15 Oct 01:30 IST
+    expect(orderInFocus({ status: "active", type: "paid", paid: true, createdIso: "2026-09-30T19:00:00Z" }, "revenue-month", now)).toBe(true); // 1 Oct IST
+    expect(orderInFocus({ status: "trial-converting", type: "trial", paid: false, createdIso: null }, "converting", now)).toBe(true);
+    const page = read("app/(app)/online-orders/page.tsx");
+    expect(page).toMatch(/if \(focus && !orderInFocus\(o, focus\)\) return false;/);
+    expect(page).not.toMatch(/toLocaleDateString\("en-IN", \{ day: "2-digit", month: "short" \}\);\n\s*const today/);
+  });
+});
