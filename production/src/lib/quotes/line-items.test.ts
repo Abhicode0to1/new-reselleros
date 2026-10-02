@@ -92,3 +92,9 @@ describe("catalogDefaultQty", () => {
     expect(catalogDefaultQty(undefined)).toBe(10);
   });
 });
+
+describe("support plan default qty (2 Oct 2026)", () => {
+  it("is one per company, not ten seats", () => {
+    expect(catalogDefaultQty("support")).toBe(1);
+  });
+});

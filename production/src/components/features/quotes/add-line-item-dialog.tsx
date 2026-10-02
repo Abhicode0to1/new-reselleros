@@ -29,6 +29,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { useItems } from "@/lib/queries/items";
 import { catalogDefaultQty } from "@/lib/quotes/line-items";
+import { headlinePrice, isOwnService } from "@/lib/catalog/headline-price";
 import { rupee } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { formatForeign } from "@/lib/currency";
@@ -119,6 +120,12 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
       const rate = exchangeRate && exchangeRate > 0 ? exchangeRate : 1;
       msrpPerYear      = Math.round(usdTier.msrp * 12 * rate);
       wholesalePerYear = Math.round(usdTier.wholesale * 12 * rate);
+    } else if (headlinePrice(it).unit === "yr") {
+      // A yearly-total plan (support "(Yearly)") keeps msrp at 0 and its whole-year
+      // price in prices.annual_total — msrp × 12 made it a ₹0 line (2 Oct 2026).
+      const total = (it.prices as { annual_total?: { msrp?: number; wholesale?: number } } | null)?.annual_total;
+      msrpPerYear      = total?.msrp ?? 0;
+      wholesalePerYear = total?.wholesale ?? 0;
     } else {
       // Domestic (or no USD price) → the ₹ catalog price, as before.
       const msrpPerMo      = annualTier?.msrp      ?? monthlyTier?.msrp      ?? it.msrp;
@@ -236,6 +243,9 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
                             >
                               {it.vendor}
                             </Badge>
+                            {it.kind === "addon" && (
+                              <Badge size="sm" kind="outline" className="shrink-0">Add-on</Badge>
+                            )}
                           </div>
                           <div className="text-2xs text-ink-3 font-mono truncate">{it.id}</div>
                         </div>
@@ -252,16 +262,20 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
                             </div>
                           ) : (
                             <div className="font-medium text-sm">
-                              {rupee(it.msrp)}/mo
+                              {rupee(headlinePrice(it).amount)}/{headlinePrice(it).unit}
                               {isUsd && <span className="block text-3xs text-amber-ink font-normal">set the exchange rate to show {currency}</span>}
                             </div>
                           )}
+                          {isOwnService(it) ? (
+                            <div className="text-3xs text-ink-3">Own service</div>
+                          ) : (
                           <div className={cn(
                             "text-3xs",
                             it.margin_pct >= 18 ? "text-emerald" : it.margin_pct >= 14 ? "text-amber-ink" : "text-rose"
                           )}>
                             {it.margin_pct}% margin
                           </div>
+                          )}
                         </div>
                         <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber text-white text-xs font-semibold px-2.5 py-1.5">
                           <Icon name="plus" size={13} /> Add
