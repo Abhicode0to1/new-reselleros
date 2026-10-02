@@ -51,10 +51,11 @@ import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
 import { safeDbMessage, logDbError } from "@/lib/errors/db-error";
+import { customerSetupSteps, leadOwnerNextSteps } from "@/lib/email/workspace-onboarding";
+import { loadLeadOwner } from "@/lib/email/lead-owner.server";
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
-const APP_URL        = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 
 /*
  * There is deliberately NO fallback recipient here any more.
@@ -594,6 +595,7 @@ export async function POST(request: NextRequest) {
      public origin for us, needs no configuration, and stays right even though
      this service answers on more than one hostname (L18). */
   const publicBase = new URL(request.url).origin;
+  const leadOwner = await loadLeadOwner(admin, quote.tenant_id, quote.lead_id);
   const invoiceUrl = paidQuote?.invoice_id
     ? pdfDownloadUrl(publicBase, "invoice", String(paidQuote.invoice_id), quote.tenant_id)
     : null;
@@ -602,7 +604,8 @@ export async function POST(request: NextRequest) {
     : `Your GST tax invoice will reach you by email shortly.`;
   const whatNext = isHostingOrder
     ? `WHAT HAPPENS NEXT\n  • Your hosting account is being set up now\n  • You'll get a separate email with your control-panel login\n  • Moving from another host? Reply and we'll migrate you free`
-    : `WHAT HAPPENS NEXT\n  Within 4 hours  — ${sellerPerson} will contact you to verify the domain\n  Within 24 hours — Your team is live on Google Workspace\n  Day 7           — Health-check call to make sure everything's working`;
+    /* R-120: the whole setup, step by step — who does what, with the exact DNS values. */
+    : customerSetupSteps({ domain, seats, tierName, contactName: leadOwner?.name ?? sellerPerson, contactPhone: sellerPhone });
   const productDesc = isHostingOrder ? tierName : `${seats} users of ${tierName}`;
 
   await Promise.allSettled([
@@ -661,13 +664,31 @@ ACTION REQUIRED
   3. Provision ${seats} licenses on ${domain || "the customer's domain"}
   4. Send admin credentials to ${customerEmail}
 
-Open in app: ${APP_URL}/customers
-Open quote:  ${APP_URL}/quotes/${quote.id}`,
+Open in app: ${publicBase}/customers
+Open quote:  ${publicBase}/quotes/${quote.id}${leadOwner
+  ? `\n\nLead owner: ${leadOwner.name} — they have the next-step list too.`
+  : `\n\nNobody owns this lead — tick "Gets new leads" on the Team page so orders are dealt to someone.`}`,
+    }),
+
+    /* R-120: the employee who owns the lead (R-111 deals new leads round-robin) gets the
+       order and the next steps — not only the tenant inbox. Skipped when that person IS the
+       tenant inbox, so nobody gets the same order twice. */
+    leadOwner && !isHostingOrder && leadOwner.email.toLowerCase() !== (owner.ok ? owner.to.toLowerCase() : "") && sendEmail({
+      to:      leadOwner.email,
+      from:    FROM_EMAIL,
+      kind:    "razorpay_payment_lead_owner",
+      route:   { tenantId: quote.tenant_id },
+      subject: `New paid order for you · ${quote.customer_name} · ${tierName} × ${seats}`,
+      text: leadOwnerNextSteps({
+        domain, seats, tierName, contactName: leadOwner.name, contactPhone: notes.phone ?? "",
+        orderId: quote.id, company: quote.customer_name ?? "", customerName, customerEmail,
+        amount: amountFmt, appBase: publicBase, quoteId: quote.id, leadId: quote.lead_id,
+      }),
     }),
   ]).then((results) => {
     results.forEach((r, i) => {
       if (r.status === "rejected") {
-        console.error(`[webhooks/razorpay] email ${i === 0 ? "customer" : "Pardeep"} failed:`, r.reason);
+        console.error(`[webhooks/razorpay] email ${["customer", "owner", "lead owner"][i] ?? i} failed:`, r.reason);
       }
     });
   });

@@ -26,6 +26,7 @@ import { LICENCE_EDITIONS, EDITION_MATRICES, type LicenceEdition } from "@/site/
 import type { MergedEdition } from "@/site/lib/live-catalog";
 import { TRUST } from "@/site/lib/data/copy";
 import { editionDelta } from "@/site/lib/edition-delta";
+import { buyWorkspaceHref } from "@/lib/checkout/buy-link";
 import { HOSTING_FROM_MO } from "@/site/lib/data/hosting-landing-v2";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { HOME_FAQS } from "@/site/lib/data/home-faqs";
@@ -291,7 +292,10 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
               const lowerName = i > 0 ? (LABEL[vendorEditions[i - 1].name] ?? vendorEditions[i - 1].name) : null;
               const shown = i > 0 ? editionDelta(featuresFor(vendor, i - 1), feats) : feats;
               const total = annual ? `${inr(e.annual * 12 * seats)}/yr` : `${inr(e.monthly * seats)}/mo`;
-              const buyHref = WA(`Hi Anutech — I'd like to buy ${vendor.name} ${LABEL[e.name] ?? e.name} for ${seats} user${seats > 1 ? "s" : ""} (${annual ? "annual" : "monthly"}). Please send the payment link.`);
+              /* R-120: Google editions go to the Razorpay checkout; M365 / Zoho have no online
+                 buy yet and keep the WhatsApp request. */
+              const payHref = buyWorkspaceHref(e.name, seats);
+              const buyHref = payHref ?? WA(`Hi Anutech — I'd like to buy ${vendor.name} ${LABEL[e.name] ?? e.name} for ${seats} user${seats > 1 ? "s" : ""} (${annual ? "annual" : "monthly"}). Please send the payment link.`);
               return (
                 <div key={e.name} style={{ position: "relative", display: "flex", flexDirection: "column", padding: 20, border: `1px solid ${pop ? C.green : C.border}`, borderRadius: 12, background: pop ? C.greenT : C.surf, boxShadow: pop ? SH_GREEN : SH_CARD }}>
                   {/* Card order (2 Oct 2026): who it is for → the price, big → what N users cost →
@@ -310,10 +314,12 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
                   <div style={{ fontSize: 12.5, color: C.ink2, marginTop: 8, padding: "7px 10px", background: pop ? "#fff" : C.sectT, borderRadius: 8 }}>
                     <b style={{ fontWeight: 600 }}>{total}</b> for {seats} user{seats > 1 ? "s" : ""} + GST
                   </div>
-                  <a href={buyHref} target="_blank" rel="noopener" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 600, padding: "11px 8px", borderRadius: 8, background: BTN_PRIMARY, color: "#fff", border: "none", marginTop: 14, boxShadow: SH_BTN, textDecoration: "none" }}>
+                  <a href={buyHref} {...(payHref ? {} : { target: "_blank", rel: "noopener" })} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 600, padding: "11px 8px", borderRadius: 8, background: BTN_PRIMARY, color: "#fff", border: "none", marginTop: 14, boxShadow: SH_BTN, textDecoration: "none" }}>
                     <CartIcon /> Buy now
                   </a>
-                  <p style={{ fontSize: 11, color: C.sec, textAlign: "center", margin: "6px 0 0" }}>Opens WhatsApp · we send the payment link · GST invoice in ₹</p>
+                  <p style={{ fontSize: 11, color: C.sec, textAlign: "center", margin: "6px 0 0" }}>
+                    {payHref ? "Pay online with Razorpay · billed yearly · GST invoice in ₹" : "Opens WhatsApp · we send the payment link · GST invoice in ₹"}
+                  </p>
                   <div style={{ height: 1, background: C.hair, margin: "16px 0 12px" }} />
                   {lowerName && (
                     <div style={{ fontSize: 12, fontWeight: 600, color: C.ink, marginBottom: 8 }}>Everything in {lowerName}, plus:</div>

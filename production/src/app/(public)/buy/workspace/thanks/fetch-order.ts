@@ -24,7 +24,10 @@ export async function fetchOrder(quoteId: string, token: string | null | undefin
     .select("id, tenant_id, public_token, customer_name, plan, seats, amount, payment_status, payment_received_at, line_items, created_date")
     .eq("id", quoteId)
     .eq("tenant_id", BUY_PAGE_TENANT_ID)
-    .in("payment_status", ["received", "partial"])
+    /* "invoiced" too (R-120): the GST invoice is issued straight after record_payment (webhook
+       and simulated checkout alike) and moves the quote to payment_status 'invoiced' — so a
+       paid order was answered "no order found" the moment its invoice existed. */
+    .in("payment_status", ["received", "partial", "invoiced"])
     .maybeSingle();
   if (error || !data) return null;
   if (!quoteTokenMatches(token, data.public_token)) return null;

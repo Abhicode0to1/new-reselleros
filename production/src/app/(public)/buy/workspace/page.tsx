@@ -20,6 +20,7 @@
 import { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
 import { BuyWorkspaceClient, type CatalogItem } from "./buy-workspace-client";
+import { parseBuyParams } from "@/lib/checkout/buy-link";
 import { simulatedPaymentAllowed } from "@/lib/checkout/live-guards";
 
 const BUY_PAGE_TENANT_ID =
@@ -80,7 +81,11 @@ async function isRazorpayConfigured(): Promise<boolean> {
   return Boolean(keyId) && Boolean(keySecret);
 }
 
-export default async function BuyWorkspacePage() {
+export default async function BuyWorkspacePage(props: {
+  /* R-120: ?tier=&seats=&buy=1 from the home edition card — open on that edition, ready to pay. */
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const pick = parseBuyParams(await props.searchParams);
   const catalogItems = await fetchGoogleWorkspaceItems();
   // Live when Razorpay is fully configured. When it isn't:
   //  · non-prod (or ALLOW_SIMULATED_CHECKOUT=1) → "simulation": Buy now stays
@@ -100,6 +105,9 @@ export default async function BuyWorkspacePage() {
     <BuyWorkspaceClient
       catalogItems={catalogItems}
       paymentMode={paymentMode}
+      initialTierId={pick.tier ?? undefined}
+      initialSeats={pick.seats ?? undefined}
+      openBuy={pick.openBuy}
     />
   );
 }

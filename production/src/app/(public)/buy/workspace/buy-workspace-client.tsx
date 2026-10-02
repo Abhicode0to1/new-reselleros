@@ -1225,7 +1225,15 @@ function GoogleCalendarIcon({ size = 32 }: { size?: number }) {
 export function BuyWorkspaceClient({
   catalogItems = [],
   paymentMode = "simulation",
+  initialTierId,
+  initialSeats,
+  openBuy = false,
 }: {
+  /** R-120: edition and seats chosen on the home card (lib/checkout/buy-link.ts). */
+  initialTierId?: string;
+  initialSeats?: number;
+  /** Open the payment dialog on arrival — the card's "Buy now" meant buy, not browse. */
+  openBuy?: boolean;
   /** Server-fetched, enabled Google Workspace SKUs from the reseller's Item
    *  Catalog. When empty, we fall back to the hardcoded FALLBACK_TIERS. */
   catalogItems?: CatalogItem[];
@@ -1263,10 +1271,21 @@ export function BuyWorkspaceClient({
   // middle tier, else the first. Works for any catalog shape — 3 SKUs or 4.
   const defaultTierId =
     TIERS.find((t) => t.isPopular)?.id ?? TIERS[Math.floor(TIERS.length / 2)]?.id ?? "standard";
-  const [selectedTierId, setSelectedTierId] = React.useState<string>(defaultTierId);
-  const [seats, setSeats] = React.useState<number>(10);
+  const [selectedTierId, setSelectedTierId] = React.useState<string>(
+    initialTierId && TIERS.some((t) => t.id === initialTierId) ? initialTierId : defaultTierId,
+  );
+  const [seats, setSeats] = React.useState<number>(initialSeats ?? 10);
   const selectedTierObj = TIERS.find((t) => t.id === selectedTierId) ?? TIERS[0];
   const calc = React.useMemo(() => calcForTier(selectedTierObj, seats), [selectedTierObj, seats]);
+  /* Arrived from "Buy now": open the Razorpay dialog once, on that edition — only when this
+     page can actually take the payment and the edition has an annual online price. */
+  const openedFromCard = React.useRef(false);
+  React.useEffect(() => {
+    if (openedFromCard.current || !openBuy || paymentMode === "disabled") return;
+    if (selectedTierObj?.annualPrice == null) return;
+    openedFromCard.current = true;
+    setBuyNowTier(selectedTierObj);
+  }, [openBuy, paymentMode, selectedTierObj]);
 
   // Site promo — currently-active auto-applied sale (from /online-promos).
   // Fetched per-tier/seat so eligibility filters work. Banner shown sticky

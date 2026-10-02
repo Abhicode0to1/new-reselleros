@@ -61,7 +61,9 @@ describe("the thanks page shows an order only with its secret token", () => {
   it("still scoped to ANUTECH's tenant and to paid quotes", async () => {
     await fetchOrder("Q-2026-27-0042", TOKEN);
     expect(db.filters).toContainEqual({ op: "eq", col: "tenant_id", val: expect.any(String) });
-    expect(db.filters).toContainEqual({ op: "in", col: "payment_status", val: ["received", "partial"] });
+    /* "invoiced" since R-120: the invoice is issued right after payment and moves the quote
+       there, so leaving it out answered every invoiced order "not found". Still only PAID states. */
+    expect(db.filters).toContainEqual({ op: "in", col: "payment_status", val: ["received", "partial", "invoiced"] });
   });
   it("today's quote numbers carry the tenant code, and are accepted", async () => {
     db.row = { ...paidRow(), id: "Q-ADPL-2026-27-0048" };

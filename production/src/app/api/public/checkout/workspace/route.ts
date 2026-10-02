@@ -34,6 +34,8 @@ import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { buyPageTenantIdOrEmpty, simulatedPaymentAllowed } from "@/lib/checkout/live-guards";
 import { issueInvoiceForOnlinePayment } from "@/lib/checkout/online-invoice.server";
 import { publicDbError } from "@/app/api/public/_lib/db-error";
+import { customerSetupSteps, leadOwnerNextSteps } from "@/lib/email/workspace-onboarding";
+import { loadLeadOwner } from "@/lib/email/lead-owner.server";
 
 /* R-079: the hard-coded dev tenant only off production; "" (fails closed) when unset there. */
 const BUY_PAGE_TENANT_ID = buyPageTenantIdOrEmpty();
@@ -492,6 +494,11 @@ export async function POST(request: NextRequest) {
       if (!owner.ok) {
         console.error(`[checkout/workspace] simulated order ${quoteId} recorded, but no owner alert: ${owner.reason}`);
       }
+      /* R-120 parity: a test buy sends what a real one sends (webhook) — setup steps to the
+         customer, next steps to the lead owner — so the flow can be checked before go-live. */
+      const leadOwner = await loadLeadOwner(admin, BUY_PAGE_TENANT_ID, leadId);
+      const simBase = new URL(request.url).origin;
+      const sellerPerson = (owner.ok ? owner.ownerName : "") || ownerTenant?.name?.trim() || "Your reseller";
       await Promise.allSettled([
         // Customer copy
         owner.ok && sendEmail({
@@ -516,8 +523,23 @@ ORDER SUMMARY
   Domain      ${cleanDomain}
   Total       ${amountFmt} (incl 18% GST)
 
-— ${owner.ownerName || ownerTenant?.name?.trim() || "Your reseller"}
+${customerSetupSteps({ domain: cleanDomain, seats, tierName: `Google Workspace ${tierName}`, contactName: leadOwner?.name ?? sellerPerson })}
+
+— ${sellerPerson}
    (Simulated email — system test only)`,
+        }),
+        // Lead owner — the employee this order was dealt to (R-111), same as the webhook
+        leadOwner && leadOwner.email.toLowerCase() !== (owner.ok ? owner.to.toLowerCase() : "") && sendEmail({
+          to:      leadOwner.email,
+          from:    FROM_EMAIL,
+          kind:    "buy_page_checkout_sim_lead_owner",
+          route:   { tenantId: BUY_PAGE_TENANT_ID },
+          subject: `[TEST] New paid order for you · ${companyName} · ${tierName} × ${seats}`,
+          text: `THIS IS A TEST — no real payment.\n\n` + leadOwnerNextSteps({
+            domain: cleanDomain, seats, tierName: `Google Workspace ${tierName}`, contactName: leadOwner.name,
+            contactPhone: phone, orderId: quoteId, company: companyName, customerName: fullName,
+            customerEmail: email, amount: amountFmt, appBase: simBase, quoteId, leadId,
+          }),
         }),
         // Owner alert — flagged clearly as test
         owner.ok && sendEmail({
