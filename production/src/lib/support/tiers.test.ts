@@ -240,7 +240,20 @@ describe("isSupportSkuId (2 Oct 2026)", () => {
     expect(isSupportSkuId("SUP-STANDARD-YR-fbb976f190904f1097260901bd144e42")).toBe(true);
     expect(isSupportSkuId("SUP-ENTERPRISE-MO")).toBe(true);
     expect(isSupportSkuId("GWS-STARTER")).toBe(false);
-    expect(isSupportSkuId("SUP-STANDARDX-YR")).toBe(false);
+    expect(isSupportSkuId("SUP-GW-STR-fbb976f1-YR")).toBe(true);
     expect(isSupportSkuId(null)).toBe(false);
+  });
+});
+
+describe("product-wise support add-ons (2 Oct 2026)", () => {
+  it("'<product> Support' is the Standard tier, never Free", () => {
+    expect(tierFromPlanName("Google Workspace Business Starter Support")).toBe("standard");
+    expect(tierFromPlanName("Google Workspace Business Plus Support (Yearly)")).toBe("standard");
+    expect(tierFromPlanName("Microsoft 365 Business Premium Support")).toBe("standard");
+  });
+  it("tenant Free plan stays free; a licence alone is not support", () => {
+    expect(tierFromPlanName("ANUTECH DIGITAL PVT LTD Free Support (Yearly)")).toBe("free");
+    expect(tierFromPlanName("ANUTECH DIGITAL PVT LTD Enterprise Support")).toBe("enterprise");
+    expect(tierFromPlanName("Google Workspace Business Plus")).toBe("free");
   });
 });
