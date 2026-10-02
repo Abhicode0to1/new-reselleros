@@ -217,6 +217,7 @@ export function CommandPalette({
   );
 
   const quickActions = [
+    { icon: "sparkles", label: "AI Entry",              meta: "Paste or photograph anything — it fills the entry", href: "/ai-entry" },
     { icon: "plus",    label: "Create new lead",        meta: "Open the quick-add form",                     href: "/leads?action=quick-add" },
     { icon: "file",    label: "Create new quote",       meta: "Open Quote Builder",                          href: "/quotes/new" },
     { icon: "receipt", label: "Create invoice",         meta: "Direct GST tax invoice",                      href: "/quotes/new?invoice=1" },

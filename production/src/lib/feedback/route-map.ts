@@ -77,6 +77,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/accounting/vendors", file: "src/app/(app)/accounting/vendors/page.tsx" },
   { route: "/activity", file: "src/app/(app)/activity/page.tsx" },
   { route: "/admin/feedback", file: "src/app/(app)/admin/feedback/page.tsx" },
+  { route: "/ai-entry", file: "src/app/(app)/ai-entry/page.tsx" },
   { route: "/assessment/[token]", file: "src/app/(public)/assessment/[token]/page.tsx" },
   { route: "/assessments", file: "src/app/(app)/assessments/page.tsx" },
   { route: "/attendance/kiosk", file: "src/app/(app)/attendance/kiosk/page.tsx" },

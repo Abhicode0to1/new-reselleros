@@ -71,7 +71,7 @@ export function useSavePackage() {
       qc.invalidateQueries({ queryKey: ["packages"] });
       toast.success(d.id ? "Package saved" : "Package created");
     },
-    onError: (err) => toast.error(friendlyPackageError((err as Error).message)),
+    onError: (err) => toast.error("Package not saved", { description: friendlyPackageError((err as Error).message) }),
   });
 }
 
@@ -87,7 +87,7 @@ export function useDeletePackage() {
       qc.invalidateQueries({ queryKey: ["packages"] });
       toast.success("Package deleted");
     },
-    onError: (err) => toast.error(friendlyPackageError((err as Error).message)),
+    onError: (err) => toast.error("Package not deleted", { description: friendlyPackageError((err as Error).message) }),
   });
 }
 

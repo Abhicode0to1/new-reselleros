@@ -104,7 +104,8 @@ function InvoicesPageInner() {
   const [tab, setTab]           = useUrlChoice<string>("tab", INVOICE_TABS, "all"); // R-118
   /* R-118: a money tile's exact set (lib/invoices/kpis.ts#invoiceInFocus) — "" = none. */
   const [focus, setFocus]       = useUrlChoice<InvoiceFocus>("focus", INVOICE_FOCI, "");
-  const [search, setSearch]     = React.useState<string>("");
+  /* ?q= pre-fills the search (AI Entry → "Find the invoice" for a payment someone sent). */
+  const [search, setSearch]     = React.useState<string>(() => searchParams.get("q") ?? "");
   const [dateRange, setDateRange] = React.useState<"all" | "this_month" | "last_30" | "this_quarter">("all");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [pendingOpen, setPendingOpen] = React.useState<boolean>(false);

@@ -83,6 +83,8 @@ export function QuickActionsPanel({ open, onOpenChange }: QuickActionsPanelProps
         {/* Body — scrollable region. Add bottom padding so safe-area on
             iOS notch devices doesn't clip the last action card. */}
         <div className="flex-1 overflow-y-auto px-5 py-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+          {/* AI Entry (2 Oct 2026) — on every page: paste or photograph anything, review, save. */}
+          <AiEntryLink onClose={() => onOpenChange(false)} />
           {isLeadsContext ? (
             <LeadsActions onClose={() => onOpenChange(false)} />
           ) : (
@@ -328,6 +330,23 @@ function ActionCard({ icon, title, description, tone, onClick }: ActionCardProps
       <Icon name={icon} size={20} className={iconClass[tone]} />
       <div className="font-semibold text-sm mt-1">{title}</div>
       <div className="text-xs opacity-80 leading-snug">{description}</div>
+    </button>
+  );
+}
+
+function AiEntryLink({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      onClick={() => { onClose(); router.push("/ai-entry" as Route); }}
+      className="mb-5 w-full flex items-center gap-3 rounded-lg border border-amber/40 bg-amber-soft/40 px-4 py-3 text-left hover:bg-amber-soft/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+    >
+      <Icon name="sparkles" size={18} className="text-amber shrink-0" />
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-ink">AI Entry</span>
+        <span className="block text-2xs text-ink-3">Paste a chat, note or email — or add a bill or card. It fills the entry and checks GST/TDS rules.</span>
+      </span>
     </button>
   );
 }
