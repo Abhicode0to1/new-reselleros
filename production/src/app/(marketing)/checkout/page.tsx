@@ -135,6 +135,15 @@ export default function CheckoutPage() {
      server starts the trial and emails a confirmation link. */
   const hasTrial = cart.lines.some((l) => (l.sku || "").startsWith("hosting-trial:"));
   const isTrialCart = hasTrial && cart.lines.length === 1;
+  /* Trials need the DMS engine (lib/dms-engine/trials.ts#trialsConfigured). null = still asking. */
+  const [trialsOpen, setTrialsOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!hasTrial) return;
+    fetch("/api/public/trial/hosting/status", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { open?: boolean }) => setTrialsOpen(j.open !== false))
+      .catch(() => setTrialsOpen(true)); // the server still refuses with a clear message
+  }, [hasTrial]);
   const trialMixed = hasTrial && cart.lines.length > 1;
   /* More than one hosting account in the cart: the server refuses it at Pay, so say it here. */
   const hostingWarning = hostingLimitWarning(cart.lines);
@@ -530,9 +539,17 @@ export default function CheckoutPage() {
                       "Emailing your confirmation link",
                     ]}
                   />
-                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={paying || trialMixed} onClick={() => proceed(() => void startTrial())}>
+                  {trialsOpen === false ? (
+                    <div role="status" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14 }}>
+                      Free hosting trials are paused for a few days. Email{" "}
+                      <a href={`mailto:${COMPANY.supportEmail}?subject=${encodeURIComponent("Please start my hosting trial")}`} style={{ fontWeight: 600 }}>{COMPANY.supportEmail}</a>
+                      {" "}and we will set your trial up by hand.
+                    </div>
+                  ) : (
+                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={paying || trialMixed || trialsOpen === null} onClick={() => proceed(() => void startTrial())}>
                     {paying ? "Starting your trial…" : "Start my 15-day free trial"}
                   </button>
+                  )}
                   <p className="meta" style={{ marginTop: 10 }}>
                     We email you a link to confirm your address; the account is set up once you click it.
                   </p>

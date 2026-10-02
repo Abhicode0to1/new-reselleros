@@ -53,6 +53,7 @@ import { COUPONS } from "@/site/lib/money";
 import { normalisePhone, splitName, type Registrant } from "@/lib/provisioning/domain-registration";
 import { isTrialPlan, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 import { startHostingTrial } from "@/lib/hosting/start-trial";
+import { trialsConfigured, TRIALS_PAUSED_MESSAGE } from "@/lib/dms-engine/trials";
 import { hostingLimitProblem } from "./hosting-limit";
 import { hostingDomain, planDomains, BUY_A_DOMAIN_HREF } from "./hosting-domain";
 import { hostingRate } from "./hosting-prices";
@@ -352,6 +353,10 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
       }
       /* A trial is a hosting account, so it needs its domain too (owner, 30 Sep 2026;
          until then a trial could start with none and the owner helped afterwards). */
+      /* Paused, not broken: say so (503) instead of failing deep inside with a 500. */
+      if (!trialsConfigured()) {
+        return NextResponse.json({ error: TRIALS_PAUSED_MESSAGE, trialsPaused: true }, { status: 503 });
+      }
       const trialDomain = hostingDomain(domain);
       if (!trialDomain) {
         return NextResponse.json(
