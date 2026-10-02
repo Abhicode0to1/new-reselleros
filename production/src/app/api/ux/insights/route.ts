@@ -24,8 +24,9 @@ async function me() {
   return { userId: user.id, tenantId: u.tenant_id as string };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const m = await me(); if ("error" in m) return m.error;
+  const agent = new URL(req.url).searchParams.get("agent") === "ui" ? "ui" : "ux";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const since = new Date(Date.now() - 7 * 86400_000).toISOString();
@@ -33,11 +34,14 @@ export async function GET() {
   let ev = admin.from("ux_events").select("id", { count: "exact", head: true }).gte("created_at", since);
   ev = site ? ev.or(`tenant_id.eq.${m.tenantId},tenant_id.is.null`) : ev.eq("tenant_id", m.tenantId);
   const [{ data: insights }, { data: last }, { count }] = await Promise.all([
-    admin.from("ux_insights").select("*").eq("tenant_id", m.tenantId).order("updated_at", { ascending: false }).limit(200),
+    admin.from("ux_insights").select("*").eq("tenant_id", m.tenantId).eq("agent", agent).order("updated_at", { ascending: false }).limit(200),
     admin.from("ux_analysis_runs").select("ran_at, events_seen, insights, mode").eq("tenant_id", m.tenantId).order("ran_at", { ascending: false }).limit(1).maybeSingle(),
     ev,
   ]);
-  return NextResponse.json({ insights: insights ?? [], lastRun: last ?? null, events7d: count ?? 0, includesWebsite: site });
+  const { data: scores } = agent === "ui"
+    ? await admin.from("ui_page_scores").select("surface, path, score, prev_score, samples, issues, updated_at").eq("tenant_id", m.tenantId).order("score", { ascending: true }).limit(200)
+    : { data: null };
+  return NextResponse.json({ insights: insights ?? [], lastRun: last ?? null, events7d: count ?? 0, includesWebsite: site, scores: scores ?? [] });
 }
 
 export async function POST() {

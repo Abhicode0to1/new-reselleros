@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const admin = createAdminClient();
     await admin.from("ux_events" as never).insert(events.map((e) => ({
       tenant_id: tenantId, user_id: userId, session_id: sid, surface: surfaceFor(e.path),
-      path: e.path, kind: e.kind, target: e.target, detail: e.detail, ms: e.ms,
+      path: e.path, kind: e.kind, target: e.target, detail: e.detail, ms: e.ms, metrics: e.metrics ?? null,
     })) as never);
     /* The analysis runs on activity, not on a clock: enough new signals since the last
        run, and that run over an hour old (lib/ux/analyze.server.ts). */

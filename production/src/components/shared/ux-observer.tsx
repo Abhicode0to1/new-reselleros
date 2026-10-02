@@ -16,8 +16,9 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { maskPII, isRageClick } from "@/lib/ux/signals";
+import { measureUi, startVitals } from "@/components/shared/ui-probe";
 
-type Ev = { kind: string; path: string; target?: string | null; detail?: string | null; ms?: number | null };
+type Ev = { kind: string; path: string; target?: string | null; detail?: string | null; ms?: number | null; metrics?: Record<string, number> };
 
 const ACTIVE_MS = 60_000;
 const FLUSH_MS = 15_000;
@@ -153,6 +154,8 @@ export function UxObserver() {
        not the page's (a 4.5 s /quotes/new insight on localhost, 3 Oct 2026). */
     if (nav && nav.loadEventEnd > 0 && process.env.NODE_ENV === "production") push({ kind: "slow", path: s.path, ms: Math.round(nav.loadEventEnd) }, true);
 
+    startVitals();
+
     const tick = setInterval(() => {
       if (!s.clickedThisView && !s.stallSent && active() && Date.now() - s.viewAt > 45_000) {
         push({ kind: "stall", path: s.path, ms: Date.now() - s.viewAt });
@@ -188,6 +191,19 @@ export function UxObserver() {
     s.stallSent = false;
     s.off = SKIP.test(pathname) || s.off;
     push({ kind: "view", path: pathname }, true);
+
+    /* UI agent: one design measurement per page per visit, after it has settled, and only
+       while the person is active (lib/ui/score.ts). */
+    const probeKey = "ui_probe:" + pathname;
+    const t = setTimeout(() => {
+      try {
+        if (s.off || s.path !== pathname || document.visibilityState !== "visible") return;
+        if (sessionStorage.getItem(probeKey)) return;
+        sessionStorage.setItem(probeKey, "1");
+        push({ kind: "ui_probe", path: pathname, metrics: measureUi() as unknown as Record<string, number> });
+      } catch { /* never disturb the page */ }
+    }, 3500);
+    return () => clearTimeout(t);
   }, [pathname, leaveView, push]);
 
   return null;

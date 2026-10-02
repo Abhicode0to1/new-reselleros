@@ -86,6 +86,7 @@ export function QuickActionsPanel({ open, onOpenChange }: QuickActionsPanelProps
           {/* AI Entry (2 Oct 2026) — on every page: paste or photograph anything, review, save. */}
           <AiEntryLink onClose={() => onOpenChange(false)} />
           <UxInsightsLink onClose={() => onOpenChange(false)} />
+          <UiInsightsLink onClose={() => onOpenChange(false)} />
           {isLeadsContext ? (
             <LeadsActions onClose={() => onOpenChange(false)} />
           ) : (
@@ -367,6 +368,26 @@ export function UxInsightsLink({ onClose }: { onClose: () => void }) {
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-ink">UX Insights</span>
         <span className="block text-2xs text-ink-3">Where people get stuck in the app and website — and what to fix.</span>
+      </span>
+    </button>
+  );
+}
+
+/** UI Insights (3 Oct 2026) — every page's design score and the fixes. Owner / manager. */
+export function UiInsightsLink({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const { data: me } = useCurrentUser();
+  if (me?.role !== "owner" && me?.role !== "manager") return null;
+  return (
+    <button
+      type="button"
+      onClick={() => { onClose(); router.push("/ui-insights" as Route); }}
+      className="mb-5 -mt-3 w-full flex items-center gap-3 rounded-lg border border-hairline bg-paper px-4 py-3 text-left hover:bg-paper-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+    >
+      <Icon name="layout" size={18} className="text-indigo shrink-0" />
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-ink">UI Insights</span>
+        <span className="block text-2xs text-ink-3">Each page's design score out of 100 — and what to change to make it world-class.</span>
       </span>
     </button>
   );

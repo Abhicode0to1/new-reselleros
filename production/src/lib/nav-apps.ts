@@ -37,16 +37,16 @@ export const PINNED_ITEM_IDS = ["today", "dashboard", "ai-entry"] as const;
 export const NAV_APPS: NavAppDef[] = [
   {
     id: "sales", label: "Sales", icon: "target",
-    itemIds: ["leads", "deals", "enquiries", "tasks", "quotes", "customers", "items", "online-orders", "marketing-hub", "referrals", "partners"],
+    itemIds: ["leads", "deals", "enquiries", "tasks", "quotes", "customers", "items", "marketing-hub", "referrals", "partners"],
   },
   {
     /* Money in and money out: what the customer pays, what we pay vendors. */
     id: "billing", label: "Billing", icon: "rupee",
-    itemIds: ["subscriptions", "renewals", "invoices", "payments", "purchase-inbox", "purchase-orders", "vendors", "bills", "bill-payments", "expenses", "emp-advances", "reimbursements"],
+    itemIds: ["subscriptions", "renewals", "invoices", "payments", "purchase-inbox", "purchase-orders", "vendors", "bills", "bill-payments", "expenses"],
   },
   {
     id: "accounts", label: "Accounts", icon: "chart",
-    itemIds: ["acc-overview", "banking", "ledger", "acc-close", "fixed-assets", "business-loans", "reports", "compliance-calendar"],
+    itemIds: ["acc-overview", "banking", "ledger", "acc-close", "reports", "compliance-calendar"],
   },
   {
     /* The queues of turning a sale into a working service. */
@@ -59,7 +59,7 @@ export const NAV_APPS: NavAppDef[] = [
   },
   {
     id: "settings", label: "Settings", icon: "settings",
-    itemIds: ["settings", "automation", "ux-insights", "vault", "documents", "help"],
+    itemIds: ["settings", "automation", "vault", "documents", "help"],
   },
 ];
 

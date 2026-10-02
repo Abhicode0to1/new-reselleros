@@ -11,14 +11,16 @@
  *  - uxPrompt / sanitizeInsights: the model's JSON is untrusted, like every AI read here.
  */
 
-export const UX_KINDS = ["view", "rage_click", "dead_click", "error", "form_abandon", "stall", "quick_exit", "slow"] as const;
+import { sanitizeMetrics, type UiMetrics } from "@/lib/ui/score";
+
+export const UX_KINDS = ["view", "rage_click", "dead_click", "error", "form_abandon", "stall", "quick_exit", "slow", "ui_probe"] as const;
 export type UxKind = (typeof UX_KINDS)[number];
 export type Surface = "app" | "site";
 
 export interface UxEventIn {
-  kind: string; path: string; target?: string | null; detail?: string | null; ms?: number | null;
+  kind: string; path: string; target?: string | null; detail?: string | null; ms?: number | null; metrics?: unknown;
 }
-export interface UxEvent { kind: UxKind; path: string; target: string | null; detail: string | null; ms: number | null }
+export interface UxEvent { kind: UxKind; path: string; target: string | null; detail: string | null; ms: number | null; metrics?: UiMetrics | null }
 
 export function maskPII(s: string | null | undefined, max = 160): string | null {
   if (!s) return null;
@@ -50,7 +52,10 @@ export function sanitizeEvent(e: UxEventIn): UxEvent | null {
   if (!e || typeof e.kind !== "string" || !UX_KINDS.includes(e.kind as UxKind)) return null;
   if (typeof e.path !== "string") return null;
   const ms = typeof e.ms === "number" && Number.isFinite(e.ms) && e.ms >= 0 ? Math.min(Math.round(e.ms), 3_600_000) : null;
-  return { kind: e.kind as UxKind, path: normalisePath(e.path), target: maskPII(e.target, 160), detail: maskPII(e.detail, 300), ms };
+  const base = { kind: e.kind as UxKind, path: normalisePath(e.path), target: maskPII(e.target, 160), detail: maskPII(e.detail, 300), ms };
+  if (e.kind !== "ui_probe") return base;
+  const metrics = sanitizeMetrics(e.metrics);
+  return metrics ? { ...base, target: null, detail: null, metrics } : null;
 }
 
 /** 3 or more clicks on the same target inside `windowMs`. */

@@ -63,7 +63,27 @@ const ADDED_FOR_OWNER = ["/marketing/indiamart"];
  *  guard bounced it to /leads), so this is a real, named grant — not a snapshot drift. */
 const ADDED_DEALS = ["/deals"];
 const DEALS_ROLES = ["owner", "manager", "sales", "sales_senior"];
+/** 3 Oct 2026 — "koi bhi hidden link nahi rahna chahiye" (Pardeep): pages that existed but
+ *  had no menu row, plus AI Entry / Packages / UX & UI Insights. Each at the roles the page
+ *  was already built for. Real route grants (not only menu rows): billing → /ai-entry and
+ *  /online-orders; sales / sales_senior → /ai-entry. Everything else here was already
+ *  reachable by the guard (owner/manager are ungated; /accounting/* was already BOOKS). */
+const ADDED_3OCT_OM = ["/ai-entry", "/online-orders", "/items/packages", "/accounting/advances", "/accounting/reimbursements",
+  "/accounting/banking/brs", "/accounting/banking/rules", "/accounting/assets", "/accounting/business-loans",
+  "/accounting/profitability", "/reports/profit", "/accounting/saas-metrics", "/reports/purchases",
+  "/accounting/tds-receivable/year-end", "/compliance/gst", "/compliance/income-tax", "/compliance/roc",
+  "/performance", "/assessments", "/ux-insights", "/ui-insights"];
+const ADDED_3OCT_OWNER = ["/vault/personal/banking", "/vault/personal/expenses", "/vault/personal/wealth"];
+const ADDED_3OCT_BOOKS = ["/accounting/banking/brs", "/accounting/banking/rules", "/accounting/assets", "/accounting/business-loans",
+  "/accounting/profitability", "/reports/purchases", "/accounting/tds-receivable/year-end", "/compliance/gst", "/compliance/income-tax", "/compliance/roc"];
+const ADDED_3OCT_BILLING = ["/ai-entry", "/online-orders", "/accounting/advances", "/accounting/reimbursements"];
+const ADDED_3OCT_SALES = ["/ai-entry"];
 const addedFor = (role: string) => [
+  ...(role === "owner" || role === "manager" ? ADDED_3OCT_OM : []),
+  ...(role === "owner" ? ADDED_3OCT_OWNER : []),
+  ...(BOOKS_ROLES.includes(role) ? ADDED_3OCT_BOOKS : []),
+  ...(role === "billing" ? ADDED_3OCT_BILLING : []),
+  ...(role === "sales" || role === "sales_senior" ? ADDED_3OCT_SALES : []),
   ...(role === "owner" || role === "manager" ? ADDED_FOR_OWNER_MANAGER : []),
   ...(role === "owner" ? ADDED_FOR_OWNER : []),
   ...(DEALS_ROLES.includes(role) ? ADDED_DEALS : []),

@@ -13,6 +13,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import { buyPageTenantIdOrEmpty } from "@/lib/checkout/live-guards";
+import { runUiAnalysis } from "@/lib/ui/analyze.server";
 import { aggregate, findings, uxPrompt, sanitizeInsights, basicInsight, signatureOf, type RowIn } from "@/lib/ux/signals";
 
 /* The ux_* tables are not in the generated types yet; reads/writes go through this. */
@@ -27,10 +28,10 @@ export function ownsWebsite(tenantId: string | null): boolean {
   return !!tenantId && !!site && site === tenantId;
 }
 
-export async function runUxAnalysis(admin: Admin, tenantId: string, mode: "auto" | "manual"): Promise<{ events: number; insights: number; mode: string }> {
+export async function runUxAnalysis(admin: Admin, tenantId: string, mode: "auto" | "manual"): Promise<{ events: number; insights: number; mode: string; uiPages: number }> {
   const since = new Date(Date.now() - 7 * 86400_000).toISOString();
   const withSite = ownsWebsite(tenantId);
-  let q = admin.from("ux_events").select("kind, path, target, detail, ms, session_id, surface, created_at").gte("created_at", since).limit(20000);
+  let q = admin.from("ux_events").select("kind, path, target, detail, ms, session_id, surface, created_at").gte("created_at", since).neq("kind", "ui_probe").limit(20000);
   q = withSite ? q.or(`tenant_id.eq.${tenantId},tenant_id.is.null`) : q.eq("tenant_id", tenantId);
   const { data: rows, error } = await q;
   if (error) throw new Error(error.message);
@@ -76,8 +77,13 @@ export async function runUxAnalysis(admin: Admin, tenantId: string, mode: "auto"
     await admin.from("ux_insights").update(row).eq("id", ex.id);
   }
 
-  await admin.from("ux_analysis_runs").insert({ tenant_id: tenantId, events_seen: rows?.length ?? 0, insights: insights?.length ?? 0, mode: `${mode}:${used}` });
-  return { events: rows?.length ?? 0, insights: insights?.length ?? 0, mode: used };
+  /* The UI agent runs alongside: same activity trigger, same Analyze now. A UI failure
+     must not lose the UX run, so it is caught and logged. */
+  let ui = { pages: 0, insights: 0 };
+  try { ui = await runUiAnalysis(admin, tenantId, withSite); } catch (e) { console.error("[ui-analysis]", (e as Error).message); }
+
+  await admin.from("ux_analysis_runs").insert({ tenant_id: tenantId, events_seen: rows?.length ?? 0, insights: (insights?.length ?? 0) + ui.insights, mode: `${mode}:${used}` });
+  return { events: rows?.length ?? 0, insights: (insights?.length ?? 0) + ui.insights, mode: used, uiPages: ui.pages };
 }
 
 /** After a batch arrives: analyse only if there has been real activity since the last run. */

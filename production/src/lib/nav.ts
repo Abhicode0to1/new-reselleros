@@ -382,8 +382,12 @@ export const APP_NAV: NavSection[] = [
       { id: "subscriptions", href: "/subscriptions", label: "Subscriptions",     icon: "refresh", roles: OMB },
       { id: "renewals",      href: "/renewals",      label: "Renewals",          icon: "clock",   roles: ["owner", "manager", "billing", "support"] },
       { id: "invoices",      href: "/invoices",      label: "Invoices",          icon: "receipt", roles: OMB },
-      { id: "payments",      href: "/payments",      label: "Payments Received", icon: "rupee",   roles: OMB },
-      { id: "online-orders", href: "/online-orders", label: "Online Orders",     icon: "cart",    roles: OMB, hint: "Website ke saare orders — cart, checkout, trial" },
+      {
+        id: "payments",      href: "/payments",      label: "Payments Received", icon: "rupee",   roles: OMB,
+        children: [
+          { id: "online-orders", href: "/online-orders", label: "Online Orders", icon: "cart", roles: OMB, hint: "Website ke saare orders — cart, checkout, trial" },
+        ],
+      },
       { id: "projects",      href: "/projects",      label: "Project Sales",     icon: "package", roles: ["owner", "manager", "sales", "delivery", "billing"] },
       {
         id: "items",     href: "/items",           label: "Catalog & Products", icon: "package", roles: OM,
@@ -408,14 +412,14 @@ export const APP_NAV: NavSection[] = [
       { id: "vendors",         href: "/accounting/vendors",        label: "Vendors Master",       icon: "users", roles: OMB },
       { id: "bills",           href: "/accounting/bills",          label: "COGS Bills",           icon: "receipt", roles: OMB },
       { id: "bill-payments",   href: "/accounting/bill-payments",  label: "Payments Made",        icon: "rupee", roles: OMB },
-      { id: "emp-advances", href: "/accounting/advances", label: "Employee Advances", icon: "wallet", roles: OMB, hint: "Staff ko kharche ka advance — diya, kharch, baaki" },
-      { id: "reimbursements", href: "/accounting/reimbursements", label: "Reimbursements", icon: "receipt", roles: OMB },
       {
         id: "expenses",        href: "/accounting/expenses",       label: "Expenses",             icon: "rupee", roles: OMB,
         children: [
           /* Money paid to a vendor before the service (Facebook ad top-ups) and the
              month-end invoices booked against it (Pardeep, 26 Sep 2026). */
           { id: "prepaid",         href: "/accounting/prepaid",        label: "Prepaid / Advances",   icon: "wallet", roles: OMB },
+          { id: "emp-advances",    href: "/accounting/advances",       label: "Employee Advances",    icon: "wallet", roles: OMB, hint: "Staff ko kharche ka advance — diya, kharch, baaki" },
+          { id: "reimbursements",  href: "/accounting/reimbursements", label: "Reimbursements",       icon: "receipt", roles: OMB },
         ],
       },
     ],
@@ -427,7 +431,13 @@ export const APP_NAV: NavSection[] = [
     section: "Books",
     icon: "chart",
     items: [
-      { id: "acc-overview",        href: "/accounting",               label: "Accounting Overview", icon: "layout", roles: BOOKS },
+      {
+        id: "acc-overview",        href: "/accounting",               label: "Accounting Overview", icon: "layout", roles: BOOKS,
+        children: [
+          { id: "fixed-assets",    href: "/accounting/assets",         label: "Fixed Assets",   icon: "package", roles: BOOKS },
+          { id: "business-loans",  href: "/accounting/business-loans", label: "Business Loans", icon: "wallet",  roles: BOOKS },
+        ],
+      },
       {
         id: "banking",             href: "/accounting/banking",       label: "Banking",             icon: "rupee", roles: BOOKS,
         children: [
@@ -440,8 +450,6 @@ export const APP_NAV: NavSection[] = [
          exactly the person a customer asks for a statement (nav.test.ts). */
       { id: "ledger",              href: "/accounting/ledger",        label: "Ledger (Khata)",      icon: "file", roles: BOOKS },
       { id: "acc-close",           href: "/accounting/close",         label: "Month-end Close",     icon: "check", roles: BOOKS },
-      { id: "fixed-assets",        href: "/accounting/assets",        label: "Fixed Assets",        icon: "package", roles: BOOKS },
-      { id: "business-loans",      href: "/accounting/business-loans", label: "Business Loans",     icon: "wallet", roles: BOOKS },
       {
         /* THE REPORTS DIRECTORY (S30). Every report is one click from this page, grouped.
            GST Reports, TDS Receivable and Customer Aging were once missing from the
@@ -529,8 +537,13 @@ export const APP_NAV: NavSection[] = [
       },
       /* "App khud kya bhejta hai — aur band karne ka switch". A brake nobody can find is
          not a brake. */
-      { id: "automation", href: "/automation",          label: "Automation",       icon: "sparkles", roles: OM, hint: "App khud kya bhejta hai — aur band karne ka switch" },
-      { id: "ux-insights", href: "/ux-insights",        label: "UX Insights",      icon: "sparkles", roles: OM, hint: "Log kahan atakte hain — aur kya theek karna hai" },
+      {
+        id: "automation", href: "/automation",          label: "Automation",       icon: "sparkles", roles: OM, hint: "App khud kya bhejta hai — aur band karne ka switch",
+        children: [
+          { id: "ux-insights", href: "/ux-insights",    label: "UX Insights",      icon: "sparkles", roles: OM, hint: "Log kahan atakte hain — aur kya theek karna hai" },
+          { id: "ui-insights", href: "/ui-insights",    label: "UI Insights",      icon: "layout",   roles: OM, hint: "Har page ka design score — aur kya badalna hai" },
+        ],
+      },
       {
         // owner/manager only — these are customers' admin console passwords.
         id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: OM,
