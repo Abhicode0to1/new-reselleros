@@ -99,21 +99,27 @@ async function latestQuoteFor(
   admin: Admin,
   tenantId: string,
   leadId: string,
-): Promise<{ createdAt: Date | null; expiresOn: string | null }> {
+): Promise<{ createdAt: Date | null; expiresOn: string | null; settled: boolean }> {
   const { data } = await admin
     .from("quotes")
-    .select("created_date, expires_date")
+    .select("created_date, expires_date, status, payment_status")
     .eq("tenant_id", tenantId)
     .eq("lead_id", leadId)
     .order("created_date", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  const row = data as { created_date?: string | null; expires_date?: string | null } | null;
+  const row = data as {
+    created_date?: string | null; expires_date?: string | null;
+    status?: string | null; payment_status?: string | null;
+  } | null;
   const created = row?.created_date ? new Date(`${row.created_date}T00:00:00Z`) : null;
   return {
     createdAt: created && !Number.isNaN(created.getTime()) ? created : null,
     expiresOn: row?.expires_date ?? null,
+    /* R-115: yes, no or paid ends the chase — see shouldNudge. */
+    settled:
+      row?.status === "accepted" || row?.status === "rejected" || row?.payment_status === "paid",
   };
 }
 
@@ -254,6 +260,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
         requiresHumanAttention: lead.requiresHumanAttention,
         scheduledFrom: loop.createdAt,
         lastCustomerMessageAt: lastFromCustomer,
+        quoteSettled: quoteRow.settled,
       });
 
       if (!verdict.nudge) {

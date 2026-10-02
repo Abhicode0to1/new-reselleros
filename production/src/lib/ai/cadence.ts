@@ -111,6 +111,32 @@ export function nextStepAt(quotedAt: Date, step: number): Date | null {
   return new Date(quotedAt.getTime() + next.dayOffset * 86_400_000);
 }
 
+/**
+ * R-115: the first chase after a person sends a quote from the app.
+ *
+ * Until 2 Oct 2026 only quotes the AI agent sent got the four-touch cadence; a quote a person
+ * sent with the Send button got nothing, so the commonest quote in the app was the one nobody
+ * chased. Step 1 IS the send, so this schedules step 2, anchored to the send like every other
+ * step. Goes through the same cron and the same `followup.send` dial, so while that dial is on
+ * hold the chase is drafted onto the lead's timeline and nothing reaches the customer.
+ */
+export function firstChaseAfterSend(sentAt: Date, now: Date = sentAt): {
+  step: number;
+  channel: CadenceChannel;
+  inHours: number;
+  triggerCondition: string;
+} | null {
+  const next = nextStep(1);
+  const at = nextStepAt(sentAt, 1);
+  if (!next || !at) return null;
+  return {
+    step: next.step,
+    channel: next.channel,
+    inHours: Math.max(1, Math.round((at.getTime() - now.getTime()) / 3_600_000)),
+    triggerCondition: next.intent,
+  };
+}
+
 /* ── Channel ─────────────────────────────────────────────────────────────── */
 
 /** Meta's customer-service window: free-form WhatsApp is only allowed inside it. */

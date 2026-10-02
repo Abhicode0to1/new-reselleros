@@ -29,6 +29,8 @@ import { renderQuotePDF } from "@/lib/pdf";
 import { replyToAddress } from "@/lib/email/reply-to";
 import { logoDataUri } from "@/lib/pdf/logo";
 import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
+import { firstChaseAfterSend } from "@/lib/ai/cadence";
+import { scheduleSalesLoop } from "@/lib/ai/sales-loops.server";
 import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
 import { quoteAmountDue } from "@/lib/payments/amount-due";
 import { rupee } from "@/lib/utils";
@@ -349,6 +351,20 @@ ${tenant.name}${tenant.phone ? `\n${tenant.phone}` : ""}${tenant.email ? `\n${te
         }
       } else {
         console.info(`[quotes/send] lead ${quote.lead_id} stage unchanged — ${move.reason}`);
+      }
+    }
+
+    /* ── AND PLAN THE CHASE (R-115) ──────────────────────────────────────────
+       Only quotes the AI sent used to get the follow-up cadence; one a person sent from here
+       got nothing. The first real send (draft → sent, mail actually delivered — not a stub
+       when email is unconfigured, and not a resend that would restart the cadence) schedules
+       step 2. The cron then re-checks reply / won / lost / accepted / paid before every touch,
+       and `followup.send` decides whether it is sent or only drafted. Never fails the send. */
+    if (quote.lead_id && quote.status === "draft" && sendResult.status === "sent") {
+      const chase = firstChaseAfterSend(new Date());
+      if (chase) {
+        const ok = await scheduleSalesLoop({ tenantId: quote.tenant_id, leadId: quote.lead_id, ...chase });
+        if (!ok) console.error(`[quotes/send] could not plan the follow-up for lead ${quote.lead_id}`);
       }
     }
   }
