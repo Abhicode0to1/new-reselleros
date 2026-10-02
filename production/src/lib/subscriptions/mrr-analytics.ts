@@ -1,128 +1,107 @@
 /**
- * Real-Time MRR/ARR & Profit Margin Analytics Engine
- * ResellerOS - ANUTECH DIGITAL PVT LTD
- * 
- * Rules Enforced:
- * 1. Whole Rupees storage & output (AGENTS.md Rule 1)
- * 2. Multi-tenant isolation (AGENTS.md Rule 4)
- * 3. IST Date compliance (@/lib/dates/ist)
+ * MRR / ARR and margin by product line, from the subscriptions table as it actually is.
+ *
+ * Rewritten 2 Oct 2026 (Pardeep: "theek karke push"). The first version read columns the
+ * database does not have (subscriptions.quantity, items.category) — the endpoint answered
+ * every call with a 500 that printed the Postgres error — and it re-priced each
+ * subscription from the catalogue MSRP, treating half-yearly and quarterly as monthly.
+ *
+ * What it reads now:
+ *   · revenue  = subscriptions.mrr — the monthly figure stored on the subscription, the
+ *                same number the Customers page totals. Not re-derived from a list price:
+ *                a customer's agreed price is not the catalogue's.
+ *   · cost     = vendor_cost_per_seat_month × seats, when the vendor sync has filled it.
+ *                Nothing else in the database states a per-month cost reliably, so a
+ *                subscription without it is counted in `cost_unknown`, and margin is
+ *                computed only over subscriptions whose cost IS known — never a guess.
+ *   · line     = subscriptions.vendor (google / microsoft / zoho / hosting / domain / …).
+ * Whole rupees throughout (AGENTS.md rule 1).
  */
 
-export interface SubscriptionLineItem {
+export type Vendor = "google" | "microsoft" | "zoho" | "hosting" | "domain" | "support" | "other";
+
+export interface SubscriptionRow {
   id: string;
-  tenant_id: string;
-  product_name: string;
-  category: 'google_workspace' | 'microsoft_365' | 'zoho' | 'hosting' | 'domain' | 'other';
-  billing_cycle: 'monthly' | 'yearly';
-  quantity: number;
-  selling_price_rupees: number; // MSRP / Custom price per seat/unit
-  wholesale_cost_rupees: number; // Vendor wholesale cost per seat/unit
-  status: 'active' | 'suspended' | 'canceled';
+  status: string;
+  vendor: string | null;
+  seats: number | null;
+  /** Stored monthly revenue, whole rupees. */
+  mrr: number | null;
+  /** From the vendor sync; null = not known. */
+  vendor_cost_per_seat_month: number | null;
 }
 
-export interface CategoryAnalytics {
-  category: string;
+export interface LineAnalytics {
+  label: string;
   active_subscriptions: number;
-  total_units: number;
+  seats: number;
   mrr_rupees: number;
+  /** Subscriptions in this line whose cost is known. */
+  costed_subscriptions: number;
   monthly_cost_rupees: number;
-  monthly_profit_rupees: number;
-  margin_percentage: number;
+  /** Margin over the costed subscriptions only; null when none is costed. */
+  margin_percentage: number | null;
 }
 
-export interface OverallMrrAnalytics {
+export interface MrrAnalytics {
   total_active_subscriptions: number;
   total_mrr_rupees: number;
   total_arr_rupees: number;
+  /** Active subscriptions with no vendor cost on file — left out of the margin. */
+  cost_unknown: number;
   total_monthly_cost_rupees: number;
-  total_monthly_profit_rupees: number;
-  overall_margin_percentage: number;
-  category_breakdown: Record<string, CategoryAnalytics>;
+  overall_margin_percentage: number | null;
+  by_line: Record<Vendor, LineAnalytics>;
 }
 
-/**
- * Calculates monthly revenue and cost for a single subscription line item
- */
-export function calculateLineItemMrr(item: SubscriptionLineItem): {
-  monthlyRevenue: number;
-  monthlyCost: number;
-  monthlyProfit: number;
-} {
-  if (item.status !== 'active') {
-    return { monthlyRevenue: 0, monthlyCost: 0, monthlyProfit: 0 };
+const LABEL: Record<Vendor, string> = {
+  google: "Google Workspace",
+  microsoft: "Microsoft 365",
+  zoho: "Zoho",
+  hosting: "Hosting",
+  domain: "Domains",
+  support: "Support",
+  other: "Other",
+};
+
+const pct = (profit: number, revenue: number) => (revenue > 0 ? Number(((profit / revenue) * 100).toFixed(2)) : null);
+
+export function computeMrrAnalytics(rows: readonly SubscriptionRow[]): MrrAnalytics {
+  const vendors = Object.keys(LABEL) as Vendor[];
+  const by_line = Object.fromEntries(vendors.map((v) => [v, {
+    label: LABEL[v], active_subscriptions: 0, seats: 0, mrr_rupees: 0,
+    costed_subscriptions: 0, monthly_cost_rupees: 0, margin_percentage: null,
+  } as LineAnalytics])) as Record<Vendor, LineAnalytics>;
+  const costedMrr: Partial<Record<Vendor, number>> = {};
+
+  let active = 0, mrr = 0, cost = 0, costedRevenue = 0, unknown = 0;
+  for (const r of rows) {
+    if (r.status !== "active") continue;
+    const v: Vendor = r.vendor && r.vendor in LABEL ? (r.vendor as Vendor) : "other";
+    const line = by_line[v];
+    const m = Math.max(0, Math.round(r.mrr ?? 0));
+    const seats = Math.max(0, r.seats ?? 0);
+    active++; mrr += m;
+    line.active_subscriptions++; line.seats += seats; line.mrr_rupees += m;
+    if (r.vendor_cost_per_seat_month == null) { unknown++; continue; }
+    const c = Math.round(r.vendor_cost_per_seat_month * seats);
+    cost += c; costedRevenue += m;
+    line.costed_subscriptions++; line.monthly_cost_rupees += c;
+    costedMrr[v] = (costedMrr[v] ?? 0) + m;
   }
-
-  const qty = Math.max(0, item.quantity);
-  const rawRevenue = item.billing_cycle === 'yearly'
-    ? (qty * item.selling_price_rupees) / 12
-    : qty * item.selling_price_rupees;
-
-  const rawCost = item.billing_cycle === 'yearly'
-    ? (qty * item.wholesale_cost_rupees) / 12
-    : qty * item.wholesale_cost_rupees;
-
-  // Round to whole rupees for final storage/display
-  const monthlyRevenue = Math.round(rawRevenue);
-  const monthlyCost = Math.round(rawCost);
-  const monthlyProfit = monthlyRevenue - monthlyCost;
-
-  return { monthlyRevenue, monthlyCost, monthlyProfit };
-}
-
-/**
- * Computes complete MRR, ARR & Margin Analytics across all subscriptions for a tenant
- */
-export function computeTenantMrrAnalytics(items: SubscriptionLineItem[]): OverallMrrAnalytics {
-  let totalActive = 0;
-  let totalMrr = 0;
-  let totalCost = 0;
-
-  const categories: Record<string, CategoryAnalytics> = {
-    google_workspace: { category: 'Google Workspace', active_subscriptions: 0, total_units: 0, mrr_rupees: 0, monthly_cost_rupees: 0, monthly_profit_rupees: 0, margin_percentage: 0 },
-    microsoft_365: { category: 'Microsoft 365', active_subscriptions: 0, total_units: 0, mrr_rupees: 0, monthly_cost_rupees: 0, monthly_profit_rupees: 0, margin_percentage: 0 },
-    zoho: { category: 'Zoho', active_subscriptions: 0, total_units: 0, mrr_rupees: 0, monthly_cost_rupees: 0, monthly_profit_rupees: 0, margin_percentage: 0 },
-    hosting: { category: 'Hosting', active_subscriptions: 0, total_units: 0, mrr_rupees: 0, monthly_cost_rupees: 0, monthly_profit_rupees: 0, margin_percentage: 0 },
-    domain: { category: 'Domain Names', active_subscriptions: 0, total_units: 0, mrr_rupees: 0, monthly_cost_rupees: 0, monthly_profit_rupees: 0, margin_percentage: 0 },
-    other: { category: 'Other Services', active_subscriptions: 0, total_units: 0, mrr_rupees: 0, monthly_cost_rupees: 0, monthly_profit_rupees: 0, margin_percentage: 0 },
-  };
-
-  for (const item of items) {
-    if (item.status !== 'active') continue;
-
-    const { monthlyRevenue, monthlyCost, monthlyProfit } = calculateLineItemMrr(item);
-    const catKey = categories[item.category] ? item.category : 'other';
-
-    totalActive++;
-    totalMrr += monthlyRevenue;
-    totalCost += monthlyCost;
-
-    categories[catKey].active_subscriptions++;
-    categories[catKey].total_units += item.quantity;
-    categories[catKey].mrr_rupees += monthlyRevenue;
-    categories[catKey].monthly_cost_rupees += monthlyCost;
-    categories[catKey].monthly_profit_rupees += monthlyProfit;
+  for (const v of vendors) {
+    const line = by_line[v];
+    const rev = costedMrr[v] ?? 0;
+    line.margin_percentage = line.costed_subscriptions > 0 ? pct(rev - line.monthly_cost_rupees, rev) : null;
   }
-
-  // Calculate percentage margins per category
-  for (const key of Object.keys(categories)) {
-    const cat = categories[key];
-    cat.margin_percentage = cat.mrr_rupees > 0
-      ? Number(((cat.monthly_profit_rupees / cat.mrr_rupees) * 100).toFixed(2))
-      : 0;
-  }
-
-  const totalProfit = totalMrr - totalCost;
-  const overallMargin = totalMrr > 0
-    ? Number(((totalProfit / totalMrr) * 100).toFixed(2))
-    : 0;
 
   return {
-    total_active_subscriptions: totalActive,
-    total_mrr_rupees: totalMrr,
-    total_arr_rupees: totalMrr * 12,
-    total_monthly_cost_rupees: totalCost,
-    total_monthly_profit_rupees: totalProfit,
-    overall_margin_percentage: overallMargin,
-    category_breakdown: categories,
+    total_active_subscriptions: active,
+    total_mrr_rupees: mrr,
+    total_arr_rupees: mrr * 12,
+    cost_unknown: unknown,
+    total_monthly_cost_rupees: cost,
+    overall_margin_percentage: pct(costedRevenue - cost, costedRevenue),
+    by_line,
   };
 }

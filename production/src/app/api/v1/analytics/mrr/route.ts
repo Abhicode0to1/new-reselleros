@@ -1,52 +1,31 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { computeTenantMrrAnalytics, SubscriptionLineItem } from '@/lib/subscriptions/mrr-analytics';
+/**
+ * GET /api/v1/analytics/mrr — MRR / ARR and margin by product line for the signed-in
+ * company. Session + RLS scope it to the caller's tenant.
+ *
+ * Fixed 2 Oct 2026: the first version selected columns that do not exist and returned the
+ * raw Postgres message to the browser. The rule lives in lib/subscriptions/mrr-analytics.ts.
+ */
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { computeMrrAnalytics, type SubscriptionRow } from "@/lib/subscriptions/mrr-analytics";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  try {
-    const supabase = createClient();
-    
-    // Fetch active subscriptions with item pricing for authenticated tenant
-    const { data: subscriptions, error } = await supabase
-      .from('subscriptions')
-      .select(`
-        id,
-        tenant_id,
-        quantity,
-        status,
-        billing_cycle,
-        items (
-          name,
-          category,
-          msrp,
-          wholesale
-        )
-      `)
-      .eq('status', 'active');
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("id, status, vendor, seats, mrr, vendor_cost_per_seat_month")
+    .eq("status", "active");
 
-    const items: SubscriptionLineItem[] = (subscriptions || []).map((sub: any) => ({
-      id: sub.id,
-      tenant_id: sub.tenant_id,
-      product_name: sub.items?.name || 'Subscription',
-      category: sub.items?.category || 'other',
-      billing_cycle: sub.billing_cycle || 'monthly',
-      quantity: sub.quantity || 1,
-      selling_price_rupees: sub.items?.msrp || 0,
-      wholesale_cost_rupees: sub.items?.wholesale || 0,
-      status: sub.status,
-    }));
-
-    const analytics = computeTenantMrrAnalytics(items);
-
-    return NextResponse.json({
-      success: true,
-      analytics,
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+  if (error) {
+    /* Logged, not echoed: the database's own wording is not for the browser. */
+    console.error("[api/v1/analytics/mrr]", error.message);
+    return NextResponse.json({ error: "Could not read subscriptions. Try again in a moment." }, { status: 500 });
   }
+
+  return NextResponse.json({ analytics: computeMrrAnalytics((data ?? []) as SubscriptionRow[]) });
 }
