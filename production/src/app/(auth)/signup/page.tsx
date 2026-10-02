@@ -14,6 +14,7 @@ import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { isValidGstin } from "@/lib/utils";
+import { GoogleAuthButton } from "@/components/features/auth/google-button";
 
 const schema = z.object({
   companyName: z.string().min(2, "Company name is required"),
@@ -172,6 +173,17 @@ export default function SignupPage() {
           </div>
         </div>
       )}
+
+      {/* R-102: same OAuth path as login. A new Google user has no company yet, so the
+          callback sends them to /welcome to create one — the fields below are for the
+          email route only. */}
+      <GoogleAuthButton label="Sign up with Google" nextPath="/dashboard" disabled={!configured} />
+
+      <div className="my-5 flex items-center gap-3 text-xs text-ink-3">
+        <div className="flex-1 h-px bg-hairline" />
+        <span>or sign up with email</span>
+        <div className="flex-1 h-px bg-hairline" />
+      </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <FormField label="Company name" required htmlFor="companyName">
