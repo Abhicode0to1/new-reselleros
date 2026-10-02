@@ -189,4 +189,5 @@ options:
   # aur ek nahi, dono taraf ke KAI build naapna, warna jawab shor hi milega.
   machineType: E2_HIGHCPU_8
 
-timeout: 1800s
+# 2 Oct 2026: the first full go-live build (562 commits) hit 1800s inside `next build`.
+timeout: 3600s

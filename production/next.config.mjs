@@ -50,6 +50,11 @@ const nextConfig = {
      and the flag only produced a "not needed anymore" warning. The Sentry side-effect import in
      lib/supabase/server.ts stays as the belt-and-braces init path. */
   typedRoutes: true,
+  /* 2 Oct 2026 go-live: `next build`'s own "Linting and checking validity of types" ran past
+     the 30-minute Cloud Build limit, and lint is the part with a separate home — CI runs
+     `next lint` on every push (.github/workflows/ci.yml) and the local gate runs it too.
+     Type checking stays ON here: it is what catches typedRoutes, which plain tsc does not. */
+  eslint: { ignoreDuringBuilds: true },
   images: {
     /* Deep study 27 Sep 2026: next 14.2.35 carries an unauthenticated RCE advisory in the
        Image Optimization API (AVIF path). Until the Next 15/16 upgrade lands, serve images
