@@ -6268,6 +6268,108 @@ export type Database = {
           },
         ]
       }
+      package_items: {
+        Row: {
+          created_at: string
+          fixed_qty: number | null
+          id: string
+          item_id: string
+          optional: boolean
+          package_id: string
+          qty_mode: string
+          sort_order: number
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          fixed_qty?: number | null
+          id?: string
+          item_id: string
+          optional?: boolean
+          package_id: string
+          qty_mode?: string
+          sort_order?: number
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          fixed_qty?: number | null
+          id?: string
+          item_id?: string
+          optional?: boolean
+          package_id?: string
+          qty_mode?: string
+          sort_order?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "package_items_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_items_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      packages: {
+        Row: {
+          created_at: string
+          discount_pct: number
+          id: string
+          is_active: boolean
+          name: string
+          pitch: string | null
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount_pct?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          pitch?: string | null
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount_pct?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          pitch?: string | null
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_mandates: {
         Row: {
           auth_link: string | null
@@ -12379,6 +12481,17 @@ export type Database = {
       next_customer_number: { Args: { p_tenant: string }; Returns: string }
       next_document_number: {
         Args: { p_doc_type: string; p_on?: string; p_tenant_id?: string }
+        Returns: string
+      }
+      save_package: {
+        Args: {
+          p_discount_pct: number
+          p_id: string | null
+          p_is_active: boolean
+          p_items: Json
+          p_name: string
+          p_pitch: string | null
+        }
         Returns: string
       }
       pay_referral_commission: {

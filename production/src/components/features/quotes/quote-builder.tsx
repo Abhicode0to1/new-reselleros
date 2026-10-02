@@ -403,7 +403,14 @@ export function QuoteBuilder() {
         annualRate = (tier?.msrp ?? it.msrp) * 12;
         annualCost = (tier?.wholesale ?? it.wholesale) * 12;
       }
-      return l.rate === annualRate && l.cost === annualCost ? l : { ...l, rate: annualRate, cost: annualCost };
+      /* Keep the line's discount: a package (or a rep) priced it below list, and a
+         currency switch must move the list price, not erase the discount (2 Oct 2026). */
+      const listBefore = l.list_rate ?? l.rate;
+      const ratio = listBefore > 0 && l.rate < listBefore ? l.rate / listBefore : 1;
+      const rate = Math.round(annualRate * ratio);
+      return l.rate === rate && l.cost === annualCost && (l.list_rate ?? l.rate) === annualRate
+        ? l
+        : { ...l, rate, list_rate: annualRate, cost: annualCost };
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currency, exchangeRate, catalog, usdPricingBasis]);

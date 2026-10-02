@@ -196,6 +196,9 @@ export default function ItemsPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
+          <Link href="/items/packages" className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-2">
+            <Icon name="package" size={14} /> Packages
+          </Link>
           <div className="w-56">
             <Input
               prefix={<Icon name="search" size={14} />}

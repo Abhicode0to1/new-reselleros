@@ -1,23 +1,23 @@
 "use client";
 
 /**
- * 1-click solution packages — "Google Workspace + Backup + SSL" in one action.
+ * Package picker on the quote (2 Oct 2026, rebuilt on the tenant's own packages).
  *
- * The interesting part of this component is what it does when the tenant's catalogue
- * is incomplete. It resolves against the REAL catalogue and shows, per package, which
- * components it found and which it could not, BEFORE the rep clicks. A package that
- * silently added two of its three products would produce a quote that looks finished
- * and under-sells by one line — so an incomplete package is still clickable, but it
- * says exactly what will be missing and where to fix it.
+ * Each card is priced live from the catalogue for the seat count in the box: every
+ * part with its qty × rate, the total, what the package discount saves, and the margin.
+ * A part that has left the catalogue is named before the click, never silently
+ * dropped — a package that adds two of its three parts looks finished and under-sells.
  */
 import * as React from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn, rupee } from "@/lib/utils";
 import type { Item, QuoteLineItem } from "@/lib/supabase/database.types";
-import { SOLUTION_BUNDLES, resolveBundle, bundleGapMessage, type ResolvedBundle } from "@/lib/quotes/bundles";
-import { slabPricing } from "@/lib/quotes/volume-tiers";
+import { usePackages } from "@/lib/queries/packages";
+import { pricePackage, packageLines, missingMessage, type PackageRow } from "@/lib/packages/price";
 
 export function SolutionPackagePicker({
   open, onOpenChange, catalog, seats, onAdd, startDate,
@@ -25,139 +25,133 @@ export function SolutionPackagePicker({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   catalog: Item[];
-  /** Seat count the per-seat components are sized to. */
+  /** Seat count the per-seat parts start at; editable in the dialog. */
   seats: number;
   onAdd: (lines: QuoteLineItem[]) => void;
   startDate?: string;
 }) {
-  const seatCount = Math.max(1, Math.trunc(seats) || 1);
+  const { data: packages, isLoading } = usePackages();
+  const [seatCount, setSeatCount] = React.useState(Math.max(1, Math.trunc(seats) || 1));
+  React.useEffect(() => { if (open) setSeatCount(Math.max(1, Math.trunc(seats) || 1)); }, [open, seats]);
+  /* Optional parts the rep left out, per package. Default: everything in. */
+  const [skipped, setSkipped] = React.useState<Record<string, Set<string>>>({});
 
-  const resolvedAll = React.useMemo(
-    () => SOLUTION_BUNDLES.map((b) => resolveBundle(b, catalog, seatCount)),
-    [catalog, seatCount],
-  );
+  const nameOf = React.useCallback((id: string) => catalog.find((c) => c.id === id)?.name, [catalog]);
 
-  const addBundle = (r: ResolvedBundle) => {
-    if (r.resolved.length === 0) {
-      toast.error(`Nothing in "${r.bundle.name}" is in your catalogue.`, {
-        description: bundleGapMessage(r) ?? undefined,
-      });
+  const add = (pkg: PackageRow) => {
+    const skip = skipped[pkg.id] ?? new Set<string>();
+    const trimmed: PackageRow = { ...pkg, items: pkg.items.filter((i) => !(i.optional && skip.has(i.item_id))) };
+    const priced = pricePackage(trimmed, catalog, seatCount);
+    if (priced.parts.length === 0) {
+      toast.error(`Nothing in "${pkg.name}" is active in your catalogue.`, { description: missingMessage(priced, nameOf) ?? undefined });
       return;
     }
-
-    const lines: QuoteLineItem[] = r.resolved.map((rc, i) => {
-      /* Each component is priced at its OWN seat count — a fixed-qty SSL certificate
-         must not be priced in the volume band the 25 mail seats earned. */
-      const priced = slabPricing(rc.item, rc.qty);
-      const rate = Math.round(priced.msrpPerSeatMonth * 12);
-      return {
-        id: `line-${Date.now()}-${i}`,
-        item_id: rc.item.id,
-        name: rc.item.name,
-        qty: rc.qty,
-        rate,
-        list_rate: rate,
-        cost: Math.round(priced.wholesalePerSeatMonth * 12),
-        commitment: "annual_yearly",
-        ...(startDate ? { start_date: startDate } : {}),
-      };
-    });
-
-    onAdd(lines);
+    onAdd(packageLines(priced, { startDate }));
     onOpenChange(false);
-
-    const gap = bundleGapMessage(r);
+    const gap = missingMessage(priced, nameOf);
     if (gap) {
-      toast.warning(`Added ${lines.length} of ${r.bundle.components.length} — the rest is missing`, {
-        description: gap,
-        duration: 10_000,
-      });
+      toast.warning(`Added ${priced.parts.length} of ${pkg.items.length} — the rest is missing`, { description: gap, duration: 10_000 });
     } else {
-      toast.success(`${r.bundle.name} added — ${lines.length} lines.`);
+      toast.success(`${pkg.name} added — ${priced.parts.length} lines, ${rupee(priced.total)}/yr.`);
     }
+  };
+
+  const toggleOptional = (pkgId: string, itemId: string) => {
+    setSkipped((s) => {
+      const next = new Set(s[pkgId] ?? []);
+      if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+      return { ...s, [pkgId]: next };
+    });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Solution packages</DialogTitle>
-          <DialogDescription>
-            One click adds every product in the package, priced for {seatCount} {seatCount === 1 ? "seat" : "seats"}.
-          </DialogDescription>
+      <DialogContent className="max-w-2xl p-0">
+        <DialogHeader className="px-6 pt-6">
+          <DialogTitle>Add a package</DialogTitle>
+          <DialogDescription>Everything the customer needs in one tap, priced from your catalogue.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-          {resolvedAll.map((r) => {
-            const total = r.resolved.reduce((s, rc) => {
-              const p = slabPricing(rc.item, rc.qty);
-              return s + Math.round(p.msrpPerSeatMonth * 12) * rc.qty;
-            }, 0);
+        <div className="px-6 pt-3 flex items-center justify-between gap-3 flex-wrap">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-ink-3">Seats</span>
+            <input
+              type="number" min={1} value={seatCount}
+              onChange={(e) => setSeatCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              aria-label="Seats for the package"
+              className="w-20 rounded-md border border-hairline bg-paper px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-amber/40"
+            />
+          </label>
+          <Link href="/items/packages" className="text-xs text-amber-ink hover:underline">Manage packages →</Link>
+        </div>
 
-            return (
-              <div key={r.bundle.id} className="rounded-lg border border-hairline bg-paper p-3.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-ink">{r.bundle.name}</p>
-                    <p className="mt-0.5 text-2xs leading-snug text-ink-3">{r.bundle.pitch}</p>
+        <div className="px-6 py-4 max-h-[65vh] overflow-y-auto space-y-3">
+          {isLoading ? (
+            [1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full" />)
+          ) : !packages || packages.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-hairline p-6 text-center">
+              <p className="font-medium text-ink">No packages yet</p>
+              <p className="text-sm text-ink-3 mt-1">Make one — licences, support, a domain — and add it to any quote in one tap.</p>
+              <Link href="/items/packages" className="inline-block mt-3 text-sm font-medium text-amber-ink hover:underline">Create a package →</Link>
+            </div>
+          ) : (
+            packages.map((pkg) => {
+              const skip = skipped[pkg.id] ?? new Set<string>();
+              const priced = pricePackage({ ...pkg, items: pkg.items.filter((i) => !(i.optional && skip.has(i.item_id))) }, catalog, seatCount);
+              const gap = missingMessage(priced, nameOf);
+              const optionalParts = pkg.items.filter((i) => i.optional && catalog.some((c) => c.id === i.item_id && c.is_active !== false));
+              return (
+                <div key={pkg.id} className={cn("rounded-lg border bg-paper p-4", priced.complete ? "border-hairline" : "border-amber/50")}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-ink">{pkg.name}</div>
+                      {pkg.pitch && <p className="text-2xs text-ink-3 mt-0.5">{pkg.pitch}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-serif text-lg tabular-nums text-ink">{rupee(priced.total)}<span className="text-3xs text-ink-3 font-sans">/yr</span></div>
+                      {priced.saving > 0 && (
+                        <div className="text-2xs text-emerald tabular-nums">
+                          <s className="text-ink-3">{rupee(priced.listTotal)}</s> · save {rupee(priced.saving)} ({pkg.discount_pct}%)
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {total > 0 && (
-                    <p className="shrink-0 font-serif text-[15px] font-semibold text-ink tabular-nums">
-                      {rupee(total)}<span className="ml-0.5 font-sans text-3xs font-normal text-ink-3">/yr</span>
-                    </p>
-                  )}
-                </div>
 
-                <ul className="mt-2.5 space-y-1">
-                  {r.bundle.components.map((c) => {
-                    const hit  = r.resolved.find((x) => x.component === c);
-                    const miss = r.unresolved.find((x) => x.component === c);
-                    return (
-                      <li key={c.label} className="flex items-start gap-1.5 text-2xs leading-snug">
-                        <Icon
-                          name={hit ? "check" : "alert"}
-                          size={11}
-                          className={cn("mt-[3px] shrink-0", hit ? "text-emerald" : c.required ? "text-rose" : "text-ink-3")}
-                        />
-                        {hit ? (
-                          <span className="text-ink-2">
-                            {hit.item.name} <span className="text-ink-3">× {hit.qty}</span>
-                          </span>
-                        ) : (
-                          <span className={c.required ? "text-rose" : "text-ink-3"}>
-                            {c.label} — {miss?.reason === "ambiguous"
-                              ? `${miss.candidates?.length} rows match at the same price, pick one by hand`
-                              : "not in your catalogue"}
-                            {!c.required && " (optional)"}
-                          </span>
-                        )}
+                  <ul className="mt-2.5 space-y-1">
+                    {priced.parts.map((pp) => (
+                      <li key={pp.item.id} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="min-w-0 truncate text-ink-2">
+                          {pp.part.optional && (
+                            <input
+                              type="checkbox" checked aria-label={`Include ${pp.item.name}`}
+                              onChange={() => toggleOptional(pkg.id, pp.item.id)}
+                              className="mr-1.5 align-middle accent-amber"
+                            />
+                          )}
+                          {pp.item.name}
+                          {pp.part.optional && <span className="ml-1 text-3xs text-ink-3">optional</span>}
+                        </span>
+                        <span className="shrink-0 tabular-nums text-ink-3">{pp.qty} × {rupee(pp.rate)}</span>
                       </li>
-                    );
-                  })}
-                </ul>
+                    ))}
+                    {optionalParts.filter((o) => skip.has(o.item_id)).map((o) => (
+                      <li key={o.item_id} className="flex items-center gap-2 text-xs text-ink-3">
+                        <input type="checkbox" checked={false} aria-label={`Include ${nameOf(o.item_id)}`} onChange={() => toggleOptional(pkg.id, o.item_id)} className="accent-amber" />
+                        <span className="line-through">{nameOf(o.item_id)}</span>
+                      </li>
+                    ))}
+                  </ul>
 
-                <button
-                  type="button"
-                  onClick={() => addBundle(r)}
-                  disabled={r.resolved.length === 0}
-                  className={cn(
-                    "mt-3 w-full rounded-md px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber",
-                    r.resolved.length === 0
-                      ? "cursor-not-allowed bg-paper-2 text-ink-3"
-                      : r.complete
-                        ? "bg-amber text-white hover:bg-amber/90"
-                        : "border border-amber/60 bg-amber-soft text-amber-ink hover:bg-amber-soft/70",
-                  )}
-                >
-                  {r.resolved.length === 0
-                    ? "Nothing to add"
-                    : r.complete
-                      ? `Add all ${r.resolved.length}`
-                      : `Add ${r.resolved.length} of ${r.bundle.components.length}`}
-                </button>
-              </div>
-            );
-          })}
+                  {gap && <p className="mt-2 text-2xs text-amber-ink">⚠ {gap}</p>}
+
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <span className="text-3xs text-ink-3">{priced.marginPct !== null ? `Est. margin ${priced.marginPct}%` : ""}</span>
+                    <Button size="sm" variant="primary" icon="plus" onClick={() => add(pkg)}>Add to quote</Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </DialogContent>
     </Dialog>
