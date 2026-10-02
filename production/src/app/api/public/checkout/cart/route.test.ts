@@ -49,6 +49,13 @@ vi.mock("@/lib/domains/live-lookup", async (orig) => ({
 
 const startHostingTrial = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/hosting/start-trial", () => ({ startHostingTrial }));
+/* These tests are about the trial path itself, so DMS counts as connected; the paused case
+   (DMS not set — 503, nothing started) is its own test below. */
+const trialsOpen = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/dms-engine/trials", async (orig) => ({
+  ...(await orig<typeof import("@/lib/dms-engine/trials")>()),
+  trialsConfigured: () => trialsOpen.value,
+}));
 
 import { POST } from "./route";
 
@@ -291,6 +298,18 @@ describe("a free Starter trial in the cart (24 Sep 2026: no form in between)", (
     const res = await POST(req({ lines: [trial], domain: "acme.in" }));
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "You've already had a free hosting trial with us.", alreadyTrialled: true, trialStartedOn: "30 Sept 2026" });
+  });
+
+  it("with DMS not connected a trial is PAUSED — 503 with the message, nothing started (go-live 2 Oct 2026)", async () => {
+    trialsOpen.value = false;
+    try {
+      const res = await POST(req({ lines: [trial], domain: "acme.in" }));
+      expect(res.status).toBe(503);
+      expect(await res.json()).toMatchObject({ trialsPaused: true });
+      expect(startHostingTrial).not.toHaveBeenCalled();
+    } finally {
+      trialsOpen.value = true;
+    }
   });
 
   it("a trial that fails on our side stays a 500 with no alreadyTrialled flag", async () => {

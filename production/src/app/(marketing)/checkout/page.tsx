@@ -546,7 +546,7 @@ export default function CheckoutPage() {
                       {" "}and we will set your trial up by hand.
                     </div>
                   ) : (
-                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={paying || trialMixed || trialsOpen === null} onClick={() => proceed(() => void startTrial())}>
+                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={paying || trialMixed} onClick={() => proceed(() => void startTrial())}>
                     {paying ? "Starting your trial…" : "Start my 15-day free trial"}
                   </button>
                   )}
