@@ -6,6 +6,29 @@ import { Button } from "@/components/ui/button";
 import { SheetFooter } from "@/components/ui/sheet";
 import type { Lead, Quote } from "@/lib/supabase/database.types";
 import type { NextAction } from "@/lib/leads/next-action";
+import { useQuery } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+import { subscriptionFromLeadHref } from "@/lib/subscriptions/lead-prefill";
+
+/**
+ * R-073: does this won deal's customer already have a subscription? An online purchase gets
+ * one from record_payment, so offering "Create subscription" there would invite a duplicate.
+ * null while unknown — the button waits rather than guessing.
+ */
+function useCustomerHasSubscription(customerId: string | null | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["lead-footer", "has-subscription", customerId ?? "none"],
+    enabled,
+    queryFn: async (): Promise<boolean> => {
+      if (!customerId) return false;
+      const { count } = await createClient()
+        .from("subscriptions").select("id", { count: "exact", head: true })
+        .eq("customer_id", customerId).neq("status", "cancelled");
+      return (count ?? 0) > 0;
+    },
+    staleTime: 30_000,
+  });
+}
 
 export interface LeadDetailFooterProps {
   lead: Lead;
@@ -28,6 +51,7 @@ export function LeadDetailFooter({
   latestQuote, hasQuotes, nextAction, handleSendQuote, handleReviseQuote,
 }: LeadDetailFooterProps) {
   const router = useRouter();
+  const hasSub = useCustomerHasSubscription(lead.customer_id, lead.stage === "won");
   return (
         <SheetFooter className="!p-4 border-t border-hairline !flex-col !items-stretch gap-2">
           {/* Secondary row — edit / archive / delete */}
@@ -112,6 +136,23 @@ export function LeadDetailFooter({
                 onClick={() => { onClose(); router.push(`/quotes/${latestQuote.id}` as any); }}
               >
                 Open accepted quote
+              </Button>
+            )}
+            {/* R-073: a won deal proposes its subscription, the form filled from this deal. */}
+            {lead.stage === "won" && hasSub.data === false && (
+              <Button
+                icon="refresh"
+                onClick={() => { onClose(); router.push(subscriptionFromLeadHref(lead.id) as any); }}
+              >
+                Create subscription
+              </Button>
+            )}
+            {lead.stage === "won" && hasSub.data === true && (
+              <Button
+                icon="refresh"
+                onClick={() => { onClose(); router.push("/subscriptions" as any); }}
+              >
+                Open subscriptions
               </Button>
             )}
             {/* THE ONE CASE THE COMMENT ABOVE GOT WRONG. It claims nextAction already says

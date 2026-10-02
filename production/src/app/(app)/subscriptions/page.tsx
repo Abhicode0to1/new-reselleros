@@ -27,6 +27,7 @@ import { RecordPaymentDialog } from "@/components/features/quotes/record-payment
 import type { QuoteLine } from "@/lib/subscriptions/orphan-quote";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/client";
+import { prefillFromLead, type LeadPrefill } from "@/lib/subscriptions/lead-prefill";
 /* One countdown, shared with /payments and with the onboarding dialog's hint, so the
    three cannot disagree about whether the same customer is late. */
 /* Only the row HIGHLIGHT is decided here — the chip itself moved into
@@ -266,6 +267,24 @@ export default function SubscriptionsPage() {
   };
   const [importOpen,     setImportOpen]     = React.useState(false);
   const [addDirectOpen,  setAddDirectOpen]  = React.useState(false);
+  /* R-073: ?from_lead=<lead id> — "Create subscription" on a won deal lands here and opens
+     the form filled from that deal. Read once after mount (no useSearchParams: build rule). */
+  const [leadPrefill, setLeadPrefill] = React.useState<LeadPrefill | null>(null);
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const leadId = new URLSearchParams(window.location.search).get("from_lead");
+    if (!leadId) return;
+    let live = true;
+    void createClient().from("leads")
+      .select("id, company, customer_id, domain, contact_name, contact_email, contact_phone, plan, seats, billing_cycle")
+      .eq("id", leadId).maybeSingle()
+      .then(({ data }) => {
+        if (!live || !data) return;
+        setLeadPrefill(prefillFromLead(data));
+        setAddDirectOpen(true);
+      });
+    return () => { live = false; };
+  }, []);
   /** Set when onboarding chose "Payment Received" — carries what Record payment needs. */
   const [pendingPayment, setPendingPayment] =
     React.useState<PendingPaymentHandoff | null>(null);
@@ -1844,6 +1863,7 @@ export default function SubscriptionsPage() {
            itself — record_payment does that, atomically, along with the receipt
            voucher and the ledger entries. See Step 3a in the dialog. */
         onNeedsPayment={setPendingPayment}
+        prefill={leadPrefill}
       />
 
       {/* Record payment — opened by the onboarding dialog's "Payment Received" path. */}
