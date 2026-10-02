@@ -278,6 +278,22 @@ const BOOKS: UserRole[] = ["owner", "manager", "billing", "accountant"];
 /** Everyone on the team except the external partner agent. */
 const STAFF: UserRole[] = ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"];
 
+/**
+ * App pages that are deliberately NOT a menu row — each with its reason. nav.test.ts fails
+ * when a page is in neither APP_NAV nor this list (Pardeep, 3 Oct 2026: no hidden links).
+ */
+export const NOT_IN_NAV: Readonly<Record<string, string>> = {
+  "/quotes/new": "Opened by the New quote / Send quote buttons on Quotes, leads and deals",
+  "/customers/new": "Opened by Add customer on Customers",
+  "/setup": "First-run wizard; reached from onboarding and Settings",
+  "/mobile": "Install-as-app guide; linked from the account menu",
+  "/attendance/kiosk": "Runs on the office kiosk device, not in a person's menu",
+  "/platform": "Founder-only cross-tenant view; any other owner would be refused by the server",
+  "/aa/simulate-approval": "Mock consent screen for the bank-statement (Account Aggregator) test flow",
+  "/vendor-portal": "Not built yet — the page says so",
+  "/contacts": "Removed from the menu on purpose (10 Sep 2026): people live on the customer or the lead",
+};
+
 export const APP_NAV: NavSection[] = [
   {
     /* The queues a person clears every day. /today is the one list across all of them. */
@@ -289,6 +305,9 @@ export const APP_NAV: NavSection[] = [
          call — today_inbox() already filters decisions by role, and RLS does the rest. */
       { id: "today", href: "/today", label: "Today", icon: "inbox", roles: OM, hint: "Har queue ka aaj ka kaam, ek list mein" },
       { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: OMB },
+      /* 2 Oct 2026 — paste / photograph anything, review, save. Pardeep (3 Oct): no hidden
+         links — every page is in this menu or in NOT_IN_NAV with its reason (nav.test.ts). */
+      { id: "ai-entry",  href: "/ai-entry",  label: "AI Entry",  icon: "sparkles", roles: ["owner", "manager", "sales", "billing"], hint: "Chat, note, bill ya card daalo — AI entry bhar deta hai" },
       { id: "whatsapp",  href: "/whatsapp",        label: "WhatsApp Inbox",      icon: "whatsapp", roles: ["owner", "manager", "billing", "support", "delivery"] },
       { id: "support",   href: "/support",         label: "Support Desk",        icon: "ticket",   roles: ["owner", "manager", "billing", "support", "delivery"] },
       { id: "provisioning", href: "/provisioning", label: "Activation Queue", icon: "package", roles: ["owner", "manager", "support", "delivery"], hint: "Seats a customer has paid for that nobody has turned on yet." },
@@ -364,8 +383,14 @@ export const APP_NAV: NavSection[] = [
       { id: "renewals",      href: "/renewals",      label: "Renewals",          icon: "clock",   roles: ["owner", "manager", "billing", "support"] },
       { id: "invoices",      href: "/invoices",      label: "Invoices",          icon: "receipt", roles: OMB },
       { id: "payments",      href: "/payments",      label: "Payments Received", icon: "rupee",   roles: OMB },
+      { id: "online-orders", href: "/online-orders", label: "Online Orders",     icon: "cart",    roles: OMB, hint: "Website ke saare orders — cart, checkout, trial" },
       { id: "projects",      href: "/projects",      label: "Project Sales",     icon: "package", roles: ["owner", "manager", "sales", "delivery", "billing"] },
-      { id: "items",     href: "/items",           label: "Catalog & Products", icon: "package", roles: OM },
+      {
+        id: "items",     href: "/items",           label: "Catalog & Products", icon: "package", roles: OM,
+        children: [
+          { id: "packages", href: "/items/packages", label: "Packages", icon: "package", roles: OM, hint: "Products ke bundle — quote me ek click" },
+        ],
+      },
     ],
   },
   {
@@ -383,6 +408,8 @@ export const APP_NAV: NavSection[] = [
       { id: "vendors",         href: "/accounting/vendors",        label: "Vendors Master",       icon: "users", roles: OMB },
       { id: "bills",           href: "/accounting/bills",          label: "COGS Bills",           icon: "receipt", roles: OMB },
       { id: "bill-payments",   href: "/accounting/bill-payments",  label: "Payments Made",        icon: "rupee", roles: OMB },
+      { id: "emp-advances", href: "/accounting/advances", label: "Employee Advances", icon: "wallet", roles: OMB, hint: "Staff ko kharche ka advance — diya, kharch, baaki" },
+      { id: "reimbursements", href: "/accounting/reimbursements", label: "Reimbursements", icon: "receipt", roles: OMB },
       {
         id: "expenses",        href: "/accounting/expenses",       label: "Expenses",             icon: "rupee", roles: OMB,
         children: [
@@ -401,12 +428,20 @@ export const APP_NAV: NavSection[] = [
     icon: "chart",
     items: [
       { id: "acc-overview",        href: "/accounting",               label: "Accounting Overview", icon: "layout", roles: BOOKS },
-      { id: "banking",             href: "/accounting/banking",       label: "Banking",             icon: "rupee", roles: BOOKS },
+      {
+        id: "banking",             href: "/accounting/banking",       label: "Banking",             icon: "rupee", roles: BOOKS,
+        children: [
+          { id: "banking-brs",     href: "/accounting/banking/brs",   label: "Bank Reconciliation (BRS)", icon: "check", roles: BOOKS },
+          { id: "banking-rules",   href: "/accounting/banking/rules", label: "Bank rules",          icon: "list",  roles: BOOKS },
+        ],
+      },
       /* The khata. The ledger answers "send me MY statement" for one party; Customer Aging
          (in Reports) answers "who owes me, across everyone". The owner must see it — he is
          exactly the person a customer asks for a statement (nav.test.ts). */
       { id: "ledger",              href: "/accounting/ledger",        label: "Ledger (Khata)",      icon: "file", roles: BOOKS },
       { id: "acc-close",           href: "/accounting/close",         label: "Month-end Close",     icon: "check", roles: BOOKS },
+      { id: "fixed-assets",        href: "/accounting/assets",        label: "Fixed Assets",        icon: "package", roles: BOOKS },
+      { id: "business-loans",      href: "/accounting/business-loans", label: "Business Loans",     icon: "wallet", roles: BOOKS },
       {
         /* THE REPORTS DIRECTORY (S30). Every report is one click from this page, grouped.
            GST Reports, TDS Receivable and Customer Aging were once missing from the
@@ -420,8 +455,13 @@ export const APP_NAV: NavSection[] = [
           /* S33: CA sabse pehle yahi do maangta hai. */
           { id: "trial-balance",       href: "/accounting/trial-balance", label: "Trial Balance",       icon: "file", roles: BOOKS, group: "Financial statements" },
           { id: "day-book",            href: "/accounting/day-book",      label: "Day Book",            icon: "calendar", roles: BOOKS, group: "Financial statements" },
+          { id: "profitability",       href: "/accounting/profitability", label: "Customer Profitability", icon: "trending_up", roles: BOOKS, group: "Business" },
+          { id: "profit-by-product",   href: "/reports/profit",           label: "Profit by Product",   icon: "chart", roles: OM, group: "Business" },
+          { id: "saas-metrics",        href: "/accounting/saas-metrics",  label: "SaaS Metrics (MRR)",  icon: "refresh", roles: OM, group: "Business" },
+          { id: "purchases-report",    href: "/reports/purchases",        label: "Purchases Report",    icon: "cart", roles: BOOKS, group: "Business" },
           { id: "gst-owner",           href: "/accounting/gst",           label: "GST Reports",         icon: "file", roles: BOOKS, group: "Tax" },
           { id: "tds-owner",           href: "/accounting/tds-receivable",label: "TDS Receivable",      icon: "rupee", roles: BOOKS, group: "Tax" },
+          { id: "tds-year-end",        href: "/accounting/tds-receivable/year-end", label: "TDS Year-end", icon: "file", roles: BOOKS, group: "Tax" },
           { id: "itr",                 href: "/accounting/itr",           label: "Income Tax (ITR)",    icon: "file", roles: BOOKS, group: "Tax" },
           { id: "acc-aging-owner",     href: "/accounting/aging",         label: "Customer Aging",      icon: "clock", roles: BOOKS, group: "Receivables & registers" },
           { id: "esi-register",        href: "/accounting/esi-register",  label: "ESI & PF Register",   icon: "file", roles: BOOKS, group: "Receivables & registers" },
@@ -429,7 +469,14 @@ export const APP_NAV: NavSection[] = [
           { id: "activity",            href: "/activity",                 label: "Activity Log",        icon: "list", roles: OM, group: "Audit" },
         ],
       },
-      { id: "compliance-calendar", href: "/compliance",               label: "Compliance Calendar", icon: "calendar", roles: BOOKS },
+      {
+        id: "compliance-calendar", href: "/compliance",               label: "Compliance Calendar", icon: "calendar", roles: BOOKS,
+        children: [
+          { id: "compliance-gst",  href: "/compliance/gst",         label: "GST",               icon: "file", roles: BOOKS },
+          { id: "compliance-it",   href: "/compliance/income-tax",  label: "Income Tax",        icon: "file", roles: BOOKS },
+          { id: "compliance-roc",  href: "/compliance/roc",         label: "ROC (MCA)",         icon: "file", roles: BOOKS },
+        ],
+      },
     ],
   },
   {
@@ -446,6 +493,8 @@ export const APP_NAV: NavSection[] = [
         children: [
           /* Was reachable only by URL. */
           { id: "scorecard",       href: "/scorecard",                  label: "Scorecards",             icon: "award", roles: OM },
+          { id: "performance",     href: "/performance",                label: "Team Performance",       icon: "trending_up", roles: OM },
+          { id: "assessments",     href: "/assessments",                label: "Assessments",            icon: "check", roles: OM },
         ],
       },
       {
@@ -481,6 +530,7 @@ export const APP_NAV: NavSection[] = [
       /* "App khud kya bhejta hai — aur band karne ka switch". A brake nobody can find is
          not a brake. */
       { id: "automation", href: "/automation",          label: "Automation",       icon: "sparkles", roles: OM, hint: "App khud kya bhejta hai — aur band karne ka switch" },
+      { id: "ux-insights", href: "/ux-insights",        label: "UX Insights",      icon: "sparkles", roles: OM, hint: "Log kahan atakte hain — aur kya theek karna hai" },
       {
         // owner/manager only — these are customers' admin console passwords.
         id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: OM,
@@ -489,6 +539,9 @@ export const APP_NAV: NavSection[] = [
              skips its role guard for owner AND manager. The data is protected by RLS scoped
              to auth.uid() (personal_vault_owner_isolation.test.sql), per USER not per role. */
           { id: "vault-personal", href: "/vault/personal",  label: "Private Vault",    icon: "wallet", roles: ["owner"], hint: "Aapke apne paise — team me kisi ko nahi dikhta" },
+          { id: "vault-personal-banking",  href: "/vault/personal/banking",  label: "Private banking",  icon: "rupee",  roles: ["owner"] },
+          { id: "vault-personal-expenses", href: "/vault/personal/expenses", label: "Private expenses", icon: "receipt", roles: ["owner"] },
+          { id: "vault-personal-wealth",   href: "/vault/personal/wealth",   label: "Private wealth",   icon: "trending_up", roles: ["owner"] },
         ],
       },
       { id: "documents", href: "/documents",       label: "Company Documents",  icon: "file",    roles: OM },

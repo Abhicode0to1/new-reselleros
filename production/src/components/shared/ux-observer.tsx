@@ -149,7 +149,9 @@ export function UxObserver() {
 
     // page load time, once
     const nav = performance.getEntriesByType?.("navigation")?.[0] as PerformanceNavigationTiming | undefined;
-    if (nav && nav.loadEventEnd > 0) push({ kind: "slow", path: s.path, ms: Math.round(nav.loadEventEnd) }, true);
+    /* Not in dev: the dev server compiles a page on its first visit, so its load time is
+       not the page's (a 4.5 s /quotes/new insight on localhost, 3 Oct 2026). */
+    if (nav && nav.loadEventEnd > 0 && process.env.NODE_ENV === "production") push({ kind: "slow", path: s.path, ms: Math.round(nav.loadEventEnd) }, true);
 
     const tick = setInterval(() => {
       if (!s.clickedThisView && !s.stallSent && active() && Date.now() - s.viewAt > 45_000) {

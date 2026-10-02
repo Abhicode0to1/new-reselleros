@@ -64,7 +64,7 @@ describe.each(USER_ROLES.map((r) => [r as UserRole]))("role %s", (role) => {
 describe("what each role sees", () => {
   it("owner: Today + Dashboard pinned, six apps behind a switcher", () => {
     const m = buildSidebarApps("owner");
-    expect(m.pinned.map((i) => i.id)).toEqual(["today", "dashboard"]);
+    expect(m.pinned.map((i) => i.id)).toEqual(["today", "dashboard", "ai-entry"]);
     expect(m.flat).toBe(false);
     expect(m.apps).toHaveLength(6);
   });
