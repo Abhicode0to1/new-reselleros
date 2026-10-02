@@ -32,7 +32,7 @@ import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
-import { provisioningProducts } from "@/lib/provisioning/products";
+import { provisioningProducts, productAmountPaid } from "@/lib/provisioning/products";
 import { domainRegistrationEnabled, hostingProvisioningEnabled } from "@/lib/provisioning/domain-registration";
 import {
   DOMAIN_RENEWAL_PLAN,
@@ -515,7 +515,10 @@ export async function POST(request: NextRequest) {
         // Renewal rows carry their plan marker; the new-sale workers skip them. A hosting
         // account in a several-plan order carries ITS plan, not the quote's first (R-032).
         plan:        renewalPlan ?? product.plan ?? quote.plan ?? null,
-        amountPaid:  paymentAmount,
+        /* R-033: this product's own share of the payment, not the whole order — the
+           engine's spend check (paid ≥ cost) reads it per row. A renewal is one product
+           and its quote is that renewal, so its share is the whole payment. */
+        amountPaid:  isRenewal ? paymentAmount : productAmountPaid(product, quote.line_items, paymentAmount),
         paymentMode: razorpayMode(keyIdForMode),
         blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
         note:        provisioning.reason,

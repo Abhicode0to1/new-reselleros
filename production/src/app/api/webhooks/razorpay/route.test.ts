@@ -326,3 +326,17 @@ describe("S24 — one payment, one run; a global-secret event cannot reach a ten
     expect(db.tables.lead_activities).toHaveLength(0);
   });
 });
+
+describe("R-033 — each provisioning row carries its own share of the payment", () => {
+  it("two domains in one order: each row gets its line's part, not the whole ₹1,180", async () => {
+    db.tables.quotes[0].line_items = [
+      { id: "l1", name: "Domain a.in", qty: 1, rate: 600, cost: 0, domain: "a.in" },
+      { id: "l2", name: "Domain b.in", qty: 1, rate: 400, cost: 0, domain: "b.in" },
+    ];
+    const res = await POST(signed(captured()));
+    expect(res.status).toBe(200);
+    const rows = queueProvisioning.mock.calls.map((c) => (c as unknown as [{ domain: string; amountPaid: number }])[0]);
+    const byDomain = Object.fromEntries(rows.map((r) => [r.domain, r.amountPaid]));
+    expect(byDomain).toEqual({ "a.in": 708, "b.in": 472 });
+  });
+});

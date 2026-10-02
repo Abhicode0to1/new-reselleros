@@ -96,3 +96,53 @@ export function provisioningProducts(input: {
   };
   return [...named, main];
 }
+
+/* ── R-033 (3 Oct 2026): each row's own share of the payment ─────────────────
+   The engine's spend check (paid ≥ cost, coverFromPaid) read the row's amount_paid, and
+   every row carried the WHOLE payment — so in a two-product order each product looked
+   covered by both, and the check could not catch a domain that cost more than its line.
+   Now each product gets the share of the payment its own lines are of the order's taxable
+   value. A ₹0 domain bundled with yearly hosting takes its hosting line's share, as the
+   bundle is what paid for it. No priced lines at all → the whole payment, as before. */
+type Line = { rate?: unknown; qty?: unknown; discount_pct?: unknown; domain?: unknown; hostingPlan?: unknown; hostingDomain?: unknown };
+
+const taxable = (l: Line) => {
+  const rate = Number(l.rate) || 0, qty = Number(l.qty) || 0, disc = Number(l.discount_pct) || 0;
+  return Math.max(0, rate * qty * (1 - Math.min(100, Math.max(0, disc)) / 100));
+};
+const lineDomain = (l: Line) => (typeof l.domain === "string" ? l.domain.trim().toLowerCase() : "");
+const hostingDomainOf = (l: Line) =>
+  (typeof l.hostingDomain === "string" ? l.hostingDomain : typeof l.domain === "string" ? l.domain : "").trim().toLowerCase();
+
+/** 0..1 — the part of the order's taxable value this product's own lines account for. */
+export function productShare(product: ProvisioningProduct, lineItems: unknown): number {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) return 1;
+  const lines = lineItems.filter((l) => l && typeof l === "object") as Line[];
+  const total = lines.reduce((s, l) => s + taxable(l), 0);
+  if (total <= 0) return 1;
+  const hosting = lines.filter(isHostingLine);
+  const want = (product.domain ?? "").trim().toLowerCase();
+  let own = 0;
+  if (product.vendor === "domain") {
+    own = lines.filter((l) => !isHostingLine(l) && lineDomain(l) === want).reduce((s, l) => s + taxable(l), 0);
+    if (own === 0) {
+      // bundled free domain → the hosting line it came with (same domain, else the only one)
+      const bundle = hosting.find((l) => hostingDomainOf(l) === want) ?? (hosting.length === 1 ? hosting[0] : undefined);
+      own = bundle ? taxable(bundle) : 0;
+    }
+  } else if (product.vendor === "hosting") {
+    const mine = hosting.filter((l) => hostingDomainOf(l) === want);
+    own = (mine.length ? mine : hosting.length === 1 ? hosting : []).reduce((s, l) => s + taxable(l), 0);
+    if (own === 0 && hosting.length === 0) own = total; // a hosting order written before hosting lines carried a plan
+  } else {
+    // a licence: every line that is neither a named domain nor a hosting account
+    own = lines.filter((l) => !isHostingLine(l) && !lineDomain(l)).reduce((s, l) => s + taxable(l), 0);
+    if (own === 0) own = total;
+  }
+  return Math.min(1, own / total);
+}
+
+/** This product's part of the payment, in rupees (GST included, like the payment). */
+export function productAmountPaid(product: ProvisioningProduct, lineItems: unknown, paymentAmount: number): number {
+  return Math.round(paymentAmount * productShare(product, lineItems));
+}
