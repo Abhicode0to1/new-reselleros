@@ -29,6 +29,8 @@ export const PAYMENT_TABS = ["all", "received", "refunded"] as const;
 /** /invoices ?focus= — the money tiles' exact sets (lib/invoices/kpis.ts). Kept in step
  *  with INVOICE_FOCI by a test. */
 export const INVOICE_FOCUS = ["", "unpaid", "paid-month"] as const;
+/** /quotes ?focus= (lib/quotes/focus.ts). */
+export const QUOTE_FOCUS = ["", "review", "accepted"] as const;
 
 /** One drill-down: the page, the URL key it reads, and the value — checked by the tests. */
 export interface Drill { path: string; key: string; value: string }
@@ -70,7 +72,7 @@ export function drillHref(name: DrillName): string {
 export const PAGE_CHOICES: Record<string, Record<string, readonly string[]>> = {
   "/leads":         { view: LEAD_VIEWS },
   "/deals":         { view: LEAD_VIEWS },
-  "/quotes":        { tab: QUOTE_TABS },
+  "/quotes":        { tab: QUOTE_TABS, focus: QUOTE_FOCUS },
   "/invoices":      { tab: INVOICE_TABS, focus: INVOICE_FOCUS },
   "/subscriptions": { tab: SUBSCRIPTION_TABS },
   "/tasks":         { tab: TASK_TABS },

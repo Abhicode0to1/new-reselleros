@@ -16,6 +16,8 @@ import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { QUOTE_FOCI, QUOTE_FOCUS_LABEL, quoteInFocus, focusValue, type QuoteFocus } from "@/lib/quotes/focus";
+import { FocusBanner } from "@/components/shared/focus-banner";
 import { useQuotes, useDeleteQuote, quoteDeleteBlockReason } from "@/lib/queries/quotes";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import type { Subscription } from "@/lib/supabase/database.types";
@@ -134,6 +136,10 @@ export default function QuotesPage() {
   const { data: projectQuotes } = useProjectSales();
   const deleteQuote = useDeleteQuote();
   const [tab, setTab] = useUrlChoice<string>("tab", QUOTE_TABS, "all"); // R-118
+  /* R-118: a money tile's exact set (lib/quotes/focus.ts) — "" = none. */
+  const [focus, setFocus] = useUrlChoice<QuoteFocus>("focus", QUOTE_FOCI, "");
+  const tabOn = (t: string) => { setFocus(""); setTab(t); };
+  const focusOn = (f: QuoteFocus) => { setTab("all"); setFocus(f); };
   const [search, setSearch] = React.useState("");
   // Clean split — Subscription is the default (most quotes live here); Project
   // is one tab away. No mixed "All" view, no empty default.
@@ -278,6 +284,7 @@ export default function QuotesPage() {
        (see the strip below). Left on "Invoiced", the two filters intersect to nothing and
        an operator who just clicked "Review them" would be shown an empty table. */
     if (onlyMyApprovals && !awaitsMyApproval(q, { id: me?.userId ?? "", role: me?.role })) return false;
+    if (focus && !quoteInFocus(q, focus)) return false;   // the tile's own predicate
     if (tab === "expired") {
       if (q.status !== "expired" && q.status !== "rejected") return false;
     } else if (tab === "awaiting") {
@@ -320,12 +327,8 @@ export default function QuotesPage() {
 
   // KPIs
   const totalValue = quotesByWorkspace.reduce((s, q) => s + (q.amount ?? 0), 0);
-  const acceptedValue = quotesByWorkspace
-    .filter((q) => q.status === "accepted")
-    .reduce((s, q) => s + (q.amount ?? 0), 0);
-  const sentValue = quotesByWorkspace
-    .filter((q) => q.status === "sent" || q.status === "viewed")
-    .reduce((s, q) => s + (q.amount ?? 0), 0);
+  const acceptedValue = focusValue(quotesByWorkspace, "accepted");
+  const sentValue = focusValue(quotesByWorkspace, "review");
   /* Only quotes whose margin is actually KNOWN are summed, and how many were left
      out is carried alongside — a total that silently drops the unknown ones reads as
      a complete measurement of the pipeline when it is a partial one. */
@@ -543,7 +546,7 @@ export default function QuotesPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
                     <button
                       type="button"
-                      onClick={() => setTab("all")}
+                      onClick={() => tabOn("all")}
                       className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
                     >
                       <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Pipeline</p>
@@ -551,7 +554,8 @@ export default function QuotesPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setTab("sent")}
+                      onClick={() => focusOn("review")}
+                      aria-pressed={focus === "review"}
                       className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
                     >
                       <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Out for review</p>
@@ -559,7 +563,8 @@ export default function QuotesPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setTab("accepted")}
+                      onClick={() => focusOn("accepted")}
+                      aria-pressed={focus === "accepted"}
                       className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-emerald/60 transition-all cursor-pointer"
                     >
                       <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Accepted</p>
@@ -580,10 +585,16 @@ export default function QuotesPage() {
                       <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
                       <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{winRate}%</p>
                     </div>
-                    <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                    {/* The list's own set (team cut applied) — quotes.length counted every
+                        quote in the workspace while the list below showed the team's. */}
+                    <button
+                      type="button"
+                      onClick={() => tabOn("all")}
+                      className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
+                    >
                       <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total Quotes</p>
-                      <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{quotes.length}</p>
-                    </div>
+                      <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{quotesByWorkspace.length}</p>
+                    </button>
                   </div>
 
                   {/* Quote Intelligence */}
@@ -591,20 +602,16 @@ export default function QuotesPage() {
                     <GeminiCard
                       title="Quote intelligence"
                       actions={
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          icon="mail"
-                          onClick={() => {
-                            toast.success(`Nudge sent for ${expiringCount} expiring quotes`);
-                          }}
-                        >
-                          Nudge expiring quotes
+                        /* Until 2 Oct 2026 this button toasted "Nudge sent for N expiring
+                           quotes" and sent nothing — a success message for an action that
+                           never happened. It now opens the quotes it is about. */
+                        <Button size="sm" variant="primary" icon="eye" onClick={() => focusOn("review")}>
+                          Show these quotes
                         </Button>
                       }
                       compact
                     >
-                      <b>{expiringCount} quote{expiringCount === 1 ? "" : "s"} out for review.</b> Expiring within 7 days are highest priority — send a nudge to those customers.
+                      <b>{expiringCount} quote{expiringCount === 1 ? "" : "s"} out for review.</b> Follow-ups run on their own on day 2, 4 and 7 after sending — drafted on the lead while the follow-up setting is on hold.
                     </GeminiCard>
                   )}
                 </div>
@@ -626,14 +633,17 @@ export default function QuotesPage() {
               /* All, so the approval filter cannot land on a status tab that excludes every
                  quote it just selected — an operator who clicked "Review them" and got an
                  empty table would read it as the queue being wrong. */
-              if (next) setTab("all");
+              if (next) tabOn("all");
             }}
           />
 
           {/* Sticky Horizontal TabBar + Date Range + Search */}
           {!isLoading && quotes && quotes.length > 0 && (
             <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
-              <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
+              {focus && (
+                <FocusBanner label={QUOTE_FOCUS_LABEL[focus]} count={filtered.length} onClear={() => setFocus("")} />
+              )}
+              <TabBar className="overflow-y-hidden" value={tab} onChange={tabOn} items={tabs} />
               <div className="flex justify-between items-center gap-3 flex-wrap">
                 <div className="text-xs text-ink-3">
                   Showing {filtered.length} of {counts.all ?? 0} quote{counts.all === 1 ? "" : "s"}
@@ -738,7 +748,7 @@ export default function QuotesPage() {
             icon="search"
             title="No quotes match"
             body={search ? `No results for "${search}".` : `No quotes in "${tab}" status.`}
-            action={<Button icon="x" onClick={() => { setTab("all"); setSearch(""); }}>Clear filters</Button>}
+            action={<Button icon="x" onClick={() => { tabOn("all"); setSearch(""); }}>Clear filters</Button>}
             compact
           />
         </div>
