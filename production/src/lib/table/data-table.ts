@@ -127,3 +127,14 @@ export function isViewActive(view: SavedView, state: Record<string, unknown>, so
 function stableJson(o: Record<string, unknown>): string {
   return JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
 }
+
+/**
+ * How many rows a paged list shows (R-024, 2 Oct 2026). Sorting and filtering still run
+ * over EVERY row — only the rendering is paged, so totals and tab counts stay exact while
+ * a 5,000-row list paints 50. `revealIndex` (a deep link such as /invoices?open=INV-…)
+ * extends the window so that row is on screen; it never shrinks it.
+ */
+export function pagedCount(total: number, limit: number, revealIndex = -1): number {
+  const want = revealIndex >= 0 ? Math.max(limit, revealIndex + 1) : limit;
+  return Math.max(0, Math.min(total, want));
+}

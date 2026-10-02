@@ -699,6 +699,9 @@ function InvoicesPageInner() {
           selected={selected}
           onSelectedChange={setSelected}
           cardsBelow="xl"
+          /* R-024: paint 50 at a time; counts, tabs and KPIs above still use every invoice. */
+          pageSize={50}
+          revealId={openInvoiceId}
           views={{ storageKey: "invoices", current: viewState, apply: applyView }}
           toolbar={
             <>
