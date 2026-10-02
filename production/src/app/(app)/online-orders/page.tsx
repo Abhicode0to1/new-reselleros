@@ -1,11 +1,11 @@
 /**
  * Online Orders — matches prototype screen "online-orders".
  *
- * Admin view for incoming orders from the buy-workspace-v2 page (paid + trial).
- * Shows real-time provisioning pipeline: new → provisioning → DNS pending → active.
- *
- * NOTE: Order data is currently mock/demo. When buy-workspace-v2 is live,
- * replace ONLINE_ORDERS with a Supabase query on an `orders` table.
+ * Every order the website makes — cart, Workspace checkout / trial / enquiry, hosting
+ * trial and the DMS panel — read from public.leads. Which sources count, what to call
+ * them and where a trial stands live in lib/online-orders/sources.ts (R-077, 2 Oct 2026:
+ * this page used to read only 'buy-workspace%', so cart, hosting-trial and DMS orders
+ * never appeared, and it called real rows "sample data").
  */
 "use client";
 
@@ -28,12 +28,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { rupee } from "@/lib/utils";
+import { WEBSITE_ORDER_FILTER, orderChannel, isTrialOrder, trialWindow } from "@/lib/online-orders/sources";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type OrderStatus =
+  | "awaiting-payment"
   | "provisioning"
   | "dns-pending"
   | "active"
@@ -48,6 +50,8 @@ interface Order {
   id:          string;
   type:        "paid" | "trial";
   createdAt:   string;
+  /** Raw ISO time — for "today" and month-to-date sums (createdAt is display text). */
+  createdIso:  string;
   company:     string;
   domain:      string;
   gstin:       string | null;
@@ -60,7 +64,11 @@ interface Order {
   gst:         number | null;
   total:       number | null;
   trialDay:    number | null;
+  /** The trial's own length — hosting 15, Workspace 14 — from the lead's dates. */
+  trialLength: number | null;
   trialEndsOn: string | null;
+  /** True only when the lead is won — a cart order awaiting payment is NOT paid. */
+  paid:        boolean;
   razorpayId:  string | null;
   invoiceNo:   string | null;
   status:      OrderStatus;
@@ -74,9 +82,10 @@ interface Order {
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<OrderStatus, { label: string; kind: "warning" | "info" | "success" | "danger" | "muted"; icon: string }> = {
+  "awaiting-payment": { label: "Not paid yet",       kind: "warning", icon: "clock"   },
   "provisioning":     { label: "Provisioning",       kind: "warning", icon: "refresh" },
   "dns-pending":      { label: "DNS pending",         kind: "info",    icon: "clock"   },
-  "active":           { label: "Active",              kind: "success", icon: "check_circle" },
+  "active":           { label: "Paid",                kind: "success", icon: "check_circle" },
   "issue":            { label: "Issue",               kind: "danger",  icon: "alert"   },
   "trial-active":     { label: "Trial · active",      kind: "info",    icon: "rocket"  },
   "trial-converting": { label: "Trial · converting",  kind: "warning", icon: "refresh" },
@@ -199,12 +208,12 @@ function OrderDetailDrawer({
             ) : (
               <>
                 <DrawerRow label="Day">
-                  <strong>Day {order.trialDay} of 14</strong>
+                  <strong>Day {order.trialDay} of {order.trialLength}</strong>
                 </DrawerRow>
                 <DrawerRow label="Expires">{order.trialEndsOn}</DrawerRow>
               </>
             )}
-            <DrawerRow label="Source" mono>{order.source}</DrawerRow>
+            <DrawerRow label="Source">{order.source}</DrawerRow>
             <DrawerRow label="Assigned to">{order.amAssigned}</DrawerRow>
           </DrawerSection>
 
@@ -404,7 +413,7 @@ function DrawerRow({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 // ─── DB → UI mapping ─────────────────────────────────────────────────────────
-// Map a row from public.leads (where source LIKE 'buy-workspace%') into the
+// Map a website-order row from public.leads (sources: lib/online-orders/sources.ts) into the
 // Order shape the UI expects. Many UI fields (Razorpay ID, invoice no, granular
 // progress) aren't populated yet — set to sensible defaults so the row still
 // renders. Once payments + provisioning land, we backfill from quotes/payments.
@@ -422,6 +431,11 @@ interface LeadRow {
   source:        string | null;
   notes:         string | null;
   created_at:    string;
+  domain:           string | null;
+  utm_source:       string | null;
+  trial_started_at: string | null;
+  trial_expires_at: string | null;
+  owner:            { full_name: string | null } | null;
 }
 
 /** Derive a friendly tier name from the lead.plan label. */
@@ -449,28 +463,20 @@ function domainFromNotes(notes: string | null, email: string | null): string {
 
 /** Status badge derived from lead stage + source. */
 function statusFromLead(l: LeadRow): OrderStatus {
-  const isTrial = (l.source ?? "").includes("trial") || l.stage === "trial";
-  if (isTrial) {
-    // Day count for trial: rough age in days since creation
-    const ageDays = Math.floor(
-      (Date.now() - new Date(l.created_at).getTime()) / 86_400_000,
-    );
-    if (ageDays >= 14) return "trial-expired";
-    if (ageDays >= 11) return "trial-converting";
-    return "trial-active";
+  if (isTrialOrder(l)) {
+    const w = trialWindow(l);
+    return w.state === "expired" ? "trial-expired" : w.state === "converting" ? "trial-converting" : "trial-active";
   }
   if (l.stage === "lost")  return "issue";
   if (l.stage === "won")   return "active";
-  if (l.stage === "quote") return "dns-pending";
-  return "provisioning";
+  /* R-077: a cart order sits at stage 'quote' until Razorpay confirms — it was shown as
+     "DNS pending" (and anything else as "Provisioning"), which nothing measured. */
+  return "awaiting-payment";
 }
 
 /** Day number within trial (1-14), or null for paid orders. */
 function trialDay(l: LeadRow): number | null {
-  const isTrial = (l.source ?? "").includes("trial") || l.stage === "trial";
-  if (!isTrial) return null;
-  const age = Math.floor((Date.now() - new Date(l.created_at).getTime()) / 86_400_000);
-  return Math.max(1, Math.min(14, age + 1));
+  return isTrialOrder(l) ? trialWindow(l).day : null;
 }
 
 /** Convert ISO timestamp → "20 May · 09:42 AM" for display. */
@@ -483,12 +489,12 @@ function formatCreatedAt(iso: string): string {
 
 /** Reasonable "next action" string based on stage + age. */
 function nextActionFromLead(l: LeadRow): string {
-  const isTrial = (l.source ?? "").includes("trial") || l.stage === "trial";
-  if (isTrial) {
-    const day = trialDay(l) ?? 1;
-    if (day >= 12) return `Day ${day} · time to send convert quote`;
-    if (day >= 7)  return `Day ${day} · scheduled health-check`;
-    return `Day ${day} · onboarding in progress`;
+  if (isTrialOrder(l)) {
+    const w = trialWindow(l);
+    if (w.state === "expired")    return `Trial ended ${w.endsOn.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} · convert or close`;
+    if (w.state === "converting") return `Day ${w.day} of ${w.length} · time to send convert quote`;
+    if (w.day >= 7)               return `Day ${w.day} of ${w.length} · scheduled health-check`;
+    return `Day ${w.day} of ${w.length} · onboarding in progress`;
   }
   switch (l.stage) {
     case "new":      return "New lead · qualify and call within 30 min";
@@ -501,7 +507,8 @@ function nextActionFromLead(l: LeadRow): string {
 }
 
 function leadToOrder(l: LeadRow): Order {
-  const isTrial = (l.source ?? "").includes("trial") || l.stage === "trial";
+  const isTrial = isTrialOrder(l);
+  const win     = isTrial ? trialWindow(l) : null;
   const tier    = tierFromPlan(l.plan);
   const seats   = l.seats ?? 0;
   const lineTotal = isTrial ? null : (l.value ?? null);
@@ -513,8 +520,9 @@ function leadToOrder(l: LeadRow): Order {
     id:          "ORD-" + l.id.replace(/^L-/, ""),
     type:        isTrial ? "trial" : "paid",
     createdAt:   formatCreatedAt(l.created_at),
+    createdIso:  l.created_at,
     company:     l.company || "—",
-    domain:      domainFromNotes(l.notes, l.contact_email),
+    domain:      l.domain || domainFromNotes(l.notes, l.contact_email),
     gstin:       null,
     contact:     {
       name:  l.contact_name  ?? "—",
@@ -529,18 +537,18 @@ function leadToOrder(l: LeadRow): Order {
     gst,
     total,
     trialDay:    day,
-    trialEndsOn: isTrial
-      ? new Date(new Date(l.created_at).getTime() + 14 * 86_400_000)
-          .toLocaleDateString("en-IN", { day: "2-digit", month: "short" })
-      : null,
+    trialLength: win?.length ?? null,
+    trialEndsOn: win ? win.endsOn.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : null,
+    paid:        l.stage === "won",
     razorpayId:  null,    // future: from payments table
     invoiceNo:   null,    // future: from invoices table
     status:      statusFromLead(l),
-    source:      l.source ?? "buy-workspace",
+    source:      orderChannel(l.source, l.utm_source),
     progress:    isTrial
       ? { trial: "done", onboarding: "active", checkin: "pending", convert: "pending" }
       : { payment: "pending", invoice: "pending", tenant: "pending", users: "pending", dns: "pending", welcome: "pending" },
-    amAssigned:  "Pardeep A",
+    /* Was the literal "Pardeep A" on every row. The lead's real owner, or says so. */
+    amAssigned:  l.owner?.full_name?.trim() || "Unassigned",
     nextAction:  nextActionFromLead(l),
   };
 }
@@ -564,8 +572,8 @@ export default function OnlineOrdersPage() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("leads")
-      .select("id, company, contact_name, contact_email, contact_phone, plan, seats, value, stage, source, notes, created_at")
-      .ilike("source", "buy-workspace%")
+      .select("id, company, contact_name, contact_email, contact_phone, plan, seats, value, stage, source, notes, created_at, domain, utm_source, trial_started_at, trial_expires_at, owner:users!leads_owner_id_fkey(full_name)")
+      .or(WEBSITE_ORDER_FILTER)
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -578,7 +586,7 @@ export default function OnlineOrdersPage() {
     }
     // Real orders only — no demo/seed data. An empty buy-flow correctly shows
     // an empty state, never fabricated revenue.
-    setOrders((data ?? []).map((r) => leadToOrder(r as LeadRow)));
+    setOrders((data ?? []).map((r) => leadToOrder(r as unknown as LeadRow)));
     setLoading(false);
   }, []);
 
@@ -592,7 +600,7 @@ export default function OnlineOrdersPage() {
 
   // Filtered list
   const filtered = orders.filter((o) => {
-    if (tab === "paid"   && o.type !== "paid")    return false;
+    if (tab === "paid"   && !o.paid)              return false;
     if (tab === "trial"  && o.type !== "trial")   return false;
     if (tab === "issues" && o.status !== "issue") return false;
     if (search) {
@@ -615,16 +623,20 @@ export default function OnlineOrdersPage() {
   const provis     = orders.filter((o) => o.status === "provisioning").length;
   const issues     = orders.filter((o) => o.status === "issue").length;
   const trialEx    = orders.filter(
-    (o) => o.type === "trial" && (o.trialDay ?? 0) >= 11 && o.status === "trial-active",
+    (o) => o.type === "trial" && o.status === "trial-converting",
   ).length;
-  const revenueMtd = orders.filter((o) => o.type === "paid").reduce(
+  /* Only money actually received — a cart order awaiting payment is not revenue. */
+  const monthKey   = new Date().toISOString().slice(0, 7);
+  const awaiting   = orders.filter((o) => o.status === "awaiting-payment");
+  const converting = orders.filter((o) => o.status === "trial-converting");
+  const revenueMtd = orders.filter((o) => o.paid && (o.createdIso ?? "").slice(0, 7) === monthKey).reduce(
     (s, o) => s + (o.total ?? 0),
     0,
   );
 
   const tabItems: TabBarItem[] = [
     { id: "all",    label: `All · ${orders.length}` },
-    { id: "paid",   label: `Paid · ${orders.filter((o) => o.type === "paid").length}` },
+    { id: "paid",   label: `Paid · ${orders.filter((o) => o.paid).length}` },
     { id: "trial",  label: `Trials · ${orders.filter((o) => o.type === "trial").length}` },
     { id: "issues", label: `Issues · ${issues}` },
   ];
@@ -650,49 +662,47 @@ export default function OnlineOrdersPage() {
         </div>
       </div>
 
-      {/* Honest disclosure: this screen is a PREVIEW of the online-store order
-          pipeline. The rows below are sample data — real orders appear here once
-          the buy page (buy-workspace-v2) is live. Better to say so than to let a
-          non-technical owner mistake demo rows for real money. */}
-      <div className="mb-6 rounded-md border border-amber/30 bg-amber-soft px-4 py-3 text-sm text-amber-ink flex items-start gap-2">
-        <Icon name="info" size={16} className="mt-0.5 shrink-0" />
-        <span>
-          <strong>Preview — sample data.</strong> This is a preview of your online-store
-          order pipeline. Real orders will appear here once your online buy page is live.
-          The rows below are demo data only.
-        </span>
-      </div>
-
       {/* ── Gemini AI ── */}
       <div className="mb-6">
+        {/* R-077: built from the orders on this page. It used to name "Hotel Asia",
+            "Cosmo Tech" and "Beta Industries" — companies that were never orders. */}
         <GeminiCard
-          title="Orders AI · Today's focus"
+          title="Orders · Today's focus"
           compact
           actions={
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => toast.info("Escalating Hotel Asia issue to Google support")}
-              >
-                <Icon name="alert" size={12} />
-                Fix Hotel Asia issue
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => toast.info("Calling Beta Industries — new trial")}
-              >
-                <Icon name="phone" size={12} />
-                Welcome call to Beta
-              </Button>
-            </div>
+            (awaiting[0] || converting[0] || orders.find((o) => o.status === "issue")) ? (
+              <div className="flex flex-wrap gap-2">
+                {orders.find((o) => o.status === "issue") && (
+                  <Button variant="primary" size="sm" onClick={() => setOpenId(orders.find((o) => o.status === "issue")!.id)}>
+                    <Icon name="alert" size={12} />
+                    Open {orders.find((o) => o.status === "issue")!.company}
+                  </Button>
+                )}
+                {converting[0] && (
+                  <Button variant="default" size="sm" onClick={() => setOpenId(converting[0].id)}>
+                    <Icon name="phone" size={12} />
+                    Convert {converting[0].company}
+                  </Button>
+                )}
+                {awaiting[0] && (
+                  <Button variant="default" size="sm" onClick={() => setOpenId(awaiting[0].id)}>
+                    <Icon name="clock" size={12} />
+                    Follow up {awaiting[0].company}
+                  </Button>
+                )}
+              </div>
+            ) : undefined
           }
         >
-          <strong className="text-ink">
-            {issues} blocker · {trialEx} conversion opportunity.
-          </strong>{" "}
-          Hotel Asia provisioning is stuck (domain conflict) — fix to unblock ₹4.9L revenue. Cosmo Tech is on Day 11 of trial with high engagement — perfect time to send convert quote. Beta Industries just signed up — first call within 2 hours is your conversion edge.
+          {issues + converting.length + awaiting.length === 0 ? (
+            <span>Nothing needs you right now.</span>
+          ) : (
+            <span>
+              <strong className="text-ink">
+                {issues} issue{issues === 1 ? "" : "s"} · {converting.length} trial{converting.length === 1 ? "" : "s"} ending in 3 days · {awaiting.length} not paid yet.
+              </strong>
+            </span>
+          )}
         </GeminiCard>
       </div>
 
@@ -701,22 +711,22 @@ export default function OnlineOrdersPage() {
         <KPI
           label="New today"
           value={today}
-          trend="+3 vs yesterday"
-          trendKind="up"
+          trend="Since midnight"
+          trendKind="neutral"
           icon="inbox"
         />
         <KPI
           label="Provisioning"
           value={provis}
-          trend="ETA 3–8 min"
+          trend="Paid, being set up"
           trendKind="neutral"
           icon="refresh"
         />
         <KPI
           label="Issues"
           value={issues}
-          trend={issues > 0 ? "Needs attention" : "All clear"}
-          trendKind={issues > 0 ? "down" : "up"}
+          trend={issues > 0 ? "Needs attention" : "None"}
+          trendKind={issues > 0 ? "down" : "neutral"}
           icon="alert"
         />
         <KPI
@@ -729,8 +739,8 @@ export default function OnlineOrdersPage() {
         <KPI
           label="Revenue MTD"
           value={rupee(revenueMtd, { compact: true })}
-          trend="From online channel"
-          trendKind="up"
+          trend="Paid this month"
+          trendKind="neutral"
           icon="rupee"
         />
       </div>
@@ -786,7 +796,7 @@ export default function OnlineOrdersPage() {
                 ? `Try a different search term or clear filters.`
                 : tab === "issues"
                   ? "Every order is provisioning smoothly."
-                  : "Orders from buy-workspace-v2 will appear here in real time."
+                  : "Orders from your website — cart, trials, DMS — appear here as they come in."
             }
             action={
               search ? (
@@ -888,7 +898,7 @@ export default function OnlineOrdersPage() {
                       {/* Type */}
                       <td className="px-4 py-3">
                         {o.type === "paid" ? (
-                          <Badge kind="success" dot>Paid</Badge>
+                          o.paid ? <Badge kind="success" dot>Paid</Badge> : <Badge kind="warning" dot>Awaiting payment</Badge>
                         ) : (
                           <Badge kind="info" dot>
                             Trial · D{o.trialDay}
@@ -904,7 +914,7 @@ export default function OnlineOrdersPage() {
                             ? "Annual"
                             : o.billing === "monthly"
                               ? "Monthly"
-                              : "14-day trial"}
+                              : `${o.trialLength ?? 14}-day trial`}
                         </p>
                       </td>
 
