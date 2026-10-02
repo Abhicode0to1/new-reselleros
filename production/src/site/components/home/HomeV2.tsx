@@ -25,6 +25,7 @@ import Link from "@/site/components/ui/SiteLink";
 import { LICENCE_EDITIONS, EDITION_MATRICES, type LicenceEdition } from "@/site/lib/data/catalog";
 import type { MergedEdition } from "@/site/lib/live-catalog";
 import { TRUST } from "@/site/lib/data/copy";
+import { editionDelta } from "@/site/lib/edition-delta";
 import { HOSTING_FROM_MO } from "@/site/lib/data/hosting-landing-v2";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { HOME_FAQS } from "@/site/lib/data/home-faqs";
@@ -73,6 +74,9 @@ const DESC: Record<string, string> = {
   "Zoho Workplace": "The full office suite at the lowest price",
 };
 const ZOHO_FEATURES = ["Custom email on your domain", "Mail, Writer, Sheet, Show, Calendar", "30 GB per user", "IMAP, POP and mobile apps", "Migration done by us, free"];
+
+/** A monthly per-user rate as rupees per user per day, GST included (the hero cards' rule). */
+const perDayOf = (monthly: number) => Math.round((monthly * 1.18 * 12) / 365);
 
 /** ALL "Yes"/valued features for an edition (no cap — the card shows a few and
  *  a "See all N features" toggle reveals the rest). */
@@ -284,49 +288,54 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
               const rate = rateOf(e);
               const pop = e.name === vendor.popular;
               const feats = featuresFor(vendor, i);
+              const lowerName = i > 0 ? (LABEL[vendorEditions[i - 1].name] ?? vendorEditions[i - 1].name) : null;
+              const shown = i > 0 ? editionDelta(featuresFor(vendor, i - 1), feats) : feats;
               const total = annual ? `${inr(e.annual * 12 * seats)}/yr` : `${inr(e.monthly * seats)}/mo`;
               const buyHref = WA(`Hi Anutech — I'd like to buy ${vendor.name} ${LABEL[e.name] ?? e.name} for ${seats} user${seats > 1 ? "s" : ""} (${annual ? "annual" : "monthly"}). Please send the payment link.`);
               return (
-                <div key={e.name} style={{ display: "flex", flexDirection: "column", minHeight: 352, padding: 18, border: `1px solid ${pop ? C.green : C.border}`, borderRadius: 12, background: pop ? C.greenT : C.surf, boxShadow: pop ? SH_GREEN : SH_CARD }}>
-                  {/* head — sticks below the strip while scrolling a long card */}
-                  <div style={{ position: "sticky", top: 130, zIndex: 5, margin: "-18px -18px 10px", padding: "9px 18px 8px", background: pop ? C.greenT : C.surfT, backdropFilter: "blur(4px)", borderBottom: `1px solid ${C.hair}`, borderRadius: "12px 12px 0 0" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.02em", color: C.ink }}>{LABEL[e.name] ?? e.name}</span>
-                        {pop && <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase", color: C.green, background: "#fff", border: `1px solid ${C.green}`, padding: "2px 5px", borderRadius: 999 }}>Popular</span>}
-                      </span>
-                      <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                        <span style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                          <span style={monoNum({ fontSize: 19, fontWeight: 500, letterSpacing: "-0.03em", color: C.ink })}>{inr(rate)}</span>
-                          <span style={{ fontSize: 10.5, color: C.sec }}>/user/mo</span>
-                        </span>
-                        <span style={{ fontSize: 10, lineHeight: 1.3, color: C.sec, textAlign: "right", marginTop: 1 }}>{total} · {seats} user{seats > 1 ? "s" : ""} + GST</span>
-                      </span>
-                    </div>
+                <div key={e.name} style={{ position: "relative", display: "flex", flexDirection: "column", padding: 20, border: `1px solid ${pop ? C.green : C.border}`, borderRadius: 12, background: pop ? C.greenT : C.surf, boxShadow: pop ? SH_GREEN : SH_CARD }}>
+                  {/* Card order (2 Oct 2026): who it is for → the price, big → what N users cost →
+                      one primary action that says where it goes → what this edition ADDS over the
+                      one below (editionDelta), so the eye finds what the extra rupees buy. */}
+                  {pop && (
+                    <span style={{ position: "absolute", top: -10, left: 20, fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#fff", background: C.green, padding: "3px 8px", borderRadius: 999 }}>Most teams pick this</span>
+                  )}
+                  <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", color: C.ink }}>{LABEL[e.name] ?? e.name}</div>
+                  <p style={{ fontSize: 12.5, lineHeight: 1.45, color: C.sec, margin: "4px 0 14px", minHeight: 36 }}>{DESC[e.name] ?? e.note}</p>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                    <span style={monoNum({ fontSize: 30, fontWeight: 600, letterSpacing: "-0.04em", color: C.ink })}>{inr(rate)}</span>
+                    <span style={{ fontSize: 12, color: C.sec }}>/user/mo + GST</span>
                   </div>
-                  {/* top buy */}
-                  <a href={buyHref} target="_blank" rel="noopener" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13.5, fontWeight: 600, padding: "11px 8px", borderRadius: 8, background: BTN_PRIMARY, color: "#fff", border: "none", marginBottom: 12, boxShadow: SH_BTN, textDecoration: "none" }}>
+                  <div style={{ fontSize: 12, color: C.sec, marginTop: 4 }}>≈ {inr(perDayOf(rate))} per user a day, GST included</div>
+                  <div style={{ fontSize: 12.5, color: C.ink2, marginTop: 8, padding: "7px 10px", background: pop ? "#fff" : C.sectT, borderRadius: 8 }}>
+                    <b style={{ fontWeight: 600 }}>{total}</b> for {seats} user{seats > 1 ? "s" : ""} + GST
+                  </div>
+                  <a href={buyHref} target="_blank" rel="noopener" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 600, padding: "11px 8px", borderRadius: 8, background: BTN_PRIMARY, color: "#fff", border: "none", marginTop: 14, boxShadow: SH_BTN, textDecoration: "none" }}>
                     <CartIcon /> Buy now
                   </a>
-                  <p style={{ fontSize: 12.5, lineHeight: 1.45, color: C.sec, margin: "0 0 12px", minHeight: 36 }}>{DESC[e.name] ?? e.note}</p>
+                  <p style={{ fontSize: 11, color: C.sec, textAlign: "center", margin: "6px 0 0" }}>Opens WhatsApp · we send the payment link · GST invoice in ₹</p>
+                  <div style={{ height: 1, background: C.hair, margin: "16px 0 12px" }} />
+                  {lowerName && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.ink, marginBottom: 8 }}>Everything in {lowerName}, plus:</div>
+                  )}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-                    {(expanded[e.name] ? feats : feats.slice(0, 4)).map((f) => (
+                    {(expanded[e.name] ? shown : shown.slice(0, 5)).map((f) => (
                       <span key={f} style={{ display: "flex", gap: 9, fontSize: 12.5, lineHeight: 1.4, color: C.ink2 }}>
                         <svg aria-hidden viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none", marginTop: 1 }}><path d="M20 6 9 17l-5-5" /></svg>
                         <span>{f}</span>
                       </span>
                     ))}
-                    {feats.length > 4 && (
+                    {shown.length > 5 && (
                       <button onClick={() => setExpanded((x) => ({ ...x, [e.name]: !x[e.name] }))} aria-expanded={!!expanded[e.name]}
                         style={{ alignSelf: "flex-start", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: C.blue, background: "none", border: "none", padding: "2px 0", cursor: "pointer" }}>
-                        {expanded[e.name] ? "Show fewer" : `See all ${feats.length} features`}
+                        {expanded[e.name] ? "Show fewer" : `See all ${shown.length}`}
                       </button>
                     )}
                   </div>
-                  {/* trial / quote */}
-                  <div style={{ display: "flex", gap: 7, marginTop: "auto", paddingTop: 14 }}>
-                    <Link href={`/trial?ed=${encodeURIComponent(e.name)}&seats=${seats}`} style={{ flex: 1, textAlign: "center", fontSize: 12.5, fontWeight: 600, padding: "9px 6px", borderRadius: 8, background: C.surf, color: C.ink, border: `1px solid ${C.strong}`, textDecoration: "none" }}>Trial</Link>
-                    <Link href="/quote" style={{ flex: 1, textAlign: "center", fontSize: 12.5, fontWeight: 600, padding: "9px 6px", borderRadius: 8, background: C.surf, color: C.ink, border: `1px solid ${C.border}` }}>Quote</Link>
+                  {/* secondary actions as links — one primary button per card */}
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: "auto", paddingTop: 16, fontSize: 12.5, fontWeight: 600 }}>
+                    <Link href={`/trial?ed=${encodeURIComponent(e.name)}&seats=${seats}`} style={{ color: C.blue, textDecoration: "none" }}>Try free →</Link>
+                    <Link href="/quote" style={{ color: C.blue, textDecoration: "none" }}>Get a written quote →</Link>
                   </div>
                 </div>
               );
