@@ -152,3 +152,24 @@ export function contactKeywords(c: ContactLike): string[] {
     ...phoneDigits(c.phone),
   ]);
 }
+
+/**
+ * Does every word typed appear somewhere in these fields? (2 Oct 2026)
+ *
+ * The palette used cmdk's fuzzy scoring, which matches letters in order with gaps —
+ * "Muskaan" found "Sachin KUmar TAkSh … solutions" (m-u-s-k-a-a-n spread across the
+ * line) and listed it beside the real match. People search for a name or a number;
+ * each word they type must be in the row as typed. Digits also match a number written
+ * with spaces or dashes ("98765 43210" ↔ "+919876543210").
+ */
+export function matchesAllTerms(fields: (string | number | null | undefined)[], query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const hay = fields.filter((f) => f !== null && f !== undefined && f !== "").join(" \u0001 ").toLowerCase();
+  const hayDigits = hay.replace(/\D/g, "");
+  return words.every((w) => {
+    if (hay.includes(w)) return true;
+    const d = w.replace(/\D/g, "");
+    return d.length >= 4 && d.length === w.replace(/[\s+\-()]/g, "").length && hayDigits.includes(d);
+  });
+}
