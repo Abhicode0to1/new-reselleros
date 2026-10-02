@@ -5,6 +5,33 @@ description: How to actually reach this project's database, deploy, and prove a 
 
 # ResellerOS — working environment
 
+> ## ⛔ STALE SINCE 6 SEP 2026 — §1, §2 and §6 DO NOT POINT AT PRODUCTION
+>
+> **Production is Cloud SQL `resellersos-db`** in the GCP project `resellsubsos-prod`, behind a
+> self-hosted Supabase data plane at `https://api.anutech.in`. See
+> [docs/adr/0001-database-on-cloud-sql.md](../../../docs/adr/0001-database-on-cloud-sql.md)
+> (cut-over commit `8a25d726`) and [docs/DEPLOY-S2-S5.md](../../../docs/DEPLOY-S2-S5.md).
+>
+> **The hosted Supabase project `ontpnqjoysjgrlsukecm` that §6 calls "the real one, linked" is
+> now STAGING.** So `npx supabase db query --linked` still works, still returns rows, and is
+> answering about the wrong database. That is worse than an error: on 1 Oct 2026 this skill
+> sent a session looking for a production list (R-039) through that door, and had the login
+> succeeded it would have produced a confident list of customers from staging and called it
+> production — AGENTS.md §2 exactly, a failure wearing the costume of a plausible value.
+>
+> Reach production through gcloud instead:
+>
+> ```bash
+> gcloud sql connect resellersos-db --user=postgres --database=resellersos --project=resellsubsos-prod
+> ```
+>
+> §3 (prove behaviour in a rolled-back transaction), §4 and §5 are about method and still hold.
+> The rest of §1/§2/§6 describes staging — useful, but say which one you are on before quoting
+> a row count from it.
+>
+> Left in place rather than deleted, for the reason §2 already gives about itself: this file's
+> value depends on a reader seeing that its claims decay.
+
 Everything here was **measured on this machine**, and most of it exists because a session
 already got it wrong once. Full write-up: [docs/WORKING-ENVIRONMENT.md](../../../docs/WORKING-ENVIRONMENT.md).
 
