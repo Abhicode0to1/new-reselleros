@@ -206,3 +206,39 @@ describe("subscription money tiles open status = active", () => {
     expect(page).toMatch(/const activeSubs = subsByWorkspace\.filter\(\(s\) => subInFocus\(s, "active"\)\)/);
   });
 });
+
+describe("renewals and payments tiles", () => {
+  it("every renewals tile opens a bucket the page has, High risk included", () => {
+    const page = read("app/(app)/renewals/page.tsx");
+    for (const b of ["urgent", "upcoming", "future", "risk"]) {
+      expect(page).toContain(`onClick={() => setBucketTab("${b}")}`);
+    }
+    expect(page).toMatch(/bucketTab === "risk"/);
+  });
+  it("PAYMENT_FOCUS / QUOTE_FOCUS match their pages", async () => {
+    const { PAYMENT_FOCI, paymentInFocus, projectReceivedInMonth } = await import("@/lib/payments/focus");
+    const { QUOTE_FOCI, quoteInFocus } = await import("@/lib/quotes/focus");
+    const dd = await import("./drilldown");
+    expect([...dd.PAYMENT_FOCUS]).toEqual([...PAYMENT_FOCI]);
+    expect([...dd.QUOTE_FOCUS]).toEqual([...QUOTE_FOCI]);
+    const now = new Date("2026-10-15T06:30:00Z");
+    expect(paymentInFocus({ status: "received", received_at: "2026-09-30T19:00:00Z" }, "received-month", now)).toBe(true); // 1 Oct IST
+    expect(paymentInFocus({ status: "refunded", received_at: "2026-10-05T05:00:00Z" }, "received-month", now)).toBe(false);
+    expect(projectReceivedInMonth([{ amount: 500, received_at: "2026-10-02" }, { amount: 9, received_at: "2026-09-30" }], now)).toBe(500);
+    expect(quoteInFocus({ status: "accepted", payment_status: "partial" }, "partial")).toBe(true);
+    expect(quoteInFocus({ status: "accepted", payment_status: "received" }, "to-invoice")).toBe(true);
+  });
+  it("Collected MTD = payments-in-focus + project receipts, the same helper sum", async () => {
+    const { collectedInMonth } = await import("@/lib/company/summary");
+    const { paymentInFocus, projectReceivedInMonth } = await import("@/lib/payments/focus");
+    const now = new Date("2026-10-15T06:30:00Z");
+    const pays = [
+      { status: "received", amount: 100, received_at: "2026-10-03T05:00:00Z" },
+      { status: "received", amount: 50, received_at: "2026-09-20T05:00:00Z" },
+      { status: "refunded", amount: 70, received_at: "2026-10-04T05:00:00Z" },
+    ];
+    const proj = [{ amount: 30, received_at: "2026-10-05" }];
+    const listed = pays.filter((p) => paymentInFocus(p, "received-month", now)).reduce((s, p) => s + p.amount, 0);
+    expect(listed + projectReceivedInMonth(proj, now)).toBe(collectedInMonth(pays, proj, now));
+  });
+});

@@ -6,6 +6,8 @@
 
 import * as React from "react";
 import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { PAYMENT_FOCI, paymentInFocus, projectReceivedInMonth, type PaymentFocus } from "@/lib/payments/focus";
+import { FocusBanner } from "@/components/shared/focus-banner";
 import { PAYMENT_TABS } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -94,6 +96,8 @@ function PaymentsPageInner() {
   const askText = useAskText();
   const router = useRouter();
   const [tab, setTab]       = useUrlChoice<"all" | "received" | "refunded">("tab", PAYMENT_TABS, "all"); // R-118
+  /* R-118: "Collected MTD"'s own set (lib/payments/focus.ts) — "" = none. */
+  const [focus, setFocus]   = useUrlChoice<PaymentFocus>("focus", PAYMENT_FOCI, "");
   const [view, setView]     = React.useState<"all" | "subscription" | "project">("all");
   const [search, setSearch] = React.useState("");
   const [helpOpen, setHelpOpen] = React.useState(false);
@@ -155,6 +159,7 @@ function PaymentsPageInner() {
   // Filter
   const filtered = (payments ?? []).filter((p) => {
     if (tab !== "all" && p.status !== tab) return false;
+    if (focus && !paymentInFocus(p, focus)) return false;   // the tile's own predicate
     if (customerFilter) {
       /* Two ways a payment belongs to a customer, and both count. `payments.customer_id`
          is what record_payment stamps, but it is nullable — a receipt taken before the
@@ -215,6 +220,9 @@ function PaymentsPageInner() {
      Company section (R-062: it used to start at "the 1st at this time of day", browser clock).
      TDS the customer withheld settles the invoice but never reaches the bank — said separately. */
   const mtdCollected = collectedInMonth(payments ?? [], projPays);
+  /* The part of Collected MTD that is project receipts — those rows live on /projects, so
+     the tile and the banner say how much of the total this list cannot show. */
+  const mtdProject = projectReceivedInMonth(projPays);
   const mtdMonth = istMonth();
   const mtdTds = [...allReceived, ...projPays]
     .filter((p) => p.method === "tds" && !!p.received_at && toIstDate(p.received_at).slice(0, 7) === mtdMonth)
@@ -314,19 +322,21 @@ function PaymentsPageInner() {
           {kpiOpen && (
             <div className="p-3 border-t border-hairline bg-paper">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                <button type="button" onClick={() => { setTab("all"); setFocus("received-month"); }} aria-pressed={focus === "received-month"} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Collected MTD</p>
                   <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(mtdCollected, { compact: true })}</p>
                   {mtdTds > 0 && <p className="text-3xs text-ink-3 mt-0.5">incl. {rupee(mtdTds)} TDS</p>}
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                  {mtdProject > 0 && <p className="text-3xs text-ink-3 mt-0.5">incl. {rupee(mtdProject)} project receipts</p>}
+                </button>
+                {/* These two count QUOTES — they open the quotes they counted (lib/quotes/focus.ts). */}
+                <button type="button" onClick={() => router.push("/quotes?focus=partial" as never)} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Partial Quotes</p>
                   <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{partialQuotes.length}</p>
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                </button>
+                <button type="button" onClick={() => router.push("/quotes?focus=to-invoice" as never)} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Awaiting GST Invoice</p>
                   <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(awaitingInvoiceTotal, { compact: true })} <span className="text-xs text-ink-3 font-normal">({awaitingInvoiceQuotes.length})</span></p>
-                </div>
+                </button>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Top Payment Method</p>
                   <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{topMethod ? METHOD_META[topMethod[0]]?.label ?? topMethod[0] : "—"}</p>
@@ -528,7 +538,16 @@ function PaymentsPageInner() {
       {/* Sticky TabBar + Search */}
       {!isLoading && payments && (
         <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
-          <TabBar className="overflow-y-hidden" value={tab} onChange={(v) => setTab(v as typeof tab)} items={tabsWithCounts} />
+          {focus && (
+            <FocusBanner
+              label={mtdProject > 0
+                ? `Received this month — sales receipts (+ ${rupee(mtdProject)} project receipts on Projects)`
+                : "Received this month"}
+              count={filtered.length}
+              onClear={() => setFocus("")}
+            />
+          )}
+          <TabBar className="overflow-y-hidden" value={tab} onChange={(v) => { setFocus(""); setTab(v as typeof tab); }} items={tabsWithCounts} />
           <div className="flex justify-between items-center gap-3 flex-wrap">
             <div className="text-xs text-ink-3">
               Showing {filtered.length} of {payments.length} payments · {rupee(totalCollected)} collected all-time

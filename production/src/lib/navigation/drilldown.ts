@@ -22,7 +22,7 @@ export const QUOTE_TABS = ["all", "draft", "sent", "viewed", "accepted", "awaiti
 export const INVOICE_TABS = ["all", "paid", "partial", "pending", "overdue", "draft", "void"] as const;
 export const SUBSCRIPTION_TABS = ["all", "active", "expiring", "suspended", "ended", "trials"] as const;
 export const TASK_TABS = ["today", "overdue", "upcoming", "done", "all"] as const;
-export const RENEWAL_BUCKETS = ["urgent", "upcoming", "future"] as const;
+export const RENEWAL_BUCKETS = ["urgent", "upcoming", "future", "risk"] as const;
 export const CUSTOMER_VIEWS = ["all", "unpaid", "subscribed", "projects", "nosub", "credit"] as const;
 export const PAYMENT_TABS = ["all", "received", "refunded"] as const;
 
@@ -32,7 +32,9 @@ export const INVOICE_FOCUS = ["", "unpaid", "paid-month"] as const;
 /** /subscriptions ?focus= (lib/subscriptions/focus.ts). */
 export const SUB_FOCUS = ["", "active"] as const;
 /** /quotes ?focus= (lib/quotes/focus.ts). */
-export const QUOTE_FOCUS = ["", "review", "accepted"] as const;
+export const QUOTE_FOCUS = ["", "review", "accepted", "partial", "to-invoice"] as const;
+/** /payments ?focus= (lib/payments/focus.ts). */
+export const PAYMENT_FOCUS = ["", "received-month"] as const;
 
 /** One drill-down: the page, the URL key it reads, and the value — checked by the tests. */
 export interface Drill { path: string; key: string; value: string }
@@ -81,5 +83,5 @@ export const PAGE_CHOICES: Record<string, Record<string, readonly string[]>> = {
   "/tasks":         { tab: TASK_TABS },
   "/renewals":      { bucket: RENEWAL_BUCKETS },
   "/customers":     { view: CUSTOMER_VIEWS },
-  "/payments":      { tab: PAYMENT_TABS },
+  "/payments":      { tab: PAYMENT_TABS, focus: PAYMENT_FOCUS },
 };

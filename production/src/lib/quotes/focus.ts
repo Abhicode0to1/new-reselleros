@@ -6,17 +6,23 @@
  * opened the Sent tab only, and "Accepted" (every accepted quote) opened a tab that leaves
  * out the ones already invoiced.
  */
-export const QUOTE_FOCI = ["", "review", "accepted"] as const;
+export const QUOTE_FOCI = ["", "review", "accepted", "partial", "to-invoice"] as const;
 export type QuoteFocus = (typeof QUOTE_FOCI)[number];
 
 export const QUOTE_FOCUS_LABEL: Record<Exclude<QuoteFocus, "">, string> = {
   review: "Out for review — sent or viewed, waiting on the customer",
   accepted: "Accepted — including ones already invoiced",
+  partial: "Part-paid — some money in, balance still due",
+  "to-invoice": "Paid, GST invoice not raised yet",
 };
 
-export function quoteInFocus(q: { status: string }, focus: QuoteFocus): boolean {
+/* partial / to-invoice are the /payments tiles "Partial Quotes" and "Awaiting GST Invoice":
+   quotes by payment_status, which no quotes tab isolates (Awaiting payment is wider). */
+export function quoteInFocus(q: { status: string; payment_status?: string | null }, focus: QuoteFocus): boolean {
   if (focus === "") return true;
   if (focus === "review") return q.status === "sent" || q.status === "viewed";
+  if (focus === "partial") return q.payment_status === "partial";
+  if (focus === "to-invoice") return q.payment_status === "received";
   return q.status === "accepted";
 }
 
