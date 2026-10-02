@@ -150,9 +150,11 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
         {/* The dark tile is for the letter monogram only. A real logo sits on the app's own
             background — on the tile, a transparent logo showed a dark square behind it
             (Pardeep, 3 Oct 2026: "logo ka background app ke background se match karo"). */}
+        {/* A logo gets room to be read (Pardeep, 3 Oct: "bahut chota dikh raha hai") — 56px
+            open, 40px when the sidebar is collapsed; the monogram stays 36px. */}
         <div className={cn(
-          "w-9 h-9 rounded-md grid place-items-center font-serif text-lg flex-shrink-0 overflow-hidden",
-          me?.tenantLogoUrl ? "bg-transparent" : "bg-ink text-paper",
+          "rounded-md grid place-items-center font-serif text-lg flex-shrink-0 overflow-hidden",
+          me?.tenantLogoUrl ? (collapsed ? "w-10 h-10 bg-transparent" : "w-14 h-14 bg-transparent") : "w-9 h-9 bg-ink text-paper",
         )}>
           {me?.tenantLogoUrl ? (
             /* eslint-disable-next-line @next/next/no-img-element */
