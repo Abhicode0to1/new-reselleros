@@ -16,7 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
-import { useProjectReceivablesByCustomer, useProjectSales } from "@/lib/queries/projects";
+import { useProjectReceivablesByCustomer, useProjectSales, useReceivedThisFyByCustomer } from "@/lib/queries/projects";
 import { customerPortfolioStatus, countsAsNoBusiness, projectValue, type ProjectLike } from "@/lib/customers/portfolio-status";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useOutstandingReceivables } from "@/lib/queries/payments";
@@ -79,7 +79,7 @@ const CUST_COL_WIDTHS = ["3%", "27%", "13%", "12%", "13%", "16%", "12%", "4%"];
 
 /* "recent" is the DEFAULT — see lib/sort/newest-first.ts. The record you just created
    must be the first thing you see, on every table. */
-type SortKey = "recent" | "name" | "mrr" | "receivables" | "credits";
+type SortKey = "recent" | "name" | "mrr" | "receivables" | "credits" | "received";
 
 // Stable per-customer avatar colour so the list is scannable by shape/colour.
 const AVATAR_COLORS = ["amber", "indigo", "slate", "emerald", "ink", "muted"] as const;
@@ -118,6 +118,8 @@ export default function CustomersPage() {
   const { data: outstanding } = useOutstandingReceivables();
   const { data: creditsByCustomer = {} } = useOpenCreditsByCustomer();
   const { data: projRecv = {} } = useProjectReceivablesByCustomer();
+  /* R-005: money actually received this FY — payments + project payments, TDS included. */
+  const { data: receivedBy = {} } = useReceivedThisFyByCustomer();
   /* R-005. Already fetched for the Project Sales page, so this is a cache hit in
      practice rather than a new round trip. */
   const { data: allProjects } = useProjectSales();
@@ -276,8 +278,9 @@ export default function CustomersPage() {
     if (key === "mrr") return subsByCustomer.get(c.id)?.mrr ?? 0;
     if (key === "receivables") return outstandingByCustomer.get(c.id)?.amount ?? 0;
     if (key === "credits") return creditsByCustomer[c.id] ?? 0;
+    if (key === "received") return receivedBy[c.id]?.total ?? 0;
     return (c.display_name || c.name).toLowerCase();
-  }, [subsByCustomer, outstandingByCustomer, creditsByCustomer]);
+  }, [subsByCustomer, outstandingByCustomer, creditsByCustomer, receivedBy]);
 
   const sorted = React.useMemo(() => {
     /* The default. Kept out of `sortVal` because that returns a number-or-string for a
@@ -440,6 +443,7 @@ export default function CustomersPage() {
   const totalMRR = customersByWorkspace.reduce((sum, c) => sum + (subsByCustomer.get(c.id)?.mrr ?? 0), 0);
   const totalARR = totalMRR * 12;
   const totalReceivables = customersByWorkspace.reduce((sum, c) => sum + (outstandingByCustomer.get(c.id)?.amount ?? 0), 0);
+  const totalReceived = customersByWorkspace.reduce((sum, c) => sum + (receivedBy[c.id]?.total ?? 0), 0);
 
   /* Contract value of WON project work across the portfolio (R-005). */
   const totalProjectValue = React.useMemo(
@@ -450,8 +454,11 @@ export default function CustomersPage() {
   const stats: React.ComponentProps<typeof StatStrip>["items"] = [];
   if (!isLoading && customers) {
     stats.push({ label: "Customers", value: total });
-    if (totalMRR > 0) stats.push({ label: "Monthly revenue", value: rupee(totalMRR, { compact: true }) });
-    if (totalARR > 0) stats.push({ label: "Yearly revenue", value: rupee(totalARR, { compact: true }) });
+    /* R-005: these are subscription MRR / ARR only. Named "Monthly / Yearly revenue" they
+       read as total income — a customer who paid ₹11.8L for a project showed ₹0 in all of them. */
+    stats.push({ label: "Recurring monthly (subscriptions)", value: rupee(totalMRR, { compact: true }) });
+    stats.push({ label: "Recurring yearly (subscriptions)", value: rupee(totalARR, { compact: true }) });
+    stats.push({ label: "Received (this FY)", value: rupee(totalReceived, { compact: true }), tone: "emerald" });
     /* R-005. Kept OUT of Monthly/Yearly revenue on purpose — those are recurring
        figures, and a one-off build is not recurring. Folding a ₹10.8L ERP into "Yearly
        revenue" would make the next year's forecast wrong by the whole amount. Won
@@ -548,27 +555,27 @@ export default function CustomersPage() {
 
           {kpiOpen && (
             <div className="p-3 border-t border-hairline bg-paper">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total Customers</p>
-                  <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{total}</p>
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Monthly Revenue</p>
-                  <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalMRR, { compact: true })}</p>
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Yearly Revenue</p>
-                  <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(totalARR, { compact: true })}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setView("unpaid")}
-                  className="bg-paper-2/40 border border-hairline hover:border-rose/60 transition-colors rounded-lg p-3 text-left cursor-pointer"
-                >
-                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">To Collect (Unpaid)</p>
-                  <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{rupee(totalReceivables, { compact: true })}</p>
-                </button>
+              {/* Built from `stats` (R-005). A redesign hardcoded four tiles here and the
+                  "Project value" tile added to `stats` silently stopped showing. */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                {stats.map((t) => {
+                  const tone = t.tone === "rose" ? "text-rose-600" : t.tone === "emerald" ? "text-emerald" : "text-ink";
+                  const body = (
+                    <>
+                      <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">{t.label}</p>
+                      <p className={cn("font-serif text-lg font-bold tabular-nums mt-0.5", tone)}>{t.value}</p>
+                    </>
+                  );
+                  return t.onClick ? (
+                    <button key={t.label} type="button" onClick={t.onClick}
+                      className={cn("bg-paper-2/40 border rounded-lg p-3 text-left cursor-pointer transition-colors",
+                        t.active ? "border-amber" : "border-hairline hover:border-amber/60")}>
+                      {body}
+                    </button>
+                  ) : (
+                    <div key={t.label} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">{body}</div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -773,6 +780,9 @@ export default function CustomersPage() {
                     <span className="text-ink-3">
                       To collect <b className={receivable > 0 ? "text-rose" : "text-ink-2"}>{rupee(receivable)}</b>
                       {receivable > 0 && days > 0 && <span className={days > 45 ? "text-rose" : "text-ink-3"}> · {days}d overdue</span>}
+                      {(receivedBy[c.id]?.total ?? 0) > 0 && (
+                        <span> · Received <b className="text-emerald">{rupee(receivedBy[c.id]!.total, { compact: true })}</b></span>
+                      )}
                     </span>
                     <div className="flex items-center gap-2">
                       {c.contact_phone && (
@@ -845,6 +855,7 @@ export default function CustomersPage() {
                     <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
                     <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Place of supply</th>
                     <SortHead label="Monthly"         sortKey="mrr"         sort={sort} onSort={toggleSort} align="right" />
+                    <SortHead label="Received (FY)"   sortKey="received"    sort={sort} onSort={toggleSort} align="right" />
                     <SortHead label="To collect"      sortKey="receivables" sort={sort} onSort={toggleSort} align="right" />
                     <SortHead label="Unused credits"  sortKey="credits"     sort={sort} onSort={toggleSort} align="right" />
                     <th className="px-2 py-2.5"><span className="sr-only">Actions</span></th>
@@ -917,6 +928,17 @@ export default function CustomersPage() {
                           {mrr > 0
                             ? <span className="text-sm font-medium text-ink">{rupee(mrr, { compact: true })}<span className="text-2xs text-ink-3">/mo</span></span>
                             : <span className="text-sm text-ink-3">{rupee(0)}</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">
+                          {(receivedBy[c.id]?.total ?? 0) > 0 ? (
+                            <span
+                              className="text-sm font-medium text-emerald"
+                              title={receivedBy[c.id]!.tds > 0 ? `of which TDS ${rupee(receivedBy[c.id]!.tds)}` : undefined}
+                            >
+                              {rupee(receivedBy[c.id]!.total)}
+                              {receivedBy[c.id]!.tds > 0 && <span className="block text-2xs text-ink-3 font-normal">incl. TDS {rupee(receivedBy[c.id]!.tds)}</span>}
+                            </span>
+                          ) : <span className="text-sm text-ink-3">{rupee(0)}</span>}
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">
                           {receivable > 0 ? (
