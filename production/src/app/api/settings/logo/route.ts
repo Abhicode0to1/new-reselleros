@@ -59,12 +59,16 @@ export async function POST(req: NextRequest) {
   const { error: upErr } = await admin.storage
     .from("logos").upload(path, buf, { upsert: true, contentType: f.type });
   if (upErr) {
+    /* Logged with its detail — on 2 Oct a production upload failed with only "500" in the
+       request log and no way to tell storage RLS from a missing bucket. */
+    console.error("[settings/logo] storage upload failed", { tenant: me.tenant_id, message: upErr.message, err: upErr });
     return NextResponse.json({ error: upErr.message }, { status: 500 });
   }
   const logoUrl = admin.storage.from("logos").getPublicUrl(path).data.publicUrl;
 
   const { error: updErr } = await admin.from("tenants").update({ logo_url: logoUrl }).eq("id", me.tenant_id);
   if (updErr) {
+    console.error("[settings/logo] tenant update failed", { tenant: me.tenant_id, message: updErr.message, code: updErr.code });
     return NextResponse.json({ error: updErr.message }, { status: 500 });
   }
   return NextResponse.json({ ok: true, logoUrl });

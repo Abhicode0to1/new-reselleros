@@ -93,6 +93,10 @@ const nextConfig = {
        in"). Keep *.supabase.co too so a rollback to hosted Supabase still works. */
     const supaUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "");
     let supaConnect = "https://*.supabase.co wss://*.supabase.co";
+    /* img-src allows any https: image. The LOCAL stack serves storage (logos) over
+       http://127.0.0.1:54321, which that blocks — the logo uploaded fine and showed as a
+       broken image (2 Oct 2026). Added only when Supabase itself is on http. */
+    let supaImg = "";
     try {
       if (supaUrl) {
         const u = new URL(supaUrl);
@@ -108,6 +112,7 @@ const nextConfig = {
         const scheme = isHttp ? "http" : "https";
         const wsScheme = isHttp ? "ws" : "wss";
         supaConnect = `${scheme}://${u.host} ${wsScheme}://${u.host} ${supaConnect}`;
+        if (isHttp) supaImg = ` http://${u.host}`;
       }
     } catch {
       /* malformed env → fall back to the wildcard above */
@@ -135,7 +140,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://challenges.cloudflare.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' data: blob: https:",
+              `img-src 'self' data: blob: https:${supaImg}`,
               "font-src 'self' data: https://fonts.gstatic.com",
               `connect-src 'self' ${supaConnect} https://api.razorpay.com https://lumberjack.razorpay.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io`,
               "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://challenges.cloudflare.com",
