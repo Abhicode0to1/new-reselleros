@@ -510,10 +510,15 @@ function InviteDialog({ open, onOpenChange, onInvited }: {
 /**
  * R-111: is this person in the pool new unowned leads are dealt to, in turn?
  * The dealing itself is a database trigger (20261002120000_lead_auto_assign.sql), so every
- * intake path is covered. An inactive person is skipped there, so the tick is hidden here.
+ * intake path is covered. An inactive person is skipped there, so the tick is hidden here,
+ * and so is it for roles that do not sell — an accountant dealt a website enquiry is a lead
+ * nobody chases.
  */
+const LEAD_ROLES: readonly string[] = ["owner", "manager", "sales", "sales_senior"];
 function NewLeadsToggle({ member, onChange }: { member: Member; onChange: (on: boolean) => void }) {
-  if (member.is_active === false) return <span className="text-2xs text-ink-3">—</span>;
+  if (member.is_active === false || !LEAD_ROLES.includes(member.role)) {
+    return <span className="text-2xs text-ink-3">—</span>;
+  }
   return (
     <label className="inline-flex items-center gap-1.5 text-xs text-ink-2 cursor-pointer">
       <input
