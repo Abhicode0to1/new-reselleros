@@ -14,6 +14,7 @@ import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { isValidGstin } from "@/lib/utils";
+import { useTurnstile } from "@/components/shared/turnstile";
 import { GoogleAuthButton } from "@/components/features/auth/google-button";
 
 const schema = z.object({
@@ -42,6 +43,8 @@ export default function SignupPage() {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const configured = isSupabaseConfigured();
+  /* R-020: bot check on signup (renders nothing until the Turnstile site key exists). */
+  const ts = useTurnstile();
 
   const handleGstinBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const val = e.target.value.trim().toUpperCase();
@@ -70,7 +73,7 @@ export default function SignupPage() {
     // (auto-confirmed) + tenant + user record atomically.
     const res = await fetch("/api/auth/signup", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...ts.headers },
       body: JSON.stringify({
         email:       values.email,
         password:    values.password,
@@ -92,6 +95,7 @@ export default function SignupPage() {
     };
 
     if (!res.ok || json.error) {
+      ts.reset();
       toast.error(json.error ?? "Signup failed. Please try again.");
       return;
     }
@@ -260,6 +264,7 @@ export default function SignupPage() {
           </div>
         </FormField>
 
+        {ts.widget}
         <Button
           type="submit"
           variant="primary"

@@ -29,6 +29,7 @@
  * `pending_approval` is not a failure and must not be shown as one.
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { turnstileRefusal } from "@/lib/security/turnstile-guard";
 import { createAdminClient } from "@/lib/supabase/server";
 import { initials } from "@/lib/utils";
 import { normalizeEmail, type InviteMatch } from "@/lib/auth/membership";
@@ -50,6 +51,10 @@ export async function POST(request: NextRequest) {
       /** Invite-email ke link se aaya raaz — iske bina invite se join NAHI hota. */
       inviteToken?: string;
     };
+
+    /* R-020: a bot is refused here; a no-op until TURNSTILE_SECRET_KEY is set. */
+    const botRefusal = await turnstileRefusal(request.headers, body);
+    if (botRefusal) return botRefusal;
 
     const { password, fullName, companyName, gstin } = body;
     const email = normalizeEmail(body.email);

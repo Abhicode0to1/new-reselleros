@@ -29,6 +29,7 @@ import { GST_STATE_BY_CODE } from "@/lib/utils";
 import type { SitePromoRow, SitePromoBannerStyle } from "@/lib/supabase/database.types";
 import { thanksUrl } from "./thanks/thanks-url";
 import { BusyPanel } from "@/components/ui/busy-panel";
+import { useTurnstile } from "@/components/shared/turnstile";
 import { COMPANY, WHATSAPP_NUMBER, WHATSAPP_READY, whatsappDisplay } from "@/site/lib/config";
 
 // ──────────────────────────────────────────────────────────────────────
@@ -2489,6 +2490,7 @@ function EnquiryDialog({
     resolver: zodResolver(enquirySchema),
     defaultValues: { tierId: tier.id, billing, seats: initialSeats },
   });
+  const ts = useTurnstile(); // R-020
 
   async function onSubmit(values: EnquiryForm) {
     // Derive the human-readable state name from the GST code so the lead (and the
@@ -2497,11 +2499,12 @@ function EnquiryDialog({
     const state     = stateCode ? `${GST_STATE_BY_CODE[stateCode]} (${stateCode})` : undefined;
     const res = await fetch("/api/public/enquiry/workspace", {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...ts.headers },
       body:    JSON.stringify({ ...values, stateCode, state }),
     });
     const json = await res.json() as { success?: boolean; error?: string };
     if (!res.ok || json.error) {
+      ts.reset();
       toast.error(json.error ?? "Could not submit enquiry. Please try again.");
       return;
     }
@@ -2584,6 +2587,7 @@ function EnquiryDialog({
             </FormField>
 
             <BusyPanel active={isSubmitting} title="Sending your enquiry" steps={["Sending your details to our team", "Preparing a GST quote for you"]} />
+            {ts.widget}
             <Button
               type="submit"
               variant="primary"

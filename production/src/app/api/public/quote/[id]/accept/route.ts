@@ -16,6 +16,7 @@ import { configureQuote, describeChanges, type LineChoice } from "@/lib/quotes/c
 import { grossAmount } from "@/lib/quotes/amounts";
 import type { QuoteLineItem, Item } from "@/lib/supabase/database.types";
 import { publicDbError } from "@/app/api/public/_lib/db-error";
+import { clientIp } from "@/lib/security/rate-limit";
 
 /** Accepts only the three fields a choice may carry — anything else is dropped. */
 function parseChoices(raw: unknown): LineChoice[] {
@@ -34,21 +35,10 @@ function parseChoices(raw: unknown): LineChoice[] {
   return out;
 }
 
-/**
- * The address the request came from.
- *
- * Read from x-forwarded-for because Vercel terminates TLS upstream. The FIRST entry is
- * the client; the rest are proxies. It is trivially spoofable by the client and that is
- * fine — it is recorded as evidence of what arrived, not asserted as proof of origin,
- * which is why the migration's comment says the same thing.
- */
-function clientIp(request: NextRequest): string | null {
-  const fwd = request.headers.get("x-forwarded-for");
-  const first = fwd?.split(",")[0]?.trim();
-  if (first) return first;
-  return request.headers.get("x-real-ip");
-}
-
+/* R-020: the signer's IP comes from the shared clientIp (lib/security/rate-limit), which
+   reads x-forwarded-for from the RIGHT, skipping only our own trusted proxy hops. This
+   file used to take the FIRST entry — the one the client writes — so anyone could put any
+   address on the acceptance record. */
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const supabase = createAdminClient();
@@ -178,7 +168,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       signer_name: signerName,
       signer_email: typeof body.signerEmail === "string" ? body.signerEmail.trim().slice(0, 320) : null,
       signer_title: typeof body.signerTitle === "string" ? body.signerTitle.trim().slice(0, 200) : null,
-      signer_ip: clientIp(request),
+      signer_ip: clientIp(request.headers),
       user_agent: request.headers.get("user-agent")?.slice(0, 1000) ?? null,
       /* The figures AS SHOWN. A signature pointing at a mutable row proves nothing. */
       signed_snapshot: {

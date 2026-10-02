@@ -26,6 +26,7 @@ import { useSearchParams } from "next/navigation";
 import { LICENCE_EDITIONS, type LicenceEdition } from "@/site/lib/data/catalog";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { BusyPanel } from "@/components/ui/busy-panel";
+import { useTurnstile } from "@/components/shared/turnstile";
 import type { MergedEdition } from "@/site/lib/live-catalog";
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -74,6 +75,7 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
   const [cat, setCat] = useState("all");
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState("");
+  const ts = useTurnstile(); // R-020
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [domain, setDomain] = useState("");
@@ -199,12 +201,13 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
       const requirement = `TRIAL: ${labelOf(ed)}, ${seats} mailbox(es) on ${domain.trim().toLowerCase()}, ${migrate ? "migrate existing mail" : "clean start"}, mail today: ${current}${startWhen ? `, preferred start: ${startWhen}` : ""}. Continues at ${rateAfter} after trial. Card check: ${cardOk ? "verified (₹1 auth, refunded)" : "to be verified by a ₹1 link"}. (via anutech.in trial page)`;
       const res = await fetch("/api/enquiry", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...ts.headers },
         body: JSON.stringify({ fullName: company, companyName: company, email, phone, product: `Trial — ${labelOf(ed)}`, seats, requirement, edition: ed, term: "annual", trial: true }),
       });
       const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; ackSent?: boolean };
       if (!res.ok || !json.ok) {
         setSubmitErr(json.error || "We could not send your trial request. Nothing was saved — please press the button to try again.");
+        ts.reset();
         setSending(false);
         return;
       }
@@ -403,6 +406,7 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
               </div>
               {submitErr && <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, margin: "12px 0" }}>{submitErr} If it keeps failing, email <a href={`mailto:${COMPANY.supportEmail}`} style={{ color: "#991B1B", fontWeight: 600 }}>{COMPANY.supportEmail}</a>.</div>}
               <BusyPanel active={sending} title="Sending your trial request" steps={["Sending your details to our team", "Preparing your request reference"]} />
+              {ts.widget}
               <button onClick={submit} disabled={sending} className="btn btn-primary" style={{ width: "100%", marginTop: 16, opacity: sending ? 0.7 : 1 }}>
                 {sending ? "Requesting…" : cardLive ? (cardOk ? "Request the trial" : "Verify the card to continue") : "Request the trial — we send a ₹1 link"}
               </button>

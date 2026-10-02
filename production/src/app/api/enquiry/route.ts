@@ -83,10 +83,13 @@ export async function POST(req: NextRequest) {
       { status: 502 },
     );
 
+  /* R-020: the visitor's Turnstile token goes to the ONE upstream call below (a token
+     works once — never two calls with it). */
+  const tsToken = req.headers.get("x-turnstile-token");
   const post = async (url: string, payload: Record<string, unknown>) =>
     fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(tsToken ? { "x-turnstile-token": tsToken } : {}) },
       body: JSON.stringify(payload),
       /* A lead capture that hangs is worse than one that reports failure — the visitor is
          sitting on a submit button. */
@@ -110,6 +113,7 @@ export async function POST(req: NextRequest) {
         message,
         ...(trial ? { trial: true } : {}),
       });
+      if (res.status === 403) return NextResponse.json({ ok: false, error: "We could not verify this request. Please try again." }, { status: 403 });
       if (!res.ok) {
         console.error("[enquiry-proxy] workspace upstream refused:", res.status, await res.text().catch(() => ""));
         return fail();
@@ -127,6 +131,7 @@ export async function POST(req: NextRequest) {
     if (trial) payload.trial = true;
 
     const res = await post(ENQUIRY_API, payload);
+    if (res.status === 403) return NextResponse.json({ ok: false, error: "We could not verify this request. Please try again." }, { status: 403 });
     if (!res.ok) {
       console.error("[enquiry-proxy] general upstream refused:", res.status, await res.text().catch(() => ""));
       return fail();
