@@ -15,6 +15,7 @@ import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -41,6 +42,8 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
   // Which accordion parents (items with children) are expanded. Defaults to
   // open when the current route is the parent or one of its children.
   const [openMenus, setOpenMenus] = React.useState<Record<string, boolean>>({});
+  /* Click the logo → see it full size (Pardeep, 3 Oct 2026). */
+  const [logoOpen, setLogoOpen] = React.useState(false);
 
   /* R-088 — the menu is an app switcher (Sales · Billing · Accounts · Delivery · Team ·
      Settings) that shows only the chosen app's rows, with Today/Dashboard pinned above;
@@ -158,11 +161,23 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
         )}>
           {me?.tenantLogoUrl ? (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={me.tenantLogoUrl} alt={me.tenantName ?? "Logo"} className="h-full w-full object-contain" />
+            <button type="button" onClick={() => setLogoOpen(true)} title="View logo" aria-label="View company logo" className="h-full w-full rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber">
+              <img src={me.tenantLogoUrl} alt={me.tenantName ?? "Logo"} className="h-full w-full object-contain" />
+            </button>
           ) : (
             (me?.tenantName ?? "R").charAt(0).toUpperCase()
           )}
         </div>
+        {me?.tenantLogoUrl && (
+          <Dialog open={logoOpen} onOpenChange={setLogoOpen}>
+            <DialogContent className="max-w-md p-6 grid place-items-center">
+              <DialogTitle className="sr-only">{me.tenantName ?? "Company logo"}</DialogTitle>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={me.tenantLogoUrl} alt={me.tenantName ?? "Logo"} className="max-h-[70vh] w-full max-w-[360px] object-contain" />
+              {me.tenantName && <p className="mt-3 text-sm font-medium text-ink text-center">{me.tenantName}</p>}
+            </DialogContent>
+          </Dialog>
+        )}
         {!collapsed && (
           <div className="min-w-0">
             <div className="text-sm font-semibold leading-tight">ResellerOS</div>
