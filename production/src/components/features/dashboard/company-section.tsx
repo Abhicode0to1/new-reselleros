@@ -170,7 +170,7 @@ function CompanyCards() {
             hint={money ? plural(money.invoicedThisMonth.count, "invoice", "invoices") : undefined} {...state(invoices)} />
           <Metric href="/payments" label="Collected" value={money$(collected)}
             {...state(payments, projectPayments)} />
-          <Metric href="/invoices" label="Still owed" value={money$(money?.outstanding.value)}
+          <Metric href={drillHref("invoicesUnpaid")} label="Still owed" value={money$(money?.outstanding.value)}
             hint={money ? plural(money.outstanding.count, "unpaid invoice", "unpaid invoices") : undefined} {...state(invoices)} />
           <Metric href={drillHref("invoicesOverdue")} label="Overdue invoices" value={money?.overdueCount ?? null}
             {...state(invoices)} />

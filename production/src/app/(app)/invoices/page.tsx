@@ -39,7 +39,10 @@ import { supplierIdentity, supplierIdentityMessage } from "@/lib/invoices/suppli
    and its KPI were permanently empty while invoices ran months late. Derived from
    due_date instead — see the header of lib/invoices/overdue.ts for why not a cron. */
 import { invoiceOverdueDays, invoiceBucket } from "@/lib/invoices/overdue";
-import { invoiceChip, invoiceChipCounts, invoiceKpis } from "@/lib/invoices/kpis";
+import {
+  invoiceChip, invoiceChipCounts, invoiceKpis, invoiceInFocus, INVOICE_FOCI, INVOICE_FOCUS_LABEL, type InvoiceFocus,
+} from "@/lib/invoices/kpis";
+import { FocusBanner } from "@/components/shared/focus-banner";
 /* R-066. The GST breakdown comes from one place, shared with the server PDF builder —
    see the header of lib/invoices/display-amounts.ts. */
 import { invoiceDisplayAmounts } from "@/lib/invoices/display-amounts";
@@ -99,6 +102,8 @@ function InvoicesPageInner() {
   // (each row carries a Type badge). The tabs below are just an optional filter.
   const [view, setView] = React.useState<"all" | "subscription" | "project">("all");
   const [tab, setTab]           = useUrlChoice<string>("tab", INVOICE_TABS, "all"); // R-118
+  /* R-118: a money tile's exact set (lib/invoices/kpis.ts#invoiceInFocus) — "" = none. */
+  const [focus, setFocus]       = useUrlChoice<InvoiceFocus>("focus", INVOICE_FOCI, "");
   const [search, setSearch]     = React.useState<string>("");
   const [dateRange, setDateRange] = React.useState<"all" | "this_month" | "last_30" | "this_quarter">("all");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -243,6 +248,8 @@ function InvoicesPageInner() {
   // split by whether advances were applied) + free-text search on invoice #,
   // customer, or status.
   const rows = dateFilteredInvoices.filter((i) => {
+    // Tile focus (R-118) — the same predicate the tile summed
+    if (focus && !invoiceInFocus(i, focus)) return false;
     // Status tab
     if (tab !== "all" && invoiceChip(i) !== tab) return false;   // same function the counts use
     // Search
@@ -262,7 +269,11 @@ function InvoicesPageInner() {
      overdue invoices (net of advances and receipts) — void and draft owe nothing.
      "Paid this month" = invoices fully paid in this IST month, by paid date; the
      /payments page's "Collected MTD" is money RECEIVED (incl. part payments and TDS). */
-  const { outstanding, overdueTotal, paidThisMonth: collectedMTD, paidThisMonthCount } = invoiceKpis(invoices ?? []);
+  const { outstanding, overdueTotal, paidThisMonth: collectedMTD, paidThisMonthCount, outstandingCount } = invoiceKpis(invoices ?? []);
+  /* A tile opens its exact set over EVERY invoice, as the tile counted it: no tab, date or
+     type narrowing left over from before the click. */
+  const focusOn = (f: InvoiceFocus) => { setView("all"); setDateRange("all"); setTab("all"); setFocus(f); };
+  const tabOn = (t: string) => { setFocus(""); setTab(t); };
   const overdueCount = counts.overdue ?? 0;
   const marginMTD = Math.round(collectedMTD * 0.17); // 17% avg estimate
   const paidInvoices = (invoices ?? []).filter((i) => i.status === "paid" && i.paid_date);
@@ -553,15 +564,17 @@ function InvoicesPageInner() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-5">
           <button
             type="button"
-            onClick={() => setTab("pending")}
+            onClick={() => focusOn("unpaid")}
+            aria-pressed={focus === "unpaid"}
             className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
           >
             <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Outstanding</p>
             <p className="font-serif text-lg font-bold text-rose-ink tabular-nums mt-0.5">{rupee(outstanding, { compact: true })}</p>
+            <p className="text-3xs text-ink-3 mt-0.5">{outstandingCount} invoice{outstandingCount === 1 ? "" : "s"} owed</p>
           </button>
           <button
             type="button"
-            onClick={() => setTab("overdue")}
+            onClick={() => { setView("all"); setDateRange("all"); tabOn("overdue"); }}
             className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-rose/60 transition-all cursor-pointer"
           >
             <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Overdue ({overdueCount})</p>
@@ -569,7 +582,8 @@ function InvoicesPageInner() {
           </button>
           <button
             type="button"
-            onClick={() => setTab("paid")}
+            onClick={() => focusOn("paid-month")}
+            aria-pressed={focus === "paid-month"}
             className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-emerald/60 transition-all cursor-pointer"
           >
             <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Paid this month</p>
@@ -580,17 +594,25 @@ function InvoicesPageInner() {
             <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Margin MTD</p>
             <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(marginMTD, { compact: true })}</p>
           </div>
-          <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
+          {/* Averaged over every paid invoice — the Paid tab is that set. */}
+          <button
+            type="button"
+            onClick={() => { setView("all"); setDateRange("all"); tabOn("paid"); }}
+            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
+          >
             <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Avg collection</p>
             <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{avgCollection}d</p>
-          </div>
+          </button>
         </div>
       )}
 
       {/* Tabs, Date Range Filter & Search */}
       {!isLoading && invoices && invoices.length > 0 && (
         <div className="mb-4">
-          <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
+          {focus && (
+            <FocusBanner label={INVOICE_FOCUS_LABEL[focus]} count={rows.length} onClear={() => setFocus("")} />
+          )}
+          <TabBar className="overflow-y-hidden" value={tab} onChange={tabOn} items={tabs} />
         </div>
       )}
 

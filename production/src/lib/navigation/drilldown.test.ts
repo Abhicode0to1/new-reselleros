@@ -135,3 +135,37 @@ describe("won this month is not cut away by the open-only All folder", () => {
     expect(page).toMatch(/const cutFolder = folderForView\(folder, smartView\)/);
   });
 });
+
+describe("invoice money tiles: tile, list and dashboard agree", () => {
+  it("INVOICE_FOCUS matches the page's INVOICE_FOCI", async () => {
+    const { INVOICE_FOCI } = await import("@/lib/invoices/kpis");
+    const { INVOICE_FOCUS } = await import("./drilldown");
+    expect([...INVOICE_FOCUS]).toEqual([...INVOICE_FOCI]);
+  });
+
+  it("Company 'Still owed' takes receipts off, like the Outstanding tile", async () => {
+    const { invoiceMoney } = await import("@/lib/company/summary");
+    const { invoiceKpis } = await import("@/lib/invoices/kpis");
+    const now = new Date("2026-10-15T06:30:00Z");
+    const invs = [
+      { status: "pending", due_date: "2026-10-30", amount: 100_000, paid_amount: 50_000, invoice_date: "2026-10-01" },
+      { status: "pending", due_date: "2026-10-30", amount: 20_000, paid_amount: 20_000, invoice_date: "2026-10-01" }, // fully received, not yet flipped
+      { status: "paid", due_date: "2026-10-05", amount: 9_000, paid_amount: 9_000, invoice_date: "2026-10-01", paid_date: "2026-10-04" },
+    ];
+    const co = invoiceMoney(invs, now).outstanding;
+    const k = invoiceKpis(invs, now);
+    expect(co).toEqual({ count: 1, value: 50_000 });
+    expect(k.outstanding).toBe(50_000);
+    expect(k.outstandingCount).toBe(1);
+    expect(k.paidThisMonthCount).toBe(1);
+  });
+
+  it("the invoices page filters by the tile's predicate and shows the banner", () => {
+    const page = read("app/(app)/invoices/page.tsx");
+    expect(page).toMatch(/useUrlChoice<InvoiceFocus>\("focus", INVOICE_FOCI, ""\)/);
+    expect(page).toMatch(/if \(focus && !invoiceInFocus\(i, focus\)\) return false;/);
+    expect(page).toMatch(/onClick=\{\(\) => focusOn\("unpaid"\)\}/);
+    expect(page).toMatch(/onClick=\{\(\) => focusOn\("paid-month"\)\}/);
+    expect(page).toMatch(/<FocusBanner/);
+  });
+});

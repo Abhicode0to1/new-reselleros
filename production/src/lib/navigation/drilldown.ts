@@ -26,6 +26,10 @@ export const RENEWAL_BUCKETS = ["urgent", "upcoming", "future"] as const;
 export const CUSTOMER_VIEWS = ["all", "unpaid", "subscribed", "projects", "nosub", "credit"] as const;
 export const PAYMENT_TABS = ["all", "received", "refunded"] as const;
 
+/** /invoices ?focus= — the money tiles' exact sets (lib/invoices/kpis.ts). Kept in step
+ *  with INVOICE_FOCI by a test. */
+export const INVOICE_FOCUS = ["", "unpaid", "paid-month"] as const;
+
 /** One drill-down: the page, the URL key it reads, and the value — checked by the tests. */
 export interface Drill { path: string; key: string; value: string }
 
@@ -45,6 +49,7 @@ export const DRILL = {
   quotesAccepted:   d("/quotes", "tab", "accepted"),
   /* Invoices */
   invoicesOverdue:  d("/invoices", "tab", "overdue"),
+  invoicesUnpaid:   d("/invoices", "focus", "unpaid"),
   /* Subscriptions / renewals */
   subsExpiring:     d("/subscriptions", "tab", "expiring"),
   renewalsUrgent:   d("/renewals", "bucket", "urgent"),
@@ -66,7 +71,7 @@ export const PAGE_CHOICES: Record<string, Record<string, readonly string[]>> = {
   "/leads":         { view: LEAD_VIEWS },
   "/deals":         { view: LEAD_VIEWS },
   "/quotes":        { tab: QUOTE_TABS },
-  "/invoices":      { tab: INVOICE_TABS },
+  "/invoices":      { tab: INVOICE_TABS, focus: INVOICE_FOCUS },
   "/subscriptions": { tab: SUBSCRIPTION_TABS },
   "/tasks":         { tab: TASK_TABS },
   "/renewals":      { bucket: RENEWAL_BUCKETS },
