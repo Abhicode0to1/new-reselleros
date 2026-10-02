@@ -70,6 +70,10 @@ describe("the thanks page shows an order only with its secret token", () => {
     expect(await fetchOrder("Q-ADPL-2026-27-0048", TOKEN)).toMatchObject({ quoteId: "Q-ADPL-2026-27-0048" });
     expect(await fetchOrder("Q-ADPL-2026-27-0048", "wrong")).toBeNull();
   });
+  it("the 16-character shape (Q-<code>-27-0005, since 30 Sep 2026) is accepted", async () => {
+    db.row = { ...paidRow(), id: "Q-FBB9-27-0005" };
+    expect(await fetchOrder("Q-FBB9-27-0005", TOKEN)).toMatchObject({ quoteId: "Q-FBB9-27-0005" });
+  });
   it("a malformed number → nothing, never queried", async () => {
     expect(await fetchOrder("Q-1' or '1'='1", TOKEN)).toBeNull();
     expect(db.calls).toBe(0);

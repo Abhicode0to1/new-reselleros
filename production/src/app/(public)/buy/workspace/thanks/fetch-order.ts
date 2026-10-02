@@ -15,7 +15,9 @@ export async function fetchOrder(quoteId: string, token: string | null | undefin
   // Both shapes of quote number: today's Q-<tenant code>-2026-27-0042 (next_document_number with
   // the tenant's doc_code) and the older Q-2026-27-0042. Until 29 Sep 2026 only the older one was
   // accepted, so every customer since tenant codes arrived got the "no order found" page.
-  if (!/^Q-(?:[A-Z0-9]{2,8}-)?[0-9]{4}-[0-9]{2}-[0-9]{4}$/.test(quoteId)) return null;
+  // And since 30 Sep 2026 (20260930172000, CGST Rule 46(b) 16 characters) the short shape
+  // Q-<code>-27-0005: FY as two digits. Found 2 Oct when a test purchase landed on "not found".
+  if (!/^Q-(?:[A-Z0-9]{2,8}-)?(?:[0-9]{4}-)?[0-9]{2}-[0-9]{4,}$/.test(quoteId)) return null;
   // No token, no lookup: a guessed number never reaches the database.
   if (!token) return null;
   const admin = createAdminClient();
