@@ -23,6 +23,7 @@ import { useAllProjectPayments } from "@/lib/queries/projects";
 import { useCustomers } from "@/lib/queries/customers";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { summarizeDealStrip } from "@/lib/deals/pipeline-summary";
+import { drillHref } from "@/lib/navigation/drilldown";
 import {
   istMonthStartUtc, growthSummary, trialsStartedInMonth, invoiceMoney, collectedInMonth,
   newCustomersInMonth, subscriptionSummary, openTicketCount,
@@ -158,9 +159,9 @@ function CompanyCards() {
         </FunctionCard>
 
         <FunctionCard title="Sales">
-          <Metric href="/deals" label="Won this month" value={money$(dealStrip?.wonThisMonth.value)}
+          <Metric href={drillHref("dealsWonMonth")} label="Won this month" value={money$(dealStrip?.wonThisMonth.value)}
             hint={dealStrip ? plural(dealStrip.wonThisMonth.count, "deal", "deals") : undefined} {...state(deals)} />
-          <Metric href="/deals" label="Pipeline" value={money$(dealStrip?.pipeline.value)}
+          <Metric href={drillHref("dealsOpen")} label="Pipeline" value={money$(dealStrip?.pipeline.value)}
             hint={dealStrip ? plural(dealStrip.pipeline.count, "open deal", "open deals") : undefined} {...state(deals)} />
         </FunctionCard>
 
@@ -171,7 +172,7 @@ function CompanyCards() {
             {...state(payments, projectPayments)} />
           <Metric href="/invoices" label="Still owed" value={money$(money?.outstanding.value)}
             hint={money ? plural(money.outstanding.count, "unpaid invoice", "unpaid invoices") : undefined} {...state(invoices)} />
-          <Metric href="/invoices" label="Overdue invoices" value={money?.overdueCount ?? null}
+          <Metric href={drillHref("invoicesOverdue")} label="Overdue invoices" value={money?.overdueCount ?? null}
             {...state(invoices)} />
         </FunctionCard>
 
@@ -179,7 +180,7 @@ function CompanyCards() {
           <Metric href="/customers" label="New customers" value={newCustomers} {...state(customers)} />
           <Metric href="/subscriptions" label="Monthly revenue (MRR)" value={money$(subSummary?.mrr)}
             hint={subSummary ? plural(subSummary.activeCount, "active subscription", "active subscriptions") : undefined} {...state(subs)} />
-          <Metric href="/subscriptions" label="Renewals in 30 days" value={subSummary?.renewalsDue.count ?? null}
+          <Metric href={drillHref("subsExpiring")} label="Renewals in 30 days" value={subSummary?.renewalsDue.count ?? null}
             hint={subSummary ? `${money$(subSummary.renewalsDue.value)} a month` : undefined} {...state(subs)} />
           <Metric href="/support" label="Open tickets" value={openTickets} {...state(tickets)} />
           <Metric href="/provisioning" label="Waiting to activate" value={waiting} {...state(queue)} />

@@ -14,6 +14,7 @@ import { useDealRows } from "@/lib/queries/deals";
 import { summarizeDealStrip } from "@/lib/deals/pipeline-summary";
 import { canSeeDeals } from "@/lib/deals/access";
 import { rupee } from "@/lib/utils";
+import { drillHref } from "@/lib/navigation/drilldown";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -26,13 +27,14 @@ export function DealsStrip({ role }: { role: string | null | undefined }) {
   const loading = isLoading || !s;
   const tiles = s ? [
     { label: "Pipeline", value: rupee(s.pipeline.value, { compact: true }), icon: "target",
-      trend: plural(s.pipeline.count, "open deal", "open deals") },
+      trend: plural(s.pipeline.count, "open deal", "open deals"), href: drillHref("dealsOpen") },
     { label: "Weighted", value: rupee(s.weighted, { compact: true }), icon: "trending_up",
-      trend: "By stage probability" },
+      trend: "By stage probability", href: drillHref("dealsOpen") },
     { label: "Closing this month", value: rupee(s.closingThisMonth.value, { compact: true }), icon: "calendar",
-      trend: plural(s.closingThisMonth.count, "deal", "deals") },
+      trend: plural(s.closingThisMonth.count, "deal", "deals"), href: drillHref("dealsClosing") },
     { label: "Won this month", value: rupee(s.wonThisMonth.value, { compact: true }), icon: "check_circle",
-      trend: plural(s.wonThisMonth.count, "deal", "deals"), accent: "emerald" as const },
+      trend: plural(s.wonThisMonth.count, "deal", "deals"), accent: "emerald" as const,
+      href: drillHref("dealsWonMonth") },
   ] : [];
 
   return (
@@ -54,13 +56,9 @@ export function DealsStrip({ role }: { role: string | null | undefined }) {
                 <KPI key={l} label={l} value="" loading />
               ))
             : tiles.map((t) => (
-                <Link
-                  key={t.label}
-                  href={"/deals" as Route}
-                  className="block rounded-lg hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                >
-                  <KPI label={t.label} value={t.value} icon={t.icon} trend={t.trend} accent={t.accent ?? "ink"} />
-                </Link>
+                /* R-118: each tile opens exactly the deals it counts. */
+                <KPI key={t.label} label={t.label} value={t.value} icon={t.icon} trend={t.trend}
+                     accent={t.accent ?? "ink"} href={t.href} />
               ))}
         </div>
       )}

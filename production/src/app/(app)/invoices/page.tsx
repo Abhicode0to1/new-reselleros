@@ -12,6 +12,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { INVOICE_TABS } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SAAS_HSN } from "@/lib/gst/hsn";
@@ -96,7 +98,7 @@ function InvoicesPageInner() {
   // Combined by default — Subscription & Project invoices live in one list
   // (each row carries a Type badge). The tabs below are just an optional filter.
   const [view, setView] = React.useState<"all" | "subscription" | "project">("all");
-  const [tab, setTab]           = React.useState<string>("all");
+  const [tab, setTab]           = useUrlChoice<string>("tab", INVOICE_TABS, "all"); // R-118
   const [search, setSearch]     = React.useState<string>("");
   const [dateRange, setDateRange] = React.useState<"all" | "this_month" | "last_30" | "this_quarter">("all");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());

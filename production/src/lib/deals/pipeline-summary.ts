@@ -38,9 +38,15 @@ export function isOpenDeal(d: Pick<DealRow, "stage">): boolean {
   return isDealStage(d.stage) && isOpenStage(d.stage);
 }
 
-/** IST calendar date the deal was won, or null (not won / no timestamp). */
-export function wonDate(d: Pick<DealRow, "stage" | "stage_changed_at">): string | null {
-  return d.stage === "won" && d.stage_changed_at ? toIstDate(d.stage_changed_at) : null;
+/**
+ * IST calendar date the deal was won, or null (not won / no timestamp).
+ * Falls back to created_at like wonThisMonth() in lib/leads/list-selectors.ts, so the
+ * dashboard tile and the /deals?view=won-mtd list it links to count the same deals (R-118).
+ */
+export function wonDate(d: Pick<DealRow, "stage" | "stage_changed_at"> & { created_at?: string | null }): string | null {
+  if (d.stage !== "won") return null;
+  const at = d.stage_changed_at ?? d.created_at ?? null;
+  return at ? toIstDate(at) : null;
 }
 
 /** IST calendar date the deal was lost, or null. */
@@ -59,7 +65,11 @@ export interface DealStrip {
   pipeline: CountValue;
   /** Sum of each open deal's weighted value (forecast.ts probabilities). */
   weighted: number;
-  /** Open deals whose expected close date falls in the current IST month. */
+  /**
+   * Open deals expected to close by the end of the current IST month — overdue close dates
+   * included, as the /deals "closing" view counts them (R-118: tile and list must agree; a
+   * deal whose close date has passed but is still open is exactly one to chase).
+   */
   closingThisMonth: CountValue;
   /** Deals won (stage_changed_at) in the current IST month. */
   wonThisMonth: CountValue;
@@ -80,7 +90,8 @@ export function summarizeDealStrip(rows: readonly DealRow[], now: Date = new Dat
       out.pipeline.count++;
       out.pipeline.value += v;
       out.weighted += weightedValue(d);
-      if (inMonth(d.expected_close_date?.slice(0, 10) ?? null)) {
+      const close = d.expected_close_date?.slice(0, 10) ?? null;
+      if (close && close <= end) {
         out.closingThisMonth.count++;
         out.closingThisMonth.value += v;
       }

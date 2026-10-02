@@ -12,6 +12,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { CUSTOMER_VIEWS } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
@@ -189,7 +191,7 @@ export default function CustomersPage() {
   const clearPicked = () => setPickedIds(new Set());
 
   const [helpOpen, setHelpOpen] = React.useState(false);
-  const [view, setView] = React.useState("all");
+  const [view, setView] = useUrlChoice<string>("view", CUSTOMER_VIEWS, "all"); // R-118
   // Archived (is_active=false) customers are hidden by default; this toggle
   // swaps the whole list to show ONLY archived ones (Zoho-style status filter).
   const [showArchived, setShowArchived] = React.useState(false);

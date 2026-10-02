@@ -20,6 +20,8 @@
 
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { LEAD_VIEWS } from "@/lib/navigation/drilldown";
 import { useTeamTree } from "@/lib/queries/team-tree";
 import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -115,7 +117,8 @@ function LeadsPageInner() {
   // chip in <LeadsSmartViews/> sets this. It travels to the server with the
   // other filters (`listFilters` below) — list_leads() and lead_counts() apply it.
   /* Opens on every lead (won and lost included) — see the "All leads" view. */
-  const [smartView, setSmartView] = React.useState<SmartView>("everything");
+  /* R-118: the view can come from the URL (?view=won-mtd) so a dashboard tile opens exactly its rows. */
+  const [smartView, setSmartView] = useUrlChoice<SmartView>("view", LEAD_VIEWS, "everything");
   // Collapsible "Lead intelligence" banner — remembers the choice so it doesn't
   // eat board space every visit.
   const [tipsOpen, setTipsOpen] = React.useState(true);

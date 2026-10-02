@@ -1,0 +1,75 @@
+/**
+ * Drill-downs — where a number's records live (R-118, 2 Oct 2026).
+ *
+ * Pardeep: "click karne related lead hi open ho — poori app me". A tile that shows "4 deals
+ * won this month" must open those four deals, not the deals page. Two halves have to agree
+ * for that: the TILE links to `/deals?view=won-mtd`, and the LIST PAGE reads `view` from the
+ * URL and accepts `won-mtd`. Both halves import from here, so a renamed tab breaks a test
+ * instead of silently landing the owner on "All".
+ *
+ * Each list page passes its `*_TABS` list to useUrlChoice (lib/hooks/use-url-choice.ts).
+ * Pure data — no React — so the tests can check every link against the list it targets.
+ */
+
+/** /leads and /deals smart views (components/features/leads/leads-smart-views.tsx). */
+export const LEAD_VIEWS = [
+  "everything", "all", "mine", "waiting", "today", "overdue", "hot", "new",
+  "closing", "stalled", "won-mtd", "duplicates", "junk",
+] as const;
+export type LeadViewId = (typeof LEAD_VIEWS)[number];
+
+export const QUOTE_TABS = ["all", "draft", "sent", "viewed", "accepted", "awaiting", "invoiced", "expired"] as const;
+export const INVOICE_TABS = ["all", "paid", "partial", "pending", "overdue", "draft", "void"] as const;
+export const SUBSCRIPTION_TABS = ["all", "active", "expiring", "suspended", "ended", "trials"] as const;
+export const TASK_TABS = ["today", "overdue", "upcoming", "done", "all"] as const;
+export const RENEWAL_BUCKETS = ["urgent", "upcoming", "future"] as const;
+export const CUSTOMER_VIEWS = ["all", "unpaid", "subscribed", "projects", "nosub", "credit"] as const;
+export const PAYMENT_TABS = ["all", "received", "refunded"] as const;
+
+/** One drill-down: the page, the URL key it reads, and the value — checked by the tests. */
+export interface Drill { path: string; key: string; value: string }
+
+const d = (path: string, key: string, value: string): Drill => ({ path, key, value });
+
+export const DRILL = {
+  /* Deals — the dashboard strip (lib/deals/pipeline-summary.ts uses the same rules). */
+  dealsOpen:        d("/deals", "view", "all"),
+  dealsClosing:     d("/deals", "view", "closing"),
+  dealsWonMonth:    d("/deals", "view", "won-mtd"),
+  /* Leads */
+  leadsActive:      d("/leads", "view", "all"),
+  leadsToday:       d("/leads", "view", "today"),
+  leadsFollowUpDue: d("/leads", "view", "overdue"),
+  /* Quotes */
+  quotesDraft:      d("/quotes", "tab", "draft"),
+  quotesAccepted:   d("/quotes", "tab", "accepted"),
+  /* Invoices */
+  invoicesOverdue:  d("/invoices", "tab", "overdue"),
+  /* Subscriptions / renewals */
+  subsExpiring:     d("/subscriptions", "tab", "expiring"),
+  renewalsUrgent:   d("/renewals", "bucket", "urgent"),
+  /* Tasks */
+  tasksOverdue:     d("/tasks", "tab", "overdue"),
+  tasksToday:       d("/tasks", "tab", "today"),
+} as const satisfies Record<string, Drill>;
+
+export type DrillName = keyof typeof DRILL;
+
+/** The link for a drill-down: "/deals?view=won-mtd". */
+export function drillHref(name: DrillName): string {
+  const x = DRILL[name];
+  return `${x.path}?${x.key}=${encodeURIComponent(x.value)}`;
+}
+
+/** Which allowed-list each page + key reads — the tests check every DRILL entry against it. */
+export const PAGE_CHOICES: Record<string, Record<string, readonly string[]>> = {
+  "/leads":         { view: LEAD_VIEWS },
+  "/deals":         { view: LEAD_VIEWS },
+  "/quotes":        { tab: QUOTE_TABS },
+  "/invoices":      { tab: INVOICE_TABS },
+  "/subscriptions": { tab: SUBSCRIPTION_TABS },
+  "/tasks":         { tab: TASK_TABS },
+  "/renewals":      { bucket: RENEWAL_BUCKETS },
+  "/customers":     { view: CUSTOMER_VIEWS },
+  "/payments":      { tab: PAYMENT_TABS },
+};

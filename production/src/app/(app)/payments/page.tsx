@@ -5,6 +5,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { PAYMENT_TABS } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -91,7 +93,7 @@ function PaymentsPageInner() {
   /* window.prompt returns null in the desktop app — Write off did nothing (R-052). */
   const askText = useAskText();
   const router = useRouter();
-  const [tab, setTab]       = React.useState<"all" | "received" | "refunded">("all");
+  const [tab, setTab]       = useUrlChoice<"all" | "received" | "refunded">("tab", PAYMENT_TABS, "all"); // R-118
   const [view, setView]     = React.useState<"all" | "subscription" | "project">("all");
   const [search, setSearch] = React.useState("");
   const [helpOpen, setHelpOpen] = React.useState(false);

@@ -5,6 +5,8 @@
 
 import { istToday } from "@/lib/dates/ist";
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { QUOTE_TABS } from "@/lib/navigation/drilldown";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { useTeamTree } from "@/lib/queries/team-tree";
 import { TeamViewToggle } from "@/components/shared/team-view-toggle";
@@ -131,7 +133,7 @@ export default function QuotesPage() {
   }, [allSubs]);
   const { data: projectQuotes } = useProjectSales();
   const deleteQuote = useDeleteQuote();
-  const [tab, setTab] = React.useState("all");
+  const [tab, setTab] = useUrlChoice<string>("tab", QUOTE_TABS, "all"); // R-118
   const [search, setSearch] = React.useState("");
   // Clean split — Subscription is the default (most quotes live here); Project
   // is one tab away. No mixed "All" view, no empty default.

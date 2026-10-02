@@ -16,6 +16,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { RENEWAL_BUCKETS } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
@@ -572,7 +574,7 @@ export default function RenewalsPage() {
   const { data: me } = useCurrentUser();
   const qc = useQueryClient();
   const router = useRouter();
-  const [bucketTab, setBucketTab] = React.useState("urgent");
+  const [bucketTab, setBucketTab] = useUrlChoice<string>("bucket", RENEWAL_BUCKETS, "urgent"); // R-118
   const [bulkSending, setBulkSending] = React.useState(false);
   const [kpiOpen, setKpiOpen] = React.useState(true);
   const graceDays = me?.tenantGracePeriodDays ?? 0;

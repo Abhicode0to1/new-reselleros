@@ -4,6 +4,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { SUBSCRIPTION_TABS } from "@/lib/navigation/drilldown";
 import { SUB_FOLDERS, folderOf, folderCounts } from "@/lib/subscriptions/folders";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
@@ -215,7 +217,7 @@ export default function SubscriptionsPage() {
         : null,
     [contractedAnnual],
   );
-  const [tab, setTab] = React.useState("all");
+  const [tab, setTab] = useUrlChoice<string>("tab", SUBSCRIPTION_TABS, "all"); // R-118
   const [vendor, setVendor] = React.useState("all");
   const [search, setSearch] = React.useState("");
   const [extendSub,   setExtendSub]   = React.useState<Subscription | null>(null);
