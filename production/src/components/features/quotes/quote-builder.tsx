@@ -49,6 +49,10 @@ import { shortcutText } from "@/lib/keyboard/shortcuts";
 import { COUNTRIES } from "@/lib/gst/countries";
 import { BILLING_CURRENCIES, isForeignCurrency, formatForeign } from "@/lib/currency";
 import { addOrMergeLine } from "@/lib/quotes/line-items";
+import { lineFromCatalog, catalogYearlyPrice } from "@/lib/quotes/catalog-line";
+import { headlinePrice } from "@/lib/catalog/headline-price";
+import { suggestPlanProducts, productSupportSku, supplyStateMissing } from "@/lib/quotes/quote-assist";
+import { stateCodeFromGstin } from "@/lib/gst/gstin-state";
 import { rupee, formatDate, GST_STATE_BY_CODE } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { QuoteLineItem, LineCommitment, BillingCycle, Item } from "@/lib/supabase/database.types";
@@ -186,6 +190,8 @@ export function QuoteBuilder() {
   const [leadContact, setLeadContact] = React.useState(leadContactInit);
   const [leadPhone,   setLeadPhone]   = React.useState(leadPhoneInit);
   const [leadEmail,   setLeadEmail]   = React.useState(leadEmailInit);
+  /* Lead contact shows as one summary card; Edit opens the fields (2 Oct 2026). */
+  const [editProspect, setEditProspect] = React.useState(false);
   // Prospect place-of-supply (state) + optional GSTIN — drives CGST/SGST vs
   // IGST for a prospect quote (no customer record exists yet). Persisted back
   // to the lead on save so it flows to the customer on conversion.
@@ -385,6 +391,12 @@ export function QuoteBuilder() {
       if (usdMode && usdPricingBasis === "international" && usd && usd.msrp > 0) {
         annualRate = Math.round(usd.msrp * 12 * fx);
         annualCost = Math.round(usd.wholesale * 12 * fx);
+      } else if (headlinePrice(it).unit === "yr") {
+        /* A yearly-total plan (support "(Yearly)", msrp 0). msrp × 12 here re-priced it
+           to ₹0 the moment this effect re-ran (2 Oct 2026). */
+        const p = catalogYearlyPrice(it);
+        annualRate = p.rate;
+        annualCost = p.cost;
       } else {
         const commitment = l.commitment ?? "annual_yearly";
         const tier = it.prices?.[commitment === "monthly" ? "monthly" : "annual"];
@@ -640,7 +652,9 @@ export function QuoteBuilder() {
   // picked customer's state. Drives CGST+SGST (intra) vs IGST (inter).
   const buyerStateCode = isLeadMode
     ? (leadStateCode || null)
-    : (customerId ? (customer?.state_code ?? null) : (prospectStateCode || null));
+    /* A customer's GSTIN proves their state — 36 of 41 GSTIN customers had no
+       state_code on file, so the GSTIN prefix is the fallback (2 Oct 2026). */
+    : (customerId ? (customer?.state_code || stateCodeFromGstin(customer?.gstin) || null) : (prospectStateCode || null));
   const interState = isInterStateSupply(buyerStateCode, currentUser?.tenantStateCode, { customerGstin: customerId ? customer?.gstin : null, sellerGstin: currentUser?.tenantGstin });
 
   // Selling gross = the (negotiated) rate × qty. This is the actual revenue and
@@ -657,6 +671,9 @@ export function QuoteBuilder() {
   const costUnknown       = (it: { cost: number; rate: number; item_id?: string | null }) =>
     it.cost <= 0 && it.rate > 0 && !isSupportSkuId(it.item_id);
   const costlessLines     = lineItems.filter(costUnknown);
+  /* One-tap product chips for an empty quote, from the lead's interest. */
+  const planChips         = suggestPlanProducts(catalog, leadPlan);
+  const chipSeats         = leadSeats && parseInt(leadSeats, 10) > 0 ? parseInt(leadSeats, 10) : null;
   // Customer discount is DERIVED, not applied: it's the gap between the LIST
   // price (list_rate) and what we're actually charging (rate). The rate is
   // already the discounted price, so taxable = subtotal (no further deduction —
@@ -882,6 +899,15 @@ export function QuoteBuilder() {
     }
     if (lineItems.length === 0) {
       toast.error("Add at least one line item");
+      return;
+    }
+    /* GST guard (2 Oct 2026). With no place of supply the quote assumes CGST+SGST; a
+       draft may wait for the state, a quote that goes to the customer may not. Only for a
+       lead or typed prospect, where the state field is on this screen; an existing
+       customer without one keeps the amber note (their record is fixed on /customers). */
+    if (status === "sent" && !customerId && supplyStateMissing({ isExport, buyerStateCode })) {
+      toast.error("Pick the customer's state first — it decides CGST+SGST or IGST");
+      document.getElementById(isLeadMode ? "leadState" : "state")?.focus();
       return;
     }
 
@@ -1173,6 +1199,21 @@ export function QuoteBuilder() {
                 </div>
               </div>
 
+              {/* The lead already carries who this is — show it as one card, open the
+                  fields only to change them (2 Oct 2026: the form pushed the line items
+                  below the fold on every lead quote). */}
+              {!editProspect && leadCompany.trim() && (leadEmail.trim() || leadPhone.trim()) ? (
+                <div className="flex items-start justify-between gap-3 rounded-md border border-hairline bg-paper-2/40 px-3 py-2.5">
+                  <div className="min-w-0 text-sm">
+                    <div className="font-medium text-ink truncate">{leadCompany}</div>
+                    <div className="text-2xs text-ink-3 mt-0.5 break-words">
+                      {[leadContact, leadPhone, leadEmail].filter((v) => v && v.trim()).join(" · ")}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditProspect(true)}>Edit</Button>
+                </div>
+              ) : (
+              <>
               <FormField label="Company" htmlFor="leadCompany">
                 <Input
                   id="leadCompany"
@@ -1213,6 +1254,8 @@ export function QuoteBuilder() {
                   placeholder="e.g. contact@company.com"
                 />
               </FormField>
+              </>
+              )}
 
               {/* Place of supply — drives correct GST for the prospect quote.
                   Without it we'd assume intra-state (CGST+SGST) for everyone. */}
@@ -1236,7 +1279,13 @@ export function QuoteBuilder() {
                   <Input
                     id="leadGstin"
                     value={leadGstin}
-                    onChange={(e) => setLeadGstin(e.target.value.toUpperCase())}
+                    onChange={(e) => {
+                      const g = e.target.value.toUpperCase();
+                      setLeadGstin(g);
+                      /* A valid GSTIN proves the state — fill it if nobody has. */
+                      const fromGstin = stateCodeFromGstin(g);
+                      if (fromGstin && !leadStateCode) setLeadStateCode(fromGstin);
+                    }}
                     className="font-mono"
                     placeholder="e.g. 27AABCE9876D1Z3"
                   />
@@ -1584,10 +1633,39 @@ export function QuoteBuilder() {
               </svg>
             </div>
             <div className="font-serif text-lg mb-1">No line items yet</div>
-            <p className="text-sm text-ink-3 mb-4">Add products from your catalog or enter custom items.</p>
-            <Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>
-              Add first item
-            </Button>
+            {planChips.length > 0 ? (
+              <>
+                {/* One tap per product the lead is interested in — the rep used to open
+                    the catalogue and search for what the lead already said (2 Oct 2026). */}
+                <p className="text-sm text-ink-3 mb-3">
+                  {leadPlan ? <>Interested in <b className="text-ink">{leadPlan}</b>. </> : null}
+                  Tap a plan to add it{chipSeats ? ` with ${chipSeats} seats` : ""}.
+                </p>
+                <div className="flex flex-wrap justify-center gap-2 mb-4">
+                  {planChips.map((it) => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => addLine(lineFromCatalog(it, { qty: chipSeats ?? undefined }))}
+                      className="inline-flex flex-col items-start rounded-lg border border-hairline bg-paper px-3 py-2 text-left hover:border-amber hover:bg-amber-soft/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                    >
+                      <span className="text-sm font-medium text-ink">{it.name}</span>
+                      <span className="text-2xs text-ink-3 tabular-nums">{rupee(catalogYearlyPrice(it).rate)}/seat/yr</span>
+                    </button>
+                  ))}
+                </div>
+                <Button variant="default" icon="plus" onClick={() => setAddOpen(true)}>
+                  Something else
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-ink-3 mb-4">Add products from your catalog or enter custom items.</p>
+                <Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>
+                  Add first item
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -1643,7 +1721,7 @@ export function QuoteBuilder() {
                         className="mt-0.5 w-full px-2 py-1.5 text-sm tabular-nums border border-hairline rounded bg-paper focus:outline-none focus:ring-2 focus:ring-amber focus:border-amber"
                       />
                     </label>
-                    <label className="block">
+                    <label className="block col-span-2">
                       <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Commit</span>
                       <select
                         value={commitType}
@@ -1654,6 +1732,18 @@ export function QuoteBuilder() {
                         <option value="annual">Annual (1-yr)</option>
                       </select>
                     </label>
+                  </div>
+                  <LineBandNote line={line} catalog={catalog} />
+                  <LineSupportToggle line={line} catalog={catalog} lineItems={lineItems} onAdd={addLine} />
+                  {/* The rest is set once and rarely touched — folded so qty, rate and amount
+                      lead the card (2 Oct 2026). */}
+                  <details className="group rounded-md border border-hairline/70 px-2.5 py-1.5">
+                    <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-2xs text-ink-3">
+                      <span>More · starts {line.start_date ? formatDate(line.start_date) : "on payment"} · {isSupportSkuId(line.item_id) ? "own service" : costUnknown(line) ? "margin unknown" : `margin ${lineMargin.marginPct}%`}</span>
+                      <Icon name="chevron_down" size={12} className="transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
                     <label className="block">
                       <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Starts</span>
                       <input
@@ -1673,7 +1763,7 @@ export function QuoteBuilder() {
                         />
                       </label>
                     )}
-                  </div>
+                    </div>
                   <div className="text-2xs text-ink-3 inline-flex items-center gap-1 flex-wrap">
                     <span>Cost {isUsdBill ? "$" : "₹"}</span>
                     <input
@@ -1692,8 +1782,9 @@ export function QuoteBuilder() {
                         : <>Margin {lineMargin.marginPct}%</>}
                     </span>
                   </div>
-                  <LineBandNote line={line} catalog={catalog} />
                   <LineAdjustControls line={line} onChange={(p) => updateAdjustable(line.id, p)} />
+                    </div>
+                  </details>
                   <div className="flex items-center justify-between border-t border-hairline pt-2">
                     <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Amount</span>
                     <span className="font-medium text-sm tabular-nums">{fmtDispC(dispAmt(line.rate, line.qty, line.discount_pct ?? 0))}{billingN > 1 ? " /yr" : ""}</span>
@@ -1777,6 +1868,7 @@ export function QuoteBuilder() {
                         </span>
                       </div>
                       <LineBandNote line={line} catalog={catalog} />
+                      <LineSupportToggle line={line} catalog={catalog} lineItems={lineItems} onAdd={addLine} />
                   <LineAdjustControls line={line} onChange={(p) => updateAdjustable(line.id, p)} />
                       {/* Discounting is quote-level only (see totals sidebar). Any
                           per-line discount stored on legacy/imported quotes is still
@@ -2324,8 +2416,11 @@ export function QuoteBuilder() {
                 .filter((id): id is string => !!id)),
           );
           const line = lineItems.find((l) => l.item_id && supportSkuIds.has(l.item_id));
-
-          return (
+          /* With product-wise support in the catalogue (each licence line offers its own
+             "+ Add support"), the three company-wide plan cards are a second road to the
+             same thing — fold them away unless one is already on the quote. */
+          const hasProductSupport = catalog.some((c) => isSupportSkuId(c.id) && !supportSkuIds.has(c.id));
+          const picker = (
             <SupportPlanPicker
               items={catalog}
               onAdd={addLine}
@@ -2336,6 +2431,19 @@ export function QuoteBuilder() {
               } : null}
               onRemove={line ? () => removeLine(line.id) : undefined}
             />
+          );
+          if (!hasProductSupport || line) return picker;
+          return (
+            <details className="group">
+              <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-sm">
+                <span>
+                  <span className="font-semibold text-ink">Company-wide support plans</span>
+                  <span className="block text-2xs text-ink-3">Support for one product is on each licence line: “Add support”.</span>
+                </span>
+                <Icon name="chevron_down" size={14} className="text-ink-3 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-3">{picker}</div>
+            </details>
           );
         })()}
       </Card>
@@ -2506,5 +2614,34 @@ function TotalRow({ label, value, tone }: { label: string; value: string; tone?:
         tone === "rose" && "text-rose"
       )}>{value}</span>
     </div>
+  );
+}
+
+/**
+ * "+ <product> Support" under a licence line (2 Oct 2026, Pardeep: support add-ons are
+ * per product — "Google Workspace Business Starter Support"). Offers the product's own
+ * support add-on on the line's cycle; once it is on the quote, says so instead.
+ */
+function LineSupportToggle({ line, catalog, lineItems, onAdd }: {
+  line: QuoteLineItem; catalog: Item[]; lineItems: QuoteLineItem[]; onAdd: (l: QuoteLineItem) => void;
+}) {
+  if (!line.item_id || isSupportSkuId(line.item_id)) return null;
+  const cycle = line.commitment === "monthly" ? "monthly" : "yearly";
+  const sku = productSupportSku(catalog, line.item_id, cycle);
+  if (!sku) return null;
+  const onQuote = lineItems.some((l) => l.item_id === sku.id
+    || l.item_id === productSupportSku(catalog, line.item_id, cycle === "yearly" ? "monthly" : "yearly")?.id);
+  if (onQuote) {
+    return <div className="mt-1 text-2xs text-emerald">✓ Support added</div>;
+  }
+  const price = catalogYearlyPrice(sku).rate;
+  return (
+    <button
+      type="button"
+      onClick={() => onAdd(lineFromCatalog(sku))}
+      className="mt-1 inline-flex items-center gap-1 rounded-md border border-dashed border-amber/60 px-2 py-0.5 text-2xs font-medium text-amber-ink hover:bg-amber-soft/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+    >
+      <Icon name="plus" size={11} /> Add support · {rupee(price)}/yr
+    </button>
   );
 }
