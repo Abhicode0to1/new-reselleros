@@ -78,6 +78,7 @@ export function useMoneyOut() {
         return [{
           id: t.id, txn_date: t.txn_date, amount: t.debit, payee, what, reference,
           account: accountName.get(t.bank_account_id) ?? "—", group, matched_to_type: t.matched_to_type, matched_to_id: t.matched_to_id, description: t.description,
+          bank_account_id: t.bank_account_id,
         } satisfies PaidOutLine];
       });
     },

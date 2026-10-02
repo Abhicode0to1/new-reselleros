@@ -8,6 +8,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { useUrlChoice } from "@/lib/hooks/use-url-choice";
 import { rupee, formatDate } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import { useMoneyOut } from "@/lib/queries/payments-made";
-import { summarisePaidOut, paidOutCsvRows, PAID_OUT_CSV_HEADERS, GROUP_LABEL, type PaidGroup } from "@/lib/accounting/payments-made";
+import { summarisePaidOut, paidOutCsvRows, PAID_OUT_CSV_HEADERS, GROUP_LABEL, paymentEditHref, type PaidGroup } from "@/lib/accounting/payments-made";
 import { istToday } from "@/lib/dates/ist";
 
 type Tab = "all" | PaidGroup;
@@ -28,6 +29,7 @@ function todayIso(): string { return istToday(); }
 
 export default function PaymentsMadePage() {
   const { data, isLoading, error } = useMoneyOut();
+  const router = useRouter();
   /* One filter, not seven tabs (2 Oct 2026, Pardeep: "isko ek hi me kar do") — the tab row ran
      off the screen after the third tab. In the URL, so a link can open one group. */
   const [tab, setTab] = useUrlChoice<Tab>("type", TABS, "all");
@@ -131,13 +133,16 @@ export default function PaymentsMadePage() {
         <>
           <ul className="md:hidden space-y-2">
             {rows.map((l) => (
-              <li key={l.id} className="rounded-lg border border-hairline bg-paper p-3">
+              <li key={l.id}>
+                {/* The whole card opens the payment's record (paymentEditHref). */}
+                <Link href={paymentEditHref(l) as Route} className="block rounded-lg border border-hairline bg-paper p-3 hover:border-amber/60">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-ink truncate">{l.payee}</span>
                   <span className="font-serif tabular-nums text-rose">− {rupee(l.amount)}</span>
                 </div>
                 <div className="mt-1 text-xs text-ink-3">{formatDate(l.txn_date)} · {l.what}{l.reference ? ` · ${l.reference}` : ""} · {l.account}</div>
-                {l.group === "unreconciled" && <Link href={"/accounting/banking" as Route} className="text-xs text-amber-ink underline">Reconcile →</Link>}
+                {l.group === "unreconciled" && <span className="text-xs text-amber-ink underline">Reconcile →</span>}
+                </Link>
               </li>
             ))}
           </ul>
@@ -151,10 +156,14 @@ export default function PaymentsMadePage() {
                 </thead>
                 <tbody>
                   {rows.map((l) => (
-                    <tr key={l.id} className="border-b border-hairline last:border-0 hover:bg-paper-2/40">
+                    <tr key={l.id} onClick={() => router.push(paymentEditHref(l) as Route)}
+                      className="border-b border-hairline last:border-0 hover:bg-paper-2/40 cursor-pointer" title="Open this payment">
                       <td className="p-3 whitespace-nowrap text-ink-2">{formatDate(l.txn_date)}</td>
-                      <td className="p-3 font-medium text-ink">{l.payee}</td>
-                      <td className="p-3 text-ink-2">{l.group === "unreconciled" ? <Link href={"/accounting/banking" as Route} className="text-amber-ink underline">Not reconciled — book it →</Link> : l.what}</td>
+                      <td className="p-3 font-medium text-ink">
+                        {/* A real link too, for keyboard and new-tab users; the row click is the shortcut. */}
+                        <Link href={paymentEditHref(l) as Route} onClick={(e) => e.stopPropagation()} className="hover:underline">{l.payee}</Link>
+                      </td>
+                      <td className="p-3 text-ink-2">{l.group === "unreconciled" ? <span className="text-amber-ink underline">Not reconciled — book it →</span> : l.what}</td>
                       <td className="p-3 font-mono text-xs text-ink-3">{l.reference ?? "—"}</td>
                       <td className="p-3 text-ink-2">{l.account}</td>
                       <td className="p-3 text-right font-serif tabular-nums text-rose">− {rupee(l.amount)}</td>

@@ -115,6 +115,17 @@ function PaymentsPageInner() {
   const [editPayment, setEditPayment] = React.useState<Payment | null>(null);
 
   const { data: payments, isLoading, error, refetch } = usePayments();
+  /* ?edit=<payment id> — Payments Made opens a refund straight into its edit form (2 Oct 2026).
+     Once, when the list has loaded; the whole list is in memory here. */
+  const editOpened = React.useRef(false);
+  React.useEffect(() => {
+    if (editOpened.current || !payments || typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("edit");
+    if (!id) return;
+    editOpened.current = true;
+    const p = payments.find((x) => x.id === id);
+    if (p) setEditPayment(p);
+  }, [payments]);
   const { data: projectPayments } = useAllProjectPayments();
   const { data: quotes } = useQuotes();
   const { data: outstanding } = useOutstandingReceivables();

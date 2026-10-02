@@ -182,6 +182,18 @@ export default function ExpensesPage() {
   }, []);
   const [addOpen, setAddOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Expense | null>(null);
+  /* ?edit=<expense id> — Payments Made opens a paid expense straight into its edit form
+     (2 Oct 2026). Fetched by id: the list here is date-range limited, the expense may be older. */
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("edit");
+    if (!id) return;
+    let live = true;
+    void createClient().from("expenses").select("*").eq("id", id).maybeSingle().then(({ data }) => {
+      if (live && data) setEditing(data as Expense);
+    });
+    return () => { live = false; };
+  }, []);
   const [detail, setDetail]   = React.useState<Expense | null>(null);
   const [payingExpense, setPayingExpense] = React.useState<Expense | null>(null);
   const [reconcilingExpense, setReconcilingExpense] = React.useState<Expense | null>(null);
