@@ -59,7 +59,7 @@ import { rupee, cn, cleanDisplayName, phoneSuffixOf } from "@/lib/utils";
 /* R-005: `projects` joined this in Sep 2026. A reseller who also sells custom software
    had those customers reading as dead accounts, because every filter here asked only
    about subscriptions. */
-type ViewCtx = { amount: number; credit: number; hasSub: boolean; projects: readonly ProjectLike[] };
+type ViewCtx = { amount: number; credit: number; hasSub: boolean; projects: readonly ProjectLike[]; received: number };
 const VIEW_DEFS: { id: string; label: string; test: (x: ViewCtx) => boolean }[] = [
   { id: "all",        label: "All",              test: () => true },
   { id: "unpaid",     label: "Has receivables",  test: (x) => x.amount > 0 },
@@ -69,6 +69,8 @@ const VIEW_DEFS: { id: string; label: string; test: (x: ViewCtx) => boolean }[] 
      `countsAsNoBusiness` is the tested rule, shared with the row pill. */
   { id: "nosub",      label: "No business",      test: (x) => countsAsNoBusiness({ hasActiveSub: x.hasSub, projects: x.projects }) },
   { id: "credit",     label: "Has credit",       test: (x) => x.credit > 0 },
+  /* R-118: the "Received (this FY)" figure's own customers — the tile had no list to open. */
+  { id: "received",   label: "Paid this FY",     test: (x) => x.received > 0 },
 ];
 
 // Columns tuned for a reseller: who they are (name + who-to-call folded in) ·
@@ -235,11 +237,11 @@ export default function CustomersPage() {
     const m: Record<string, number> = Object.fromEntries(VIEW_DEFS.map((v) => [v.id, 0]));
     for (const c of customersByWorkspace) {
       const out = outstandingByCustomer.get(c.id);
-      const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS };
+      const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS, received: receivedBy[c.id]?.total ?? 0 };
       for (const v of VIEW_DEFS) if (v.test(ctx)) m[v.id]++;
     }
     return m;
-  }, [customersByWorkspace, outstandingByCustomer, creditsByCustomer, subsByCustomer, projectsByCustomer, NO_PROJECTS]);
+  }, [customersByWorkspace, outstandingByCustomer, creditsByCustomer, subsByCustomer, projectsByCustomer, NO_PROJECTS, receivedBy]);
 
   /* Who serves which customers, so the search box below can find a customer by the
      person rather than only by the company. One fetch, shared with Subscriptions
@@ -252,7 +254,7 @@ export default function CustomersPage() {
     // Active by default; the Archived toggle swaps to show only inactive ones.
     if ((c.is_active === false) !== showArchived) return false;
     const out = outstandingByCustomer.get(c.id);
-    const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS };
+    const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS, received: receivedBy[c.id]?.total ?? 0 };
     if (!activeView.test(ctx)) return false;
     if (!search.trim()) return true;
     const s = search.toLowerCase().trim();
@@ -455,12 +457,17 @@ export default function CustomersPage() {
 
   const stats: React.ComponentProps<typeof StatStrip>["items"] = [];
   if (!isLoading && customers) {
-    stats.push({ label: "Customers", value: total });
+    stats.push({ label: "Customers", value: total, onClick: () => setView("all"), active: view === "all" });
     /* R-005: these are subscription MRR / ARR only. Named "Monthly / Yearly revenue" they
        read as total income — a customer who paid ₹11.8L for a project showed ₹0 in all of them. */
-    stats.push({ label: "Recurring monthly (subscriptions)", value: rupee(totalMRR, { compact: true }) });
-    stats.push({ label: "Recurring yearly (subscriptions)", value: rupee(totalARR, { compact: true }) });
-    stats.push({ label: "Received (this FY)", value: rupee(totalReceived, { compact: true }), tone: "emerald" });
+    /* R-118: subsByCustomer holds ACTIVE subscriptions only, and "With subscriptions" tests
+       exactly that map — so these two open the customers whose MRR they add up. */
+    stats.push({ label: "Recurring monthly (subscriptions)", value: rupee(totalMRR, { compact: true }),
+      onClick: () => setView("subscribed"), active: view === "subscribed" });
+    stats.push({ label: "Recurring yearly (subscriptions)", value: rupee(totalARR, { compact: true }),
+      onClick: () => setView("subscribed") });
+    stats.push({ label: "Received (this FY)", value: rupee(totalReceived, { compact: true }), tone: "emerald",
+      onClick: () => setView("received"), active: view === "received" });
     /* R-005. Kept OUT of Monthly/Yearly revenue on purpose — those are recurring
        figures, and a one-off build is not recurring. Folding a ₹10.8L ERP into "Yearly
        revenue" would make the next year's forecast wrong by the whole amount. Won

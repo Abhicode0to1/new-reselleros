@@ -23,7 +23,7 @@ export const INVOICE_TABS = ["all", "paid", "partial", "pending", "overdue", "dr
 export const SUBSCRIPTION_TABS = ["all", "active", "expiring", "suspended", "ended", "trials"] as const;
 export const TASK_TABS = ["today", "overdue", "upcoming", "done", "all"] as const;
 export const RENEWAL_BUCKETS = ["urgent", "upcoming", "future", "risk"] as const;
-export const CUSTOMER_VIEWS = ["all", "unpaid", "subscribed", "projects", "nosub", "credit"] as const;
+export const CUSTOMER_VIEWS = ["all", "unpaid", "subscribed", "projects", "nosub", "credit", "received"] as const;
 export const PAYMENT_TABS = ["all", "received", "refunded"] as const;
 
 /** /invoices ?focus= — the money tiles' exact sets (lib/invoices/kpis.ts). Kept in step

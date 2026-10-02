@@ -242,3 +242,14 @@ describe("renewals and payments tiles", () => {
     expect(listed + projectReceivedInMonth(proj, now)).toBe(collectedInMonth(pays, proj, now));
   });
 });
+
+describe("customers strip opens the customers behind each figure", () => {
+  it("MRR / ARR open With subscriptions (active only), Received opens Paid this FY", () => {
+    const page = read("app/(app)/customers/page.tsx");
+    expect(page).toMatch(/if \(!s\.customer_id \|\| s\.status !== "active"\) continue;/); // subsByCustomer = active only
+    expect(page).toMatch(/\{ id: "subscribed", label: "With subscriptions", test: \(x\) => x\.hasSub \}/);
+    expect(page).toMatch(/\{ id: "received",   label: "Paid this FY",     test: \(x\) => x\.received > 0 \}/);
+    expect(page).toMatch(/onClick: \(\) => setView\("received"\)/);
+    expect(page).toMatch(/onClick: \(\) => setView\("subscribed"\)/);
+  });
+});
