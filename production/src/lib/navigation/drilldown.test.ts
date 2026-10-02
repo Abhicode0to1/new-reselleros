@@ -121,3 +121,17 @@ describe("no dead drill-downs", () => {
     }
   });
 });
+
+describe("won this month is not cut away by the open-only All folder", () => {
+  it("folderForView moves won-mtd under All into the Won folder, leaves the rest alone", async () => {
+    const { folderForView } = await import("@/lib/leads/list-selectors");
+    expect(folderForView("all", "won-mtd")).toBe("won");
+    expect(folderForView("all", "all")).toBe("all");
+    expect(folderForView("quoted", "won-mtd")).toBe("quoted");
+  });
+  it("the leads page sends the adjusted folder to the server and the board", () => {
+    const page = read("app/(app)/leads/page.tsx");
+    expect(page).toMatch(/folder: folderForView\(folder, smartView\)/);
+    expect(page).toMatch(/const cutFolder = folderForView\(folder, smartView\)/);
+  });
+});

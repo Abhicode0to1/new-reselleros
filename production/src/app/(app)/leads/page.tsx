@@ -48,7 +48,7 @@ import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { DEAL_STAGES, filterStagesFor } from "@/lib/leads/stage-meta";
 import { boardServerTotals, everythingCountForPage, folderShownOnPage, scopeFiltersForPage, stageShownOnPage } from "@/lib/leads/page-scope";
 import {
-  boardCut, inWorkspace, listCut, searchLeads, type SortCol,
+  boardCut, folderForView, inWorkspace, listCut, searchLeads, type SortCol,
 } from "@/lib/leads/list-selectors";
 import { toastError } from "@/lib/errors/toast-error";
 import { LeadListView } from "@/components/features/leads/lead-list-view";
@@ -379,7 +379,7 @@ function LeadsPageInner() {
     priorities: priorityFilter,
     owners: ownerFilter,
     smart_view: smartView,
-    folder,
+    folder: folderForView(folder, smartView),
     /* The default "wait" order (lib/leads/waiting.ts) is worked out by the server, so the
        lead that has waited longest is on page 1 even if it arrived months ago. */
     sort: sortBy === "wait" ? "wait" : "created",
@@ -436,7 +436,8 @@ function LeadsPageInner() {
        `won` — so the Won column read 0 cards three inches below a chip saying 🏆 Won 2.
        Won is also the board's DROP TARGET. So the board's base is every non-junk, non-lost
        lead; picking a folder hands control back to the list cut (list-selectors#boardCut). */
-    return boardCut(searched, listCut(searched, folder, smartView, folderToday), folder, smartView);
+    const cutFolder = folderForView(folder, smartView);
+    return boardCut(searched, listCut(searched, cutFolder, smartView, folderToday), cutFolder, smartView);
   }, [isList, isDealsPage, boardQ.data, teamIds, search, stageFilter, priorityFilter, ownerFilter, smartView, currentUser, folder, folderToday]);
 
   /** The rows the current view is showing — what `filtered` was. */
