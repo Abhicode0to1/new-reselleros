@@ -46,7 +46,6 @@ export function AiLiveTester() {
 
       // Step 2: Highlight & Click "+ Quick add quote"
       setStepText("2/6: Testing '+ Quick add quote' button...");
-      const quoteBtn = document.querySelector('button:has-text("Quick add quote"), a:has-text("Quick add quote"), button[class*="amber"], button[class*="orange"]') as HTMLElement;
       const targetBtn = Array.from(document.querySelectorAll("button, a")).find((el) =>
         el.textContent?.includes("Quick add quote")
       ) as HTMLElement | undefined;
