@@ -36,7 +36,7 @@ export function useVendorBills(opts?: {
   /** ISO YYYY-MM-DD inclusive. Filters bill_date <= to. */
   to?:   string;
   /** Filter by status (default: all). */
-  status?: "unpaid" | "paid" | "partial";
+  status?: "unpaid" | "paid" | "partial" | "owed";
 }) {
   const { from, to, status } = opts ?? {};
   return useQuery({
@@ -46,7 +46,9 @@ export function useVendorBills(opts?: {
       let q = supabase.from("vendor_bills").select("*").order("bill_date", { ascending: false });
       if (from)   q = q.gte("bill_date", from);
       if (to)     q = q.lte("bill_date", to);
-      if (status) q = q.eq("status", status);
+      /* "owed" = unpaid + partial: the Outstanding tile's bills (R-118). */
+      if (status === "owed") q = q.in("status", ["unpaid", "partial"]);
+      else if (status) q = q.eq("status", status);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as VendorBill[];

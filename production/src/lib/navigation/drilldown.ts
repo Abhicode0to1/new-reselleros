@@ -25,6 +25,10 @@ export const TASK_TABS = ["today", "overdue", "upcoming", "done", "all"] as cons
 export const RENEWAL_BUCKETS = ["urgent", "upcoming", "future", "risk"] as const;
 export const CUSTOMER_VIEWS = ["all", "unpaid", "subscribed", "projects", "nosub", "credit", "received"] as const;
 export const PAYMENT_TABS = ["all", "received", "refunded"] as const;
+/** /accounting/tds-receivable ?tab= (claimable = cert received + 26AS verified). */
+export const TDS_TABS = ["all", "claimable", "pending_cert", "cert_received", "verified_26as", "claimed", "disputed", "written_off"] as const;
+/** /accounting/bills ?status= ("" = all; owed = unpaid + partial, the Outstanding tile). */
+export const BILL_STATUSES = ["", "owed", "unpaid", "partial", "paid"] as const;
 
 /** /invoices ?focus= — the money tiles' exact sets (lib/invoices/kpis.ts). Kept in step
  *  with INVOICE_FOCI by a test. */

@@ -58,7 +58,8 @@ export const TDS_SECTIONS = [
 // ────────────────────────────────────────────────────────────────
 
 export function useTdsReceivables(opts?: {
-  status?: TdsStatus | "all";
+  /** "claimable" = cert_received + verified_26as — the "Ready to claim" tile (R-118). */
+  status?: TdsStatus | "all" | "claimable";
   fiscalYear?: string;
   customerId?: string;
 }) {
@@ -71,7 +72,8 @@ export function useTdsReceivables(opts?: {
         .from("tds_receivable")
         .select("*")
         .order("payment_received_date", { ascending: false });
-      if (status && status !== "all") q = q.eq("status", status);
+      if (status === "claimable") q = q.in("status", ["cert_received", "verified_26as"]);
+      else if (status && status !== "all") q = q.eq("status", status);
       if (fiscalYear)                 q = q.eq("fiscal_year", fiscalYear);
       if (customerId)                 q = q.eq("customer_id", customerId);
       const { data, error } = await q;

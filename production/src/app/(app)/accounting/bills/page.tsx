@@ -15,6 +15,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { BILL_STATUSES } from "@/lib/navigation/drilldown";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,7 +65,8 @@ const STATUS_COLOR: Record<string, "rose" | "emerald" | "amber" | "slate"> = {
 
 export default function VendorBillsPage() {
   const [range, setRange]   = React.useState(thisFYRange());
-  const [statusFilter, setStatusFilter] = React.useState<"" | "unpaid" | "paid" | "partial">("");
+  /* R-118: in the URL, so the Outstanding tile (and a link) can open the owed bills. */
+  const [statusFilter, setStatusFilter] = useUrlChoice<"" | "unpaid" | "paid" | "partial" | "owed">("status", BILL_STATUSES, "");
   const [addOpen, setAddOpen] = React.useState(false);
   const [payBill, setPayBill] = React.useState<VendorBill | null>(null);
   const [detailBill, setDetailBill] = React.useState<VendorBill | null>(null);
@@ -111,11 +114,12 @@ export default function VendorBillsPage() {
 
       {/* ── KPI strip ───────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <KPI label="Bills (this FY)" value={totals ? String(totals.count) : "—"} />
-        <KPI label="Total amount"       value={totals ? rupee(totals.total) : "—"} />
+        <KPI label="Bills (this FY)" value={totals ? String(totals.count) : "—"} onClick={() => setStatusFilter("")} />
+        <KPI label="Total amount"       value={totals ? rupee(totals.total) : "—"} onClick={() => setStatusFilter("")} />
         <KPI label="Outstanding"        value={totals ? rupee(totals.outstanding) : "—"}
-             tone={totals && totals.outstanding > 0 ? "rose" : undefined} />
-        <KPI label="Input GST (claimable)" value={totals ? rupee(totals.inputGst) : "—"} tone="emerald" />
+             tone={totals && totals.outstanding > 0 ? "rose" : undefined}
+             onClick={() => setStatusFilter("owed")} active={statusFilter === "owed"} />
+        <KPI label="Input GST (claimable)" value={totals ? rupee(totals.inputGst) : "—"} tone="emerald" onClick={() => setStatusFilter("")} />
       </div>
 
       {/* ── Filter strip ────────────────────────────────────────── */}
@@ -141,6 +145,7 @@ export default function VendorBillsPage() {
             className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
           >
             <option value="">All statuses</option>
+            <option value="owed">Owed (unpaid + partial)</option>
             <option value="unpaid">Unpaid</option>
             <option value="partial">Partial</option>
             <option value="paid">Paid</option>
@@ -449,20 +454,30 @@ function PayBillDialog({ bill, onClose }: { bill: VendorBill; onClose: () => voi
 
 // ─── Tiny KPI card ────────────────────────────────────────────────────
 function KPI({
-  label, value, tone,
+  label, value, tone, onClick, active,
 }: {
   label: string;
   value: string;
   tone?: "emerald" | "rose" | "amber";
+  /** R-118: opens the bills this figure adds up (the From/To range stays as set). */
+  onClick?: () => void;
+  active?: boolean;
 }) {
   const colorClass = tone === "emerald" ? "text-emerald"
                    : tone === "rose"    ? "text-rose"
                    : tone === "amber"   ? "text-amber-ink"
                    : "text-ink";
-  return (
-    <Card className="p-3 md:p-4">
+  const body = (
+    <>
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif text-xl md:text-2xl ${colorClass} leading-tight`}>{value}</div>
-    </Card>
+    </>
+  );
+  if (!onClick) return <Card className="p-3 md:p-4">{body}</Card>;
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active ?? undefined}
+      className={`text-left rounded-lg border bg-paper p-3 md:p-4 transition-colors hover:border-amber/60 ${active ? "border-amber" : "border-hairline"}`}>
+      {body}
+    </button>
   );
 }
