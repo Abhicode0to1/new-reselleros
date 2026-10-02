@@ -233,3 +233,14 @@ describe("live calls", () => {
     }
   });
 });
+
+describe("isSupportSkuId (2 Oct 2026)", () => {
+  it("knows our own support SKUs, with or without the tenant suffix", async () => {
+    const { isSupportSkuId } = await import("./tiers");
+    expect(isSupportSkuId("SUP-STANDARD-YR-fbb976f190904f1097260901bd144e42")).toBe(true);
+    expect(isSupportSkuId("SUP-ENTERPRISE-MO")).toBe(true);
+    expect(isSupportSkuId("GWS-STARTER")).toBe(false);
+    expect(isSupportSkuId("SUP-STANDARDX-YR")).toBe(false);
+    expect(isSupportSkuId(null)).toBe(false);
+  });
+});

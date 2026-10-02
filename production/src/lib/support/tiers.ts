@@ -110,6 +110,15 @@ export function supportSkuId(id: SupportTierId, cycle: "monthly" | "yearly"): st
 }
 
 /**
+ * A support plan is our own service, not something bought from a vendor — so ₹0 cost on
+ * its line is the true cost, not a missing one (2 Oct 2026: the quote builder called
+ * "Standard Support" a plan with "no catalogue row" and its margin "unknown").
+ */
+export function isSupportSkuId(id: string | null | undefined): boolean {
+  return !!id && /^SUP-(FREE|STANDARD|ENTERPRISE)-(MO|YR)(-|$)/.test(id);
+}
+
+/**
  * Find a tenant's catalogue row for a tier and cycle.
  *
  * The seeded ids carry the tenant on the end (`SUP-STANDARD-YR-fbb976f1…`) so two

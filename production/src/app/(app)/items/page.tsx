@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { catalogCostCoverage } from "@/lib/catalog/cost-coverage";
+import { headlinePrice, isOwnService } from "@/lib/catalog/headline-price";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -404,9 +405,9 @@ export default function ItemsPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-serif text-base tabular-nums text-ink">
-                      {rupee(it.msrp)}<span className="text-3xs text-ink-3 font-sans">/mo</span>
+                      {rupee(headlinePrice(it).amount)}<span className="text-3xs text-ink-3 font-sans">/{headlinePrice(it).unit}</span>
                     </p>
-                    <p className="text-3xs text-ink-3">{it.margin_pct}% margin</p>
+                    <p className="text-3xs text-ink-3">{isOwnService(it) ? "Own service" : `${it.margin_pct}% margin`}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-2 border-t border-hairline/60">
@@ -471,16 +472,23 @@ export default function ItemsPage() {
                       </Badge>
                     </td>
                     <td className="p-3 font-mono text-xs text-ink-2">{it.hsn ?? "—"}</td>
-                    <td className="p-3 text-right tabular-nums text-sm">{rupee(it.msrp)}</td>
+                    <td className="p-3 text-right tabular-nums text-sm">
+                      {rupee(headlinePrice(it).amount)}
+                      {headlinePrice(it).unit === "yr" && <span className="text-3xs text-ink-3">/yr</span>}
+                    </td>
                     <td className="p-3 text-right tabular-nums text-sm text-ink-3">
                       {/* "₹0" reads as a free product. It almost always means nobody has
                           entered the vendor's price — and that is what blinds the margin
-                          check, so the cell has to say which of the two it is. */}
+                          check, so the cell has to say which of the two it is. Support is
+                          our own service, so its ₹0 is real. */}
                       {it.wholesale > 0
                         ? rupee(it.wholesale)
-                        : <span className="text-amber-ink font-medium">Not set</span>}
+                        : isOwnService(it)
+                          ? "—"
+                          : <span className="text-amber-ink font-medium">Not set</span>}
                     </td>
                     <td className="p-3 text-right">
+                      {isOwnService(it) ? <span className="text-xs text-ink-3">Own service</span> : (
                       <div className={cn(
                         "tabular-nums text-sm font-medium",
                         tone === "emerald" && "text-emerald",
@@ -490,6 +498,7 @@ export default function ItemsPage() {
                         {rupee(margin)}
                         <div className="text-3xs">{it.margin_pct}%</div>
                       </div>
+                      )}
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -547,7 +556,7 @@ export default function ItemsPage() {
       {!isLoading && items && items.length > 0 && (
         <div className="pt-4 mt-2 border-t border-hairline space-y-4">
           {(() => {
-            const lowMargin = (items ?? []).filter((i) => i.margin_pct < 14).length;
+            const lowMargin = (items ?? []).filter((i) => !isOwnService(i) && i.margin_pct < 14).length;
             return (
               <GeminiCard title="Catalog intelligence" compact>
                 <b>{lowMargin} {lowMargin === 1 ? "item has" : "items have"} margin below 14%.</b>{" "}

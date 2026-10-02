@@ -28,6 +28,8 @@ export interface CostCoverageRow {
   wholesale: number | null;
   /** Sale margin percent, as stored. Meaningless on a row with no cost. */
   margin_pct: number;
+  /** 'support' rows are our own service: their ₹0 cost is real, so they sit in neither half. */
+  vendor?: string | null;
 }
 
 export interface CostCoverage<T> {
@@ -58,6 +60,7 @@ export function catalogCostCoverage<T extends CostCoverageRow>(rows: readonly T[
   const priced: T[] = [];
   const unpriced: T[] = [];
   for (const r of rows) {
+    if (r.vendor === "support") continue;
     if (typeof r.wholesale === "number" && r.wholesale > 0) priced.push(r);
     else unpriced.push(r);
   }

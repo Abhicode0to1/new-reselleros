@@ -31,7 +31,7 @@ import { AddLineItemDialog } from "@/components/features/quotes/add-line-item-di
 import { BulkDomainsDialog } from "@/components/features/quotes/bulk-domains-dialog";
 import { ViewDomainsDialog } from "@/components/features/quotes/view-domains-dialog";
 import { matchLeadToCustomer, matchNote } from "@/lib/quotes/match-customer";
-import { SUPPORT_TIERS, findSupportSku } from "@/lib/support/tiers";
+import { SUPPORT_TIERS, findSupportSku, isSupportSkuId } from "@/lib/support/tiers";
 import { QuotePreviewDialog } from "@/components/features/quotes/quote-preview-dialog";
 import { useCustomers } from "@/lib/queries/customers";
 import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
@@ -652,8 +652,11 @@ export function QuoteBuilder() {
   const totalCost         = lineItems.reduce((s, it) => s + it.qty * it.cost, 0);
   /* Lines that are actually being SOLD but whose cost nobody knows. A ₹0 line is
      excluded — a free line legitimately costs nothing, and flagging it would train
-     people to dismiss the banner. */
-  const costlessLines     = lineItems.filter((it) => it.cost <= 0 && it.rate > 0);
+     people to dismiss the banner. A support plan is excluded too: it is our own
+     service, so ₹0 is its real cost. */
+  const costUnknown       = (it: { cost: number; rate: number; item_id?: string | null }) =>
+    it.cost <= 0 && it.rate > 0 && !isSupportSkuId(it.item_id);
+  const costlessLines     = lineItems.filter(costUnknown);
   // Customer discount is DERIVED, not applied: it's the gap between the LIST
   // price (list_rate) and what we're actually charging (rate). The rate is
   // already the discounted price, so taxable = subtotal (no further deduction —
@@ -1684,7 +1687,7 @@ export function QuoteBuilder() {
                         cost-unknown banner above for why. */}
                     <span>
                       /seat{unitLabel} ·{" "}
-                      {line.cost <= 0 && line.rate > 0
+                      {costUnknown(line)
                         ? <span className="font-semibold text-amber-ink">Margin unknown</span>
                         : <>Margin {lineMargin.marginPct}%</>}
                     </span>
@@ -1768,7 +1771,7 @@ export function QuoteBuilder() {
                         />
                         <span>
                           /seat{unitLabel} ·{" "}
-                          {line.cost <= 0 && line.rate > 0
+                          {costUnknown(line)
                             ? <span className="font-semibold text-amber-ink">Margin unknown</span>
                             : <>Margin {lineMargin.marginPct}%</>}
                         </span>
