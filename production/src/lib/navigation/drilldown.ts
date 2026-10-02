@@ -25,6 +25,8 @@ export const TASK_TABS = ["today", "overdue", "upcoming", "done", "all"] as cons
 export const RENEWAL_BUCKETS = ["urgent", "upcoming", "future", "risk"] as const;
 export const CUSTOMER_VIEWS = ["all", "unpaid", "subscribed", "projects", "nosub", "credit", "received"] as const;
 export const PAYMENT_TABS = ["all", "received", "refunded"] as const;
+/** /accounting/aging ?bucket= ("" = every customer owing). */
+export const AGING_BUCKETS = ["", "current", "b30", "b60", "over90"] as const;
 /** /purchase-orders ?tab= */
 export const PO_TABS = ["open", "draft", "placed", "provisioned", "closed"] as const;
 /** /accounting/tds-receivable ?tab= (claimable = cert received + 26AS verified). */

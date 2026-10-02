@@ -284,6 +284,13 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
           <DialogTitle>Add prepaid advance</DialogTitle>
           <DialogDescription>Money paid to a vendor before using the service. Held as an asset until consumed.</DialogDescription>
         </DialogHeader>
+        {/* 2 Oct 2026: Pardeep opened this form to give the office peon petty-cash money —
+            that is a staff advance (R-101), tracked per employee with bills on its own page. */}
+        <p className="rounded-md border border-amber/40 bg-amber-soft/30 px-3 py-2 text-xs text-ink-2">
+          Giving money to a staff member for small office expenses?{" "}
+          <a href="/accounting/advances" className="font-semibold text-amber-ink underline">Use Employee Advances</a>
+          {" "}— it tracks what they spend, with bills, and what is left.
+        </p>
         <div className="space-y-3">
           <FormField label="Vendor" required htmlFor="pa_vendor">
             <div className="relative">

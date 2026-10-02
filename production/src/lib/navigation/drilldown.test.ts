@@ -278,3 +278,17 @@ describe("hissa 3: accounting, purchase orders, online orders", () => {
     expect(page).not.toMatch(/toLocaleDateString\("en-IN", \{ day: "2-digit", month: "short" \}\);\n\s*const today/);
   });
 });
+
+describe("aging, expenses and the prepaid form", () => {
+  it("aging owes the balance (receipts taken off) and filters by bucket", () => {
+    const page = read("app/(app)/accounting/aging/page.tsx");
+    expect(page).toMatch(/const owed = invoiceBalance\(/);
+    expect(page).not.toMatch(/const owed = inv\.net_payable \?\? inv\.amount/);
+    expect(page).toMatch(/paid_amount, status, invoice_date/);
+    expect(page).toMatch(/rows   = bucket \? allRows\.filter\(\(r\) => r\.buckets\[bucket\] > 0\) : allRows/);
+  });
+  it("expenses Top category opens that category; prepaid form points staff advances away", () => {
+    expect(read("app/(app)/accounting/expenses/page.tsx")).toMatch(/onClick=\{\(\) => setCatFilter\(top\)\}/);
+    expect(read("app/(app)/accounting/prepaid/page.tsx")).toContain(`href="/accounting/advances"`);
+  });
+});

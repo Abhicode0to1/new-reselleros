@@ -555,10 +555,18 @@ export default function ExpensesPage() {
                tone={payableQ.data && payableQ.data.amount > 0 ? "amber" : undefined}
                sub={payableQ.data && payableQ.data.count > 0 ? `${payableQ.data.count} unpaid` : "all clear"} />
         </button>
-        <KPI label="Top category"
-             value={totals && categoryOptions.length > 0
-               ? Object.entries(totals.byCategory).sort((a, b) => b[1] - a[1])[0][0]
-               : "—"} />
+        {/* R-118: opens that category's entries. */}
+        {(() => {
+          const top = totals && categoryOptions.length > 0
+            ? Object.entries(totals.byCategory).sort((a, b) => b[1] - a[1])[0][0]
+            : null;
+          return top ? (
+            <button type="button" onClick={() => setCatFilter(top)} className="text-left"
+              title={`Show ${top} expenses`} aria-pressed={catFilter === top}>
+              <KPI label="Top category" value={top} />
+            </button>
+          ) : <KPI label="Top category" value="—" />;
+        })()}
       </div>
 
       {/* Filter bar — compact: presets + count on one line, inputs on the next. */}
