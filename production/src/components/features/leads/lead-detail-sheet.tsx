@@ -20,6 +20,7 @@ import { useQuotesByLead } from "@/lib/queries/quotes";
 import { QuoteActionBar } from "@/components/features/quotes/quote-action-bar";
 import { useTasksForLead, useCompleteTask, useSnoozeTask, useDeleteTask } from "@/lib/queries/tasks";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { dealDeleteBlock } from "@/lib/deals/delete-rules";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { useCallLog } from "@/components/features/leads/call-log-dialog";
 import { localDateISO } from "@/lib/leads/outcomes";
@@ -248,6 +249,15 @@ export function LeadDetailSheet({
   const doneTasks = tasksForLead.filter((t) => t.status === "done");
 
   const handleDelete = async () => {
+    /* Owner/manager only, never with a quote (lib/deals/delete-rules.ts, 2 Oct 2026). */
+    const block = dealDeleteBlock({ role: currentUser?.role, quoteIds: quotesForLead.map((q) => q.id) });
+    if (block) {
+      toast.error("This can't be deleted", {
+        description: block,
+        action: lead.stage !== "lost" && lead.stage !== "won" ? { label: "Mark lost", onClick: () => handleArchive() } : undefined,
+      });
+      return;
+    }
     const confirmed = await confirm({
       title: `Permanently delete lead "${lead.company}"?`,
       body: "This cannot be undone.",

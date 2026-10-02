@@ -12,6 +12,7 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
+import { friendlyDeleteError } from "@/lib/deals/delete-rules";
 import { createClient } from "@/lib/supabase/client";
 import { requireTenantId } from "@/lib/queries/require-tenant";
 import type { Json, Lead, Database } from "@/lib/supabase/database.types";
@@ -857,16 +858,24 @@ export function useDeleteLead() {
   return useMutation({
     mutationFn: async (id: string) => {
       const supabase = createClient();
-      const { error } = await supabase.from("leads").delete().eq("id", id);
+      /* .select() so a delete RLS silently filtered out (0 rows) is reported, not toasted
+         as "deleted" — a policy refusal on DELETE returns no error, just nothing gone. */
+      const { data, error } = await supabase.from("leads").delete().eq("id", id).select("id");
       if (error) throw error;
+      if (!data || data.length === 0) throw Object.assign(new Error("permission denied"), { code: "42501" });
       return id;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
-      toast.success("Lead deleted");
+      toast.success("Deleted");
     },
-    onError: (err) => toastError(err),
+    onError: (err) => {
+      const e = err as { message?: string; code?: string };
+      const friendly = friendlyDeleteError(e.message ?? "", e.code);
+      if (friendly) toast.error("Not deleted", { description: friendly });
+      else toastError(err);
+    },
   });
 }
 

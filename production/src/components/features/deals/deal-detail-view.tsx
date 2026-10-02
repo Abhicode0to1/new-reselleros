@@ -16,7 +16,10 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useLead } from "@/lib/queries/leads";
+import { useLead, useDeleteLead } from "@/lib/queries/leads";
+import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
+import { useConfirm } from "@/components/providers/confirm-provider";
+import { dealDeleteBlock } from "@/lib/deals/delete-rules";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { useQuotesByLead } from "@/lib/queries/quotes";
 import { useTasksForLead, useCompleteTask, useSnoozeTask, useDeleteTask } from "@/lib/queries/tasks";
@@ -109,6 +112,10 @@ export function DealDetailView({ leadId }: { leadId: string }) {
   const completeTask = useCompleteTask();
   const snoozeTask = useSnoozeTask();
   const deleteTask = useDeleteTask();
+  /* Lost / Delete on the deal page (2 Oct 2026) — the drawer had them, this page did not. */
+  const { changeStage } = useChangeLeadStage();
+  const deleteLead = useDeleteLead();
+  const confirm = useConfirm();
 
   const [addTaskOpen, setAddTaskOpen] = React.useState(false);
   const [emailOpen, setEmailOpen] = React.useState(false);
@@ -196,6 +203,22 @@ export function DealDetailView({ leadId }: { leadId: string }) {
   const latestQuote = quotes[0];
   const title = lead.company?.trim() || leadDisplayName(lead).label;
 
+  /* Delete — owner/manager only, never with a quote on it (lib/deals/delete-rules.ts; the
+     database enforces both). Blocked → say why and offer Lost, in the toast. */
+  const onDelete = async () => {
+    const block = dealDeleteBlock({ role: me?.role, quoteIds: quotes.map((q) => q.id) });
+    if (block) {
+      toast.error("This deal can't be deleted", {
+        description: block,
+        action: lead.stage !== "lost" && lead.stage !== "won" ? { label: "Mark lost", onClick: () => { void changeStage(lead, "lost"); } } : undefined,
+      });
+      return;
+    }
+    const ok = await confirm({ title: `Delete "${title}" for good?`, body: "Its notes, calls and follow-ups go with it. This cannot be undone — Mark lost keeps the history instead.", danger: true, confirmLabel: "Delete" });
+    if (!ok) return;
+    deleteLead.mutate(lead.id, { onSuccess: () => router.push("/deals" as never) });
+  };
+
   /* Same hand-off as the drawer's handleSendQuote — the quote builder reads these params. */
   const newQuote = () => {
     if (lead.enquiry_type === "project") {
@@ -258,6 +281,10 @@ export function DealDetailView({ leadId }: { leadId: string }) {
               }}
             >Email</Button>
             <Button icon="edit" variant="ghost" onClick={() => setEditOpen(true)}>Edit</Button>
+            {lead.stage !== "won" && lead.stage !== "lost" && (
+              <Button variant="ghost" onClick={() => { void changeStage(lead, "lost"); }}>Mark lost</Button>
+            )}
+            <Button variant="ghost" icon="trash" className="!text-rose hover:!bg-rose/10" loading={deleteLead.isPending} onClick={onDelete}>Delete</Button>
             {lead.stage !== "won" && lead.stage !== "lost" && (
               <Button variant="primary" icon="send" onClick={newQuote}>{quoteRows.length ? "New quote" : "Send quote"}</Button>
             )}
