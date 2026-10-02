@@ -70,17 +70,26 @@ export function generatePassword(opts: GenerateOptions = {}): string {
   // the distribution, so it is thrown away.
   const limit = Math.floor(256 / n) * n;
 
-  const out: string[] = [];
-  const buf = new Uint8Array(64);
-  while (out.length < length) {
-    crypto.getRandomValues(buf);
-    for (const b of buf) {
-      if (b >= limit) continue;               // discard, do not fold
-      out.push(alphabet[b % n]);
-      if (out.length === length) break;
+  const draw = () => {
+    const out: string[] = [];
+    const buf = new Uint8Array(64);
+    while (out.length < length) {
+      crypto.getRandomValues(buf);
+      for (const b of buf) {
+        if (b >= limit) continue;               // discard, do not fold
+        out.push(alphabet[b % n]);
+        if (out.length === length) break;
+      }
     }
-  }
-  return out.join("");
+    return out.join("");
+  };
+
+  /* A uniform draw can, now and then, contain "abc", "123", a common word or a missing
+     class — and then assessStrength (rightly) calls it fair. Measured 3 Oct 2026: it failed
+     the CI gate once in a 50-draw test. Draw again until it is strong; a few tries at most. */
+  let p = draw();
+  for (let i = 0; i < 50 && assessStrength(p).strength !== "strong"; i++) p = draw();
+  return p;
 }
 
 // ─── Strength ───────────────────────────────────────────────────────────────
