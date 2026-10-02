@@ -168,6 +168,12 @@ echo
 for row in "${JOBS[@]}"; do
   IFS='|' read -r NAME SCHEDULE PATH_ DESC <<< "$row"
 
+  # ONLY="job-a,job-b" — touch just these (2 Oct 2026 go-live: 4 of the 11 missing jobs were
+  # wanted; the rest wait for DMS / ad keys). Unset = every job, as before.
+  if [[ -n "${ONLY:-}" && ",${ONLY}," != *",${NAME},"* ]]; then
+    continue
+  fi
+
   # `describe` is the cheapest existence check that does not depend on parsing
   # `list` output, which changes between gcloud versions.
   if gcloud scheduler jobs describe "$NAME" --location="$REGION" >/dev/null 2>&1; then
