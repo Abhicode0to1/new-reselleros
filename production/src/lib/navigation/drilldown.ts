@@ -29,6 +29,8 @@ export const PAYMENT_TABS = ["all", "received", "refunded"] as const;
 /** /invoices ?focus= — the money tiles' exact sets (lib/invoices/kpis.ts). Kept in step
  *  with INVOICE_FOCI by a test. */
 export const INVOICE_FOCUS = ["", "unpaid", "paid-month"] as const;
+/** /subscriptions ?focus= (lib/subscriptions/focus.ts). */
+export const SUB_FOCUS = ["", "active"] as const;
 /** /quotes ?focus= (lib/quotes/focus.ts). */
 export const QUOTE_FOCUS = ["", "review", "accepted"] as const;
 
@@ -54,6 +56,7 @@ export const DRILL = {
   invoicesUnpaid:   d("/invoices", "focus", "unpaid"),
   /* Subscriptions / renewals */
   subsExpiring:     d("/subscriptions", "tab", "expiring"),
+  subsActive:       d("/subscriptions", "focus", "active"),
   renewalsUrgent:   d("/renewals", "bucket", "urgent"),
   /* Tasks */
   tasksOverdue:     d("/tasks", "tab", "overdue"),
@@ -74,7 +77,7 @@ export const PAGE_CHOICES: Record<string, Record<string, readonly string[]>> = {
   "/deals":         { view: LEAD_VIEWS },
   "/quotes":        { tab: QUOTE_TABS, focus: QUOTE_FOCUS },
   "/invoices":      { tab: INVOICE_TABS, focus: INVOICE_FOCUS },
-  "/subscriptions": { tab: SUBSCRIPTION_TABS },
+  "/subscriptions": { tab: SUBSCRIPTION_TABS, focus: SUB_FOCUS },
   "/tasks":         { tab: TASK_TABS },
   "/renewals":      { bucket: RENEWAL_BUCKETS },
   "/customers":     { view: CUSTOMER_VIEWS },

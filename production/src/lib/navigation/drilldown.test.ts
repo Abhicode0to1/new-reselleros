@@ -193,3 +193,16 @@ describe("quotes tiles: tile and list agree, and the nudge button is honest", ()
     expect(page).not.toContain("toast.success(`Nudge sent");
   });
 });
+
+describe("subscription money tiles open status = active", () => {
+  it("SUB_FOCUS matches SUB_FOCI, and the page filters by subInFocus", async () => {
+    const { SUB_FOCI, subInFocus } = await import("@/lib/subscriptions/focus");
+    const { SUB_FOCUS } = await import("./drilldown");
+    expect([...SUB_FOCUS]).toEqual([...SUB_FOCI]);
+    expect(subInFocus({ status: "active" }, "active")).toBe(true);
+    expect(subInFocus({ status: "paused" }, "active")).toBe(false);
+    const page = read("app/(app)/subscriptions/page.tsx");
+    expect(page).toMatch(/if \(focus && !subInFocus\(s, focus\)\) return false;/);
+    expect(page).toMatch(/const activeSubs = subsByWorkspace\.filter\(\(s\) => subInFocus\(s, "active"\)\)/);
+  });
+});

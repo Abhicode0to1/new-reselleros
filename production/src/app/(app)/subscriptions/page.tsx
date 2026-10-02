@@ -7,6 +7,8 @@ import * as React from "react";
 import { useUrlChoice } from "@/lib/hooks/use-url-choice";
 import { SUBSCRIPTION_TABS } from "@/lib/navigation/drilldown";
 import { SUB_FOLDERS, folderOf, folderCounts } from "@/lib/subscriptions/folders";
+import { SUB_FOCI, SUB_FOCUS_LABEL, subInFocus, type SubFocus } from "@/lib/subscriptions/focus";
+import { FocusBanner } from "@/components/shared/focus-banner";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import { useRouter } from "next/navigation";
@@ -218,6 +220,10 @@ export default function SubscriptionsPage() {
     [contractedAnnual],
   );
   const [tab, setTab] = useUrlChoice<string>("tab", SUBSCRIPTION_TABS, "all"); // R-118
+  /* R-118: the money tiles' exact set (lib/subscriptions/focus.ts) — "" = none. */
+  const [focus, setFocus] = useUrlChoice<SubFocus>("focus", SUB_FOCI, "");
+  const tabOn = (t: string) => { setFocus(""); setTab(t); };
+  const focusOn = (f: SubFocus) => { setTab("all"); setFocus(f); };
   const [vendor, setVendor] = React.useState("all");
   const [search, setSearch] = React.useState("");
   const [extendSub,   setExtendSub]   = React.useState<Subscription | null>(null);
@@ -394,6 +400,7 @@ export default function SubscriptionsPage() {
   const filtered = subsByWorkspace.filter((s) => {
     if (tab === "trials") return false;  // trials handled in separate table below
     if (tab !== "all" && folderOf(s, todayISO) !== tab) return false;
+    if (focus && !subInFocus(s, focus)) return false;   // the tile's own predicate
     if (vendor !== "all" && s.vendor !== vendor) return false;
     if (search.trim()) {
       const q = search.toLowerCase().trim();
@@ -645,7 +652,7 @@ export default function SubscriptionsPage() {
   ];
 
   // KPIs
-  const activeSubs = subsByWorkspace.filter((s) => s.status === "active");
+  const activeSubs = subsByWorkspace.filter((s) => subInFocus(s, "active"));
   const activeMRR = activeSubs.reduce((s, x) => s + x.mrr, 0);
   const activeARR = activeMRR * 12;
   const totalSeats = activeSubs.reduce((s, x) => s + x.seats, 0);
@@ -754,15 +761,15 @@ export default function SubscriptionsPage() {
           {kpiOpen && (
             <div className="p-3 border-t border-hairline space-y-3 bg-paper">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                <button type="button" onClick={() => focusOn("active")} aria-pressed={focus === "active"} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Active MRR</p>
                   <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(activeMRR, { compact: true })}</p>
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                </button>
+                <button type="button" onClick={() => focusOn("active")} aria-pressed={focus === "active"} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Active ARR</p>
                   <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(activeARR, { compact: true })}</p>
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                </button>
+                <button type="button" onClick={() => focusOn("active")} aria-pressed={focus === "active"} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Margin (ARR)</p>
                   <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(annualMargin, { compact: true })} <span className="text-xs text-ink-3 font-normal">({avgMarginPct}%)</span></p>
                   {/* A total that silently drops the unmeasured rows reads as covering
@@ -777,19 +784,19 @@ export default function SubscriptionsPage() {
                       {marginEstimatedCount} from catalogue, not vendor bills
                     </p>
                   )}
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                </button>
+                <button type="button" onClick={() => tabOn("all")} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total Subscriptions</p>
                   <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{subsByWorkspace.length} <span className="text-xs text-emerald font-normal">({folderCount.active + folderCount.expiring} live)</span></p>
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                </button>
+                <button type="button" onClick={() => focusOn("active")} aria-pressed={focus === "active"} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Seats In Use</p>
                   <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{usedSeats} <span className="text-xs text-ink-3 font-normal">/ {totalSeats}</span></p>
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                </button>
+                <button type="button" onClick={() => tabOn("trials")} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Active Trials</p>
                   <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{trials?.length ?? 0}</p>
-                </div>
+                </button>
               </div>
 
               {/* Renewal intelligence */}
@@ -893,7 +900,10 @@ export default function SubscriptionsPage() {
       {/* Sticky Horizontal TabBar + Vendor Filter + Search */}
       {!isLoading && subs && subs.length > 0 && (
         <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
-          <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
+          {focus && (
+            <FocusBanner label={SUB_FOCUS_LABEL[focus]} count={filtered.length} onClear={() => setFocus("")} />
+          )}
+          <TabBar className="overflow-y-hidden" value={tab} onChange={tabOn} items={tabs} />
           <div className="flex justify-between items-center gap-3 flex-wrap">
             {/* Vendor pills and search sit TOGETHER on the left — they are one act
                 ("narrow the list"), and `justify-between` across three children used to

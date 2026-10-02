@@ -689,6 +689,7 @@ export default function DashboardPage() {
           trendKind={activeMRR > 0 ? "up" : "neutral"}
           trendIcon={activeMRR > 0 ? "trending_up" : undefined}
           icon="rupee"
+          href={drillHref("subsActive")}
         />
       </div>
       <StatStrip

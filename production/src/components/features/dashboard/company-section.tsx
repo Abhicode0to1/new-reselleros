@@ -178,7 +178,7 @@ function CompanyCards() {
 
         <FunctionCard title="Customers & Ops">
           <Metric href="/customers" label="New customers" value={newCustomers} {...state(customers)} />
-          <Metric href="/subscriptions" label="Monthly revenue (MRR)" value={money$(subSummary?.mrr)}
+          <Metric href={drillHref("subsActive")} label="Monthly revenue (MRR)" value={money$(subSummary?.mrr)}
             hint={subSummary ? plural(subSummary.activeCount, "active subscription", "active subscriptions") : undefined} {...state(subs)} />
           <Metric href={drillHref("subsExpiring")} label="Renewals in 30 days" value={subSummary?.renewalsDue.count ?? null}
             hint={subSummary ? `${money$(subSummary.renewalsDue.value)} a month` : undefined} {...state(subs)} />
