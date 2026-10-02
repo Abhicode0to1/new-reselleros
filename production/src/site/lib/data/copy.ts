@@ -9,7 +9,7 @@
 
 export const CATALOGUE = [
   { name: "Domains", from: "from ₹249/yr", body: "500+ extensions with register, renew and transfer prices on one row.", chips: ["500+ TLDS", "FREE DNS", "WHOIS PRIVACY"], href: "/domains" },
-  { name: "Web hosting", from: "from ₹159/mo", body: "cPanel and LiteSpeed on NVMe, in Mumbai and Bengaluru.", chips: ["CPANEL", "LITESPEED", "99.9% SLA"], href: "/hosting" },
+  { name: "Web hosting", from: "from ₹49.99/mo", body: "cPanel and LiteSpeed on NVMe, in Mumbai and Bengaluru.", chips: ["CPANEL", "LITESPEED", "99.9% SLA"], href: "/hosting" },
   { name: "Business email", from: "from ₹79/mo", body: "Anutech Mail, Google Workspace or Microsoft 365 — quoted side by side.", chips: ["NO SEAT MINIMUM", "FREE MIGRATION"], href: "/email" },
   { name: "SSL & security", from: "from ₹0", body: "Free DV on every site, wildcard and OV when a client needs the paperwork.", chips: ["DV", "OV", "WILDCARD"], href: "/ssl" },
   { name: "Reseller program", from: "₹0 to join", body: "Published wholesale rates with no slabs and no advance deposit.", chips: ["NO DEPOSIT", "ONE RATE", "WHITE LABEL"], href: "/reseller" },
@@ -24,16 +24,14 @@ export const CASES = [
 
 export const TRUST = [
   { value: "12+ yrs", label: "RESELLING SINCE 2014" },
-  { value: "11 min", label: "AVG WHATSAPP FIRST REPLY", primary: true },
+  /* Was an average-first-reply figure in minutes — nobody measures that (2 Oct 2026). */
+  { value: "A person", label: "ANSWERS ON WHATSAPP", primary: true },
   { value: "99.9%", label: "UPTIME SLA, CREDITED" },
   { value: "₹0", label: "MIGRATION FEE, ANY SIZE" },
 ] as const;
 
-export const REVIEWS = [
-  { stars: "★★★★★", quote: "Quoted three options with GST broken out the same afternoon. We picked the cheapest one and they agreed it was enough.", name: "Ritu Malhotra", role: "Nirvaan Clinics · Google review" },
-  { stars: "★★★★★", quote: "Eleven sites moved over a weekend with no downtime. I have paid four figures for worse migrations.", name: "Rohan Deshpande", role: "Studio Anka · Google review" },
-  { stars: "★★★★☆", quote: "Renewal price printed next to the first-year price. That is the whole reason we stopped shopping around.", name: "Aditya Menon", role: "Bharat Freight · Google review" },
-] as const;
+/* REVIEWS removed 2 Oct 2026: three "Google review" quotes that were sample text, not reviews.
+   Real ones go here only with a link to where the customer wrote them. */
 
 /** Wholesale page: THEM vs us. Never a competitor's name. */
 export const SWITCH_REASONS = [

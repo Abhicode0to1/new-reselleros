@@ -46,7 +46,7 @@ const MENUS: readonly Menu[] = [
     label: "Hosting", href: "/hosting",
     cols: [
       [
-        { label: "Shared hosting", note: "cPanel on NVMe, from ₹159/mo", href: "/hosting" },
+        { label: "Shared hosting", note: "cPanel on NVMe, from ₹49.99/mo", href: "/hosting" },
         { label: "Full specification", note: "All 14 rows, nothing hidden", href: "/hosting#specs" },
         { label: "Migration desk", note: "Free, done by us", href: "/contact" },
       ],
@@ -111,7 +111,7 @@ const MENUS: readonly Menu[] = [
 const MOBILE_PAGES = [
   { label: "Home", note: "The whole catalogue", href: "/" },
   { label: "Domains", note: "500+ extensions, from ₹249/yr", href: "/domains" },
-  { label: "Hosting", note: "cPanel on NVMe, from ₹159/mo", href: "/hosting" },
+  { label: "Hosting", note: "cPanel on NVMe, from ₹49.99/mo", href: "/hosting" },
   { label: "Business email", note: "Mailboxes from ₹79/mo", href: "/email" },
   { label: "Compare editions", note: "GW, M365 and Zoho side by side", href: "/email/compare-editions" },
   { label: "SSL & security", note: "Free DV on every site", href: "/ssl" },

@@ -410,7 +410,7 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
               <button onClick={submit} disabled={sending} className="btn btn-primary" style={{ width: "100%", marginTop: 16, opacity: sending ? 0.7 : 1 }}>
                 {sending ? "Requesting…" : cardLive ? (cardOk ? "Request the trial" : "Verify the card to continue") : "Request the trial — we send a ₹1 link"}
               </button>
-              <p className="meta" style={{ textAlign: "center", marginTop: 8 }}>First reply on WhatsApp averages 11 minutes in working hours.</p>
+              <p className="meta" style={{ textAlign: "center", marginTop: 8 }}>A person replies on WhatsApp in working hours.</p>
             </div>
           )}
         </div>

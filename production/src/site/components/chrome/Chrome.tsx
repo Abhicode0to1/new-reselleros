@@ -162,7 +162,7 @@ export function WhatsAppButton() {
       href={WHATSAPP_URL}
       target="_blank"
       rel="noopener"
-      aria-label="WhatsApp us — average first reply 11 minutes"
+      aria-label="WhatsApp us"
       style={{
         position: "fixed", right: 22, bottom: 22, zIndex: 90,
         display: "inline-flex", alignItems: "center", gap: 9,
@@ -175,7 +175,6 @@ export function WhatsAppButton() {
     >
       <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: "var(--bar-ok)" }} />
       WhatsApp us
-      <span className="mono" style={{ fontSize: 11, color: "#9AA5B1" }}>~11 MIN</span>
     </a>
   );
 }

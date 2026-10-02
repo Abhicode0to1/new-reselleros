@@ -24,7 +24,8 @@ import { useEffect, useState } from "react";
 import Link from "@/site/components/ui/SiteLink";
 import { LICENCE_EDITIONS, EDITION_MATRICES, type LicenceEdition } from "@/site/lib/data/catalog";
 import type { MergedEdition } from "@/site/lib/live-catalog";
-import { TRUST, REVIEWS } from "@/site/lib/data/copy";
+import { TRUST } from "@/site/lib/data/copy";
+import { HOSTING_FROM_MO } from "@/site/lib/data/hosting-landing-v2";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { HOME_FAQS } from "@/site/lib/data/home-faqs";
 
@@ -109,7 +110,7 @@ const CROSS_ROWS: readonly { label: string; gw: string; ms: string; zoho: string
  *  four — no half-empty photo slots). */
 const CATALOGUE_V2: readonly { name: string; href: string; from: string; unit: string; gst: string; body: string; tags: string[]; cta: string; icon: "globe" | "server" | "lock" | "tag"; img?: string }[] = [
   { name: "Domains", href: "/domains", from: "₹249", unit: "from · first year", gst: "+ GST 18%", body: "500+ extensions, register and renew price on one row.", tags: ["500+ TLDS", "FREE DNS", "WHOIS PRIVACY"], cta: "See domain rates", icon: "globe", img: "/domain-search.jpg" },
-  { name: "Web hosting", href: "/hosting", from: "₹159", unit: "from · /mo, billed yearly", gst: "+ GST 18%", body: "cPanel and LiteSpeed on NVMe, Mumbai and Bengaluru.", tags: ["CPANEL", "LITESPEED", "99.9% SLA"], cta: "See hosting plans", icon: "server", img: "/cat-hosting.png" },
+  { name: "Web hosting", href: "/hosting", from: HOSTING_FROM_MO, unit: "from · /mo, billed yearly", gst: "+ GST 18%", body: "cPanel and LiteSpeed on NVMe, Mumbai and Bengaluru.", tags: ["CPANEL", "LITESPEED", "99.9% SLA"], cta: "See hosting plans", icon: "server", img: "/cat-hosting.png" },
   { name: "SSL & security", href: "/ssl", from: "₹0", unit: "free DV", gst: "No charge", body: "Free DV on every hosted site; wildcard and OV when needed.", tags: ["DV", "OV", "WILDCARD"], cta: "See SSL options", icon: "lock", img: "/cat-ssl.jpg" },
   { name: "Reseller program", href: "/reseller", from: "₹0", unit: "to join", gst: "No charge", body: "Published wholesale rates. No slabs, no advance deposit.", tags: ["NO DEPOSIT", "ONE RATE", "WHITE LABEL"], cta: "See the rate card", icon: "tag", img: "/cat-reseller.png" },
 ];
@@ -515,21 +516,14 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
       {/* ── TRUST ──────────────────────────────────────────────────────────── */}
       <section style={{ background: C.sectT, borderTop: `1px solid ${C.borderL}` }}>
         <div style={wrap({ padding: "44px 48px" })}>
-          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>
+          {/* 2 Oct 2026: the three "Google review" cards below this were sample text (the names
+              are the app's test fixtures), not reviews anyone wrote — removed until real ones,
+              linked to their source, replace them. */}
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4,1fr)", gap: 16 }}>
             {TRUST.map((f) => (
               <div key={f.label} style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: ("primary" in f && f.primary) ? C.blue : C.ink }}>{f.value}</div>
                 <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: C.sec, marginTop: 4 }}>{f.label}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(3,1fr)", gap: 16 }}>
-            {REVIEWS.filter((r, i, a) => a.findIndex((x) => x.name === r.name) === i).map((r) => (
-              <div key={r.name} style={{ background: C.surf, border: `1px solid ${C.borderL}`, borderRadius: 12, padding: 20, boxShadow: SH_CARD }}>
-                <div aria-label={`${r.stars.split("★").length - 1} star review`} style={{ color: "#B7791F", letterSpacing: 2, marginBottom: 10 }}>{r.stars}</div>
-                <p style={{ fontSize: 15, lineHeight: 1.55, margin: "0 0 14px", color: C.ink2 }}>&ldquo;{r.quote}&rdquo;</p>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{r.name}</div>
-                <div style={{ fontSize: 13, color: C.sec }}>{r.role}</div>
               </div>
             ))}
           </div>
