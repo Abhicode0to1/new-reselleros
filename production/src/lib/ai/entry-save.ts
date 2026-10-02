@@ -3,6 +3,7 @@
  * Pure, so what reaches the database from an AI read is pinned down by tests, and the
  * law checks for a proposal are computed the same way on every render.
  */
+import type { AdvanceFields } from "@/lib/ai/data-entry";
 import type { EntryProposal, LeadFields, CustomerFields, ExpenseFields, VendorBillFields, TaskFields } from "@/lib/ai/data-entry";
 import { checkExpense, checkVendorBill, checkPayment, checkCustomer, type LawWarning, type Party } from "@/lib/compliance/entry-rules";
 import { stateCodeFromGstin } from "@/lib/gst/gstin-state";
@@ -77,6 +78,17 @@ export function taskInsert(f: TaskFields) {
   return { title: f.title ?? "Follow up", due_at: `${f.due_date}T10:00:00+05:30`, kind: "followup" as const };
 }
 
+/** The Employee Advances page, its "Give advance" form open and filled (2 Oct 2026). */
+export function advanceFormHref(f: AdvanceFields): string {
+  const q = new URLSearchParams({ give: "1" });
+  if (f.employee_name) q.set("name", f.employee_name);
+  if (f.amount) q.set("amount", String(Math.round(f.amount)));
+  if (f.date) q.set("date", f.date);
+  if (f.method) q.set("method", f.method);
+  if (f.purpose) q.set("purpose", f.purpose);
+  return `/accounting/advances?${q.toString()}`;
+}
+
 /** What still has to be filled before this can be saved — named, so the button can say why. */
 export function missingFor(p: EntryProposal): string | null {
   switch (p.kind) {
@@ -86,6 +98,7 @@ export function missingFor(p: EntryProposal): string | null {
     case "vendor_bill": return !p.fields.vendor_name ? "Add the vendor." : !p.fields.total ? "Add the bill total." : !p.fields.bill_date ? "Add the bill date." : null;
     case "task": return !p.fields.title ? "Add what to do." : !p.fields.due_date ? "Add the day." : null;
     case "payment": return null;
+    case "employee_advance": return !p.fields.amount ? "Add the amount." : !p.fields.employee_name ? "Add who it is for." : null;
   }
 }
 

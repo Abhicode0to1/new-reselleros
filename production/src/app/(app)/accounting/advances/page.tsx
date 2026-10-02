@@ -46,6 +46,20 @@ function todayISO() {
 export default function EmployeeAdvancesPage() {
   const { data: advances = [], isLoading } = useEmployeeAdvances();
   const [disburseOpen, setDisburseOpen] = React.useState(false);
+  /* ?give=1&name=&amount=&date=&method=&purpose= opens Give advance filled — AI Entry sends
+     "Prashant ko kharche ke liye 5000 advance" straight here (2 Oct 2026). Read once after
+     mount, then dropped from the URL so a refresh does not reopen it. */
+  const [prefill, setPrefill] = React.useState<AdvancePrefill | null>(null);
+  React.useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("give") !== "1") return;
+    setPrefill({
+      name: q.get("name") ?? "", amount: q.get("amount") ?? "", date: q.get("date") ?? "",
+      method: q.get("method") ?? "", purpose: q.get("purpose") ?? "",
+    });
+    setDisburseOpen(true);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
   const [recordExpenseFor, setRecordExpenseFor] = React.useState<EmployeeAdvance | null>(null);
   const [topUpFor, setTopUpFor] = React.useState<EmployeeAdvance | null>(null);
 
@@ -246,7 +260,7 @@ export default function EmployeeAdvancesPage() {
       )}
 
       {/* Disburse Advance Modal */}
-      <DisburseAdvanceDialog open={disburseOpen} onOpenChange={setDisburseOpen} />
+      <DisburseAdvanceDialog open={disburseOpen} onOpenChange={setDisburseOpen} prefill={prefill} />
 
       {/* Record Expense Modal */}
       {/* R-101: the normal Expense form (bill attach, GST, categories) with this
@@ -279,7 +293,9 @@ export default function EmployeeAdvancesPage() {
 }
 
 /** Disburse Advance Modal */
-function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+interface AdvancePrefill { name: string; amount: string; date: string; method: string; purpose: string }
+
+function DisburseAdvanceDialog({ open, onOpenChange, prefill }: { open: boolean; onOpenChange: (open: boolean) => void; prefill?: AdvancePrefill | null }) {
   const disburse = useDisburseAdvance();
   const { data: employees = [] } = useEmployees();
   const { data: bankAccounts = [] } = useBankAccounts();
@@ -291,6 +307,20 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const [method, setMethod] = React.useState<string>("bank_transfer");
   const [bankId, setBankId] = React.useState<string>("");
   const [purpose, setPurpose] = React.useState<string>("");
+
+  /* Fill from AI Entry: the employee is matched by name (exact, then first-name), else the
+     name goes in "Or Enter Employee Name" so nothing is silently dropped. */
+  React.useEffect(() => {
+    if (!prefill || !open) return;
+    const n = prefill.name.trim().toLowerCase();
+    const hit = n ? (employees.find((e) => e.name.trim().toLowerCase() === n)
+      ?? employees.find((e) => e.name.trim().toLowerCase().split(/s+/)[0] === n.split(/s+/)[0])) : undefined;
+    if (hit) { setSelectedEmpId(hit.id); setCustomName(""); } else { setSelectedEmpId(""); setCustomName(prefill.name); }
+    if (prefill.amount) setAmount(prefill.amount);
+    if (/^d{4}-d{2}-d{2}$/.test(prefill.date)) setDate(prefill.date);
+    if (prefill.method && prefill.method in ADVANCE_PAYMENT_METHODS) setMethod(prefill.method);
+    if (prefill.purpose) setPurpose(prefill.purpose);
+  }, [prefill, open, employees]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

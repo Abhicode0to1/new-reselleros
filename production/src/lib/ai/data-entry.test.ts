@@ -73,4 +73,10 @@ describe("AI data entry — the model's JSON is untrusted", () => {
     const [p] = sanitizeEntries({ entries: [{ kind: "lead", fields: { company: "Sharma Traders", contact_phone: "9876543210" } }] }, TODAY);
     expect(proposalKeys(p)).toEqual({ phones: ["+919876543210"], emails: [], gstins: [], names: ["Sharma Traders"] });
   });
+  it("money given to our own staff for expenses is an employee advance", () => {
+    const [p] = sanitizeEntries({ entries: [{ kind: "employee_advance", fields: { employee_name: "Prashant", amount: "5000", method: "NEFT", purpose: "kharche" } }] }, TODAY);
+    expect(p.kind).toBe("employee_advance");
+    expect(p.fields).toMatchObject({ employee_name: "Prashant", amount: 5000, date: TODAY, method: "bank_transfer" });
+    expect(dataEntryPrompt(TODAY)).toContain("employee_advance");
+  });
 });

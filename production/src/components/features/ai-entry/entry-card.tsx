@@ -15,7 +15,7 @@ import { cn, rupee } from "@/lib/utils";
 import { EXPENSE_CATEGORIES } from "@/lib/accounting/expense-categories";
 import type { EntryProposal } from "@/lib/ai/data-entry";
 import type { ProposalWithMatches } from "@/app/api/ai/data-entry/route";
-import { warningsFor, missingFor, leadInsert, customerInsert, expenseInsert, vendorBillInsert, taskInsert } from "@/lib/ai/entry-save";
+import { advanceFormHref, warningsFor, missingFor, leadInsert, customerInsert, expenseInsert, vendorBillInsert, taskInsert } from "@/lib/ai/entry-save";
 import { hasStop, type Party } from "@/lib/compliance/entry-rules";
 import { useCreateLead } from "@/lib/queries/leads";
 import { useCreateCustomer } from "@/lib/queries/customers";
@@ -56,6 +56,12 @@ const FIELDS: Record<EntryProposal["kind"], FieldDef[]> = {
   task: [
     { key: "title", label: "To do", wide: true }, { key: "due_date", label: "On", type: "date" }, { key: "company", label: "For" },
   ],
+  employee_advance: [
+    { key: "employee_name", label: "Given to" }, { key: "amount", label: "Amount ₹", type: "number" },
+    { key: "date", label: "Date", type: "date" },
+    { key: "method", label: "Paid by", type: "select", options: ["", "bank_transfer", "upi", "cash", "cheque"] },
+    { key: "purpose", label: "For", wide: true },
+  ],
   payment: [
     { key: "payer", label: "From" }, { key: "amount", label: "Amount ₹", type: "number" },
     { key: "received_on", label: "Received on", type: "date" },
@@ -65,7 +71,7 @@ const FIELDS: Record<EntryProposal["kind"], FieldDef[]> = {
 };
 
 const KIND_LABEL: Record<EntryProposal["kind"], string> = {
-  lead: "Lead", customer: "Customer", expense: "Expense", vendor_bill: "Vendor bill", task: "Follow-up", payment: "Payment received",
+  lead: "Lead", customer: "Customer", expense: "Expense", vendor_bill: "Vendor bill", task: "Follow-up", payment: "Payment received", employee_advance: "Employee advance",
 };
 
 const invoicesHref = (payer: string | null): Route => (payer ? `/invoices?q=${encodeURIComponent(payer)}` : "/invoices") as Route;
@@ -198,6 +204,19 @@ export function EntryCard({ initial, us, todayIST, userId, onDone }: {
       <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
         {saved ? (
           <span className="text-sm text-emerald">✓ Saved · <Link href={saved.href} className="underline">{saved.label}</Link></span>
+        ) : p.kind === "employee_advance" ? (
+          <>
+            {/* Straight to the real entry (Pardeep: "seedha entry par bhi to le ja sakta hai"):
+                the Give advance form, filled — the bank/cash account it leaves from is picked there. */}
+            <span className="text-2xs text-ink-3">{missing ?? "Held as company money with them — not an expense until bills come in."}</span>
+            {missing ? (
+              <span className="text-sm text-ink-3">Fill the fields first</span>
+            ) : (
+              <Link href={advanceFormHref(p.fields) as Route} className="inline-flex items-center rounded-md bg-amber px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber/90">
+                Give advance →
+              </Link>
+            )}
+          </>
         ) : p.kind === "payment" ? (
           <>
             <span className="text-2xs text-ink-3">Money received is recorded against its invoice{p.fields.amount ? ` (${rupee(p.fields.amount)})` : ""}.</span>

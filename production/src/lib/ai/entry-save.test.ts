@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { leadInsert, customerInsert, expenseInsert, vendorBillInsert, taskInsert, missingFor, warningsFor } from "./entry-save";
+import { advanceFormHref, leadInsert, customerInsert, expenseInsert, vendorBillInsert, taskInsert, missingFor, warningsFor } from "./entry-save";
 import type { EntryProposal } from "./data-entry";
 
 const TODAY = "2026-10-02";
@@ -35,5 +35,9 @@ describe("AI Entry → the insert the normal form would make", () => {
     expect(warningsFor(exp, US, TODAY, { vendorYtd: 40_000 }).map((w) => w.code)).toEqual(["tds-194J"]);
     const cust: EntryProposal = { kind: "customer", confidence: 1, why: "", gstinTyped: "27AAAAA0000A1Z0", fields: { name: "A", contact_name: "B", contact_email: null, contact_phone: null, gstin: null, domain: null, address: null } };
     expect(warningsFor(cust, US, TODAY).map((w) => w.code)).toEqual(["gstin-invalid"]);
+  });
+  it("an employee advance opens the Give advance form, filled", () => {
+    expect(advanceFormHref({ employee_name: "Prashant", amount: 5000, date: "2026-10-02", method: null, purpose: "Office expenses" }))
+      .toBe("/accounting/advances?give=1&name=Prashant&amount=5000&date=2026-10-02&purpose=Office+expenses");
   });
 });

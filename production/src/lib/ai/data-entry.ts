@@ -17,7 +17,7 @@
 import { EXPENSE_CATEGORIES } from "@/lib/accounting/expense-categories";
 import { isValidGstin } from "@/lib/utils";
 
-export const ENTRY_KINDS = ["lead", "customer", "expense", "vendor_bill", "task", "payment"] as const;
+export const ENTRY_KINDS = ["lead", "customer", "expense", "vendor_bill", "task", "payment", "employee_advance"] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];
 
 export interface LeadFields {
@@ -41,6 +41,8 @@ export interface VendorBillFields {
   paid_by: string | null;
 }
 export interface TaskFields { title: string | null; due_date: string | null; company: string | null }
+/** Company money handed to OUR staff for expenses — an asset with them, not an expense (R-101). */
+export interface AdvanceFields { employee_name: string | null; amount: number | null; date: string | null; method: string | null; purpose: string | null }
 export interface PaymentFields { payer: string | null; amount: number | null; received_on: string | null; reference: string | null; method: string | null }
 
 interface ProposalBase { confidence: number; why: string; /** A GSTIN read but failing the checksum. */ gstinTyped?: string }
@@ -50,7 +52,8 @@ export type EntryProposal = ProposalBase & (
   | { kind: "expense"; fields: ExpenseFields }
   | { kind: "vendor_bill"; fields: VendorBillFields }
   | { kind: "task"; fields: TaskFields }
-  | { kind: "payment"; fields: PaymentFields });
+  | { kind: "payment"; fields: PaymentFields }
+  | { kind: "employee_advance"; fields: AdvanceFields });
 
 export const MAX_PROPOSALS = 10;
 export const MAX_INPUT_CHARS = 12_000;
@@ -69,6 +72,7 @@ Kinds and fields (use null for anything not stated — NEVER guess a phone, emai
 - expense: money WE spent without a GST tax invoice (cab, tea, petrol, small purchase). fields: vendor_name, amount (INR number), expense_date, category (one of: ${EXPENSE_CATEGORIES.join(", ")}), description, paid_by (cash|upi|bank|card, only if stated)
 - vendor_bill: a supplier's tax invoice/bill to us (anything showing the supplier's GSTIN and GST). fields: vendor_name, vendor_gstin, buyer_gstin (the GSTIN it is billed TO), bill_no, bill_date, subtotal, cgst, sgst, igst, total, paid_by (cash|upi|bank|card, only if stated)
 - task: a to-do or callback. fields: title (imperative, short), due_date (YYYY-MM-DD), company
+- employee_advance: WE give money to our own employee/staff to spend on company expenses ("Prashant ko kharche ke liye 5000 advance", petty cash to office boy). Not a task, not an expense. fields: employee_name, amount, date (YYYY-MM-DD, today if "dena hai"/"diya"), method (bank_transfer|upi|cash|cheque, only if stated), purpose
 - payment: someone says they PAID US. fields: payer, amount, received_on, reference (UTR/txn id), method (upi|neft|imps|rtgs|cheque|cash|card)
 
 Rules:
@@ -172,6 +176,15 @@ function fieldsFor(kind: EntryKind, f: Record<string, unknown>, today: string): 
     case "task": {
       const x: TaskFields = { title: str(f.title, 160), due_date: cleanDate(f.due_date, today) ?? today, company: str(f.company, 120) };
       return x.title ? x : null;
+    }
+    case "employee_advance": {
+      const m = str(f.method, 20)?.toLowerCase() ?? null;
+      const method = m === "bank" || m === "neft" || m === "imps" || m === "rtgs" ? "bank_transfer" : m;
+      const x: AdvanceFields = {
+        employee_name: str(f.employee_name, 80), amount: money(f.amount), date: cleanDate(f.date, today) ?? today,
+        method: method && ["bank_transfer", "upi", "cash", "cheque"].includes(method) ? method : null, purpose: str(f.purpose, 200),
+      };
+      return x.amount ? x : null;
     }
     case "payment": {
       const m = str(f.method, 20)?.toLowerCase() ?? null;
