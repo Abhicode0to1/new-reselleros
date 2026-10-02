@@ -10852,9 +10852,11 @@ export type Database = {
           email: string
           employee_id: string | null
           full_name: string | null
+          gets_new_leads: boolean
           id: string
           initials: string | null
           is_active: boolean
+          last_lead_assigned_at: string | null
           manager_id: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
@@ -10870,9 +10872,11 @@ export type Database = {
           email: string
           employee_id?: string | null
           full_name?: string | null
+          gets_new_leads?: boolean
           id: string
           initials?: string | null
           is_active?: boolean
+          last_lead_assigned_at?: string | null
           manager_id?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
@@ -10888,9 +10892,11 @@ export type Database = {
           email?: string
           employee_id?: string | null
           full_name?: string | null
+          gets_new_leads?: boolean
           id?: string
           initials?: string | null
           is_active?: boolean
+          last_lead_assigned_at?: string | null
           manager_id?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
