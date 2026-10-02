@@ -69,9 +69,37 @@ comment on column public.contacts.is_primary is
   'The one contact who receives invoices and payment reminders. At most one per '
   'customer — enforced by contacts_one_primary_per_customer.';
 
--- ── Backfill: every customer that has a contact detail gets a contact row ───
+-- ── Backfill step 1: link the contact the customer ALREADY has ───────────────
+-- Found by the 2 Oct 2026 go-live rehearsal on a clone of production: 26 customers
+-- first arrived through the enquiry form, which created a contact (source 'enquiry',
+-- no customer_id) with the same email. Step 2 then inserted a second contact for the
+-- same person and hit contacts_unique_email_per_tenant — the whole migration failed on
+-- real data, and had it run unguarded on production it would have stopped half-way.
+-- That enquiry contact IS this customer's person: link it (and keep its history)
+-- rather than duplicate it. Only when exactly one customer in the tenant carries that
+-- email — an ambiguous match is left alone for step 2 to handle.
+update public.contacts ct
+   set customer_id = c.id,
+       role        = coalesce(ct.role, 'poc'),
+       is_primary  = true,
+       status      = 'engaged'
+  from public.customers c
+ where ct.tenant_id   = c.tenant_id
+   and ct.customer_id is null
+   and ct.email is not null
+   and lower(ct.email) = lower(trim(c.contact_email))
+   and not exists (select 1 from public.contacts x where x.customer_id = c.id)
+   and (select count(*) from public.customers c2
+         where c2.tenant_id = c.tenant_id
+           and lower(trim(c2.contact_email)) = lower(ct.email)) = 1;
+
+-- ── Backfill step 2: every other customer with a contact detail gets a row ──
 -- Idempotent by design: skips a customer that already has contacts, so re-running
 -- cannot duplicate anybody. Named `-- ZZ` nothing; these are real records.
+-- An email another contact in the tenant already holds (a second customer with the
+-- same address, or a contact linked elsewhere) is left OFF the new row instead of
+-- breaking the unique index: the customer still gets its primary contact, and the
+-- operator sees a contact without an email rather than a failed migration.
 insert into public.contacts (
   id, tenant_id, customer_id, full_name, email, phone, company, title,
   role, is_primary, source, status, created_at
@@ -88,7 +116,18 @@ select
     nullif(trim(coalesce(c.contact_first_name, '') || ' ' || coalesce(c.contact_last_name, '')), ''),
     c.name
   ),
-  nullif(trim(coalesce(c.contact_email, '')), ''),
+  case
+    when exists (select 1 from public.contacts y
+                  where y.tenant_id = c.tenant_id
+                    and y.email is not null
+                    and lower(y.email) = lower(trim(c.contact_email)))
+      or (select count(*) from public.customers c3
+           where c3.tenant_id = c.tenant_id
+             and lower(trim(c3.contact_email)) = lower(trim(c.contact_email))
+             and c3.id < c.id) > 0
+    then null
+    else nullif(trim(coalesce(c.contact_email, '')), '')
+  end,
   coalesce(nullif(trim(coalesce(c.contact_phone, '')), ''),
            nullif(trim(coalesce(c.contact_mobile, '')), '')),
   c.name,

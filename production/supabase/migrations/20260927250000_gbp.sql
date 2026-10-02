@@ -19,7 +19,7 @@
 create table if not exists public.gbp_locations (
   id                uuid primary key default gen_random_uuid(),
   tenant_id         uuid not null references public.tenants(id) on delete cascade,
-  connected_user_id uuid not null references auth.users(id) on delete cascade,   -- whose Google token syncs it
+  connected_user_id uuid not null references public.users(id) on delete cascade,   -- whose Google token syncs it (public.users, not auth.users: the prod migration role may not reference the auth schema; same id, and public.users cascades from auth.users)
   account_name      text not null,                       -- "accounts/123"
   location_name     text not null,                       -- "locations/456"
   title             text not null,

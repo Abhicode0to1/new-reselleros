@@ -28,7 +28,7 @@ create table if not exists public.ad_accounts (
   name               text not null,
   currency           text not null default 'INR',
   login_customer_id  text,                                -- Google: manager (MCC) id to send as login-customer-id
-  connected_user_id  uuid references auth.users(id) on delete set null,
+  connected_user_id  uuid references public.users(id) on delete set null,   -- public.users, not auth.users: see 20260927250000_gbp.sql
   access_token       text,                                -- Meta only (long-lived user token)
   token_expires_at   timestamptz,
   enabled            boolean not null default true,
