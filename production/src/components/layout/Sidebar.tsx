@@ -147,7 +147,13 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
     <div className="flex flex-col h-full overflow-hidden">
       {/* Brand — shows the LOGGED-IN tenant name (not hardcoded) */}
       <div className={cn("flex items-center gap-2.5 border-b border-hairline flex-shrink-0", collapsed ? "justify-center px-2 py-4" : "px-4 py-4")}>
-        <div className="w-9 h-9 rounded-md bg-ink text-paper grid place-items-center font-serif text-lg flex-shrink-0 overflow-hidden">
+        {/* The dark tile is for the letter monogram only. A real logo sits on the app's own
+            background — on the tile, a transparent logo showed a dark square behind it
+            (Pardeep, 3 Oct 2026: "logo ka background app ke background se match karo"). */}
+        <div className={cn(
+          "w-9 h-9 rounded-md grid place-items-center font-serif text-lg flex-shrink-0 overflow-hidden",
+          me?.tenantLogoUrl ? "bg-transparent" : "bg-ink text-paper",
+        )}>
           {me?.tenantLogoUrl ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img src={me.tenantLogoUrl} alt={me.tenantName ?? "Logo"} className="h-full w-full object-contain" />
