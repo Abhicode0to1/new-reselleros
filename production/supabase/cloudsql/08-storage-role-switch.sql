@@ -1,0 +1,13 @@
+-- 08 · Let storage-api switch into the request's role — 2 Oct 2026.
+--
+-- storage-api connects as supabase_storage_admin (phase2/docker-compose.yml) and runs every
+-- request under `SET ROLE anon | authenticated | service_role`. On this Cloud SQL instance
+-- supabase_storage_admin was a member of none of them, so the switch failed with 42501 —
+-- which storage-api reports as "new row violates row-level security policy". Every storage
+-- call failed, even GET of a public file (measured: /storage/v1/object/public/logos/x → 403
+-- with that message, for an existing and a non-existent bucket alike).
+--
+-- The standard Supabase arrangement (roles.sql): authenticator may become anon /
+-- authenticated / service_role, and supabase_storage_admin is granted authenticator.
+-- Run as postgres. Idempotent.
+grant authenticator to supabase_storage_admin;
