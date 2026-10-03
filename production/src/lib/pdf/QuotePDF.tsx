@@ -27,6 +27,7 @@ import {
 import { formatDate } from "@/lib/utils";
 import { pdfRupee } from "./pdf-money";
 import { pdfText } from "./pdf-text";
+import { lineDomainNote } from "./invoice-display";
 import { isForeignCurrency, formatForeign } from "@/lib/currency";
 import type { QuoteLineItem, LineCommitment, BillingCycle } from "@/lib/supabase/database.types";
 import {
@@ -584,6 +585,8 @@ export function QuotePDF(props: QuotePDFProps) {
                 <View key={line.id} style={s.tr} wrap={false}>
                   <View style={s.tdDesc}>
                     <Text style={s.lineName}>{pdfText(line.name)}</Text>
+                    {/* Which website the line is for (3 Oct 2026; invoice-display.ts). */}
+                    {lineDomainNote(line) && <Text style={s.lineMeta}>{pdfText(lineDomainNote(line) ?? "")}</Text>}
                     <Text style={s.lineMeta}>
                       Per seat{perInvoice ? "" : " per year"} · HSN 998313
                       {line.commitment && ` · ${scheduleLabel(line.commitment, effectiveCycle)}`}
