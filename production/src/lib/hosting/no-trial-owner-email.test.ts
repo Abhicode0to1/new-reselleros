@@ -12,13 +12,17 @@ const FILES = [
   "src/app/api/public/trial/hosting/confirm/route.ts",
   "src/app/api/public/trial/workspace/route.ts",
 ];
+/* The confirm route sends no email at all since 3 Oct 2026 — DMS sends the customer's
+   "trial is live" email when it creates the account — so it has no sendEmail to anchor on. */
+const SENDS_CUSTOMER_EMAIL = new Set(["src/lib/hosting/start-trial.ts", "src/app/api/public/trial/workspace/route.ts"]);
 const code = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 describe("trials never email the owner", () => {
   for (const f of FILES) {
     it(f, () => {
       const c = code(f);
-      expect(c).toContain("sendEmail("); // guard: the customer's email is still there to scan
+      if (SENDS_CUSTOMER_EMAIL.has(f)) expect(c).toContain("sendEmail("); // guard: the customer's email is still there to scan
+      else expect(c).not.toContain("sendEmail(");
       expect(c).not.toMatch(/buy_page_trial_owner/);
       expect(c).not.toMatch(/to:\s*owner\.to/);
     });
