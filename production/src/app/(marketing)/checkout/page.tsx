@@ -332,7 +332,9 @@ export default function CheckoutPage() {
           method: METHODS.find((m) => m.label === method)?.razorpay,
         },
         notes: { quoteId: order.quoteId ?? "", domain: hasHosting ? domain.trim() : "" },
-        theme: { color: "#C2410C" },
+        /* The storefront blue (site.css --primary), so the payment window matches the shop
+           around it (3 Oct 2026). It was the staff app's orange. */
+        theme: { color: "#1668E3" },
         handler: () => {
           try { window.sessionStorage.removeItem("anutech.trial"); window.sessionStorage.setItem("anutech.order", order.quoteId || ""); } catch { /* default */ }
           cart.clear();
