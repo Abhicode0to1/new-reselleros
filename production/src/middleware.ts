@@ -9,7 +9,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { allowedRoutesForRole, ROLE_HOME, type UserRole } from "@/lib/nav";
+import { isRouteAllowed, ROLE_HOME, type UserRole } from "@/lib/nav";
 import { rateLimitShared, clientIp, publicApiLimit } from "@/lib/security/rate-limit";
 
 // Routes that require authentication (the entire app shell).
@@ -187,10 +187,7 @@ export async function middleware(request: NextRequest) {
   // Owners + managers get the full app — no gate applied to them.
   if (isAuthed && isProtected && role && role !== "owner" && role !== "manager") {
     const userRole = role as UserRole;
-    const allowed = allowedRoutesForRole(userRole, { canViewDeals });
-    const isAllowedPath = allowed.some(
-      (a) => pathname === a || pathname.startsWith(a + "/"),
-    );
+    const isAllowedPath = isRouteAllowed(userRole, pathname, { canViewDeals });
     if (!isAllowedPath) {
       const url = request.nextUrl.clone();
       url.pathname = ROLE_HOME[userRole];

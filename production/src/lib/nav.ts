@@ -236,6 +236,24 @@ export function allowedRoutesForRole(role: UserRole, opts: NavFilterOpts = {}): 
   return flattenNav(filterNavForRole(APP_NAV, role, opts)).map((e) => e.item.href);
 }
 
+/**
+ * Pages a role must NOT open even though a parent route admits it (R-138, 3 Oct 2026).
+ * The guard matches by prefix, so billing's "/accounting" (the Overview) admitted every
+ * /accounting/* page. The Balance Sheet is the one that lies to billing: since role hardening
+ * (migration 20260930175000) only SALARY_ROLES may read salary_payments, so billing saw salary
+ * payable and PF/ESI/TDS dues as Rs 0 with no warning. Pardeep chose to take it away.
+ */
+export const ROUTE_DENY: Partial<Record<UserRole, string[]>> = {
+  billing: ["/accounting/balance-sheet"],
+};
+
+/** The route guard: allowed by the nav (prefix) and not denied for this role. */
+export function isRouteAllowed(role: UserRole, pathname: string, opts: NavFilterOpts = {}): boolean {
+  const under = (a: string) => pathname === a || pathname.startsWith(a + "/");
+  if ((ROUTE_DENY[role] ?? []).some(under)) return false;
+  return allowedRoutesForRole(role, opts).some(under);
+}
+
 /** Where each role lands by default (after login + on disallowed-route redirect). */
 export const ROLE_HOME: Record<UserRole, string> = {
   owner:        "/dashboard",
@@ -273,6 +291,9 @@ export const ROLE_HOME: Record<UserRole, string> = {
 // auto-opens when you're inside it.
 const OM: UserRole[] = ["owner", "manager"];
 const OMB: UserRole[] = ["owner", "manager", "billing"];
+/** Who may read salaries (RLS on salary_payments since 20260930175000) — and so who gets a
+ *  Balance Sheet whose salary lines are real. */
+export const SALARY_ROLES: UserRole[] = ["owner", "manager", "accountant"];
 /** Books: the accountant / CA reads every one of these. */
 const BOOKS: UserRole[] = ["owner", "manager", "billing", "accountant"];
 /** Everyone on the team except the external partner agent. */
@@ -458,7 +479,7 @@ export const APP_NAV: NavSection[] = [
         id: "reports",             href: "/reports",                  label: "Reports",             icon: "chart", roles: BOOKS,
         directory: [
           { id: "pnl",                 href: "/accounting/pnl",           label: "P&L Report",          icon: "trending_up", roles: BOOKS, group: "Financial statements" },
-          { id: "balance-sheet",       href: "/accounting/balance-sheet", label: "Balance Sheet",       icon: "layout", roles: BOOKS, group: "Financial statements" },
+          { id: "balance-sheet",       href: "/accounting/balance-sheet", label: "Balance Sheet",       icon: "layout", roles: SALARY_ROLES, group: "Financial statements" },
           { id: "cash-flow",           href: "/accounting/cash-flow",     label: "Cash Flow",           icon: "rupee", roles: BOOKS, group: "Financial statements" },
           /* S33: CA sabse pehle yahi do maangta hai. */
           { id: "trial-balance",       href: "/accounting/trial-balance", label: "Trial Balance",       icon: "file", roles: BOOKS, group: "Financial statements" },

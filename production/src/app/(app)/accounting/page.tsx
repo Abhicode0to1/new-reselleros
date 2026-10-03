@@ -45,11 +45,17 @@ import {
   type MoneyDirection, type MoneyFolderMeta, type MoneyFolderState,
 } from "@/lib/accounting/money-inbox";
 import { localDateISO } from "@/lib/leads/outcomes";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { SALARY_ROLES, type UserRole } from "@/lib/nav";
 
 type Tone = "emerald" | "rose" | "amber" | "indigo" | "ink";
 
 export default function AccountingOverviewPage() {
   const autoQ = useBalanceSheetAuto();
+  const { data: me } = useCurrentUser();
+  /* R-138: a role that cannot read salaries gets 0 for them from the database; say so rather
+     than show a "You owe" that silently leaves salary and PF/ESI/TDS dues out. */
+  const salaryHidden = !!me?.role && !SALARY_ROLES.includes(me.role as UserRole);
   const unrecQ = useUnreconciledExpenses();
   const accountsQ = useBankAccounts();
 
@@ -131,7 +137,7 @@ export default function AccountingOverviewPage() {
         <HeroKpi label="Owed to you" value={owedToYou} tone="amber" loading={loading}
           hint="Receivables + advances" href="/accounting/aging" />
         <HeroKpi label="You owe" value={youOwe} tone={youOwe > 0 ? "rose" : "ink"} loading={loading}
-          hint="Payables, salary, loans, GST-side" href="/accounting/expenses" />
+          hint={salaryHidden ? "Payables, loans, GST-side · salary not shown for your role" : "Payables, salary, loans, GST-side"} href="/accounting/expenses" />
         <HeroKpi label={`GST due · ${fyLabel}`} value={gstDue} tone={gstDue > 0 ? "rose" : "emerald"} loading={loading}
           hint="Net output − input, before filing" href="/accounting/gst" />
       </div>

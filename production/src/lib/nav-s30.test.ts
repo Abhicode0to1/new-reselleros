@@ -19,7 +19,7 @@ import path from "node:path";
 
 import snapshot from "./__fixtures__/nav-before-s30.json";
 import {
-  APP_NAV, ROLE_HOME, SCREEN_TITLES, allowedRoutesForRole, filterNavForRole, flattenNav,
+  APP_NAV, ROLE_HOME, SCREEN_TITLES, allowedRoutesForRole, isRouteAllowed, filterNavForRole, flattenNav,
   getCrumb, groupDirectory, sectionCrumb, type NavItem, type UserRole,
 } from "./nav";
 import { USER_ROLES } from "./auth/roles";
@@ -78,6 +78,10 @@ const ADDED_3OCT_BOOKS = ["/accounting/banking/brs", "/accounting/banking/rules"
   "/accounting/profitability", "/reports/purchases", "/accounting/tds-receivable/year-end", "/compliance/gst", "/compliance/income-tax", "/compliance/roc"];
 const ADDED_3OCT_BILLING = ["/ai-entry", "/online-orders", "/accounting/advances", "/accounting/reimbursements"];
 const ADDED_3OCT_SALES = ["/ai-entry"];
+/** R-138 (3 Oct 2026): billing loses the Balance Sheet — salaries are hidden from it by RLS,
+ *  so its Balance Sheet showed salary payable and statutory dues as Rs 0 (Pardeep's call). */
+const REMOVED_3OCT: Record<string, string[]> = { billing: ["/accounting/balance-sheet"] };
+const removedFor = (role: string) => REMOVED_3OCT[role] ?? [];
 const addedFor = (role: string) => [
   ...(role === "owner" || role === "manager" ? ADDED_3OCT_OM : []),
   ...(role === "owner" ? ADDED_3OCT_OWNER : []),
@@ -141,7 +145,7 @@ describe.each(USER_ROLES.map((r) => [r]))("role %s", (role) => {
 
   it("can still click to every page it could before", () => {
     const now = clickable(r);
-    const lost = OLD_MENU[r].filter((h) => !now.has(h));
+    const lost = OLD_MENU[r].filter((h) => !now.has(h) && !removedFor(r).includes(h));
     expect(lost, `${r} lost: ${lost.join(", ")}`).toEqual([]);
   });
 
@@ -152,7 +156,7 @@ describe.each(USER_ROLES.map((r) => [r]))("role %s", (role) => {
   });
 
   it("gets the same allowedRoutesForRole() as before (the middleware route guard)", () => {
-    const expected = [...new Set([...OLD_ALLOWED[r], ...addedFor(r)])].sort();
+    const expected = [...new Set([...OLD_ALLOWED[r], ...addedFor(r)])].filter((h) => !removedFor(r).includes(h)).sort();
     expect([...new Set(allowedRoutesForRole(r))].sort()).toEqual(expected);
   });
 
@@ -166,6 +170,10 @@ describe.each(USER_ROLES.map((r) => [r]))("role %s", (role) => {
       permits(oldAllowed, p) !== permits(newAllowed, p) && !permits(added, p) && !permits(REMOVED_ON_PURPOSE, p),
     );
     expect(changed, `${r}: guard answer changed for ${changed.join(", ")}`).toEqual([]);
+  });
+
+  it("the guard refuses exactly the pages removed on purpose", () => {
+    for (const h of removedFor(r)) expect(isRouteAllowed(r, h), `${r} still opens ${h}`).toBe(false);
   });
 
   it("can reach its own ROLE_HOME (no login loop)", () => {
