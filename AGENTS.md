@@ -221,7 +221,13 @@ Mono, Anutech blue `#1668E3` (`site/site.css`). Built in DMS (`a40887b8`, `03d50
 - **Razorpay windows:** storefront blue on the shop checkout and in DMS. The Workspace buy page and
   the quote-accept page stay orange: their whole pages are in that palette, and the quote page also
   serves other reseller tenants.
+- **Asking for the profile:** DMS's "complete your profile" banner and the cart's profile gate apply
+  only to domains (a hosting-only customer is never nagged; buying a domain asks for the address),
+  and the banner reads the saved account, so a saved mobile is never called missing (DMS `96a27f82`,
+  `26eecfde`).
 Any new customer-facing email or screen in DMS follows this; never a separate DMS identity.
+The DMS repo's working branch for Pawan is `website-pawan` too (renamed from `pawan-api-system` on
+3 Oct 2026; the old branch is deleted).
 
 Open items for the integration are tracked in `Todos.md`, not here.
 
@@ -399,10 +405,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **9,100 tests
-passing across 566 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
-with 0 errors** — measured 3 Oct 2026 on `website-pawan` at `3b0301ad`.
-Earlier markers: 8,410/517 on 30 Sep after merging `manager-pardeep` (C-053); 8,242/504 the same day before that merge; 8,193/499 after `9ad95378` (trials send the
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **9,106 tests
+passing across 567 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
+with 0 errors** — measured 3 Oct 2026 on `website-pawan` at `133fd00e`.
+Earlier markers: 9,100/566 at `3b0301ad` the same day; 8,410/517 on 30 Sep after merging `manager-pardeep` (C-053); 8,242/504 the same day before that merge; 8,193/499 after `9ad95378` (trials send the
 owner no email); 8,111/486 on 29 Sep after merging `abhishek-pre-merge` (`3bebf671`: R-012 renewal quote,
 R-018 dunning pay link); 8,049/480 the same day after the fourth
 `pardeep-sir` merge (`ddde2754`); 7,972/477 the same day after the Tailwind dev-server fix; 7,933/472 on 28 Sep

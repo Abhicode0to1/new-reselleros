@@ -763,6 +763,11 @@ scan test:
   "Ask for more trial time", "Not me — check my details". The wording and buttons per case live in
   `site/lib/checkout-problem.ts` (tested); a failed payment never says "nothing was charged". The checkout's
   waits use `<BusyPanel variant="modal">`, a centred card, so the form under it does not move.
+- **A pop-up that locks page scrolling uses `lib/ui/scroll-lock.ts` (3 Oct 2026).** Never save-and-restore
+  `body.style.overflow` yourself: the progress card and Razorpay both did, Razorpay put back the card's
+  "hidden", and `/done` arrived unscrollable after a payment. The lock is counted; the checkout calls
+  `settlePageScroll()` after Razorpay closes, and `/done` settles on arrival
+  (`src/lib/ui/scroll-lock.test.ts`).
 
 ---
 
