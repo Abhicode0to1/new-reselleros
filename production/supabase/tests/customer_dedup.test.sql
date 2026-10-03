@@ -7,6 +7,10 @@
 --   2. NO-REGRESSION: lead email with NO existing customer → new customer
 --      created + subscription mrr ex-GST (8640).
 --   3. accept_quote: same dedup on the no-payment accept path.
+--
+-- R-137 (3 Oct 2026): reuse now needs the SAME BUSINESS — same email AND a matching name
+-- (or the same GSTIN). The leads here spell the existing name with a legal suffix; the
+-- "same email, different business" case lives in customer_match_needs_name.test.sql.
 
 -- 1) record_payment dedup
 begin;
@@ -14,8 +18,8 @@ select set_config('request.jwt.claims','{"role":"service_role"}',true);
 insert into public.tenants (id,name,email,state_code,doc_code) values ('11110000-0000-0000-0000-0000000000d1','DD1','dd1@x.in','07','DDA1');
 insert into public.customers (id,tenant_id,name,contact_email) values ('cccccccc-0000-0000-0000-0000000000d1','11110000-0000-0000-0000-0000000000d1','Existing Co','dup@x.in');
 insert into public.document_series (tenant_id,doc_type,fiscal_year,prefix,last_number) values ('11110000-0000-0000-0000-0000000000d1','purchase_order',public.indian_fiscal_year(current_date),'PO',990000);
-insert into public.leads (id,tenant_id,company,contact_email,stage,source,priority) values ('L-DD1','11110000-0000-0000-0000-0000000000d1','New Co Name','dup@x.in','new','manual','medium');
-insert into public.quotes (id,tenant_id,lead_id,customer_id,customer_name,amount,subtotal,tax_rate,status,payment_status,line_items) values ('Q-DD1','11110000-0000-0000-0000-0000000000d1','L-DD1',null,'New Co Name',122342,103680,18,'sent','awaiting','[{"name":"Google Workspace Standard","qty":10,"rate":10368,"commitment":"annual_yearly"}]'::jsonb);
+insert into public.leads (id,tenant_id,company,contact_email,stage,source,priority) values ('L-DD1','11110000-0000-0000-0000-0000000000d1','Existing Co Pvt. Ltd.','dup@x.in','new','manual','medium');
+insert into public.quotes (id,tenant_id,lead_id,customer_id,customer_name,amount,subtotal,tax_rate,status,payment_status,line_items) values ('Q-DD1','11110000-0000-0000-0000-0000000000d1','L-DD1',null,'Existing Co Pvt. Ltd.',122342,103680,18,'sent','awaiting','[{"name":"Google Workspace Standard","qty":10,"rate":10368,"commitment":"annual_yearly"}]'::jsonb);
 do $$ declare n int; qc uuid; begin
   perform public.record_payment('Q-DD1',122342,'upi','dd1ref');
   select count(*) into n from public.customers where tenant_id='11110000-0000-0000-0000-0000000000d1' and lower(contact_email)='dup@x.in';
@@ -48,7 +52,7 @@ begin;
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
 insert into public.tenants (id,name,email,state_code,doc_code) values ('11110000-0000-0000-0000-0000000000d3','DD3','dd3@x.in','07','DDA3');
 insert into public.customers (id,tenant_id,name,contact_email) values ('cccccccc-0000-0000-0000-0000000000d3','11110000-0000-0000-0000-0000000000d3','Existing 3','dup3@x.in');
-insert into public.leads (id,tenant_id,company,contact_email,stage,source,priority) values ('L-DD3','11110000-0000-0000-0000-0000000000d3','New 3','dup3@x.in','quote','manual','medium');
+insert into public.leads (id,tenant_id,company,contact_email,stage,source,priority) values ('L-DD3','11110000-0000-0000-0000-0000000000d3','Existing 3 Pvt Ltd','dup3@x.in','quote','manual','medium');
 insert into public.quotes (id,tenant_id,lead_id,customer_id,customer_name,amount,subtotal,tax_rate,status,payment_status,line_items) values ('Q-DD3','11110000-0000-0000-0000-0000000000d3','L-DD3',null,'New 3',122342,103680,18,'sent','none','[]'::jsonb);
 do $$ declare res jsonb; n int; begin
   res := public.accept_quote('Q-DD3');
