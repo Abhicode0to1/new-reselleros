@@ -73,9 +73,11 @@ interface MetricProps {
   hint?: string;
   loading: boolean;
   failed: boolean;
+  /** The hint line appears once the data is in; while loading, keep its line so nothing jumps (R-134). */
+  withHint?: boolean;
 }
 
-function Metric({ href, label, value, hint, loading, failed }: MetricProps) {
+function Metric({ href, label, value, hint, loading, failed, withHint }: MetricProps) {
   return (
     <Link
       href={href as Route}
@@ -88,6 +90,7 @@ function Metric({ href, label, value, hint, loading, failed }: MetricProps) {
             {failed ? "Couldn't load — open the screen" : hint}
           </span>
         )}
+        {loading && (hint || withHint) && <span aria-hidden className="block text-3xs">&nbsp;</span>}
       </span>
       {loading ? (
         <Skeleton className="h-4 w-12 shrink-0" />
@@ -109,7 +112,35 @@ function FunctionCard({ title, children }: { title: string; children: React.Reac
   );
 }
 
+/* While the signed-in user is still loading (role undefined) the section keeps its place as a
+   skeleton of the same shape, instead of popping in later and pushing the page down (R-134:
+   the UI agent measured the Dashboard's layout shift at 1.07, "poor" is anything over 0.25). */
+const SHAPE: Array<[string, Array<[string, boolean]>]> = [
+  ["Growth", [["New leads", false], ["From the website", true], ["Trials started", true]]],
+  ["Sales", [["Won this month", true], ["Pipeline", true]]],
+  ["Money", [["Invoiced", true], ["Collected", false], ["Still owed", true], ["Overdue invoices", false]]],
+  ["Customers & Ops", [["New customers", false], ["Monthly revenue (MRR)", true], ["Renewals in 30 days", true], ["Open tickets", false], ["Waiting to activate", false]]],
+];
+
+function CompanyPending() {
+  return (
+    <section aria-hidden className="mb-4">
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-3">Company</h2>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {SHAPE.map(([title, rows]) => (
+          <FunctionCard key={title} title={title}>
+            {rows.map(([label, withHint]) => (
+              <Metric key={label} href="#" label={label} value={null} loading failed={false} withHint={withHint} />
+            ))}
+          </FunctionCard>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function CompanySection({ role }: { role: string | null | undefined }) {
+  if (role === undefined) return <CompanyPending />;
   if (!role || !COMPANY_ROLES.has(role)) return null;
   return <CompanyCards />;
 }
@@ -154,23 +185,23 @@ function CompanyCards() {
             {...state(leads)} />
           <Metric href="/lead-gen" label="From the website" value={growth?.fromWebsite ?? null}
             hint="Enquiry, buy and trial forms" {...state(leads)} />
-          <Metric href="/subscriptions" label="Trials started" value={trialsStarted}
+          <Metric href="/subscriptions" label="Trials started" value={trialsStarted} withHint
             hint={running.data ? `${running.data.length} running now` : undefined} {...state(trials)} />
         </FunctionCard>
 
         <FunctionCard title="Sales">
-          <Metric href={drillHref("dealsWonMonth")} label="Won this month" value={money$(dealStrip?.wonThisMonth.value)}
+          <Metric href={drillHref("dealsWonMonth")} label="Won this month" value={money$(dealStrip?.wonThisMonth.value)} withHint
             hint={dealStrip ? plural(dealStrip.wonThisMonth.count, "deal", "deals") : undefined} {...state(deals)} />
-          <Metric href={drillHref("dealsOpen")} label="Pipeline" value={money$(dealStrip?.pipeline.value)}
+          <Metric href={drillHref("dealsOpen")} label="Pipeline" value={money$(dealStrip?.pipeline.value)} withHint
             hint={dealStrip ? plural(dealStrip.pipeline.count, "open deal", "open deals") : undefined} {...state(deals)} />
         </FunctionCard>
 
         <FunctionCard title="Money">
-          <Metric href="/invoices" label="Invoiced" value={money$(money?.invoicedThisMonth.value)}
+          <Metric href="/invoices" label="Invoiced" value={money$(money?.invoicedThisMonth.value)} withHint
             hint={money ? plural(money.invoicedThisMonth.count, "invoice", "invoices") : undefined} {...state(invoices)} />
           <Metric href="/payments" label="Collected" value={money$(collected)}
             {...state(payments, projectPayments)} />
-          <Metric href={drillHref("invoicesUnpaid")} label="Still owed" value={money$(money?.outstanding.value)}
+          <Metric href={drillHref("invoicesUnpaid")} label="Still owed" value={money$(money?.outstanding.value)} withHint
             hint={money ? plural(money.outstanding.count, "unpaid invoice", "unpaid invoices") : undefined} {...state(invoices)} />
           <Metric href={drillHref("invoicesOverdue")} label="Overdue invoices" value={money?.overdueCount ?? null}
             {...state(invoices)} />
@@ -178,9 +209,9 @@ function CompanyCards() {
 
         <FunctionCard title="Customers & Ops">
           <Metric href="/customers" label="New customers" value={newCustomers} {...state(customers)} />
-          <Metric href={drillHref("subsActive")} label="Monthly revenue (MRR)" value={money$(subSummary?.mrr)}
+          <Metric href={drillHref("subsActive")} label="Monthly revenue (MRR)" value={money$(subSummary?.mrr)} withHint
             hint={subSummary ? plural(subSummary.activeCount, "active subscription", "active subscriptions") : undefined} {...state(subs)} />
-          <Metric href={drillHref("subsExpiring")} label="Renewals in 30 days" value={subSummary?.renewalsDue.count ?? null}
+          <Metric href={drillHref("subsExpiring")} label="Renewals in 30 days" value={subSummary?.renewalsDue.count ?? null} withHint
             hint={subSummary ? `${money$(subSummary.renewalsDue.value)} a month` : undefined} {...state(subs)} />
           <Metric href="/support" label="Open tickets" value={openTickets} {...state(tickets)} />
           <Metric href="/provisioning" label="Waiting to activate" value={waiting} {...state(queue)} />

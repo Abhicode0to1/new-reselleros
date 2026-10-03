@@ -21,10 +21,11 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 export function DealsStrip({ role }: { role: string | null | undefined }) {
   const allowed = canSeeDeals(role);
   const { data, isLoading, error } = useDealRows(allowed);
-  if (!allowed) return null;
+  // role undefined = the signed-in user is still loading: hold the strip's place (R-134).
+  if (!allowed && role !== undefined) return null;
 
   const s = data ? summarizeDealStrip(data) : null;
-  const loading = isLoading || !s;
+  const loading = role === undefined || isLoading || !s;
   const tiles = s ? [
     { label: "Pipeline", value: rupee(s.pipeline.value, { compact: true }), icon: "target",
       trend: plural(s.pipeline.count, "open deal", "open deals"), href: drillHref("dealsOpen") },

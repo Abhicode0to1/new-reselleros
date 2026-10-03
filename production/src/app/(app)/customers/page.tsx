@@ -593,7 +593,7 @@ export default function CustomersPage() {
 
       {/* Sticky Segment chips + search */}
       {!isLoading && customers && customers.length > 0 && !selectedId && (
-        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-2.5">
+        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-2.5">
           <div className="flex justify-between items-center gap-3 flex-wrap sm:flex-nowrap">
             <div className="w-full sm:w-64 shrink-0">
               <Input

@@ -45,8 +45,11 @@ const config: Config = {
        * before/after measurement.
        */
       fontSize: {
-        "3xs": "0.625rem", //  10px — 820 uses
-        "2xs": "0.6875rem", // 11px — 1,143 uses, the app's most common size
+        /* R-087 / R-134 (3 Oct 2026): both rungs raised to 12px. At 10–11px labels, dates and
+           badges could not be read on a phone, and the UI agent counted 55 such texts on the
+           Dashboard alone. 12px is the floor; the names stay so no call site changes. */
+        "3xs": "0.75rem", // 12px (was 10px)
+        "2xs": "0.75rem", // 12px (was 11px)
       },
       fontFamily: {
         serif: ["var(--font-serif)", "DM Serif Display", "Georgia", "serif"],

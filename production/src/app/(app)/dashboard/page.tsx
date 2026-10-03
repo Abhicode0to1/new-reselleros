@@ -121,7 +121,7 @@ export default function DashboardPage() {
   const { data: currentUser }   = useCurrentUser();
   /* Getting-started ke "Load your price list" kadam ke liye — khali catalogue
      naye tenant ka pehla deadend tha (audit B2). */
-  const { data: catalogItems }  = useItems();
+  const { data: catalogItems, isSuccess: catalogLoaded }  = useItems();
 
   // Draggable-card order per column (persisted). Starts at the default order;
   // snaps to the saved order after mount (avoids hydration mismatch).
@@ -588,8 +588,10 @@ export default function DashboardPage() {
           {/* Re-run setup — only when wizard was completed once. Wizard
               entry is hidden from sidebar after completion, so this
               keeps it reachable for a re-run / re-tour. */}
-          {currentUser?.tenantSetupCompletedAt && (
-            <Button asChild variant="ghost" icon="rocket">
+          {/* Held invisibly while the user loads, so its late arrival cannot re-wrap this row
+              and push the whole page down 48px (R-134). */}
+          {(!currentUser || currentUser.tenantSetupCompletedAt) && (
+            <Button asChild variant="ghost" icon="rocket" className={currentUser ? undefined : "invisible"}>
               <Link href={"/setup" as any}>Re-run setup</Link>
             </Button>
           )}
@@ -647,6 +649,7 @@ export default function DashboardPage() {
            checksum) so there is one rule, in one place — a `hasGstin` computed at this call
            site would be a second, looser definition of "GST is set up". */
         gstin={currentUser?.tenantGstin ?? null}
+        ready={Boolean(currentUser) && catalogLoaded && customersQ.isSuccess && quotesQ.isSuccess && subscriptionsQ.isSuccess}
       />
 
       {/* Priority Action Hub for actionable alerts */}

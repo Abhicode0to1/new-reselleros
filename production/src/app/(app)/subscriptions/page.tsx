@@ -918,7 +918,7 @@ export default function SubscriptionsPage() {
 
       {/* Sticky Horizontal TabBar + Vendor Filter + Search */}
       {!isLoading && subs && subs.length > 0 && (
-        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
+        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
           {focus && (
             <FocusBanner label={SUB_FOCUS_LABEL[focus]} count={filtered.length} onClear={() => setFocus("")} />
           )}
