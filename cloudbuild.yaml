@@ -132,10 +132,10 @@ steps:
       - --timeout=600
       # Cold starts (WC-ci, 30 Sep 2026): keep one instance warm and give each new instance
       # extra CPU while it boots. COST: roughly one small always-on instance (billed while
-      # idle) — Pardeep approves this at deploy time. Note a staging trigger that reuses this
-      # file gets the same warm instance; drop these two lines there if that is unwanted.
-      - --min-instances=1
-      - --cpu-boost
+      # idle) — Pardeep approves this at deploy time. The staging trigger (R-106) sets
+      # _MIN_INSTANCES=0 and _CPU_BOOST=no-cpu-boost so an unused staging costs nothing.
+      - --min-instances=$_MIN_INSTANCES
+      - --$_CPU_BOOST
       - --quiet
     # NOTE: no --set-env-vars here, deliberately. That flag REPLACES the whole set, and this
     # service carries eleven — including SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET and
@@ -151,7 +151,11 @@ substitutions:
   _SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9udHBucWpveXNqZ3Jsc3VrZWNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjc1NjcsImV4cCI6MjA5NDg0MzU2N30.tulYYDQSzq7IpEQCFbP7qjsSUxg4c-0ku5uO80-TKXI
   _APP_URL: https://reselleros.anutech.in
   _APP_ENV: ""
-  # The same Artifact Registry path the current revision already runs from.
+  _MIN_INSTANCES: "1"
+  _CPU_BOOST: cpu-boost
+  # The same Artifact Registry path the current revision already runs from. The staging
+  # trigger MUST override this (…/resellersos-staging): `images:` below also pushes :latest,
+  # and a shared path would let a staging build overwrite production's latest tag.
   _IMAGE: asia-south1-docker.pkg.dev/resellsubsos-prod/cloud-run-source-deploy/resellersos
 
 images:

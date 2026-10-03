@@ -1,0 +1,49 @@
+# Caddy — TLS (auto Let's Encrypt) + path routing for the Supabase data plane.
+# staging-api.anutech.in must resolve to THIS VM's public IP, DNS-only (grey cloud) in
+# Cloudflare, so Caddy can complete the ACME HTTP challenge and get a real cert.
+#
+# supabase-js calls  /auth/v1/*  /rest/v1/*  /storage/v1/*  — handle_path strips
+# the matched prefix, so each backend receives the request at its own root.
+
+staging-api.anutech.in {
+	encode gzip
+
+	# GoTrue sets Access-Control-Allow-Origin on its ACTUAL responses, but answers
+	# the browser's CORS PREFLIGHT (OPTIONS) with a bare 204 and no CORS headers —
+	# so supabase-js getUser()/token-refresh failed the preflight with "Failed to
+	# fetch" and the app showed "Not signed in" for a logged-in user. Caddy answers
+	# ONLY the preflight here. Passthrough (GET/POST) responses are left untouched
+	# so GoTrue's own single ACAO stands — adding a second one produced a duplicate
+	# "Access-Control-Allow-Origin: *, *" that the browser rejects just as hard.
+	# (REST is left alone entirely — PostgREST does its own CORS, preflight included.)
+	handle_path /auth/v1/* {
+		@preflight method OPTIONS
+		handle @preflight {
+			header {
+				Access-Control-Allow-Origin "*"
+				Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+				Access-Control-Allow-Headers "Authorization, apikey, Content-Type, X-Client-Info, X-Supabase-Api-Version, Accept, Accept-Language, Content-Language, X-Requested-With"
+				Access-Control-Max-Age "86400"
+			}
+			respond 204
+		}
+		reverse_proxy auth:9999
+	}
+
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000
+	}
+
+	handle_path /storage/v1/* {
+		reverse_proxy storage:5000
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Anything else → a plain 404 (no Supabase Studio is exposed).
+	handle {
+		respond "Not found" 404
+	}
+}
