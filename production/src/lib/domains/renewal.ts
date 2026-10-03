@@ -27,6 +27,7 @@ import { grossAmount } from "@/lib/quotes/amounts";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { rcConfigured, rcTldPricing } from "@/lib/resellerclub";
 import { splitDomain } from "@/lib/domains/live-lookup";
+import { isDomainPurchaseLine } from "@/lib/provisioning/products";
 import { istToday, toIstDate, utcDateISO } from "@/lib/dates/ist";
 
 type SupabaseAdmin = SupabaseClient<Database>;
@@ -67,14 +68,14 @@ export interface DomainSubscriptionRow {
  * The domains a paid quote bought, each becoming one yearly subscription. Read from
  * the quote's lines, which name their domain since 24 Sep 2026 (`line.domain`).
  */
-export function domainSubscriptionsToCreate(lineItems: unknown): DomainSubscriptionRow[] {
+export function domainSubscriptionsToCreate(lineItems: unknown, domainItemIds?: ReadonlySet<string>): DomainSubscriptionRow[] {
   if (!Array.isArray(lineItems)) return [];
   const out: DomainSubscriptionRow[] = [];
   const seen = new Set<string>();
   for (const l of lineItems) {
-    if (!l || typeof l !== "object") continue;
-    // A hosting line names the domain its account sits on, not a domain bought (R-032).
-    if (typeof (l as { hostingPlan?: unknown }).hostingPlan === "string") continue;
+    /* Only a domain BOUGHT: a hosting line names the domain its account sits on (R-032), and
+       a Workspace line the domain its seats run on (3 Oct 2026) — neither is a domain sale. */
+    if (!isDomainPurchaseLine(l, domainItemIds)) continue;
     const line = l as { domain?: unknown; rate?: unknown; qty?: unknown };
     const domain = typeof line.domain === "string" ? line.domain.trim().toLowerCase() : "";
     if (!domain || seen.has(domain) || !splitDomain(domain)) continue;

@@ -40,7 +40,7 @@ describe("at the sale: one yearly subscription per paid domain", () => {
     expect(rows).toEqual([{ domain: "acme.in", mrr: 62 }]);
   });
   it("a domain free with yearly hosting still gets its subscription (mrr 0; the renewal is priced live, not from this)", () => {
-    expect(domainSubscriptionsToCreate([{ domain: "free.in", rate: 0, qty: 1 }])).toEqual([{ domain: "free.in", mrr: 0 }]);
+    expect(domainSubscriptionsToCreate([{ name: "Domain free.in", domain: "free.in", rate: 0, qty: 1 }])).toEqual([{ domain: "free.in", mrr: 0 }]);
   });
   it("the row: vendor domain, 12 months, renewing a year out, NOT tied to the sale's quote", () => {
     const ins = domainSubscriptionInsert({ tenantId: "T", customerId: "C", customerName: "Acme", row: { domain: "acme.in", mrr: 62 }, today: "2026-09-25" });

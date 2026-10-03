@@ -169,6 +169,27 @@ async function vendorForQuote(
   return vendorFromPlan(plan);
 }
 
+/**
+ * The quote's catalogue items that are domains (3 Oct 2026). A line linked to one of these
+ * is a domain sale; a line linked to any other item (a Workspace plan) only NAMES a domain,
+ * and must not be registered or given a domain subscription. See isDomainPurchaseLine.
+ */
+async function domainItemIdsForQuote(
+  db: ReturnType<typeof createAdminClient>,
+  lineItems: unknown,
+): Promise<Set<string>> {
+  const ids = Array.isArray(lineItems)
+    ? lineItems
+        .map((l) => (l && typeof l === "object" ? (l as { item_id?: unknown }).item_id : null))
+        .filter((v): v is string => typeof v === "string" && v.length > 0)
+    : [];
+  if (ids.length === 0) return new Set();
+  const { data } = await db.from("items").select("id, vendor").in("id", ids);
+  return new Set(
+    (data ?? []).filter((r) => (r as { vendor?: string | null }).vendor === "domain").map((r) => (r as { id: string }).id),
+  );
+}
+
 /** Verify Razorpay's HMAC SHA256 signature header against a given secret. */
 /**
  * S24 (2 Oct 2026): which tenant's records may a VERIFIED event act on?
@@ -437,6 +458,7 @@ export async function POST(request: NextRequest) {
   /* Resolved from the catalogue, not from the plan's wording — a hosting tier is
      named "Starter" and says nothing about hosting. See vendorForQuote. */
   const provisioningVendor = await vendorForQuote(admin, quote.line_items, quote.plan);
+  const domainItemIds = await domainItemIdsForQuote(admin, quote.line_items);
   const provisioningDomain = (notes.domain as string | undefined)?.trim() || null;
 
   /* One request per PRODUCT (24 Sep 2026). A cart can buy a domain and a hosting
@@ -468,6 +490,7 @@ export async function POST(request: NextRequest) {
         vendor: provisioningVendor,
         domain: provisioningDomain,
         seats: Number(quote.seats ?? 0),
+        domainItemIds,
       });
 
   for (const product of products) {
@@ -518,7 +541,7 @@ export async function POST(request: NextRequest) {
         /* R-033: this product's own share of the payment, not the whole order — the
            engine's spend check (paid ≥ cost) reads it per row. A renewal is one product
            and its quote is that renewal, so its share is the whole payment. */
-        amountPaid:  isRenewal ? paymentAmount : productAmountPaid(product, quote.line_items, paymentAmount),
+        amountPaid:  isRenewal ? paymentAmount : productAmountPaid(product, quote.line_items, paymentAmount, domainItemIds),
         paymentMode: razorpayMode(keyIdForMode),
         blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
         note:        provisioning.reason,
@@ -536,7 +559,7 @@ export async function POST(request: NextRequest) {
      subscription per (quote, domain) and would drop it when hosting shares the name.
      Best-effort and logged: the payment is already recorded. */
   if (!isRenewal) {
-    const toCreate = domainSubscriptionsToCreate(quote.line_items);
+    const toCreate = domainSubscriptionsToCreate(quote.line_items, domainItemIds);
     if (toCreate.length) {
       const { data: paidQuote } = await admin
         .from("quotes").select("customer_id").eq("id", quote.id).eq("tenant_id", quote.tenant_id).maybeSingle();

@@ -5,7 +5,7 @@
  * hosting, so the paid domain was registered by nobody.
  */
 import { describe, it, expect } from "vitest";
-import { domainsInLines, provisioningProducts, productShare, productAmountPaid } from "./products";
+import { domainsInLines, isDomainPurchaseLine, provisioningProducts, productShare, productAmountPaid } from "./products";
 
 const line = (name: string, domain?: string) => ({ id: "x", name, qty: 1, rate: 1, cost: 0, ...(domain ? { domain } : {}) });
 
@@ -44,7 +44,7 @@ describe("provisioningProducts", () => {
   });
 
   it("the same domain twice is one request, not two", () => {
-    expect(domainsInLines([line("a", "x.in"), line("b", "x.in")])).toEqual(["x.in"]);
+    expect(domainsInLines([line("Domain x.in", "x.in"), line("x.in", "x.in")])).toEqual(["x.in"]);
   });
 
   it("ignores junk line items", () => {
@@ -76,12 +76,42 @@ describe("R-033 — each row carries only its own share of the payment", () => {
     expect(priced).toBeLessThanOrEqual(paid + 1);
   });
   it("a licence takes the lines that are not domains or hosting", () => {
-    const mixed = [{ rate: 1632, qty: 10 }, { rate: 900, qty: 1, domain: "acme.in" }];
+    const mixed = [{ name: "Business Starter", rate: 1632, qty: 10, domain: "acme.in" }, { name: "Domain acme.in", rate: 900, qty: 1, domain: "acme.in" }];
     expect(productShare({ vendor: "google", domain: null, seats: 10 }, mixed)).toBeCloseTo(16320 / 17220);
   });
   it("line discounts count; no priced lines → the whole payment, as before", () => {
-    expect(productShare({ vendor: "domain", domain: "a.in", seats: 1 }, [{ rate: 1000, qty: 1, domain: "a.in", discount_pct: 50 }, { rate: 500, qty: 1, domain: "b.in" }])).toBeCloseTo(0.5);
+    expect(productShare({ vendor: "domain", domain: "a.in", seats: 1 }, [{ name: "a.in", rate: 1000, qty: 1, domain: "a.in", discount_pct: 50 }, { name: "b.in", rate: 500, qty: 1, domain: "b.in" }])).toBeCloseTo(0.5);
     expect(productShare({ vendor: "domain", domain: "a.in", seats: 1 }, [])).toBe(1);
     expect(productShare({ vendor: "domain", domain: "a.in", seats: 1 }, [{ rate: 0, qty: 1, domain: "a.in" }])).toBe(1);
+  });
+});
+
+/* 3 Oct 2026: a Workspace line names the domain its seats run on. Paying for it must not
+   queue that domain for REGISTRATION, nor file a domain subscription that later bills a
+   renewal for a domain the customer never bought from us. */
+describe("a line that only NAMES a domain is not a domain sale", () => {
+  const ws = { name: "Google Workspace Business Starter", rate: 1632, qty: 10, domain: "acme.in", item_id: "ITEM-WS" };
+  const dom = { name: ".in Domain", rate: 900, qty: 1, domain: "new.in", item_id: "ITEM-DOM" };
+  const domainIds = new Set(["ITEM-DOM"]);
+
+  it("a Workspace line with a domain queues only the licence", () => {
+    expect(provisioningProducts({ lineItems: [ws], vendor: "google", domain: "acme.in", seats: 10, domainItemIds: new Set() }))
+      .toEqual([{ vendor: "google", domain: "acme.in", seats: 10 }]);
+    // and without the catalogue answer, the name decides — still not a domain
+    expect(domainsInLines([ws])).toEqual([]);
+  });
+  it("a domain catalogue item alongside it is still registered", () => {
+    expect(domainsInLines([ws, dom], domainIds)).toEqual(["new.in"]);
+  });
+  it("a catalogue item decides over the wording of its name", () => {
+    expect(isDomainPurchaseLine({ ...ws, name: "Workspace for the domain acme.in" }, domainIds)).toBe(false);
+    expect(isDomainPurchaseLine({ ...dom, name: ".in" }, domainIds)).toBe(true);
+  });
+  it("a cart domain line (it carries a registrant) always counts", () => {
+    expect(isDomainPurchaseLine({ name: "anything", domain: "x.in", registrant: { name: "A" } })).toBe(true);
+  });
+  it("the Workspace line keeps its share of the payment as the licence", () => {
+    expect(productShare({ vendor: "google", domain: "acme.in", seats: 10 }, [ws, dom], domainIds)).toBeCloseTo(16320 / 17220);
+    expect(productShare({ vendor: "domain", domain: "new.in", seats: 1 }, [ws, dom], domainIds)).toBeCloseTo(900 / 17220);
   });
 });

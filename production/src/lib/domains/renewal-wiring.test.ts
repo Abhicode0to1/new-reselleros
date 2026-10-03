@@ -37,7 +37,7 @@ describe("the payment webhook", () => {
 
   it("creates domain subscriptions only on a first sale, never on a renewal", () => {
     expect(w).toMatch(/if \(!isRenewal\)/);
-    expect(w).toMatch(/domainSubscriptionsToCreate\(quote\.line_items\)/);
+    expect(w).toMatch(/domainSubscriptionsToCreate\(quote\.line_items, domainItemIds\)/);
   });
 });
 
