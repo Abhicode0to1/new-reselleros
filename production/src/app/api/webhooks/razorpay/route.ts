@@ -30,7 +30,7 @@ import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { razorpayMode } from "@/lib/payments/razorpay-readiness";
-import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
+import { decideProvisioning, testPaymentProvisioningAllowed, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
 import { provisioningProducts } from "@/lib/provisioning/products";
 import { domainRegistrationEnabled, hostingProvisioningEnabled } from "@/lib/provisioning/domain-registration";
@@ -459,6 +459,7 @@ export async function POST(request: NextRequest) {
             ? (renewalPlan ? domainRenewalEnabled() : domainRegistrationEnabled()) && commandsConfigured()
             : false,
       dialMode,
+      allowTestPayment: testPaymentProvisioningAllowed(),
     });
 
     if (provisioning.action !== "refuse") {
