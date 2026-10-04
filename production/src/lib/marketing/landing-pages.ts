@@ -3,7 +3,7 @@
  * (Pardeep, 4 Oct 2026: "ads landing pages ko bhi app me show karo").
  *
  * One row per page under src/app/(lp)/lp/. Add the row in the same change that adds a page
- * (the 3–4 Google Workspace variants are next), or the team cannot find, copy or check it.
+ * (/lp/google-workspace now forwards to the Starter page), or the team cannot find, copy or check it.
  * Leads are matched by `leads.landing_page_url`, which stores the path + utm params only.
  */
 export interface AdLandingPage {
@@ -23,11 +23,35 @@ export const PUBLIC_SITE_ORIGIN = "https://anutech.in";
 
 export const AD_LANDING_PAGES: readonly AdLandingPage[] = [
   {
-    path: "/lp/google-workspace",
-    title: "Google Workspace — main ad page",
+    path: "/lp/google-workspace-business-starter-1",
+    title: "Google Workspace Business Starter — Google Ads Landing Page 1",
     product: "Google Workspace Business Starter",
     offer: "30+ users, new account: ₹1,650/user for the first year (49% off) + free setup and migration",
     captures: "Call-back form (name + mobile), Free trial / Buy enquiry, WhatsApp",
+    addedOn: "2026-10-04",
+  },
+  {
+    path: "/lp/google-workspace-business-standard-1",
+    title: "Google Workspace Business Standard — Google Ads Landing Page 1",
+    product: "Google Workspace Business Standard",
+    offer: "Free setup and email migration + 14-day free trial (no first-year discount)",
+    captures: "Call-back form (name + mobile), Free trial / Buy enquiry, WhatsApp",
+    addedOn: "2026-10-04",
+  },
+  {
+    path: "/lp/google-workspace-business-plus-1",
+    title: "Google Workspace Business Plus — Google Ads Landing Page 1",
+    product: "Google Workspace Business Plus",
+    offer: "Free setup and email migration + 14-day free trial (no first-year discount)",
+    captures: "Call-back form (name + mobile), Free trial / Buy enquiry, WhatsApp",
+    addedOn: "2026-10-04",
+  },
+  {
+    path: "/lp/google-workspace-enterprise-1",
+    title: "Google Workspace Enterprise — Google Ads Landing Page 1",
+    product: "Google Workspace Enterprise",
+    offer: "No list price: quote within a day + migration planning and rollout",
+    captures: "Call-back form (name + mobile), Quote enquiry, WhatsApp",
     addedOn: "2026-10-04",
   },
 ];

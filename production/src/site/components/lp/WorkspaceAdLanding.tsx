@@ -18,7 +18,8 @@
  *   • BUY NOW opens the same form while online Workspace checkout is paused (Pardeep,
  *     4 Oct 2026, until all prices are in the catalogue). Flip BUY_ONLINE to send it to
  *     checkout.
- * Copy is a prop so the 3–4 ad variants reuse this component.
+ * Copy is a prop so the 3–4 ad variants reuse this component. The plan is a prop too
+ * (lib/lp-plans.ts): one page per Workspace plan, the Starter offer only on Starter.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buyWorkspaceHref } from "@/lib/checkout/buy-link";
@@ -27,6 +28,7 @@ import { useTurnstile } from "@/components/shared/turnstile";
 import { pickAdParams, withAdParams, rememberLanding } from "@/site/lib/ad-attribution";
 import { reportLeadConversion } from "@/site/lib/google-ads";
 import { FIRST_YEAR_PER_USER, OFFER_MIN_USERS } from "@/site/lib/workspace-offer";
+import { LP_PLANS, compareRows, type LpPlan } from "@/site/lib/lp-plans";
 
 /** Online checkout for Workspace — off until every edition's price is confirmed (see header). */
 const BUY_ONLINE = false;
@@ -57,43 +59,36 @@ const APPS: { name: string; what: string; icon?: string; tile?: { bg: string; la
   { name: "Slides", what: "Present Ideas", tile: { bg: "#F9AB00", label: "P" } },
   { name: "Calendar", what: "Stay Organised", icon: "/ic-calendar.png" },
 ];
-const BENEFITS = [
-  ["Professional email", "you@yourcompany.com — apne domain par"],
-  ["Secure & reliable", "Google ki business-grade security"],
-  ["Easy collaboration", "Kahin se bhi saath kaam karein"],
-  ["Har device par", "Desktop, mobile aur tablet"],
-] as const;
-
-/** Free Gmail vs Google Workspace — facts only (Business Starter). */
-const COMPARE: [string, string, string][] = [
-  ["Email address", "yourname@gmail.com", "you@yourcompany.com"],
-  ["Storage", "15 GB, shared with Drive & Photos", "30 GB per user"],
-  ["Ads in the inbox", "Yes", "No ads"],
-  ["Group video calls", "60-minute limit", "Up to 100 people, long meetings"],
-  ["Who owns the account", "The employee", "Your company — add, remove, reset any user"],
-  ["Help when stuck", "Online forums", "ANUTECH team + Google support"],
-];
 const WHY: [string, string][] = [
   ["GST invoice in INR", "Har order par GST invoice — business input credit le sakta hai."],
   ["Setup done for you", "Domain verify, MX records, users — hamari team karti hai."],
   ["Free migration", "Purana mail, folders, contacts aur calendar — hum shift karte hain, kuch nahi chhootta."],
   ["Local support", `Hindi / English mein, phone aur WhatsApp par — ${COMPANY.hours}.`],
 ];
-const FAQ: [string, string][] = [
+function faqFor(plan: LpPlan): [string, string][] {
+  const trialAnswer = plan.offer
+    ? "Trial ke baad aap tay karte hain. Jaari rakhna hai to saalana plan lijiye — naya account aur 30+ users ho to pehle saal ₹1,650/user (Google approval ke saath; doosre saal se list price); nahi to kuch nahi katega — koi card nahi maanga jaata."
+    : "Trial ke baad aap tay karte hain. Jaari rakhna hai to saalana ya monthly plan lijiye; nahi to kuch nahi katega — koi card nahi maanga jaata.";
+  return [
   ["Mere paas domain nahi hai — kya hoga?", "Koi baat nahi. Hum aapka domain bhi register kar dete hain aur usi par Google Workspace chalu karte hain — ek hi jagah se."],
   ["Purana email (cPanel, Zoho, Outlook) ka kya hoga?", "Free migration: purane mail, folders, contacts aur calendar hum Google Workspace mein shift karte hain. Aapke paas kuch nahi chhootta."],
-  ["14 din ke trial ke baad kya hota hai?", "Trial ke baad aap tay karte hain. Jaari rakhna hai to saalana plan lijiye — naya account aur 30+ users ho to pehle saal ₹1,650/user (Google approval ke saath; doosre saal se list price); nahi to kuch nahi katega — koi card nahi maanga jaata."],
+  ["14 din ke trial ke baad kya hota hai?", trialAnswer],
   ["GST invoice milega?", "Haan, har order par GST invoice milta hai, aur business us par input tax credit le sakta hai."],
-  ["Kitne users tak chal sakta hai?", "Business plans 1 se 300 users tak. Users kabhi bhi badha sakte hain."],
-];
+  [`${plan.name} kitne users tak?`, `${plan.usersLimit}. Users kabhi bhi badha sakte hain, aur zaroorat par plan upgrade bhi.`],
+  ];
+}
 
 export function WorkspaceAdLanding({
-  annualPerSeatMo, copy = DEFAULT_COPY,
+  annualPerSeatMo, plan = LP_PLANS.starter, copy,
 }: {
-  /** Business Starter, ₹ per user per month on the yearly plan (live catalogue). */
-  annualPerSeatMo: number;
+  /** The plan's ₹ per user per month on the yearly plan (live catalogue); null = talk to us. */
+  annualPerSeatMo: number | null;
+  plan?: LpPlan;
   copy?: WorkspaceAdCopy;
 }) {
+  const text = copy ?? plan.copy ?? DEFAULT_COPY;
+  const priced = annualPerSeatMo != null && annualPerSeatMo > 0;
+  const hasOffer = plan.offer && priced;
   const [ad, setAd] = useState<URLSearchParams>(new URLSearchParams());
   const [landing, setLanding] = useState("");
   const [modal, setModal] = useState<null | "buy" | "trial">(null);
@@ -131,19 +126,22 @@ export function WorkspaceAdLanding({
     setAd(pickAdParams(first.includes("?") ? first.slice(first.indexOf("?")) : ""));
   }, []);
 
-  const checkoutHref = useMemo(() => withAdParams(buyWorkspaceHref("GW Business Starter", 5) ?? "/buy/workspace", ad), [ad]);
-  const yearly = annualPerSeatMo * 12;                     // list price = renewal price
+  const checkoutHref = useMemo(() => withAdParams((plan.edition ? buyWorkspaceHref(plan.edition, 5) : null) ?? "/buy/workspace", ad), [ad, plan.edition]);
+  const yearly = (annualPerSeatMo ?? 0) * 12;              // list price = renewal price
   const offerYear = Math.min(FIRST_YEAR_PER_USER, yearly);
   const offerMo = offerYear / 12;
   const offPct = Math.round((1 - offerYear / yearly) * 100);
-  const offerOn = users >= OFFER_MIN_USERS;
+  const offerOn = hasOffer && users >= OFFER_MIN_USERS;
   const perUserYear = offerOn ? offerYear : yearly;
-  const wa = waLink("Hello ANUTECH, mujhe Google Workspace chahiye.");
+  const wa = waLink(`Hello ANUTECH, mujhe Google Workspace ${plan.name} chahiye.`);
 
+  /** Enterprise has no list price, so no checkout: the button asks for a quote instead. */
+  const buyOnline = BUY_ONLINE && priced && !!plan.edition;
+  const buyLabel = priced ? "Buy Now" : "Get Quote";
   const BuyButton = ({ className = "" }: { className?: string }) =>
-    BUY_ONLINE
+    buyOnline
       ? <a className={`gw-btn gw-buy ${className}`} href={checkoutHref}>Buy Now <span aria-hidden>→</span></a>
-      : <button type="button" className={`gw-btn gw-buy ${className}`} onClick={() => setModal("buy")}>Buy Now <span aria-hidden>→</span></button>;
+      : <button type="button" className={`gw-btn gw-buy ${className}`} onClick={() => setModal("buy")}>{buyLabel} <span aria-hidden>→</span></button>;
   const TrialButton = ({ className = "" }: { className?: string }) =>
     <button type="button" className={`gw-btn gw-trial ${className}`} onClick={() => setModal("trial")}>Start 14-Day Free Trial <span aria-hidden>→</span></button>;
 
@@ -159,7 +157,7 @@ export function WorkspaceAdLanding({
           </nav>
           <div className="gw-nav-actions">
             {WHATSAPP_READY && <a className="gw-mini" href={wa} target="_blank" rel="noopener">WhatsApp</a>}
-            <a className="gw-mini gw-mini-primary" href="#offer">View Offer</a>
+            <a className="gw-mini gw-mini-primary" href="#offer">{hasOffer ? "View Offer" : "See Price"}</a>
           </div>
         </div>
       </header>
@@ -168,10 +166,10 @@ export function WorkspaceAdLanding({
         <section className="gw-hero">
           <div className="gw-wrap gw-hero-grid">
             <div>
-              <span className="gw-eyebrow">✓ {copy.eyebrow}</span>
-              <h1 className="gw-h1"><span className="gw-google">Google</span> {copy.h1Rest}</h1>
-              <h2 className="gw-h2">{copy.h2}</h2>
-              <p className="gw-copy">{copy.sub}</p>
+              <span className="gw-eyebrow">✓ {text.eyebrow}</span>
+              <h1 className="gw-h1"><span className="gw-google">Google</span> {text.h1Rest}</h1>
+              <h2 className="gw-h2">{text.h2}</h2>
+              <p className="gw-copy">{text.sub}</p>
               <div className="gw-buttons">
                 <BuyButton />
                 <TrialButton />
@@ -182,10 +180,16 @@ export function WorkspaceAdLanding({
                 <li>Setup + migration free</li>
                 <li>GST invoice</li>
               </ul>
-              <p className="gw-note">{OFFER_MIN_USERS}+ users: pehle saal sirf <b>{inr(offerMo)}/user/mahina</b> (saalana plan) · {COMPANY.partnerLine}</p>
-              <CallbackForm landing={landing} />
+              <p className="gw-note">
+                {hasOffer
+                  ? <>{OFFER_MIN_USERS}+ users: pehle saal sirf <b>{inr(offerMo)}/user/mahina</b> (saalana plan)</>
+                  : priced ? <>{plan.name}: <b>{inr(annualPerSeatMo!)}/user/mahina</b> (saalana plan)</> : <>{plan.name}: daam aapki zaroorat ke hisaab se</>}
+                {" "}· {COMPANY.partnerLine}
+              </p>
+              <CallbackForm landing={landing} plan={plan} />
             </div>
             <div className="gw-visual">
+              {hasOffer ? (
               <aside className="gw-promo" aria-label="Special offer">
                 <span className="gw-promo-tag">{OFFER_MIN_USERS}+ users · naya account</span>
                 <div className="gw-promo-main">
@@ -199,6 +203,21 @@ export function WorkspaceAdLanding({
                   <button type="button" className="gw-promo-btn" onClick={() => { setUsers((n) => Math.max(n, OFFER_MIN_USERS)); setModal("buy"); }}>Offer lo <span aria-hidden>→</span></button>
                 </div>
               </aside>
+              ) : (
+              <aside className="gw-promo" aria-label="What you get">
+                <span className="gw-promo-tag">{plan.name}</span>
+                <div className="gw-promo-main">
+                  <div className="gw-promo-zero" aria-hidden><b>₹0</b><small>setup</small></div>
+                  <div>
+                    <p className="gw-promo-h">FREE setup + email migration</p>
+                    <p className="gw-promo-s">Domain, users aur purana mail — hamari team karti hai. Saath mein <b>14 din free trial</b>, koi card nahi.</p>
+                  </div>
+                </div>
+                <div className="gw-promo-foot">
+                  <button type="button" className="gw-promo-btn" onClick={() => setModal(priced ? "buy" : "trial")}>{priced ? "Abhi shuru karein" : "Quote lein"} <span aria-hidden>→</span></button>
+                </div>
+              </aside>
+              )}
               <img className="gw-photo" src="/lp/gw-hero.jpg" alt="A business owner working on Google Workspace" width={400} height={458} fetchPriority="high" decoding="async" />
               <div className="gw-float">Grow your business with Google<small>Secure · Collaborative · Productive</small></div>
             </div>
@@ -241,26 +260,32 @@ export function WorkspaceAdLanding({
             <h3 className="gw-h3">Everything your business needs, in one place.</h3>
             <p className="gw-copy">Email, files, meetings aur roz ka kaam — ek simple, secure jagah par.</p>
             <ul className="gw-blist">
-              {BENEFITS.map(([t, l]) => (
+              {plan.benefits.map(([t, l]) => (
                 <li key={t}><span className="gw-check" aria-hidden>✓</span><span><b>{t}</b><small>{l}</small></span></li>
               ))}
             </ul>
           </div>
 
           <aside className="gw-card gw-pricing" aria-label="Price">
-            <div className="gw-tag">Business Starter</div>
-            <div className="gw-price">{inr(annualPerSeatMo)}<small> per user / month</small></div>
+            <div className="gw-tag">{plan.name}</div>
+            {priced ? (<>
+            <div className="gw-price">{inr(annualPerSeatMo!)}<small> per user / month</small></div>
             <div className="gw-year">{inr(yearly)} per user / year · + 18% GST (input credit milta hai)</div>
+            </>) : (
+            <div className="gw-price gw-price-talk">Let&apos;s talk<small> — quote in a day</small></div>
+            )}
+            {hasOffer && (
             <div className="gw-offer-box">
               <div className="gw-offer-line"><span className="gw-off-badge">{offPct}% OFF</span> {OFFER_MIN_USERS}+ users · naya account</div>
               <div className="gw-year">Pehle saal <s>{inr(yearly)}</s> <b>{inr(offerYear)}</b>/user ({inr(offerMo)}/mahina)</div>
               <div className="gw-renew">Google approval ke saath (aam taur par mil jaati hai) · doosre saal se {inr(yearly)}/user</div>
             </div>
+            )}
             <ul className="gw-incl">
-              <li>30 GB per user · custom email</li>
-              <li>Setup, domain aur migration help included</li>
+              {plan.includes.map((l) => <li key={l}>{l}</li>)}
               <li>GST invoice · {COMPANY.partnerLine}</li>
             </ul>
+            {priced && (
             <div className="gw-calc">
               <label htmlFor="gw-users">Kitne users?</label>
               <div className="gw-calc-row">
@@ -275,16 +300,17 @@ export function WorkspaceAdLanding({
                 {offerOn && <div className="gw-calc-save"><dt>Aapki bachat ({offPct}% OFF)</dt><dd>{inr((yearly - offerYear) * users)}</dd></div>}
                 <div><dt>Doosre saal se</dt><dd>{inr(yearly * users)}/saal + GST</dd></div>
               </dl>
-              {!offerOn && (
+              {hasOffer && !offerOn && (
                 <button type="button" className="gw-calc-nudge" onClick={() => setUsers(OFFER_MIN_USERS)}>
                   {OFFER_MIN_USERS} users par pehle saal {offPct}% OFF — {OFFER_MIN_USERS} karke dekhein
                 </button>
               )}
             </div>
+            )}
             <div className="gw-price-actions">
               <BuyButton className="gw-full" />
               <TrialButton className="gw-full" />
-              {WHATSAPP_READY && <a className="gw-btn gw-wa gw-full" href={waLink("Hello ANUTECH, mujhe Google Workspace kharidna hai.")} target="_blank" rel="noopener">Call / WhatsApp {PHONE_SHOWN}</a>}
+              {WHATSAPP_READY && <a className="gw-btn gw-wa gw-full" href={waLink(`Hello ANUTECH, mujhe Google Workspace ${plan.name} kharidna hai.`)} target="_blank" rel="noopener">Call / WhatsApp {PHONE_SHOWN}</a>}
             </div>
             <p className="gw-secure">Easy setup · Expert support · Local support in India</p>
           </aside>
@@ -297,7 +323,7 @@ export function WorkspaceAdLanding({
             <table className="gw-table">
               <thead><tr><th scope="col"><span className="gw-sr">Feature</span></th><th scope="col">Free Gmail</th><th scope="col">Google Workspace</th></tr></thead>
               <tbody>
-                {COMPARE.map(([k, a, b]) => (
+                {compareRows(plan).map(([k, a, b]) => (
                   <tr key={k}><th scope="row">{k}</th><td data-label="Free Gmail">{a}</td><td data-label="Google Workspace"><span className="gw-yes" aria-hidden>✓</span> {b}</td></tr>
                 ))}
               </tbody>
@@ -319,7 +345,7 @@ export function WorkspaceAdLanding({
           <div className="gw-kicker">FAQ</div>
           <h3 className="gw-h3">Aksar puchhe jaane wale sawal</h3>
           <div className="gw-faq">
-            {FAQ.map(([q, a]) => (
+            {faqFor(plan).map(([q, a]) => (
               <details key={q} className="gw-card"><summary>{q}</summary><p>{a}</p></details>
             ))}
           </div>
@@ -335,7 +361,7 @@ export function WorkspaceAdLanding({
                 {WHATSAPP_READY && <a className="gw-btn gw-wa" href={wa} target="_blank" rel="noopener">WhatsApp {PHONE_SHOWN}</a>}
               </div>
             </div>
-            <div className="gw-cta-form"><CallbackForm landing={landing} /></div>
+            <div className="gw-cta-form"><CallbackForm landing={landing} plan={plan} /></div>
           </div>
         </section>
       </main>
@@ -354,24 +380,24 @@ export function WorkspaceAdLanding({
             <div className="gw-kicker">Jaane se pehle</div>
             <h3 id="gw-exit-title" className="gw-h3">Ek free call — koi commitment nahi</h3>
             <p className="gw-copy">Naam aur number dijiye. Hum batayenge aapke business ke liye kaunsa plan sahi hai, aur setup kaise hoga.</p>
-            <CallbackForm landing={landing} compact />
+            <CallbackForm landing={landing} plan={plan} compact />
           </div>
         </div>
       )}
 
       <div className="gw-sticky" aria-label="Quick actions">
-        <button type="button" className="gw-btn gw-buy" onClick={() => { if (BUY_ONLINE) window.location.href = checkoutHref; else setModal("buy"); }}>Buy Now</button>
+        <button type="button" className="gw-btn gw-buy" onClick={() => { if (buyOnline) window.location.href = checkoutHref; else setModal("buy"); }}>{buyLabel}</button>
         <button type="button" className="gw-btn gw-trial" onClick={() => setModal("trial")}>Free Trial</button>
         {WHATSAPP_READY && <a className="gw-btn gw-wa" href={wa} target="_blank" rel="noopener">WhatsApp</a>}
       </div>
 
-      {modal && <EnquiryModal kind={modal} landing={landing} defaultUsers={users} onClose={() => setModal(null)} />}
+      {modal && <EnquiryModal kind={modal} landing={landing} plan={plan} defaultUsers={users} onClose={() => setModal(null)} />}
     </div>
   );
 }
 
 /** Two fields — name + mobile — straight into the pipeline (api/public/callback). */
-function CallbackForm({ landing, compact = false }: { landing: string; compact?: boolean }) {
+function CallbackForm({ landing, plan, compact = false }: { landing: string; plan: LpPlan; compact?: boolean }) {
   const ts = useTurnstile();
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [err, setErr] = useState("");
@@ -388,7 +414,7 @@ function CallbackForm({ landing, compact = false }: { landing: string; compact?:
       const res = await fetch("/api/public/callback", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...ts.headers },
-        body: JSON.stringify({ fullName, phone, pageUrl: landing || window.location.href, pageReferrer: document.referrer || undefined }),
+        body: JSON.stringify({ fullName, phone, plan: plan.key, pageUrl: landing || window.location.href, pageReferrer: document.referrer || undefined }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -406,7 +432,7 @@ function CallbackForm({ landing, compact = false }: { landing: string; compact?:
       <div className={`gw-cb gw-cb-done${compact ? " gw-cb-compact" : ""}`} role="status">
         <b>Shukriya{name ? `, ${name.split(" ")[0]}` : ""}! Hum jald call karenge.</b>
         <span>{COMPANY.hours}{WHATSAPP_READY ? " · abhi baat karni ho to WhatsApp karein" : ""}</span>
-        {WHATSAPP_READY && <a className="gw-btn gw-wa" href={waLink(`Hello ANUTECH, I am ${name}. Mujhe Google Workspace ke liye call chahiye.`)} target="_blank" rel="noopener">WhatsApp {PHONE_SHOWN}</a>}
+        {WHATSAPP_READY && <a className="gw-btn gw-wa" href={waLink(`Hello ANUTECH, I am ${name}. Mujhe Google Workspace ${plan.name} ke liye call chahiye.`)} target="_blank" rel="noopener">WhatsApp {PHONE_SHOWN}</a>}
       </div>
     );
   }
@@ -426,7 +452,7 @@ function CallbackForm({ landing, compact = false }: { landing: string; compact?:
   );
 }
 
-function EnquiryModal({ kind, landing, defaultUsers, onClose }: { kind: "buy" | "trial"; landing: string; defaultUsers: number; onClose: () => void }) {
+function EnquiryModal({ kind, landing, plan, defaultUsers, onClose }: { kind: "buy" | "trial"; landing: string; plan: LpPlan; defaultUsers: number; onClose: () => void }) {
   const ts = useTurnstile();
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [err, setErr] = useState("");
@@ -461,9 +487,9 @@ function EnquiryModal({ kind, landing, defaultUsers, onClose }: { kind: "buy" | 
       email: String(f.get("email") ?? "").trim(),
       phone: String(f.get("phone") ?? "").trim(),
       seats: users,
-      tierId: "starter",
+      tierId: plan.key,
       billing: "annual",
-      message: kind === "buy" ? "Google Ads landing page: wants to BUY Business Starter" : "Google Ads landing page: 14-day free trial request",
+      message: kind === "buy" ? `Google Ads landing page: wants to BUY ${plan.name}` : `Google Ads landing page: 14-day free trial request (${plan.name})`,
       pageUrl: landing || window.location.href,
       pageReferrer: document.referrer || undefined,
     };
@@ -501,7 +527,7 @@ function EnquiryModal({ kind, landing, defaultUsers, onClose }: { kind: "buy" | 
           </div>
         ) : (
           <>
-            <div className="gw-kicker">{kind === "buy" ? "Buy Google Workspace" : "14-day free trial"}</div>
+            <div className="gw-kicker">{kind === "buy" ? `Google Workspace ${plan.name}` : "14-day free trial"}</div>
             <h3 id="gw-modal-title" className="gw-h3">{kind === "buy" ? "Apni details dijiye" : "Free trial shuru karein"}</h3>
             <p className="gw-copy">{kind === "buy" ? "Hamari team aaj hi call karke aapke domain par setup karegi." : "Koi card nahi chahiye. Hum aapke domain par trial chalu karenge."}</p>
             <form className="gw-form" onSubmit={submit}>
@@ -604,6 +630,7 @@ const CSS = `
 .gw-price{font-size:clamp(46px,6vw,64px);font-weight:900;letter-spacing:-.04em;color:var(--blue);line-height:1;font-variant-numeric:tabular-nums}
 .gw-price small{font-size:16px;letter-spacing:0;color:#51627d;font-weight:700}
 .gw-year{margin-top:8px;font-size:14px;color:var(--muted)}
+.gw-price-talk{font-size:clamp(34px,4vw,44px)}
 .gw-incl{margin:16px 0 20px;padding-left:18px;color:var(--ink);font-size:15px;display:grid;gap:4px}
 .gw-price-actions{display:grid;gap:10px}
 .gw-secure{margin:14px 0 0;text-align:center;color:#6c7a91;font-size:13px}
@@ -665,6 +692,7 @@ const CSS = `
 .gw-steps span{width:36px;height:36px;border-radius:50%;background:#0b57d0;color:#fff;display:grid;place-items:center;font-weight:900}
 .gw-steps small{color:var(--muted);font-size:14px}
 .gw-modal{position:fixed;inset:0;background:rgba(6,22,48,.6);display:grid;place-items:center;padding:16px;z-index:100}
+.gw-modal-card > .gw-kicker{padding-right:40px}
 .gw-modal-card{width:min(520px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:#fff;border-radius:24px;padding:28px;box-shadow:0 30px 90px rgba(0,0,0,.25);position:relative}
 .gw-close{position:absolute;right:14px;top:12px;border:0;background:#f0f4fa;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer}
 .gw-form{display:grid;gap:12px;margin-top:16px}

@@ -24,6 +24,8 @@ const schema = z.object({
   phone: z.string().trim().min(10, "Please enter a 10-digit mobile number").max(20)
     .refine((p) => p.replace(/\D/g, "").length >= 10, "Please enter a 10-digit mobile number"),
   product: z.enum(["google-workspace"]).default("google-workspace"),
+  /** Which plan's landing page sent it (lib/lp-plans.ts); old pages send none = Starter. */
+  plan: z.enum(["starter", "standard", "plus", "enterprise"]).default("starter"),
   seats: z.coerce.number().int().min(1).max(300).optional(),
   pageUrl: z.string().max(1000).optional(),
   pageReferrer: z.string().max(1000).optional(),
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: [...new Set(parsed.error.issues.map((i) => i.message))].join(", ") }, { status: 400 });
   }
-  const { fullName, phone, seats } = parsed.data;
+  const { fullName, phone, seats, plan } = parsed.data;
   const digits = phone.replace(/\D/g, "").slice(-10);
 
   if (!rateLimit(`callback:ip:${clientIp(request.headers)}`, { limit: 5, windowMs: 10 * 60_000 }).ok ||
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
     company: fullName,                       // no company asked; the call fills it in
     contact_name: fullName,
     contact_phone: phone,
-    plan: "google-workspace-starter",
+    plan: `google-workspace-${plan}`,
     seats: seats ?? null,
     stage: "new",
     source: "ads-callback",
@@ -71,7 +73,7 @@ export async function POST(request: NextRequest) {
     tenantId: BUY_PAGE_TENANT_ID,
     kind: "lead.created",
     title: `Call back — ${fullName}`,
-    body: `${phone} · Google Workspace (ad landing page)`,
+    body: `${phone} · Google Workspace ${plan} (ad landing page)`,
     href: "/leads",
     entityId: leadId,
   }).catch(() => null);

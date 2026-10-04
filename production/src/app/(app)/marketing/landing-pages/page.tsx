@@ -68,7 +68,7 @@ export default function AdLandingPagesPage() {
       </div>
 
       <p className="text-xs text-ink-3">
-        New variants (3–4 Google Workspace versions are planned) appear here as they are added.
+        One page per Google Workspace plan. New variants (Landing Page 2, 3…) appear here as they are added.
       </p>
     </div>
   );

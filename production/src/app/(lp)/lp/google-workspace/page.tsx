@@ -1,22 +1,19 @@
-import type { Metadata } from "next";
-import { WorkspaceAdLanding } from "@/site/components/lp/WorkspaceAdLanding";
-import { fetchLiveWorkspace, mergeEditions } from "@/site/lib/live-catalog";
+import type { Route } from "next";
+import { redirect } from "next/navigation";
+import { LP_PLANS } from "@/site/lib/lp-plans";
 
 /**
- * /lp/google-workspace — the Google Ads landing page for Google Workspace (R-139, 4 Oct 2026).
- * Lives in the (lp) group: its own small header, no site menu (see (lp)/layout.tsx). noindex.
- * The price is the live catalogue's Business Starter yearly rate — the same figure checkout
- * charges (falls back to LICENCE_EDITIONS if the catalogue is down).
+ * /lp/google-workspace — the first ad page (R-139). Since 4 Oct 2026 every plan has its own
+ * page, and this one is "Business Starter — Landing Page 1". Old ads and links still land
+ * here, so forward them with the query string intact (gclid / utm must survive the hop).
  */
-export const metadata: Metadata = {
-  title: "Google Workspace for Business",
-  description: "Google Workspace for business by ANUTECH Digital — professional email, cloud storage, meetings and productivity tools. 14-day free trial, GST invoice, setup included.",
-};
-
-export const revalidate = 600;
-
-export default async function GoogleWorkspaceLandingPage() {
-  const editions = mergeEditions(await fetchLiveWorkspace());
-  const starter = editions.find((e) => e.name === "GW Business Starter") ?? editions[0];
-  return <WorkspaceAdLanding annualPerSeatMo={starter.annual} />;
+export default async function OldWorkspaceLanding({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    if (Array.isArray(v)) v.forEach((x) => qs.append(k, x));
+    else if (v != null) qs.set(k, v);
+  }
+  const q = qs.toString();
+  redirect((LP_PLANS.starter.path + (q ? `?${q}` : "")) as Route);
 }
