@@ -241,7 +241,7 @@ describe("2. structure", () => {
   it("groups the Marketing Hub into five and the Reports directory by kind", () => {
     const hub = flat.find((e) => e.item.id === "marketing-hub")!.item;
     expect(groupDirectory(hub.directory!).map((g) => g.group)).toHaveLength(5);
-    expect(hub.directory).toHaveLength(14 + ADDED_S28.length + 1); // 14 at S30 + S28 reminders + the IndiaMART key screen (S34)
+    expect(hub.directory).toHaveLength(14 + ADDED_S28.length + 2); // 14 at S30 + S28 reminders + the IndiaMART key screen (S34) + Ads landing pages (4 Oct 2026)
 
     const reports = flat.find((e) => e.item.id === "reports")!.item;
     expect(reports.directory!.map((d) => d.href)).toEqual(expect.arrayContaining([
