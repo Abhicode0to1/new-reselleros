@@ -14,9 +14,6 @@ export const EXPENSE_CATEGORIES = [
   "Hosting",
   "Software",
   "Salaries",
-  /* Stipend paid to interns / trainees. Payroll files it here by itself when the person is
-     marked Intern / trainee (migration 20261004140000). */
-  "Stipend — Interns & Trainees",
   /* Paid to a director — shown apart from Salaries because the accounts disclose it
      separately. An employee-director's salary still goes through Payroll (TDS u/s 192);
      this is for remuneration / commission / sitting fees booked as an expense. */

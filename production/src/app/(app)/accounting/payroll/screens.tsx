@@ -193,15 +193,8 @@ export function EmployeesTab() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        {/* Interns / trainees are listed with staff but counted apart (4 Oct 2026). */}
-        <p className="text-sm text-ink-3">
-          {rows.filter((e) => e.engagement_type !== "intern" && e.is_active).length} employees
-          {rows.some((e) => e.engagement_type === "intern") && (
-            <> · {rows.filter((e) => e.engagement_type === "intern" && e.is_active).length} interns / trainees</>
-          )}
-        </p>
-        <Button variant="primary" icon="plus" onClick={() => setEdit("new")}>Add person</Button>
+      <div className="flex justify-end mb-3">
+        <Button variant="primary" icon="plus" onClick={() => setEdit("new")}>Add employee</Button>
       </div>
       {q.isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
@@ -242,7 +235,7 @@ export function EmployeesTab() {
                       onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setViewEmp(e); } }}
                     >
                       <td className="px-4 py-3">
-                        <div className="font-medium text-ink group-hover:text-amber-ink transition-colors flex items-center gap-2 flex-wrap">{toTitleCase(e.name)} <InternTag e={e} /></div>
+                        <div className="font-medium text-ink group-hover:text-amber-ink transition-colors">{toTitleCase(e.name)}</div>
                         <div className="text-xs text-ink-3 mt-0.5 flex items-center gap-1.5 flex-wrap">
                           {employeeSubline(e) && <span>{employeeSubline(e)}</span>}
                           {employeeSubline(e) && e.email && <span className="text-ink-3">·</span>}
@@ -254,7 +247,7 @@ export function EmployeesTab() {
                           <span className="font-mono font-semibold tabular-nums text-ink">{rupee(e.monthly_gross)}</span>
                         ) : (
                           <span title="No salary set yet — add it before running payroll.">
-                            <Badge kind="warning" size="sm">{e.engagement_type === "intern" ? "Stipend pending" : "Salary pending"}</Badge>
+                            <Badge kind="warning" size="sm">Salary pending</Badge>
                           </span>
                         )}
                       </td>
@@ -293,7 +286,7 @@ export function EmployeesTab() {
                   >
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="min-w-0">
-                        <div className="font-medium text-ink leading-tight flex items-center gap-2 flex-wrap">{toTitleCase(e.name)} <InternTag e={e} /></div>
+                        <div className="font-medium text-ink leading-tight">{toTitleCase(e.name)}</div>
                         {employeeSubline(e) && <div className="text-xs text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
                         {e.email && (
                           <div className="text-xs font-mono text-amber-ink mt-0.5 flex items-center gap-1">
@@ -305,7 +298,7 @@ export function EmployeesTab() {
                       {e.monthly_gross > 0 ? (
                         <div className="font-serif text-xl leading-none text-ink shrink-0">{rupee(e.monthly_gross)}</div>
                       ) : (
-                        <Badge kind="warning" size="sm">{e.engagement_type === "intern" ? "Stipend pending" : "Salary pending"}</Badge>
+                        <Badge kind="warning" size="sm">Salary pending</Badge>
                       )}
                     </div>
                     <div className="text-xs text-ink-3 mb-2">
@@ -410,14 +403,6 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
   /* PF wage components — PF is on Basic + DA, not gross (lib/payroll/pf.ts). */
   const [basicMonthly, setBasicMonthly] = React.useState(employee?.basic_monthly != null ? String(employee.basic_monthly) : "");
   const [daMonthly, setDaMonthly] = React.useState(String(employee?.da_monthly ?? 0));
-  /* Intern / trainee on a stipend (4 Oct 2026). Not an Apprentices-Act apprentice, so PF /
-     ESI stay the owner's call — the toggles are untouched by this choice. */
-  const [engagement, setEngagement] = React.useState<"employee" | "intern">(employee?.engagement_type === "intern" ? "intern" : "employee");
-  const isIntern = engagement === "intern";
-  const [trainStart, setTrainStart] = React.useState(employee?.training_start ?? "");
-  const [trainEnd, setTrainEnd] = React.useState(employee?.training_end ?? "");
-  const [trainArea, setTrainArea] = React.useState(employee?.training_area ?? "");
-  const [institute, setInstitute] = React.useState(employee?.training_institute ?? "");
 
   // Tab state
   const [empTab, setEmpTab] = React.useState<"basic" | "ctc" | "statutory">("basic");
@@ -463,10 +448,6 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
 
   async function submit() {
     if (!name.trim() || !pinValid) return;
-    if (isIntern && trainStart && trainEnd && trainEnd < trainStart) {
-      toast.error("Training end is before its start");
-      return;
-    }
     const id = await save.mutateAsync({
       id: employee?.id, name: name.trim(), monthly_gross: Math.round(Number(gross) || 0),
       joining_date: joined || null, leave_allowance: Math.round(Number(allowance) || 0), is_active: active,
@@ -477,11 +458,6 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
       esi_applicable: esiApplicable, pf_applicable: pfApplicable,
       basic_monthly: basicMonthly.trim() === "" ? null : Math.round(Number(basicMonthly) || 0),
       da_monthly: Math.round(Number(daMonthly) || 0),
-      engagement_type: engagement,
-      training_start: isIntern ? (trainStart || null) : null,
-      training_end: isIntern ? (trainEnd || null) : null,
-      training_area: isIntern ? (trainArea.trim() || null) : null,
-      training_institute: isIntern ? (institute.trim() || null) : null,
     });
     if (pin && id) await setPin.mutateAsync({ employeeId: id, pin });
     onClose();
@@ -491,9 +467,9 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="sm:!max-w-3xl md:!max-w-4xl">
         <DialogHeader>
-          <DialogTitle>{employee ? (isIntern ? "Edit intern / trainee" : "Edit employee") : (isIntern ? "Add intern / trainee" : "Add employee")}</DialogTitle>
+          <DialogTitle>{employee ? "Edit employee" : "Add employee"}</DialogTitle>
           <DialogDescription>
-            {employee ? `Update ${employee.name}'s profile, payroll & contact details.` : (isIntern ? "Add an intern or trainee you pay a stipend to — fill the basics now, the rest later." : "Add a person you pay a salary to — you can fill only the basics now and the rest later.")}
+            {employee ? `Update ${employee.name}'s profile, payroll & contact details.` : "Add a person you pay a salary to — you can fill only the basics now and the rest later."}
           </DialogDescription>
         </DialogHeader>
 
@@ -532,39 +508,6 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
           {/* TAB 1: BASIC PROFILE */}
           {empTab === "basic" && (
             <section className="space-y-3">
-              <div>
-                <p className="text-xs font-semibold text-ink-2 mb-1.5">Type</p>
-                <div className="inline-flex rounded-lg border border-hairline bg-paper-2/60 p-1 gap-1" role="radiogroup" aria-label="Employee or intern">
-                  {(["employee", "intern"] as const).map((t) => (
-                    <button key={t} type="button" role="radio" aria-checked={engagement === t} onClick={() => setEngagement(t)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${engagement === t ? "bg-paper text-ink shadow-2xs" : "text-ink-3 hover:text-ink"}`}>
-                      {t === "employee" ? "Employee" : "Intern / trainee"}
-                    </button>
-                  ))}
-                </div>
-                {isIntern && (
-                  <p className="text-xs text-ink-3 mt-1.5">
-                    Paid a monthly stipend, booked as &ldquo;Stipend — Interns & Trainees&rdquo; and counted apart from staff.
-                    PF / ESI are set on the Statutory tab — for a trainee they can still apply; check with your CA.
-                  </p>
-                )}
-              </div>
-              {isIntern && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-hairline bg-paper-2/40 p-3">
-                  <Field htmlFor="payroll-train-start" label="Training starts">
-                    <Input id="payroll-train-start" type="date" value={trainStart} onChange={(e) => setTrainStart(e.target.value)} />
-                  </Field>
-                  <Field htmlFor="payroll-train-end" label="Training ends">
-                    <Input id="payroll-train-end" type="date" value={trainEnd} onChange={(e) => setTrainEnd(e.target.value)} />
-                  </Field>
-                  <Field htmlFor="payroll-train-area" label="Area / team">
-                    <Input id="payroll-train-area" value={trainArea} onChange={(e) => setTrainArea(e.target.value)} placeholder="e.g. Accounts, Sales" />
-                  </Field>
-                  <Field htmlFor="payroll-institute" label="College / institute">
-                    <Input id="payroll-institute" value={institute} onChange={(e) => setInstitute(e.target.value)} placeholder="Optional" />
-                  </Field>
-                </div>
-              )}
               <Field htmlFor="payroll-full-name" label="Full name" required>
                 <Input id="payroll-full-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="e.g. Abhishek Sharma" />
               </Field>
@@ -619,7 +562,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                 </Field>
               </div>
 
-              <Field htmlFor="payroll-monthly-gross-salary-base" label={isIntern ? "Monthly stipend (₹)" : "Monthly Gross Salary (₹, Base for Pay Slip)"}>
+              <Field htmlFor="payroll-monthly-gross-salary-base" label="Monthly Gross Salary (₹, Base for Pay Slip)">
                 <Input id="payroll-monthly-gross-salary-base" type="number" min={0} value={gross} onChange={(e) => setGross(e.target.value)} placeholder="e.g. 46997" />
               </Field>
 
@@ -1423,7 +1366,7 @@ async function generatePayslip(employee: Employee, payment: SalaryPayment, me: C
           phone:   me?.tenantPhone ?? null,
           gstin:   me?.tenantGstin ?? null,
         },
-        employee: { name: employee.name, pan: employee.pan, pfNo: employee.pf_no, esiNo: employee.esi_no, intern: employee.engagement_type === "intern" },
+        employee: { name: employee.name, pan: employee.pan, pfNo: employee.pf_no, esiNo: employee.esi_no },
         period:           payment.period,
         payDate:          payment.pay_date,
         paidVia,
@@ -1654,7 +1597,7 @@ function PaySalaryDialog({ employee, period, onClose }: { employee: Employee; pe
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="md:!max-w-xl">
         <DialogHeader>
-          <DialogTitle>{employee.engagement_type === "intern" ? "Pay stipend" : "Pay salary"} — {employee.name}</DialogTitle>
+          <DialogTitle>Pay salary — {employee.name}</DialogTitle>
           <DialogDescription>Period {period}. This books the salary + deductions now; the net pay clears your bank once you reconcile the debit in Banking.</DialogDescription>
         </DialogHeader>
 
@@ -2712,23 +2655,5 @@ function PayDuesDialog({ payable, onClose }: { payable: number; onClose: () => v
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** "Intern" badge, plus how long the training has left once it is within 30 days. */
-function InternTag({ e }: { e: Employee }) {
-  if (e.engagement_type !== "intern") return null;
-  const daysLeft = e.training_end
-    ? Math.ceil((new Date(e.training_end + "T00:00:00").getTime() - new Date(todayISO() + "T00:00:00").getTime()) / 86_400_000)
-    : null;
-  return (
-    <>
-      <Badge kind="info" size="sm">Intern</Badge>
-      {daysLeft !== null && daysLeft <= 30 && (
-        <Badge kind={daysLeft < 0 ? "muted" : "warning"} size="sm" title={`Training ends ${formatDate(e.training_end!)}`}>
-          {daysLeft < 0 ? "Training over" : daysLeft === 0 ? "Training ends today" : `Training ends in ${daysLeft} d`}
-        </Badge>
-      )}
-    </>
   );
 }

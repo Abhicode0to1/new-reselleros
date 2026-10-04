@@ -31,7 +31,7 @@ import { monthsActiveInPeriod } from "./pnl";
 import { utcDateISO } from "@/lib/dates/ist";
 
 /** Expense categories that are payroll — the pool labour can be moved out of. */
-export const SALARY_CATEGORIES: ReadonlySet<string> = new Set(["Salaries", "Director's Remuneration", "Stipend — Interns & Trainees"]);
+export const SALARY_CATEGORIES: ReadonlySet<string> = new Set(["Salaries", "Director's Remuneration"]);
 
 export interface LabourAllocation {
   project_id: string;
