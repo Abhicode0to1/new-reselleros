@@ -26,8 +26,9 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       /* The widget shows a typing indicator against this — a hung upstream must become a
-         stated failure, not a forever-spinner. The app's own Gemini timeout is 20s. */
-      signal: AbortSignal.timeout(25_000),
+         stated failure, not a forever-spinner. The app's own Gemini timeout is 20s; with the
+         overload retry and the fallback model (4 Oct 2026) the worst case is longer. */
+      signal: AbortSignal.timeout(45_000),
       cache: "no-store",
     });
     if (!res.ok) {

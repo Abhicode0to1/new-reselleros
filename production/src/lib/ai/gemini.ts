@@ -258,6 +258,14 @@ export async function geminiJson<T>(args: {
    * `null` alone is what made four different faults read identically.
    */
   onFailure?: (reason: string) => void;
+  /**
+   * OPT-IN second model for when Google says the main one is overloaded (503 "high
+   * demand") on both tries. Asked once, with no retry of its own. Only for callers where a
+   * person is waiting on an answer (the website sales chat); webhooks keep the old
+   * two-call ceiling. Added 4 Oct 2026 after the chat answered "could not reply" during a
+   * 503 spike (7 times in two days).
+   */
+  fallbackModel?: string;
   /** Internal. Set on the single retry so it cannot recurse — see the 5xx branch below. */
   __isRetry?: boolean;
 }): Promise<T | null> {
@@ -343,6 +351,12 @@ export async function geminiJson<T>(args: {
         console.warn(`[${args.label}] retrying once after HTTP ${res.status}`);
         await new Promise((r) => setTimeout(r, 900));
         return geminiJson<T>({ ...args, __isRetry: true });
+      }
+      /* Overloaded twice → ask the opt-in fallback model once. Its call records the outcome,
+         so this logical call still counts as ONE breaker failure at most. */
+      if (res.status === 503 && args.__isRetry && args.fallbackModel && args.fallbackModel !== args.model) {
+        console.warn(`[${args.label}] ${args.model} overloaded twice — asking ${args.fallbackModel}`);
+        return geminiJson<T>({ ...args, model: args.fallbackModel, fallbackModel: undefined, __isRetry: true });
       }
       recordFailure(now);
       args.onFailure?.(failureReason(res.status, body));
