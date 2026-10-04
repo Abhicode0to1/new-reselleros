@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { DevDemoPanel } from "@/components/shared/dev-demo-panel";
 import { GoogleAuthButton } from "@/components/features/auth/google-button";
+import { ResendVerification } from "@/components/features/auth/resend-verification";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -65,13 +66,15 @@ function LoginPageInner() {
      into the OAuth redirectTo, so the same string reaches the provider. */
   const nextPath = appPathOr(searchParams.get("next"));
   const [showPassword, setShowPassword] = React.useState(false);
+  /** R-048: GoTrue refuses an unconfirmed email; say why and offer a fresh link. */
+  const [unconfirmed, setUnconfirmed] = React.useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { email: searchParams.get("email") ?? "" } as Partial<FormData> });
 
   // Quick-fill from the dev panel — email only; the password is never in code (R-059)
   const fillDemo = (email: string) => {
@@ -86,6 +89,10 @@ function LoginPageInner() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword(values);
     if (error) {
+      if (/not confirmed/i.test(error.message)) {
+        setUnconfirmed(values.email);
+        return;
+      }
       toast.error(error.message);
       return;
     }
@@ -172,6 +179,15 @@ function LoginPageInner() {
         <span>or use email</span>
         <div className="flex-1 h-px bg-hairline" />
       </div>
+
+      {unconfirmed && (
+        <div className="mb-4 rounded-md border border-amber bg-amber-soft p-3 text-sm" role="alert">
+          <p className="mb-3 text-amber-ink">
+            <b>Please confirm your email first.</b> We sent a link to {unconfirmed} when you signed up.
+          </p>
+          <ResendVerification initialEmail={unconfirmed} />
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <FormField label="Email" required htmlFor="email">
