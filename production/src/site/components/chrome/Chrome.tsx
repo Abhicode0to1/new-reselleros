@@ -41,6 +41,7 @@ const CRUMBS: Record<string, string> = {
   "/hosting": "cPanel web hosting",
   "/email": "Business email & productivity",
   "/email/compare-editions": "Compare editions",
+  "/google-workspace/pricing": "Google Workspace pricing",
   "/ssl": "SSL & security",
   "/login": "Client login",
   "/terms": "Terms of service",
@@ -108,7 +109,7 @@ export function CtaBand() {
 const FOOTER_COLS = [
   { title: "DOMAINS", links: [["Search a domain", "/domains"], ["Rate card", "/domains#rates"], ["Transfer in", "/domains"], ["All prices", "/rates"]] },
   { title: "HOSTING", links: [["Shared hosting", "/hosting"], ["Full specification", "/hosting#specs"], ["Client area", CLIENT_AREA_URL], ["System status", "/status"]] },
-  { title: "EMAIL & SECURITY", links: [["Compare editions", "/email/compare-editions"], ["Business email", "/email"], ["Google Workspace", "/quote"], ["Microsoft 365", "/quote"], ["SSL certificates", "/ssl"]] },
+  { title: "EMAIL & SECURITY", links: [["Compare editions", "/email/compare-editions"], ["Business email", "/email"], ["Google Workspace pricing", "/google-workspace/pricing"], ["Microsoft 365", "/quote"], ["SSL certificates", "/ssl"]] },
   { title: "RESELLEROS", links: [["What it is", "/reselleros"], ["Modules", "/reselleros#modules"], ["Interactive demo", "/reselleros"], ["Pricing — free in beta", "/reselleros#pricing"]] },
   { title: "COMPANY", links: [["About Anutech", "/about"], ["Reseller program", "/reseller"], ["Why us", "/why-us"], ["Support", "/contact"], ["Get a quote", "/quote"], ["Client login", "/login"], ["Terms", "/terms-and-conditions"], ["Privacy", "/privacy-policy"], ["Refunds", "/refund"]] },
 ] as const;
@@ -120,8 +121,7 @@ export function Footer() {
         <div style={{ display: "grid", gridTemplateColumns: "1.5fr repeat(5, 1fr)", gap: 28 }} className="footer-grid">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <Image src="/anutech-digital-logo.png" alt="" width={30} height={30} style={{ objectFit: "contain" }} />
-              <span style={{ fontSize: 16, fontWeight: 700 }}>Anutech Digital</span>
+              <Image src="/lp/anutech-logo.png" alt="ANUTECH Digital Pvt Ltd" width={108} height={36} style={{ objectFit: "contain", height: 36, width: "auto" }} />
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--text-secondary)", maxWidth: 260, margin: "0 0 14px" }}>
               Anutech Digital Pvt Ltd, Rohini, Delhi. Google Premier Partner since 2014. Maker of ResellerOS.

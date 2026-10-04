@@ -67,7 +67,7 @@ const MENUS: readonly Menu[] = [
         { label: "Licence calculator", note: "Priced live, GST separate", href: "/email#calculator" },
       ],
       [
-        { label: "Google Workspace", note: "Premier Partner since 2014", href: "/quote" },
+        { label: "Google Workspace", note: "Plans and pricing in INR", href: "/google-workspace/pricing" },
         { label: "Microsoft 365", note: "Licence management by us", href: "/quote" },
         { label: "SSL certificates", note: "DV free, OV/EV when needed", href: "/ssl" },
       ],
@@ -114,6 +114,7 @@ const MOBILE_PAGES = [
   { label: "Hosting", note: "cPanel on NVMe, from ₹49.99/mo", href: "/hosting" },
   { label: "Business email", note: "Mailboxes from ₹79/mo", href: "/email" },
   { label: "Compare editions", note: "GW, M365 and Zoho side by side", href: "/email/compare-editions" },
+  { label: "Google Workspace pricing", note: "Every plan in INR + GST", href: "/google-workspace/pricing" },
   { label: "SSL & security", note: "Free DV on every site", href: "/ssl" },
   { label: "ResellerOS", note: "Software for resellers · free in beta", href: "/reselleros" },
   { label: "Reseller program", note: "No slabs, no deposit", href: "/reseller" },
@@ -158,8 +159,8 @@ export function Header() {
             root page's built-in bypass: it shows the Anutech Digital home to everyone,
             signed in or not. */}
         <Link href="/?preview=1" style={{ display: "flex", alignItems: "center", gap: 10 }} aria-label="Anutech Digital home">
-          <Image src="/anutech-digital-logo.png" alt="" width={34} height={34} style={{ objectFit: "contain" }} />
-          <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Anutech Digital</span>
+          {/* New ANUTECH logo, the wordmark is in the image (Pardeep, 4 Oct 2026). */}
+          <Image src="/lp/anutech-logo.png" alt="ANUTECH Digital Pvt Ltd" width={120} height={40} priority style={{ objectFit: "contain", height: 40, width: "auto" }} />
         </Link>
 
         <nav className="hide-mobile" style={{ display: "flex", gap: 4, flex: 1 }} aria-label="Main">

@@ -26,12 +26,7 @@ import { WHATSAPP_NUMBER, WHATSAPP_READY, COMPANY } from "@/site/lib/config";
 import { useTurnstile } from "@/components/shared/turnstile";
 import { pickAdParams, withAdParams, rememberLanding } from "@/site/lib/ad-attribution";
 import { reportLeadConversion } from "@/site/lib/google-ads";
-
-/** New-customer offer, first year only (Pardeep, 4 Oct 2026). Our cost for a NEW customer
- *  is ₹1,650/user/year, for a renewal ₹3,080 — so the cut is safe in year 1 only, and the page
- *  always says that year 2 renews at the list price. Not in the catalogue: quotes for new
- *  customers are made at this price by the team. */
-export const FIRST_YEAR_PER_USER = 2499;
+import { FIRST_YEAR_PER_USER, OFFER_MIN_USERS } from "@/site/lib/workspace-offer";
 
 /** Online checkout for Workspace — off until every edition's price is confirmed (see header). */
 const BUY_ONLINE = false;
@@ -87,7 +82,7 @@ const WHY: [string, string][] = [
 const FAQ: [string, string][] = [
   ["Mere paas domain nahi hai — kya hoga?", "Koi baat nahi. Hum aapka domain bhi register kar dete hain aur usi par Google Workspace chalu karte hain — ek hi jagah se."],
   ["Purana email (cPanel, Zoho, Outlook) ka kya hoga?", "Free migration: purane mail, folders, contacts aur calendar hum Google Workspace mein shift karte hain. Aapke paas kuch nahi chhootta."],
-  ["14 din ke trial ke baad kya hota hai?", "Trial ke baad aap tay karte hain. Jaari rakhna hai to saalana plan lijiye — naye customer ko pehle saal ₹2,499/user (doosre saal se list price); nahi to kuch nahi katega — koi card nahi maanga jaata."],
+  ["14 din ke trial ke baad kya hota hai?", "Trial ke baad aap tay karte hain. Jaari rakhna hai to saalana plan lijiye — naya account aur 30+ users ho to pehle saal ₹1,650/user (Google approval ke saath; doosre saal se list price); nahi to kuch nahi katega — koi card nahi maanga jaata."],
   ["GST invoice milega?", "Haan, har order par GST invoice milta hai, aur business us par input tax credit le sakta hai."],
   ["Kitne users tak chal sakta hai?", "Business plans 1 se 300 users tak. Users kabhi bhi badha sakte hain."],
 ];
@@ -102,7 +97,7 @@ export function WorkspaceAdLanding({
   const [ad, setAd] = useState<URLSearchParams>(new URLSearchParams());
   const [landing, setLanding] = useState("");
   const [modal, setModal] = useState<null | "buy" | "trial">(null);
-  const [users, setUsers] = useState(5);
+  const [users, setUsers] = useState(1);
   const [exitOffer, setExitOffer] = useState(false);
 
   /* Desktop only: the pointer leaving through the top of the window is the classic "about to
@@ -141,6 +136,8 @@ export function WorkspaceAdLanding({
   const offerYear = Math.min(FIRST_YEAR_PER_USER, yearly);
   const offerMo = offerYear / 12;
   const offPct = Math.round((1 - offerYear / yearly) * 100);
+  const offerOn = users >= OFFER_MIN_USERS;
+  const perUserYear = offerOn ? offerYear : yearly;
   const wa = waLink("Hello ANUTECH, mujhe Google Workspace chahiye.");
 
   const BuyButton = ({ className = "" }: { className?: string }) =>
@@ -182,12 +179,12 @@ export function WorkspaceAdLanding({
                 <li>Setup + migration free</li>
                 <li>GST invoice</li>
               </ul>
-              <p className="gw-note">Naye customer: pehle saal sirf <b>{inr(offerMo)}/user/mahina</b> (saalana plan) · {COMPANY.partnerLine}</p>
+              <p className="gw-note">{OFFER_MIN_USERS}+ users: pehle saal sirf <b>{inr(offerMo)}/user/mahina</b> (saalana plan) · {COMPANY.partnerLine}</p>
               <CallbackForm landing={landing} />
             </div>
             <div className="gw-visual">
               <aside className="gw-promo" aria-label="Special offer">
-                <span className="gw-promo-tag">Naye customer ka offer</span>
+                <span className="gw-promo-tag">{OFFER_MIN_USERS}+ users · naya account</span>
                 <div className="gw-promo-main">
                   <div className="gw-promo-zero" aria-hidden><b>{offPct}%</b><small>off</small></div>
                   <div>
@@ -196,8 +193,7 @@ export function WorkspaceAdLanding({
                   </div>
                 </div>
                 <div className="gw-promo-foot">
-                  <span>Doosre saal se {inr(yearly)}/user · + GST</span>
-                  <button type="button" className="gw-promo-btn" onClick={() => setModal("trial")}>Offer lo <span aria-hidden>→</span></button>
+                  <button type="button" className="gw-promo-btn" onClick={() => { setUsers((n) => Math.max(n, OFFER_MIN_USERS)); setModal("buy"); }}>Offer lo <span aria-hidden>→</span></button>
                 </div>
               </aside>
               <img className="gw-photo" src="/lp/gw-hero.jpg" alt="A business owner working on Google Workspace" width={400} height={458} fetchPriority="high" decoding="async" />
@@ -243,10 +239,13 @@ export function WorkspaceAdLanding({
 
           <aside className="gw-card gw-pricing" aria-label="Price">
             <div className="gw-tag">Business Starter</div>
-            <div className="gw-offer-line"><span className="gw-off-badge">{offPct}% OFF</span> pehle saal · naye customer</div>
-            <div className="gw-price">{inr(offerMo)}<small> per user / month</small></div>
-            <div className="gw-year"><s>{inr(yearly)}</s> <b>{inr(offerYear)}</b> per user, pehla saal · + 18% GST (input credit milta hai)</div>
-            <div className="gw-renew">Doosre saal se {inr(yearly)}/user/saal ({inr(annualPerSeatMo)}/mahina)</div>
+            <div className="gw-price">{inr(annualPerSeatMo)}<small> per user / month</small></div>
+            <div className="gw-year">{inr(yearly)} per user / year · + 18% GST (input credit milta hai)</div>
+            <div className="gw-offer-box">
+              <div className="gw-offer-line"><span className="gw-off-badge">{offPct}% OFF</span> {OFFER_MIN_USERS}+ users · naya account</div>
+              <div className="gw-year">Pehle saal <s>{inr(yearly)}</s> <b>{inr(offerYear)}</b>/user ({inr(offerMo)}/mahina)</div>
+              <div className="gw-renew">Google approval ke saath (aam taur par mil jaati hai) · doosre saal se {inr(yearly)}/user</div>
+            </div>
             <ul className="gw-incl">
               <li>30 GB per user · custom email</li>
               <li>Setup, domain aur migration help included</li>
@@ -261,11 +260,16 @@ export function WorkspaceAdLanding({
                 <button type="button" aria-label="One user more" onClick={() => setUsers((n) => Math.min(300, n + 1))}>+</button>
               </div>
               <dl className="gw-calc-out">
-                <div><dt>Pehla saal</dt><dd>{inr(offerYear * users)}</dd></div>
-                <div><dt>Pehla saal + 18% GST</dt><dd><b>{inr(Math.round(offerYear * users * 1.18))}</b></dd></div>
-                <div className="gw-calc-save"><dt>Aapki bachat</dt><dd>{inr((yearly - offerYear) * users)}</dd></div>
+                <div><dt>Pehla saal</dt><dd>{inr(perUserYear * users)}</dd></div>
+                <div><dt>Pehla saal + 18% GST</dt><dd><b>{inr(Math.round(perUserYear * users * 1.18))}</b></dd></div>
+                {offerOn && <div className="gw-calc-save"><dt>Aapki bachat ({offPct}% OFF)</dt><dd>{inr((yearly - offerYear) * users)}</dd></div>}
                 <div><dt>Doosre saal se</dt><dd>{inr(yearly * users)}/saal + GST</dd></div>
               </dl>
+              {!offerOn && (
+                <button type="button" className="gw-calc-nudge" onClick={() => setUsers(OFFER_MIN_USERS)}>
+                  {OFFER_MIN_USERS} users par pehle saal {offPct}% OFF — {OFFER_MIN_USERS} karke dekhein
+                </button>
+              )}
             </div>
             <div className="gw-price-actions">
               <BuyButton className="gw-full" />
@@ -561,6 +565,9 @@ const CSS = `
 .gw-off-badge{background:#d93025;color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;letter-spacing:.04em}
 .gw-year s,.gw-renew{color:#6b7a92}.gw-year b{color:var(--ink)}
 .gw-renew{font-size:13px;margin-top:2px}
+.gw-offer-box{margin:12px 0 4px;padding:10px 12px;border:1px dashed #f4b4ae;background:#fff6f5;border-radius:14px}
+.gw-offer-box .gw-offer-line{margin-top:0}
+.gw .gw-calc-nudge{margin-top:10px;width:100%;background:#fff6f5;border:1px dashed #d93025;color:#b42318;border-radius:12px;padding:10px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;min-height:44px}
 .gw-calc-save dt,.gw-calc-save dd{color:#0a7a35!important;font-weight:800}
 .gw-promo-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.45);font-size:13px;font-weight:700;position:relative;z-index:1}
 .gw .gw-promo-btn{background:#fff;color:#0b57d0;border:0;border-radius:999px;padding:10px 18px;font:inherit;font-size:14px;font-weight:900;cursor:pointer;min-height:44px}

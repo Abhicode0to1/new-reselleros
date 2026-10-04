@@ -32,6 +32,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     page("/hosting", 0.9, "weekly"),
     page("/email", 0.9, "weekly"),
     page("/email/compare-editions", 0.7, "weekly"),
+    page("/google-workspace/pricing", 0.9, "weekly"),
     page("/ssl", 0.7, "weekly"),
     // Reseller side
     page("/reselleros", 0.8, "weekly"),
