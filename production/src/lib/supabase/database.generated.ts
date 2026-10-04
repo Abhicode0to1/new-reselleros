@@ -9,6 +9,258 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      academy_programs: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      academy_modules: {
+        Row: {
+          created_at: string
+          id: string
+          position: number
+          program_id: string
+          tenant_id: string
+          title: string
+          topics: string[]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position?: number
+          program_id: string
+          tenant_id: string
+          title: string
+          topics?: string[]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position?: number
+          program_id?: string
+          tenant_id?: string
+          title?: string
+          topics?: string[]
+        }
+        Relationships: []
+      }
+      academy_apprentices: {
+        Row: {
+          address: string | null
+          code: string
+          course: string | null
+          created_at: string
+          date_of_birth: string | null
+          email: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          end_date: string | null
+          full_name: string
+          id: string
+          institute: string | null
+          joining_date: string | null
+          mentor_user_id: string | null
+          notes: string | null
+          phone: string | null
+          program_id: string | null
+          qualification: string | null
+          start_date: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          code?: string
+          course?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          end_date?: string | null
+          full_name: string
+          id?: string
+          institute?: string | null
+          joining_date?: string | null
+          mentor_user_id?: string | null
+          notes?: string | null
+          phone?: string | null
+          program_id?: string | null
+          qualification?: string | null
+          start_date?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          code?: string
+          course?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          end_date?: string | null
+          full_name?: string
+          id?: string
+          institute?: string | null
+          joining_date?: string | null
+          mentor_user_id?: string | null
+          notes?: string | null
+          phone?: string | null
+          program_id?: string | null
+          qualification?: string | null
+          start_date?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      academy_tasks: {
+        Row: {
+          apprentice_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          difficulty: string
+          due_date: string | null
+          est_minutes: number | null
+          id: string
+          instructions: string | null
+          kind: string
+          module_id: string | null
+          priority: string
+          reference_url: string | null
+          status: string
+          submission_type: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          apprentice_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          difficulty?: string
+          due_date?: string | null
+          est_minutes?: number | null
+          id?: string
+          instructions?: string | null
+          kind?: string
+          module_id?: string | null
+          priority?: string
+          reference_url?: string | null
+          status?: string
+          submission_type?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          apprentice_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          difficulty?: string
+          due_date?: string | null
+          est_minutes?: number | null
+          id?: string
+          instructions?: string | null
+          kind?: string
+          module_id?: string | null
+          priority?: string
+          reference_url?: string | null
+          status?: string
+          submission_type?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      academy_submissions: {
+        Row: {
+          apprentice_id: string
+          attempt: number
+          feedback: string | null
+          github_url: string | null
+          id: string
+          link_url: string | null
+          marks: number | null
+          note: string | null
+          review_result: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          submitted_at: string
+          task_id: string
+          tenant_id: string
+        }
+        Insert: {
+          apprentice_id: string
+          attempt?: number
+          feedback?: string | null
+          github_url?: string | null
+          id?: string
+          link_url?: string | null
+          marks?: number | null
+          note?: string | null
+          review_result?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          submitted_at?: string
+          task_id: string
+          tenant_id: string
+        }
+        Update: {
+          apprentice_id?: string
+          attempt?: number
+          feedback?: string | null
+          github_url?: string | null
+          id?: string
+          link_url?: string | null
+          marks?: number | null
+          note?: string | null
+          review_result?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          submitted_at?: string
+          task_id?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       access_credentials: {
         Row: {
           account_ref: string | null
@@ -11882,6 +12134,20 @@ export type Database = {
       }
     }
     Functions: {
+      academy_can_manage: { Args: never; Returns: boolean }
+      academy_load_default_program: { Args: never; Returns: string }
+      academy_my_apprentice_id: { Args: never; Returns: string }
+      academy_my_tenant_id: { Args: never; Returns: string }
+      academy_review_task: {
+        Args: { p_feedback: string; p_marks: number | null; p_result: string; p_task_id: string }
+        Returns: undefined
+      }
+      academy_staff_sees: { Args: { p_apprentice_id: string }; Returns: boolean }
+      academy_start_task: { Args: { p_task_id: string }; Returns: undefined }
+      academy_submit_task: {
+        Args: { p_github: string; p_link: string; p_note: string; p_task_id: string }
+        Returns: number
+      }
       accept_project_quote: { Args: { p_project_id: string }; Returns: string }
       accept_quote: { Args: { p_quote_id: string }; Returns: Json }
       ad_channel_guess: { Args: { p_text: string }; Returns: string }

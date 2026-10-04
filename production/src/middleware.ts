@@ -17,6 +17,8 @@ import { rateLimitShared, clientIp, publicApiLimit } from "@/lib/security/rate-l
 // prefix must be added here for the auth gate + role guard to fire.
 const PROTECTED_PREFIXES = [
   "/dashboard",
+  "/learn",           // Apprentice Academy — the apprentice's own area (R-149)
+  "/academy",         // Apprentice Academy — staff side (R-149)
   "/today",           // S29 ranked inbox across every queue
   "/ux-insights",     // UX observer findings (3 Oct 2026)
   "/ui-insights",     // UI agent design scores (3 Oct 2026)
@@ -183,6 +185,24 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/mfa";
     if (target) url.searchParams.set("next", target);
     return NextResponse.redirect(url);
+  }
+
+  /* Apprentice Academy (R-149): an apprentice may use /learn and the academy API, nothing
+     else. The database already hides every company table from them (they have no
+     public.users row, so current_tenant_id() is null); this keeps them off staff pages and
+     off every other API route too, so no admin-client route can be reached by one. */
+  if (isAuthed && role === "apprentice") {
+    const apiOk = pathname.startsWith("/api/academy/") || pathname.startsWith("/api/auth/");
+    if (pathname.startsWith("/api/") && !apiOk) {
+      return NextResponse.json({ error: "Not available for apprentice accounts." }, { status: 403 });
+    }
+    if (isAuthPage || (isProtected && !pathname.startsWith("/learn"))) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/learn";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
   }
 
   // Logged in → redirect away from auth pages, sending each role to its

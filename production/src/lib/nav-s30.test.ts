@@ -76,7 +76,8 @@ const ADDED_3OCT_OM = ["/ai-entry", "/online-orders", "/items/packages", "/accou
 /** 4 Oct 2026 — the two catalogs (tabs on /items) get their own menu rows next to Packages
  *  (Pardeep: "subscription catalog aur product catalog bhi hone chahiye"). Same page, same
  *  owner/manager roles as /items — new addresses, not new access. */
-const ADDED_4OCT_OM = ["/items/subscriptions", "/items/products", "/marketing/landing-pages"];
+/** …and Apprentice Academy (R-149), owner / manager in phase 1. */
+const ADDED_4OCT_OM = ["/items/subscriptions", "/items/products", "/marketing/landing-pages", "/academy"];
 const ADDED_3OCT_OWNER = ["/vault/personal/banking", "/vault/personal/expenses", "/vault/personal/wealth"];
 const ADDED_3OCT_BOOKS = ["/accounting/banking/brs", "/accounting/banking/rules", "/accounting/assets", "/accounting/business-loans",
   "/accounting/profitability", "/reports/purchases", "/accounting/tds-receivable/year-end", "/compliance/gst", "/compliance/income-tax", "/compliance/roc"];

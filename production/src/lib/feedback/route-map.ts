@@ -40,6 +40,8 @@ export interface AppRoute {
 export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/aa/simulate-approval", file: "src/app/(app)/aa/simulate-approval/page.tsx" },
   { route: "/about", file: "src/app/(public)/about/page.tsx" },
+  { route: "/academy", file: "src/app/(app)/academy/page.tsx" },
+  { route: "/academy/[id]", file: "src/app/(app)/academy/[id]/page.tsx" },
   { route: "/accounting", file: "src/app/(app)/accounting/page.tsx" },
   { route: "/accounting/advances", file: "src/app/(app)/accounting/advances/page.tsx" },
   { route: "/accounting/aging", file: "src/app/(app)/accounting/aging/page.tsx" },
@@ -119,6 +121,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/items/subscriptions", file: "src/app/(app)/items/subscriptions/page.tsx" },
   { route: "/lead-gen", file: "src/app/(app)/lead-gen/page.tsx" },
   { route: "/leads", file: "src/app/(app)/leads/page.tsx" },
+  { route: "/learn", file: "src/app/learn/page.tsx" },
   { route: "/login", file: "src/app/(auth)/login/page.tsx" },
   { route: "/lp/google-workspace", file: "src/app/(lp)/lp/google-workspace/page.tsx" },
   { route: "/marketing", file: "src/app/(app)/marketing/page.tsx" },

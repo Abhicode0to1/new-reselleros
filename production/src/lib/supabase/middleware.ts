@@ -65,6 +65,16 @@ export async function updateSession(request: NextRequest) {
       .maybeSingle();
     role = (me?.role as string | null) ?? null;
     canViewDeals = Boolean(me?.can_view_deals);
+    /* Apprentice Academy (R-149): an apprentice is not a staff (public.users) row — they are
+       academy_apprentices.user_id. RLS lets them read only their own row. */
+    if (!me) {
+      const { data: appr } = await supabase
+        .from("academy_apprentices")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (appr) role = "apprentice";
+    }
   }
 
   return { response, user, role, canViewDeals, needsMfa };

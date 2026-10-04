@@ -529,6 +529,9 @@ export const APP_NAV: NavSection[] = [
           { id: "scorecard",       href: "/scorecard",                  label: "Scorecards",             icon: "award", roles: OM },
           { id: "performance",     href: "/performance",                label: "Team Performance",       icon: "trending_up", roles: OM },
           { id: "assessments",     href: "/assessments",                label: "Assessments",            icon: "check", roles: OM },
+          /* Apprentice Academy (R-149). Owner / manager in phase 1 (they are the mentors); the
+             sidebar is at its row cap, so it sits here rather than as a new top-level row. */
+          { id: "academy",         href: "/academy",                    label: "Apprentice Academy",     icon: "award", roles: OM, hint: "Apprentices, training, tasks aur review" },
         ],
       },
       {

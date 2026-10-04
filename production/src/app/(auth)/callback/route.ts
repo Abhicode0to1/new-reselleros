@@ -104,6 +104,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}${next}`);
   }
 
+  /* Apprentice Academy (R-149): an apprentice has no users row ON PURPOSE (that is what
+     hides company data from them). Without this they would fall through to the
+     new-workspace / join-request flow below. A password reset keeps its own destination. */
+  const { data: apprentice } = await admin
+    .from("academy_apprentices")
+    .select("id")
+    .eq("user_id", authUser.id)
+    .maybeSingle();
+  if (apprentice) {
+    return NextResponse.redirect(`${origin}${next === "/reset-password" ? next : "/learn"}`);
+  }
+
   // ─── First-time sign-in with Google OAuth ──────────────────────────────────────────────────
   const email = authUser.email ?? "";
   const fullName =
