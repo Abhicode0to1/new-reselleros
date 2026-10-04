@@ -97,6 +97,30 @@ export function WorkspaceAdLanding({
   const [landing, setLanding] = useState("");
   const [modal, setModal] = useState<null | "buy" | "trial">(null);
   const [users, setUsers] = useState(5);
+  const [exitOffer, setExitOffer] = useState(false);
+
+  /* Desktop only: the pointer leaving through the top of the window is the classic "about to
+     close the tab" signal. Shown once per visit, never on phones, never over an open form. */
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 900px)").matches) return;
+    let shown = false;
+    try { shown = sessionStorage.getItem("anutech.lp.exit.v1") === "1"; } catch { /* private mode */ }
+    if (shown) return;
+    const onOut = (e: MouseEvent) => {
+      if (e.clientY > 8 || e.relatedTarget) return;
+      document.removeEventListener("mouseout", onOut);
+      try { sessionStorage.setItem("anutech.lp.exit.v1", "1"); } catch { /* ignore */ }
+      setExitOffer(true);
+    };
+    const t = setTimeout(() => document.addEventListener("mouseout", onOut), 8000);   // not on a quick bounce
+    return () => { clearTimeout(t); document.removeEventListener("mouseout", onOut); };
+  }, []);
+  useEffect(() => {
+    if (!exitOffer) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setExitOffer(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [exitOffer]);
 
   useEffect(() => {
     let store: Storage | null = null;
@@ -144,10 +168,16 @@ export function WorkspaceAdLanding({
                 <TrialButton />
                 {WHATSAPP_READY && <a className="gw-btn gw-wa" href={wa} target="_blank" rel="noopener">WhatsApp {PHONE_SHOWN}</a>}
               </div>
-              <p className="gw-note">Business email · Cloud storage · Video meetings · {COMPANY.partnerLine}</p>
+              <ul className="gw-ticks">
+                <li>Trial mein koi card nahi</li>
+                <li>Setup + migration free</li>
+                <li>GST invoice</li>
+              </ul>
+              <p className="gw-note">Sirf <b>{inr(annualPerSeatMo)}/user/mahina</b> (saalana plan) · {COMPANY.partnerLine}</p>
+              <CallbackForm landing={landing} />
             </div>
             <div className="gw-visual">
-              <img className="gw-photo" src="/lp/gw-hero.jpg" alt="A business owner working on Google Workspace" width={400} height={458} />
+              <img className="gw-photo" src="/lp/gw-hero.jpg" alt="A business owner working on Google Workspace" width={400} height={458} fetchPriority="high" decoding="async" />
               <div className="gw-float">Grow your business with Google<small>Secure · Collaborative · Productive</small></div>
             </div>
           </div>
@@ -164,6 +194,16 @@ export function WorkspaceAdLanding({
               </li>
             ))}
           </ul>
+        </section>
+
+        <section className="gw-wrap gw-sec">
+          <div className="gw-kicker">Kaise shuru hota hai</div>
+          <h3 className="gw-h3">3 kadam — aur aapki team professional email par</h3>
+          <ol className="gw-steps">
+            <li><span>1</span><b>Form ya WhatsApp</b><small>Naam aur number dijiye — 1 minute.</small></li>
+            <li><span>2</span><b>Hamari call</b><small>Users, domain aur plan tay karte hain — {COMPANY.hours}.</small></li>
+            <li><span>3</span><b>Setup hum karte hain</b><small>Domain, users, purana mail — sab shift. Aapki team kaam shuru karti hai.</small></li>
+          </ol>
         </section>
 
         <section className="gw-wrap gw-offer" id="offer">
@@ -273,6 +313,18 @@ export function WorkspaceAdLanding({
         </div>
       </footer>
 
+      {exitOffer && !modal && (
+        <div className="gw-modal" role="dialog" aria-modal="true" aria-labelledby="gw-exit-title" onClick={(e) => { if (e.target === e.currentTarget) setExitOffer(false); }}>
+          <div className="gw-modal-card">
+            <button type="button" className="gw-close" aria-label="Close" onClick={() => setExitOffer(false)}>×</button>
+            <div className="gw-kicker">Jaane se pehle</div>
+            <h3 id="gw-exit-title" className="gw-h3">Ek free call — koi commitment nahi</h3>
+            <p className="gw-copy">Naam aur number dijiye. Hum batayenge aapke business ke liye kaunsa plan sahi hai, aur setup kaise hoga.</p>
+            <CallbackForm landing={landing} compact />
+          </div>
+        </div>
+      )}
+
       <div className="gw-sticky" aria-label="Quick actions">
         <button type="button" className="gw-btn gw-buy" onClick={() => { if (BUY_ONLINE) window.location.href = checkoutHref; else setModal("buy"); }}>Buy Now</button>
         <button type="button" className="gw-btn gw-trial" onClick={() => setModal("trial")}>Free Trial</button>
@@ -281,6 +333,62 @@ export function WorkspaceAdLanding({
 
       {modal && <EnquiryModal kind={modal} landing={landing} defaultUsers={users} onClose={() => setModal(null)} />}
     </div>
+  );
+}
+
+/** Two fields — name + mobile — straight into the pipeline (api/public/callback). */
+function CallbackForm({ landing, compact = false }: { landing: string; compact?: boolean }) {
+  const ts = useTurnstile();
+  const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [err, setErr] = useState("");
+  const [name, setName] = useState("");
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!ts.ready) { setErr("Ek second — spam check chal raha hai"); setState("error"); return; }
+    const f = new FormData(e.currentTarget);
+    const fullName = String(f.get("fullName") ?? "").trim();
+    const phone = String(f.get("phone") ?? "").trim();
+    setState("sending"); setErr("");
+    try {
+      const res = await fetch("/api/public/callback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...ts.headers },
+        body: JSON.stringify({ fullName, phone, pageUrl: landing || window.location.href, pageReferrer: document.referrer || undefined }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(typeof j?.error === "string" ? j.error : "Request nahi gayi");
+      }
+      setName(fullName); setState("done");
+      void reportLeadConversion();
+    } catch (x) {
+      setErr(x instanceof Error ? x.message : "Request nahi gayi"); setState("error");
+    }
+  }
+
+  if (state === "done") {
+    return (
+      <div className={`gw-cb gw-cb-done${compact ? " gw-cb-compact" : ""}`} role="status">
+        <b>Shukriya{name ? `, ${name.split(" ")[0]}` : ""}! Hum jald call karenge.</b>
+        <span>{COMPANY.hours}{WHATSAPP_READY ? " · abhi baat karni ho to WhatsApp karein" : ""}</span>
+        {WHATSAPP_READY && <a className="gw-btn gw-wa" href={waLink(`Hello ANUTECH, I am ${name}. Mujhe Google Workspace ke liye call chahiye.`)} target="_blank" rel="noopener">WhatsApp {PHONE_SHOWN}</a>}
+      </div>
+    );
+  }
+  return (
+    <form className={`gw-cb${compact ? " gw-cb-compact" : ""}`} onSubmit={submit} aria-label="Request a call back">
+      {!compact && <b className="gw-cb-title">Ya hum aapko call karein — free</b>}
+      <div className="gw-cb-row">
+        <label className="gw-sr" htmlFor={compact ? "cb-name-x" : "cb-name"}>Your name</label>
+        <input id={compact ? "cb-name-x" : "cb-name"} name="fullName" required minLength={2} placeholder="Aapka naam" autoComplete="name" />
+        <label className="gw-sr" htmlFor={compact ? "cb-phone-x" : "cb-phone"}>Mobile number</label>
+        <input id={compact ? "cb-phone-x" : "cb-phone"} name="phone" type="tel" required minLength={10} inputMode="tel" placeholder="Mobile number" autoComplete="tel" />
+        <button type="submit" className="gw-btn gw-trial" disabled={state === "sending"}>{state === "sending" ? "…" : "Call me back"}</button>
+      </div>
+      {ts.widget}
+      {state === "error" && <p className="gw-err" role="alert">{err}</p>}
+    </form>
   );
 }
 
@@ -383,7 +491,7 @@ function EnquiryModal({ kind, landing, defaultUsers, onClose }: { kind: "buy" | 
 
 const CSS = `
 .gw{--blue:#0b57d0;--ink:#172b4d;--muted:#5b6a83;--line:#e7edf7;--bg:#f7fbff;--shadow:0 18px 50px rgba(16,42,86,.12);
-  font-family:var(--font-sans),Archivo,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;overflow-x:hidden}
+  font-family:var(--font-sans),Archivo,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;overflow-x:clip}
 .gw *{box-sizing:border-box}
 .gw img{max-width:100%;height:auto}
 .gw a{color:inherit;text-decoration:none}
@@ -480,6 +588,21 @@ const CSS = `
 .gw-faq details[open] summary::after{content:"−"}
 .gw-faq p{margin:0;padding:0 20px 18px;color:var(--muted)}
 .gw-sticky{display:none}
+.gw-ticks{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 16px;font-size:14px;font-weight:700;color:#14532d}
+.gw-ticks li::before{content:"✓ ";color:#15803d}
+.gw-note b{color:var(--ink)}
+.gw-cb{margin-top:18px;background:#fff;border:1px solid #dbe8ff;border-radius:18px;padding:14px;box-shadow:0 10px 28px rgba(16,42,86,.08);display:grid;gap:8px;max-width:620px}
+.gw-cb-compact{box-shadow:none;border:0;padding:0;margin-top:14px}
+.gw-cb-title{font-size:15px}
+.gw-cb-row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px}
+.gw-cb input{min-height:48px;border:1px solid #c9d3e3;border-radius:12px;padding:0 12px;font:inherit;font-size:16px;min-width:0}
+.gw-cb input:focus-visible{outline:3px solid #0b57d0;outline-offset:1px}
+.gw .gw-cb .gw-btn{min-height:48px}
+.gw-cb-done{color:#14532d}.gw-cb-done span{font-size:13px;color:var(--muted)}
+.gw-steps{list-style:none;margin:16px 0 0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.gw-steps li{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px;display:grid;gap:4px;box-shadow:var(--shadow)}
+.gw-steps span{width:36px;height:36px;border-radius:50%;background:#0b57d0;color:#fff;display:grid;place-items:center;font-weight:900}
+.gw-steps small{color:var(--muted);font-size:14px}
 .gw-modal{position:fixed;inset:0;background:rgba(6,22,48,.6);display:grid;place-items:center;padding:16px;z-index:100}
 .gw-modal-card{width:min(520px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:#fff;border-radius:24px;padding:28px;box-shadow:0 30px 90px rgba(0,0,0,.25);position:relative}
 .gw-close{position:absolute;right:14px;top:12px;border:0;background:#f0f4fa;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer}
@@ -495,6 +618,7 @@ const CSS = `
   .gw-apps li:nth-child(4){border-right:0}.gw-apps li:nth-child(n+5){border-top:1px solid var(--line)}
   .gw-blist{grid-template-columns:1fr}
   .gw-why{grid-template-columns:1fr 1fr}
+  .gw-steps{grid-template-columns:1fr}
   .gw-cta{flex-direction:column;align-items:flex-start}
 }
 @media(max-width:600px){
@@ -514,6 +638,7 @@ const CSS = `
   .gw-benefits,.gw-pricing{padding:22px}
   .gw-trust{grid-template-columns:1fr}
   .gw-why{grid-template-columns:1fr}
+  .gw-cb-row{grid-template-columns:1fr}
   .gw-table-wrap{overflow:visible;border:0;box-shadow:none;background:transparent}
   .gw-table,.gw-table tbody,.gw-table tr,.gw-table th,.gw-table td{display:block;min-width:0}
   .gw-table thead{display:none}
