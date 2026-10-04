@@ -36,6 +36,7 @@ import WhatsAppConfigureDialog from "@/components/features/integrations/whatsapp
 import RazorpayConfigureDialog from "@/components/features/integrations/razorpay-configure-dialog";
 import EmailSendingCard from "@/components/features/integrations/email-sending-card";
 import ChangePasswordCard from "@/components/features/settings/change-password-card";
+import { TwoFactorCard } from "@/components/features/settings/two-factor-card";
 import GeminiConfigureDialog from "@/components/features/integrations/gemini-configure-dialog";
 import ApiKeysCard from "@/components/features/integrations/api-keys-card";
 import { useConfirm } from "@/components/providers/confirm-provider";
@@ -1041,7 +1042,7 @@ export default function SettingsPage() {
       {tab === "integrations"  && <IntegrationsTab />}
       {tab === "branding"      && <BrandingTab />}
       {tab === "notifications" && <NotificationsCard />}
-      {tab === "security"      && <div className="max-w-md"><ChangePasswordCard /></div>}
+      {tab === "security"      && <div className="max-w-md"><ChangePasswordCard /><TwoFactorCard /></div>}
     </div>
   );
 }

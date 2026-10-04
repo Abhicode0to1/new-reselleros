@@ -149,7 +149,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const { response, user, role, canViewDeals } = await updateSession(request);
+  const { response, user, role, canViewDeals, needsMfa } = await updateSession(request);
   const isAuthed = !!user;
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   const isAuthPage = AUTH_PREFIXES.some((p) => pathname.startsWith(p));
@@ -170,6 +170,18 @@ export async function middleware(request: NextRequest) {
     url.search = "";
     url.pathname = "/login";
     url.searchParams.set("next", target);
+    return NextResponse.redirect(url);
+  }
+
+  /* R-048 part 2: two-factor on, code not given yet → every app page (and the login/signup
+     bounce below, which would otherwise loop) goes to /mfa first. /mfa itself is neither
+     protected nor an auth page, so it never redirects to itself. */
+  if (isAuthed && needsMfa && (isProtected || isAuthPage)) {
+    const url = request.nextUrl.clone();
+    const target = isProtected ? pathname + request.nextUrl.search : "";
+    url.search = "";
+    url.pathname = "/mfa";
+    if (target) url.searchParams.set("next", target);
     return NextResponse.redirect(url);
   }
 

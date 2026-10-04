@@ -18,6 +18,7 @@ import { Icon } from "@/components/ui/icon";
 import { DevDemoPanel } from "@/components/shared/dev-demo-panel";
 import { GoogleAuthButton } from "@/components/features/auth/google-button";
 import { ResendVerification } from "@/components/features/auth/resend-verification";
+import { MfaCodeForm } from "@/components/features/auth/mfa-code-form";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -68,6 +69,8 @@ function LoginPageInner() {
   const [showPassword, setShowPassword] = React.useState(false);
   /** R-048: GoTrue refuses an unconfirmed email; say why and offer a fresh link. */
   const [unconfirmed, setUnconfirmed] = React.useState<string | null>(null);
+  /** R-048 part 2: password accepted, authenticator code still needed. */
+  const [mfaStep, setMfaStep] = React.useState(false);
 
   const {
     register,
@@ -96,11 +99,28 @@ function LoginPageInner() {
       toast.error(error.message);
       return;
     }
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+      setMfaStep(true);
+      return;
+    }
     toast.success("Welcome back");
     // Hard navigation — guarantees the fresh auth cookies are sent on the
     // next request (router.push uses soft nav which can race the cookie
     // write when the app is behind a Firebase Hosting → Cloud Run proxy).
     window.location.href = nextPath;
+  }
+
+  if (mfaStep) {
+    return (
+      <Card>
+        <div className="text-center mb-6">
+          <h1 className="font-serif text-3xl mb-2">Two-step sign-in</h1>
+          <p className="text-sm text-ink-3">Enter the 6-digit code from your authenticator app.</p>
+        </div>
+        <MfaCodeForm onDone={() => { window.location.href = nextPath; }} />
+      </Card>
+    );
   }
 
   return (

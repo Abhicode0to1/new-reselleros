@@ -51,7 +51,13 @@ export async function updateSession(request: NextRequest) {
   // lookup; cost ≈ 1 ms. Cached at the Supabase edge anyway.
   let role: string | null = null;
   let canViewDeals = false;
+  /* R-048 part 2: this session signed in with a password but has not passed the account's
+     authenticator code yet (verified TOTP factor → nextLevel aal2, session still aal1).
+     Read from the session JWT + the user's factors; no extra network call. */
+  let needsMfa = false;
   if (user) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    needsMfa = aal?.nextLevel === "aal2" && aal?.currentLevel !== "aal2";
     const { data: me } = await supabase
       .from("users")
       .select("role, can_view_deals")
@@ -61,5 +67,5 @@ export async function updateSession(request: NextRequest) {
     canViewDeals = Boolean(me?.can_view_deals);
   }
 
-  return { response, user, role, canViewDeals };
+  return { response, user, role, canViewDeals, needsMfa };
 }
