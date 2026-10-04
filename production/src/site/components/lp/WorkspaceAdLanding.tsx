@@ -154,6 +154,9 @@ export function WorkspaceAdLanding({
       <header className="gw-top">
         <div className="gw-wrap gw-nav">
           <a href="#top" aria-label="ANUTECH Digital"><img src="/lp/anutech-logo.png" alt="ANUTECH Digital Pvt Ltd" className="gw-logo" width={210} height={70} /></a>
+          <nav className="gw-links" aria-label="On this page">
+            <a href="#features">Features</a><a href="#offer">Price</a><a href="#compare">Compare</a><a href="#faq">FAQ</a>
+          </nav>
           <div className="gw-nav-actions">
             {WHATSAPP_READY && <a className="gw-mini" href={wa} target="_blank" rel="noopener">WhatsApp</a>}
             <a className="gw-mini gw-mini-primary" href="#offer">View Offer</a>
@@ -202,7 +205,14 @@ export function WorkspaceAdLanding({
           </div>
         </section>
 
-        <section className="gw-wrap gw-apps-sec">
+        <div className="gw-strip" aria-label="Why customers pick ANUTECH">
+          <div className="gw-wrap gw-strip-row">
+            <span>✓ 14-day free trial</span><span>✓ Free setup &amp; migration</span><span>✓ GST invoice</span>
+            <span>✓ {COMPANY.partnerLine}</span><span>✓ Hindi / English support</span>
+          </div>
+        </div>
+
+        <section className="gw-wrap gw-apps-sec" id="features">
           <ul className="gw-apps" aria-label="Google Workspace apps">
             {APPS.map((a) => (
               <li key={a.name}>
@@ -280,13 +290,7 @@ export function WorkspaceAdLanding({
           </aside>
         </section>
 
-        <section className="gw-wrap gw-trust">
-          {[["🛡️", "Secure & Reliable", "Built for business productivity"], ["⚙️", "Easy Setup", "Hum aapke domain par chalu karte hain"], ["🎧", "Expert Support", COMPANY.hours]].map(([i, t, l]) => (
-            <div key={t} className="gw-card gw-trust-card"><span aria-hidden className="gw-ticon">{i}</span><b>{t}</b><small>{l}</small></div>
-          ))}
-        </section>
-
-        <section className="gw-wrap gw-sec">
+        <section className="gw-wrap gw-sec" id="compare">
           <div className="gw-kicker">Free Gmail vs Google Workspace</div>
           <h3 className="gw-h3">Business ke liye free Gmail kaafi kyun nahi</h3>
           <div className="gw-table-wrap">
@@ -311,7 +315,7 @@ export function WorkspaceAdLanding({
           </div>
         </section>
 
-        <section className="gw-wrap gw-sec">
+        <section className="gw-wrap gw-sec" id="faq">
           <div className="gw-kicker">FAQ</div>
           <h3 className="gw-h3">Aksar puchhe jaane wale sawal</h3>
           <div className="gw-faq">
@@ -323,15 +327,15 @@ export function WorkspaceAdLanding({
 
         <section className="gw-wrap gw-final">
           <div className="gw-cta">
-            <div>
-              <h3 className="gw-h3">Ready to make your business smarter?</h3>
-              <p>Google Workspace shuru karein — ANUTECH Digital har kadam par saath.</p>
+            <div className="gw-cta-copy">
+              <h3 className="gw-h3">Ready to move your business to Google Workspace?</h3>
+              <p>14 din free trial, free setup aur migration — naam aur number dijiye, hum aaj hi call karte hain.</p>
+              <div className="gw-cta-actions">
+                <TrialButton />
+                {WHATSAPP_READY && <a className="gw-btn gw-wa" href={wa} target="_blank" rel="noopener">WhatsApp {PHONE_SHOWN}</a>}
+              </div>
             </div>
-            <div className="gw-cta-actions">
-              <BuyButton />
-              <TrialButton />
-              {WHATSAPP_READY && <a className="gw-btn gw-wa" href={wa} target="_blank" rel="noopener">WhatsApp</a>}
-            </div>
+            <div className="gw-cta-form"><CallbackForm landing={landing} /></div>
           </div>
         </section>
       </main>
@@ -530,6 +534,11 @@ const CSS = `
 .gw-nav{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .gw-logo{width:190px;height:auto;display:block}
 .gw-nav-actions{display:flex;gap:8px}
+.gw-links{display:flex;gap:22px;font-size:14px;font-weight:700;color:#475467;margin-left:auto;margin-right:12px}
+.gw-links a{color:inherit;text-decoration:none}.gw-links a:hover{color:var(--blue)}
+.gw-links a:focus-visible{outline:3px solid #0b57d0;outline-offset:3px;border-radius:4px}
+.gw-strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#fff}
+.gw-strip-row{display:flex;justify-content:center;flex-wrap:wrap;gap:8px 26px;padding:14px 0;font-size:13.5px;font-weight:700;color:#344054}
 .gw .gw-mini{padding:10px 15px;border-radius:999px;font-weight:800;border:1px solid var(--line);background:#fff;font-size:14px;white-space:nowrap}
 .gw .gw-mini-primary{background:var(--blue);color:#fff;border-color:var(--blue)}
 .gw-hero{padding:48px 0 24px;background:radial-gradient(circle at 88% 8%,rgba(66,133,244,.16),transparent 34%),linear-gradient(180deg,#fff,#f5faff)}
@@ -598,12 +607,13 @@ const CSS = `
 .gw-incl{margin:16px 0 20px;padding-left:18px;color:var(--ink);font-size:15px;display:grid;gap:4px}
 .gw-price-actions{display:grid;gap:10px}
 .gw-secure{margin:14px 0 0;text-align:center;color:#6c7a91;font-size:13px}
-.gw-trust{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;padding-bottom:64px}
-.gw-trust-card{padding:22px;text-align:center;display:grid;gap:4px}
-.gw-ticon{font-size:26px}.gw-trust-card small{font-size:13px;color:var(--muted)}
 .gw-final{padding-bottom:64px}
-.gw-cta{background:linear-gradient(135deg,#0b57d0,#0d75e8);border-radius:30px;color:#fff;padding:40px;display:flex;align-items:center;justify-content:space-between;gap:28px;box-shadow:0 22px 60px rgba(11,87,208,.25)}
-.gw-cta p{margin:0;color:#dbeaff}
+.gw-cta{background:#101828;border-radius:30px;color:#fff;padding:44px;display:grid;grid-template-columns:1.1fr .9fr;align-items:center;gap:32px;box-shadow:0 22px 60px rgba(16,24,40,.25)}
+.gw-cta .gw-h3{color:#fff}
+.gw-cta p{margin:0 0 18px;color:#cbd5e1}
+.gw-cta-form .gw-cb{margin-top:0;max-width:none;color:var(--ink)}
+.gw .gw-cta .gw-cta-form .gw-btn{background:#0b57d0;color:#fff;border-color:#0b57d0}
+.gw-cta-form .gw-cb-row{grid-template-columns:1fr}
 .gw-cta-actions{display:flex;flex-wrap:wrap;gap:10px}
 .gw .gw-cta .gw-buy,.gw .gw-cta .gw-trial{background:#fff;color:#0b57d0}
 .gw-foot{background:#0d2348;color:#cdd9ee;padding:28px 0}
@@ -670,7 +680,8 @@ const CSS = `
   .gw-blist{grid-template-columns:1fr}
   .gw-why{grid-template-columns:1fr 1fr}
   .gw-steps{grid-template-columns:1fr}
-  .gw-cta{flex-direction:column;align-items:flex-start}
+  .gw-cta{grid-template-columns:1fr;padding:30px}
+  .gw-links{display:none}
 }
 @media(max-width:600px){
   .gw-wrap{width:calc(100% - 24px)}
@@ -689,7 +700,6 @@ const CSS = `
   .gw-apps b{font-size:12px}
   .gw-apps img,.gw-apps .gw-tile{width:34px;height:34px}
   .gw-benefits,.gw-pricing{padding:22px}
-  .gw-trust{grid-template-columns:1fr}
   .gw-why{grid-template-columns:1fr}
   .gw-cb-row{grid-template-columns:1fr}
   .gw-table-wrap{overflow:visible;border:0;box-shadow:none;background:transparent}
