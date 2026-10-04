@@ -73,6 +73,10 @@ const ADDED_3OCT_OM = ["/ai-entry", "/online-orders", "/items/packages", "/accou
   "/accounting/profitability", "/reports/profit", "/accounting/saas-metrics", "/reports/purchases",
   "/accounting/tds-receivable/year-end", "/compliance/gst", "/compliance/income-tax", "/compliance/roc",
   "/performance", "/assessments", "/ux-insights", "/ui-insights"];
+/** 4 Oct 2026 — the two catalogs (tabs on /items) get their own menu rows next to Packages
+ *  (Pardeep: "subscription catalog aur product catalog bhi hone chahiye"). Same page, same
+ *  owner/manager roles as /items — new addresses, not new access. */
+const ADDED_4OCT_OM = ["/items/subscriptions", "/items/products"];
 const ADDED_3OCT_OWNER = ["/vault/personal/banking", "/vault/personal/expenses", "/vault/personal/wealth"];
 const ADDED_3OCT_BOOKS = ["/accounting/banking/brs", "/accounting/banking/rules", "/accounting/assets", "/accounting/business-loans",
   "/accounting/profitability", "/reports/purchases", "/accounting/tds-receivable/year-end", "/compliance/gst", "/compliance/income-tax", "/compliance/roc"];
@@ -84,6 +88,7 @@ const REMOVED_3OCT: Record<string, string[]> = { billing: ["/accounting/balance-
 const removedFor = (role: string) => REMOVED_3OCT[role] ?? [];
 const addedFor = (role: string) => [
   ...(role === "owner" || role === "manager" ? ADDED_3OCT_OM : []),
+  ...(role === "owner" || role === "manager" ? ADDED_4OCT_OM : []),
   ...(role === "owner" ? ADDED_3OCT_OWNER : []),
   ...(BOOKS_ROLES.includes(role) ? ADDED_3OCT_BOOKS : []),
   ...(role === "billing" ? ADDED_3OCT_BILLING : []),

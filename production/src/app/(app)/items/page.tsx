@@ -5,6 +5,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useItems, useDeleteItem, useLoadDefaultCatalog, useSyncHostingCatalog, useSyncDomainCatalog } from "@/lib/queries/items";
@@ -107,7 +108,12 @@ export default function ItemsPage() {
   const loadDefaults = useLoadDefaultCatalog();
   const confirm = useConfirm();
 
-  const [catalogType, setCatalogType] = React.useState<"subscription" | "one_time">("subscription");
+  /* /items and /items/subscriptions = subscription catalog, /items/products = product
+     catalog — one page, three addresses, so the menu can link to each and the tab keeps the URL in step. */
+  const pathname = usePathname();
+  const router = useRouter();
+  const catalogType: "subscription" | "one_time" = pathname?.startsWith("/items/products") ? "one_time" : "subscription";
+  const setCatalogType = (v: "subscription" | "one_time") => router.replace(v === "one_time" ? "/items/products" : "/items/subscriptions");
   const [vendor, setVendor] = React.useState("all");
   const [kind,   setKind]   = React.useState("all");
   const [search, setSearch] = React.useState("");
@@ -156,7 +162,7 @@ export default function ItemsPage() {
 
   const CATALOG_TABS: TabBarItem[] = [
     { id: "subscription", label: "Subscription Catalog", count: subItems.length },
-    { id: "one_time",     label: "Items Catalog",        count: oneTimeItems.length },
+    { id: "one_time",     label: "Product Catalog",      count: oneTimeItems.length },
   ];
 
   // Aggregates (subscription)
@@ -187,7 +193,7 @@ export default function ItemsPage() {
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Catalog</p>
           <h1 className="font-serif text-3xl md:text-4xl leading-tight">
-            {catalogType === "subscription" ? "Subscription Catalog" : "Items Catalog"}
+            {catalogType === "subscription" ? "Subscription Catalog" : "Product Catalog"}
           </h1>
           <p className="text-sm text-ink-3 mt-1">
             {catalogType === "subscription"

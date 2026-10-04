@@ -413,6 +413,10 @@ export const APP_NAV: NavSection[] = [
       {
         id: "items",     href: "/items",           label: "Catalog & Products", icon: "package", roles: OM,
         children: [
+          /* The two catalogs lived as tabs on /items with no link of their own, so the menu
+             showed only Packages (Pardeep, 4 Oct 2026). Each now has its own address. */
+          { id: "catalog-subscriptions", href: "/items/subscriptions", label: "Subscription catalog", icon: "repeat",  roles: OM, hint: "Google, Microsoft, hosting — har mahine/saal ka daam" },
+          { id: "catalog-products",      href: "/items/products", label: "Product catalog",      icon: "package", roles: OM, hint: "Ek baar ke product aur services" },
           { id: "packages", href: "/items/packages", label: "Packages", icon: "package", roles: OM, hint: "Products ke bundle — quote me ek click" },
         ],
       },
