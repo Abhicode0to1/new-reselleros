@@ -28,6 +28,10 @@ import {
   APPRENTICE_STATUS_LABEL, type Apprentice,
 } from "@/lib/queries/academy";
 import { ReviewTaskCard } from "@/components/features/academy/review-task-card";
+import { ScoreChip } from "@/components/features/academy/performance-card";
+import { SkillsList } from "@/components/features/academy/skills-list";
+import { computePerformance, type Performance } from "@/lib/academy/performance";
+import { useEvaluations } from "@/lib/queries/academy";
 
 type Tab = "overview" | "apprentices" | "review" | "curriculum";
 
@@ -48,6 +52,26 @@ export default function AcademyPage() {
   const done = allTasks.filter((t) => t.status === "completed").length;
   const completion = allTasks.length ? Math.round((done / allTasks.length) * 100) : 0;
   const nameOf = (id: string) => list.find((a) => a.id === id)?.full_name ?? "Apprentice";
+  const allSubs = useSubmissions(allTasks.map((t) => t.id));
+  const allEvals = useEvaluations();
+  /* Phase 2 (R-150): one score per apprentice, computed from their own rows. */
+  const perfOf = React.useMemo(() => {
+    const m = new Map<string, Performance>();
+    for (const a of list) {
+      const tasksA = allTasks.filter((t) => t.apprentice_id === a.id);
+      const ids = new Set(tasksA.map((t) => t.id));
+      m.set(a.id, computePerformance({
+        tasks: tasksA,
+        submissions: (allSubs.data ?? []).filter((s) => ids.has(s.task_id)),
+        evaluations: (allEvals.data ?? []).filter((e) => e.apprentice_id === a.id),
+        today,
+      }));
+    }
+    return m;
+  }, [list, allTasks, allSubs.data, allEvals.data, today]);
+  const scored = list.map((a) => perfOf.get(a.id)?.score).filter((x): x is number => x != null);
+  const avgScore = scored.length ? Math.round(scored.reduce((s, x) => s + x, 0) / scored.length) : null;
+  const atRisk = list.filter((a) => (perfOf.get(a.id)?.alerts.length ?? 0) > 0 && a.status === "active");
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
@@ -75,12 +99,14 @@ export default function AcademyPage() {
 
       {tab === "overview" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <Kpi label="Apprentices" value={list.length} />
             <Kpi label="Active" value={list.filter((a) => a.status === "active").length} />
             <Kpi label="Tasks due today" value={dueToday.length} />
             <Kpi label="Waiting for review" value={toReview.length} tone={toReview.length ? "amber" : undefined} />
             <Kpi label="Tasks completed" value={`${completion}%`} />
+            <Kpi label="Average performance" value={avgScore == null ? "—" : `${avgScore}/100`} />
+            <Kpi label="Need attention" value={atRisk.length} tone={atRisk.length ? "amber" : undefined} />
           </div>
           {list.length === 0 && !apprentices.isLoading ? (
             <Card className="py-6">
@@ -89,6 +115,23 @@ export default function AcademyPage() {
                 action={canManage ? <Button variant="primary" icon="plus" onClick={() => setEdit("new")}>Add apprentice</Button> : undefined} />
             </Card>
           ) : (
+            <>
+            {atRisk.length > 0 && (
+              <Card className="p-5 border-2 border-red-ink/30">
+                <h2 className="font-serif text-lg mb-3 text-red-ink">Needs attention</h2>
+                <ul className="divide-y divide-hairline">
+                  {atRisk.map((a) => (
+                    <li key={a.id} className="py-2.5 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link href={`/academy/${a.id}` as Route} className="font-semibold text-ink hover:text-amber-ink">{a.full_name}</Link>
+                        <p className="text-xs text-red-ink">{perfOf.get(a.id)!.alerts.join(" · ")}</p>
+                      </div>
+                      <ScoreChip perf={perfOf.get(a.id)!} />
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
             <Card className="p-5">
               <h2 className="font-serif text-lg mb-3">Waiting for your review</h2>
               {toReview.length === 0 ? (
@@ -104,6 +147,7 @@ export default function AcademyPage() {
                 </ul>
               )}
             </Card>
+            </>
           )}
         </div>
       )}
@@ -128,6 +172,7 @@ export default function AcademyPage() {
                       {a.user_id && <Badge kind="info" size="sm">Has login</Badge>}
                     </div>
                   </div>
+                  {perfOf.get(a.id) && <ScoreChip perf={perfOf.get(a.id)!} />}
                   <div>
                     <div className="flex justify-between text-xs text-ink-3 mb-1"><span>Tasks completed</span><span className="tabular-nums">{pct}% · {mine.length} task{mine.length === 1 ? "" : "s"}</span></div>
                     <div className="h-2 rounded-full bg-paper-2 overflow-hidden"><div className="h-full bg-emerald" style={{ width: `${pct}%` }} /></div>
@@ -146,7 +191,7 @@ export default function AcademyPage() {
       {tab === "review" && <ReviewQueue taskIds={toReview.map((t) => t.id)} nameOf={nameOf} />}
 
       {tab === "curriculum" && (
-        <CurriculumTab canManage={canManage} loading={programs.isLoading} data={programs.data} />
+        <div className="space-y-4"><CurriculumTab canManage={canManage} loading={programs.isLoading} data={programs.data} /><SkillsList canManage={canManage} /></div>
       )}
 
       {edit && <ApprenticeDialog apprentice={edit === "new" ? null : edit} onClose={() => setEdit(null)} />}

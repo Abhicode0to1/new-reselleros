@@ -1250,6 +1250,8 @@ type ArgNullable = {
   reconcile_salary_advance_split: "p_notes";
   pay_statutory_dues: "p_notes" | "p_challan_no" | "p_period";
   mark_attendance: "p_ip";
+  save_package: "p_id" | "p_pitch";
+  academy_review_task: "p_marks";
 };
 
 /** jsonb / setof RPCs ka return shape (generator sirf `Json` likhta hai). */

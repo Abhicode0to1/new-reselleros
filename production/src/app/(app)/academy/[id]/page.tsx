@@ -26,6 +26,11 @@ import {
   TASK_STATUS_LABEL, TASK_KIND_LABEL, APPRENTICE_STATUS_LABEL, type Apprentice,
 } from "@/lib/queries/academy";
 import { ReviewTaskCard } from "@/components/features/academy/review-task-card";
+import { PerformanceCard } from "@/components/features/academy/performance-card";
+import { SkillsPanel } from "@/components/features/academy/skills-panel";
+import { EvaluationsPanel } from "@/components/features/academy/evaluations-panel";
+import { computePerformance } from "@/lib/academy/performance";
+import { useEvaluations } from "@/lib/queries/academy";
 
 const STATUS_KIND: Record<string, "muted" | "info" | "warning" | "danger" | "success"> = {
   not_started: "muted", in_progress: "info", submitted: "warning", rework: "danger", completed: "success",
@@ -39,6 +44,7 @@ export default function ApprenticeDetailPage() {
   const tasks = useAcademyTasks(id);
   const taskList = tasks.data ?? [];
   const subs = useSubmissions(taskList.map((t) => t.id));
+  const evals = useEvaluations(id);
   const team = useTeamMembers();
   const login = useCreateApprenticeLogin();
   const del = useDeleteTask();
@@ -58,6 +64,7 @@ export default function ApprenticeDetailPage() {
   const done = taskList.filter((t) => t.status === "completed").length;
   const pct = taskList.length ? Math.round((done / taskList.length) * 100) : 0;
   const submitted = taskList.filter((t) => t.status === "submitted");
+  const perf = computePerformance({ tasks: taskList, submissions: subs.data ?? [], evaluations: evals.data ?? [], today: istToday() });
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1200px] mx-auto space-y-6">
@@ -92,6 +99,8 @@ export default function ApprenticeDetailPage() {
           <div className="h-2 rounded-full bg-paper-2 overflow-hidden"><div className="h-full bg-emerald" style={{ width: `${pct}%` }} /></div>
         </div>
       </Card>
+
+      <PerformanceCard perf={perf} />
 
       {submitted.length > 0 && (
         <section className="space-y-3">
@@ -134,6 +143,11 @@ export default function ApprenticeDetailPage() {
           </Card>
         )}
       </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <EvaluationsPanel apprenticeId={a.id} apprenticeName={a.full_name} editable />
+        <SkillsPanel apprenticeId={a.id} editable canSetUp={canManage} />
+      </div>
 
       {assignOpen && <AssignTaskDialog apprentice={a} onClose={() => setAssignOpen(false)} />}
     </div>

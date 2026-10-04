@@ -244,3 +244,102 @@ function friendly(e: unknown): string {
   if (/row-level security|permission denied/i.test(msg)) return "You do not have access to do this.";
   return msg;
 }
+
+/* ── phase 2 (R-150): skills, weekly evaluations ───────────────────────── */
+export type AcademySkill = T["academy_skills"]["Row"];
+export type ApprenticeSkill = T["academy_apprentice_skills"]["Row"];
+export type AcademyEvaluation = T["academy_evaluations"]["Row"];
+
+/** The company's skill list (staff and apprentices read it). */
+export function useSkills() {
+  return useQuery({
+    queryKey: [...KEY, "skills"],
+    queryFn: async () => {
+      const { data, error } = await createClient().from("academy_skills").select("*").order("position");
+      if (error) throw error;
+      return data as AcademySkill[];
+    },
+  });
+}
+
+/** Skill levels for one apprentice, or for everyone the viewer may see. */
+export function useApprenticeSkills(apprenticeId?: string) {
+  return useQuery({
+    queryKey: [...KEY, "apprentice-skills", apprenticeId ?? "all"],
+    queryFn: async () => {
+      let q = createClient().from("academy_apprentice_skills").select("*");
+      if (apprenticeId) q = q.eq("apprentice_id", apprenticeId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data as ApprenticeSkill[];
+    },
+  });
+}
+
+export function useEvaluations(apprenticeId?: string) {
+  return useQuery({
+    queryKey: [...KEY, "evaluations", apprenticeId ?? "all"],
+    queryFn: async () => {
+      let q = createClient().from("academy_evaluations").select("*").order("week_start", { ascending: false });
+      if (apprenticeId) q = q.eq("apprentice_id", apprenticeId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data as AcademyEvaluation[];
+    },
+  });
+}
+
+export function useLoadDefaultSkills() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await createClient().rpc("academy_load_default_skills");
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: () => { refresh(qc); toast.success("Skills ready", { description: "HTML, CSS, JavaScript, Python, Git, AI, Claude Code, APIs, Automation." }); },
+    onError: (e) => toast.error("Could not load the skills", { description: friendly(e) }),
+  });
+}
+
+export function useSaveSkillLevels() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { apprentice_id: string; rows: { skill_id: string; percent: number; mentor_note: string | null }[] }) => {
+      const tid = await tenantId();
+      const { error } = await createClient().from("academy_apprentice_skills").upsert(
+        input.rows.map((r) => ({ apprentice_id: input.apprentice_id, skill_id: r.skill_id, tenant_id: tid, percent: r.percent, mentor_note: r.mentor_note })),
+        { onConflict: "apprentice_id,skill_id" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => { refresh(qc); toast.success("Skills updated"); },
+    onError: (e) => toast.error("Could not save the skills", { description: friendly(e) }),
+  });
+}
+
+export type EvaluationInput = Pick<AcademyEvaluation, "apprentice_id" | "week_start" | "technical" | "problem_solving" | "ai_tool_usage" | "task_completion" | "code_quality" | "communication"> &
+  Partial<Pick<AcademyEvaluation, "strengths" | "improve" | "next_focus">>;
+
+export function useSaveEvaluation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: EvaluationInput & { id?: string }) => {
+      const supabase = createClient();
+      if (id) {
+        const { error } = await supabase.from("academy_evaluations").update(input).eq("id", id);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase.from("academy_evaluations").insert({ ...input, tenant_id: await tenantId() });
+      if (error) throw error;
+    },
+    onSuccess: () => { refresh(qc); toast.success("Evaluation saved"); },
+    onError: (e) => {
+      const msg = (e as { message?: string })?.message ?? "";
+      toast.error("Could not save the evaluation", {
+        description: /one_per_week|duplicate key/i.test(msg) ? "This week is already evaluated — open it and edit instead." : friendly(e),
+      });
+    },
+  });
+}

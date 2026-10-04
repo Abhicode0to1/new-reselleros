@@ -23,7 +23,12 @@ import { istToday } from "@/lib/dates/ist";
 import {
   useMyApprenticeProfile, useAcademyTasks, useSubmissions, usePrograms, useStartTask, useSubmitTask,
   TASK_STATUS_LABEL, TASK_KIND_LABEL, type AcademyTask,
+  useEvaluations,
 } from "@/lib/queries/academy";
+import { computePerformance } from "@/lib/academy/performance";
+import { PerformanceCard } from "@/components/features/academy/performance-card";
+import { SkillsPanel } from "@/components/features/academy/skills-panel";
+import { EvaluationsPanel } from "@/components/features/academy/evaluations-panel";
 
 const STATUS_KIND: Record<string, "muted" | "info" | "warning" | "danger" | "success"> = {
   not_started: "muted", in_progress: "info", submitted: "warning", rework: "danger", completed: "success",
@@ -42,6 +47,7 @@ export default function LearnPage() {
   const subs = useSubmissions(list.map((t) => t.id));
   const programs = usePrograms();
   const start = useStartTask();
+  const evals = useEvaluations();
   const [submitFor, setSubmitFor] = React.useState<AcademyTask | null>(null);
 
   const today = istToday();
@@ -52,6 +58,7 @@ export default function LearnPage() {
   const modules = (programs.data?.modules ?? []).filter((m) => !me.data?.program_id || m.program_id === me.data.program_id);
   const feedback = (subs.data ?? []).filter((s) => s.feedback).slice(0, 5);
   const titleOf = (taskId: string) => list.find((t) => t.id === taskId)?.title ?? "Task";
+  const perf = computePerformance({ tasks: list, submissions: subs.data ?? [], evaluations: evals.data ?? [], today });
 
   async function signOut() {
     await createClient().auth.signOut();
@@ -97,6 +104,12 @@ export default function LearnPage() {
                 {open.filter((t) => !todays.includes(t)).map((t) => <TaskRow key={t.id} t={t} onStart={() => start.mutate(t.id)} onSubmit={() => setSubmitFor(t)} />)}
               </section>
             )}
+
+            <PerformanceCard perf={perf} title="Your performance" />
+            <div className="grid gap-4 md:grid-cols-2">
+              <EvaluationsPanel apprenticeId={me.data.id} apprenticeName={me.data.full_name} editable={false} />
+              <SkillsPanel apprenticeId={me.data.id} editable={false} canSetUp={false} />
+            </div>
 
             {feedback.length > 0 && (
               <section className="space-y-2">
