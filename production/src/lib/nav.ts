@@ -369,6 +369,7 @@ export const APP_NAV: NavSection[] = [
           /* S28: renewal / invoice reminders on WhatsApp — switch, template per kind, send log. */
           { id: "wa-reminders",    href: "/marketing/whatsapp/reminders", label: "WhatsApp reminders", icon: "whatsapp", roles: OM, group: "Campaigns", hint: "Renewal aur invoice reminder WhatsApp par — ON/OFF, template, log" },
           { id: "ad-platforms",    href: "/marketing/ads",      label: "Ad accounts (live)", icon: "trending_up", roles: OM, group: "Ads & tracking", hint: "Google Ads + Facebook ka kharcha campaign-wise, roz Google/Meta se" },
+          { id: "ad-landing-pages", href: "/marketing/landing-pages", label: "Ads landing pages", icon: "layout", roles: OM, group: "Ads & tracking", hint: "Ad ka final URL, phone preview, kitni leads aayi" },
           { id: "marketing-links", href: "/marketing/links",   label: "Tracking links", icon: "globe",  roles: OM, group: "Ads & tracking", hint: "Har ad / post ka link — lead ka source khud lagega" },
           { id: "lead-gen",        href: "/lead-gen",          label: "Lead sources",    icon: "target",  roles: OM, group: "Ads & tracking" },
           { id: "indiamart-leads", href: "/marketing/indiamart", label: "IndiaMART leads", icon: "inbox", roles: ["owner"], group: "Ads & tracking", hint: "CRM key save karo — IndiaMART ki enquiries apne aap leads banengi" },
