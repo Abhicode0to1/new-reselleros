@@ -9,7 +9,7 @@ import Image from "next/image";
 import Link from "@/site/components/ui/SiteLink";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { COMPANY, WHATSAPP_URL, CLIENT_AREA_URL } from "@/site/lib/config";
+import { COMPANY, WHATSAPP_URL, WHATSAPP_READY, CLIENT_AREA_URL } from "@/site/lib/config";
 
 export function UtilityBar() {
   const pathname = usePathname();
@@ -92,9 +92,12 @@ export function CtaBand() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <a href={WHATSAPP_URL} target="_blank" rel="noopener" className="btn btn-outline" style={{ background: "transparent", color: "#fff", borderColor: "#39434e" }}>
-            WhatsApp us
-          </a>
+          {/* R-078: only with the real number configured; the placeholder sent people nowhere. */}
+          {WHATSAPP_READY && (
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener" className="btn btn-outline" style={{ background: "transparent", color: "#fff", borderColor: "#39434e" }}>
+              WhatsApp us
+            </a>
+          )}
           <Link href="/quote" className="btn btn-primary">Get a quote</Link>
         </div>
       </div>
@@ -157,6 +160,10 @@ export function Footer() {
 }
 
 export function WhatsAppButton() {
+  /* R-078 (4 Oct 2026): the floating button linked to the placeholder 919800000000 on every
+     page, and sat over the Google Ads landing page price. Hidden until the real number is set
+     in site/lib/config.ts (WHATSAPP_NUMBER), which flips WHATSAPP_READY. */
+  if (!WHATSAPP_READY) return null;
   return (
     <a
       href={WHATSAPP_URL}
