@@ -3779,6 +3779,11 @@ export type Database = {
           da_monthly: number
           date_of_birth: string | null
           designation: string | null
+          engagement_type: string
+          training_start: string | null
+          training_end: string | null
+          training_area: string | null
+          training_institute: string | null
           email: string | null
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
@@ -3811,6 +3816,11 @@ export type Database = {
           da_monthly?: number
           date_of_birth?: string | null
           designation?: string | null
+          engagement_type?: string
+          training_start?: string | null
+          training_end?: string | null
+          training_area?: string | null
+          training_institute?: string | null
           email?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
@@ -3843,6 +3853,11 @@ export type Database = {
           da_monthly?: number
           date_of_birth?: string | null
           designation?: string | null
+          engagement_type?: string
+          training_start?: string | null
+          training_end?: string | null
+          training_area?: string | null
+          training_institute?: string | null
           email?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null

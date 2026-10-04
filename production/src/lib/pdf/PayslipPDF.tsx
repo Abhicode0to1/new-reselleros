@@ -86,6 +86,8 @@ export interface PayslipPDFProps {
   };
   employee: {
     name:  string;
+    /** Interns / trainees get a stipend slip, not a salary slip. */
+    intern?: boolean;
     pan?:  string | null;
     pfNo?: string | null;
     esiNo?: string | null;
@@ -243,9 +245,9 @@ export function PayslipPDF(props: PayslipPDFProps) {
 
   return (
     <Document
-      title={`Payslip ${periodLabel(period)} — ${employee.name}`}
+      title={`${employee.intern ? "Stipend slip" : "Payslip"} ${periodLabel(period)} — ${employee.name}`}
       author={company.name}
-      subject={`Salary slip for ${employee.name}, ${periodLabel(period)}`}
+      subject={`${employee.intern ? "Stipend" : "Salary"} slip for ${employee.name}, ${periodLabel(period)}`}
     >
       <Page size="A4" style={s.page}>
 
@@ -262,8 +264,8 @@ export function PayslipPDF(props: PayslipPDFProps) {
             )}
           </View>
           <View style={s.slipBox}>
-            <Text style={s.slipEyebrow}>Salary Slip</Text>
-            <Text style={s.slipTitle}>PAYSLIP</Text>
+            <Text style={s.slipEyebrow}>{employee.intern ? "Intern / Trainee" : "Salary Slip"}</Text>
+            <Text style={s.slipTitle}>{employee.intern ? "STIPEND SLIP" : "PAYSLIP"}</Text>
             <Text style={s.slipPeriod}>{periodLabel(period)}</Text>
           </View>
         </View>
@@ -296,7 +298,7 @@ export function PayslipPDF(props: PayslipPDFProps) {
           <View style={s.col}>
             <View style={s.colHead}><Text style={s.colHeadText}>Earnings</Text></View>
             <View style={s.row}>
-              <Text style={s.rowLabel}>Gross salary</Text>
+              <Text style={s.rowLabel}>{employee.intern ? "Stipend" : "Gross salary"}</Text>
               <Text style={s.rowValue}>{inrPdf(gross)}</Text>
             </View>
             {lopAmount > 0 && (

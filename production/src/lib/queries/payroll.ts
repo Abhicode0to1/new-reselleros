@@ -63,6 +63,9 @@ export function useUpsertEmployee() {
       email?: string | null; phone?: string | null; designation?: string | null;
       date_of_birth?: string | null; address?: string | null;
       emergency_contact_name?: string | null; emergency_contact_phone?: string | null;
+      engagement_type?: "employee" | "intern";
+      training_start?: string | null; training_end?: string | null;
+      training_area?: string | null; training_institute?: string | null;
     }) => {
       const supabase = createClient();
       if (input.id) {
@@ -78,7 +81,7 @@ export function useUpsertEmployee() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employees"] });
-      toast.success("Employee saved");
+      toast.success("Saved");
     },
     onError: (err) => toast.error((err as Error).message),
   });
