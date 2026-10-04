@@ -62,6 +62,29 @@ const BENEFITS = [
   ["Har device par", "Desktop, mobile aur tablet"],
 ] as const;
 
+/** Free Gmail vs Google Workspace — facts only (Business Starter). */
+const COMPARE: [string, string, string][] = [
+  ["Email address", "yourname@gmail.com", "you@yourcompany.com"],
+  ["Storage", "15 GB, shared with Drive & Photos", "30 GB per user"],
+  ["Ads in the inbox", "Yes", "No ads"],
+  ["Group video calls", "60-minute limit", "Up to 100 people, long meetings"],
+  ["Who owns the account", "The employee", "Your company — add, remove, reset any user"],
+  ["Help when stuck", "Online forums", "ANUTECH team + Google support"],
+];
+const WHY: [string, string][] = [
+  ["GST invoice in INR", "Har order par GST invoice — business input credit le sakta hai."],
+  ["Setup done for you", "Domain verify, MX records, users — hamari team karti hai."],
+  ["Free migration", "Purana mail, folders, contacts aur calendar — hum shift karte hain, kuch nahi chhootta."],
+  ["Local support", `Hindi / English mein, phone aur WhatsApp par — ${COMPANY.hours}.`],
+];
+const FAQ: [string, string][] = [
+  ["Mere paas domain nahi hai — kya hoga?", "Koi baat nahi. Hum aapka domain bhi register kar dete hain aur usi par Google Workspace chalu karte hain — ek hi jagah se."],
+  ["Purana email (cPanel, Zoho, Outlook) ka kya hoga?", "Free migration: purane mail, folders, contacts aur calendar hum Google Workspace mein shift karte hain. Aapke paas kuch nahi chhootta."],
+  ["14 din ke trial ke baad kya hota hai?", "Trial ke baad aap tay karte hain. Jaari rakhna hai to saalana plan lijiye; nahi to kuch nahi katega — koi card nahi maanga jaata."],
+  ["GST invoice milega?", "Haan, har order par GST invoice milta hai, aur business us par input tax credit le sakta hai."],
+  ["Kitne users tak chal sakta hai?", "Business plans 1 se 300 users tak. Users kabhi bhi badha sakte hain."],
+];
+
 export function WorkspaceAdLanding({
   annualPerSeatMo, copy = DEFAULT_COPY,
 }: {
@@ -72,6 +95,7 @@ export function WorkspaceAdLanding({
   const [ad, setAd] = useState<URLSearchParams>(new URLSearchParams());
   const [landing, setLanding] = useState("");
   const [modal, setModal] = useState<null | "buy" | "trial">(null);
+  const [users, setUsers] = useState(5);
 
   useEffect(() => {
     let store: Storage | null = null;
@@ -162,6 +186,20 @@ export function WorkspaceAdLanding({
               <li>Setup, domain aur migration help included</li>
               <li>GST invoice · {COMPANY.partnerLine}</li>
             </ul>
+            <div className="gw-calc">
+              <label htmlFor="gw-users">Kitne users?</label>
+              <div className="gw-calc-row">
+                <button type="button" aria-label="One user fewer" onClick={() => setUsers((n) => Math.max(1, n - 1))}>−</button>
+                <input id="gw-users" type="number" min={1} max={300} value={users}
+                  onChange={(e) => setUsers(Math.max(1, Math.min(300, Number(e.target.value) || 1)))} />
+                <button type="button" aria-label="One user more" onClick={() => setUsers((n) => Math.min(300, n + 1))}>+</button>
+              </div>
+              <dl className="gw-calc-out">
+                <div><dt>Per month</dt><dd>{inr(annualPerSeatMo * users)}</dd></div>
+                <div><dt>Per year</dt><dd>{inr(yearly * users)}</dd></div>
+                <div><dt>Per year + 18% GST</dt><dd><b>{inr(Math.round(yearly * users * 1.18))}</b></dd></div>
+              </dl>
+            </div>
             <div className="gw-price-actions">
               <BuyButton className="gw-full" />
               <TrialButton className="gw-full" />
@@ -175,6 +213,41 @@ export function WorkspaceAdLanding({
           {[["🛡️", "Secure & Reliable", "Built for business productivity"], ["⚙️", "Easy Setup", "Hum aapke domain par chalu karte hain"], ["🎧", "Expert Support", COMPANY.hours]].map(([i, t, l]) => (
             <div key={t} className="gw-card gw-trust-card"><span aria-hidden className="gw-ticon">{i}</span><b>{t}</b><small>{l}</small></div>
           ))}
+        </section>
+
+        <section className="gw-wrap gw-sec">
+          <div className="gw-kicker">Free Gmail vs Google Workspace</div>
+          <h3 className="gw-h3">Business ke liye free Gmail kaafi kyun nahi</h3>
+          <div className="gw-table-wrap">
+            <table className="gw-table">
+              <thead><tr><th scope="col"><span className="gw-sr">Feature</span></th><th scope="col">Free Gmail</th><th scope="col">Google Workspace</th></tr></thead>
+              <tbody>
+                {COMPARE.map(([k, a, b]) => (
+                  <tr key={k}><th scope="row">{k}</th><td data-label="Free Gmail">{a}</td><td data-label="Google Workspace"><span className="gw-yes" aria-hidden>✓</span> {b}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="gw-wrap gw-sec">
+          <div className="gw-kicker">Why buy from ANUTECH?</div>
+          <h3 className="gw-h3">Google ka product, ANUTECH ka saath</h3>
+          <div className="gw-why">
+            {WHY.map(([t, l]) => (
+              <div key={t} className="gw-card gw-why-card"><b>{t}</b><p>{l}</p></div>
+            ))}
+          </div>
+        </section>
+
+        <section className="gw-wrap gw-sec">
+          <div className="gw-kicker">FAQ</div>
+          <h3 className="gw-h3">Aksar puchhe jaane wale sawal</h3>
+          <div className="gw-faq">
+            {FAQ.map(([q, a]) => (
+              <details key={q} className="gw-card"><summary>{q}</summary><p>{a}</p></details>
+            ))}
+          </div>
         </section>
 
         <section className="gw-wrap gw-final">
@@ -199,12 +272,18 @@ export function WorkspaceAdLanding({
         </div>
       </footer>
 
-      {modal && <EnquiryModal kind={modal} landing={landing} onClose={() => setModal(null)} />}
+      <div className="gw-sticky" aria-label="Quick actions">
+        <button type="button" className="gw-btn gw-buy" onClick={() => { if (BUY_ONLINE) window.location.href = checkoutHref; else setModal("buy"); }}>Buy Now</button>
+        <button type="button" className="gw-btn gw-trial" onClick={() => setModal("trial")}>Free Trial</button>
+        {WHATSAPP_READY && <a className="gw-btn gw-wa" href={wa} target="_blank" rel="noopener">WhatsApp</a>}
+      </div>
+
+      {modal && <EnquiryModal kind={modal} landing={landing} defaultUsers={users} onClose={() => setModal(null)} />}
     </div>
   );
 }
 
-function EnquiryModal({ kind, landing, onClose }: { kind: "buy" | "trial"; landing: string; onClose: () => void }) {
+function EnquiryModal({ kind, landing, defaultUsers, onClose }: { kind: "buy" | "trial"; landing: string; defaultUsers: number; onClose: () => void }) {
   const ts = useTurnstile();
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [err, setErr] = useState("");
@@ -286,7 +365,7 @@ function EnquiryModal({ kind, landing, onClose }: { kind: "buy" | "trial"; landi
               <label>Company name<input name="companyName" required minLength={2} autoComplete="organization" /></label>
               <label>Email<input name="email" type="email" required autoComplete="email" /></label>
               <label>Mobile number<input name="phone" type="tel" required minLength={10} inputMode="tel" autoComplete="tel" /></label>
-              <label>Number of users<input name="users" type="number" min={1} max={300} defaultValue={5} /></label>
+              <label>Number of users<input name="users" type="number" min={1} max={300} defaultValue={defaultUsers} /></label>
               {ts.widget}
               {state === "error" && <p className="gw-err" role="alert">{err} — dobara try karein.</p>}
               <button type="submit" className="gw-btn gw-trial gw-full" disabled={state === "sending"}>
@@ -369,6 +448,36 @@ const CSS = `
 .gw-foot{background:#0d2348;color:#cdd9ee;padding:28px 0}
 .gw-foot b{color:#fff}
 .gw-foot-row{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap;font-size:13px}
+.gw-calc{border:1px solid var(--line);border-radius:16px;padding:14px;margin:0 0 16px;background:#fff}
+.gw-calc label{font-weight:800;font-size:14px}
+.gw-calc-row{display:flex;gap:8px;margin:8px 0 10px}
+.gw-calc-row button{width:44px;height:44px;border-radius:12px;border:1px solid #c9d3e3;background:#f5f8fd;font-size:22px;font-weight:800;cursor:pointer;color:var(--ink)}
+.gw-calc-row button:focus-visible,.gw-calc-row input:focus-visible,.gw-faq summary:focus-visible{outline:3px solid #0b57d0;outline-offset:2px}
+.gw-calc-row input{width:90px;height:44px;text-align:center;border:1px solid #c9d3e3;border-radius:12px;font:inherit;font-size:18px;font-weight:800}
+.gw-calc-out{margin:0;display:grid;gap:4px}
+.gw-calc-out div{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+.gw-calc-out dt{color:var(--muted)}.gw-calc-out dd{margin:0;font-variant-numeric:tabular-nums}
+.gw-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.gw-sec{padding-bottom:56px}
+.gw-table-wrap{overflow-x:auto;margin-top:16px;border:1px solid var(--line);border-radius:20px;background:#fff;box-shadow:var(--shadow)}
+.gw-table{width:100%;border-collapse:collapse;min-width:520px;font-size:15px}
+.gw-table th,.gw-table td{padding:14px 16px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.gw-table thead th{background:#f2f7ff;font-size:14px}
+.gw-table thead th:last-child{color:var(--blue)}
+.gw-table tbody tr:last-child th,.gw-table tbody tr:last-child td{border-bottom:0}
+.gw-table tbody th{font-weight:700;color:var(--ink)}
+.gw-table td:nth-child(2){color:var(--muted)}
+.gw-table td:last-child{font-weight:700}
+.gw-yes{color:#0a7a35;font-weight:900}
+.gw-why{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:16px}
+.gw-why-card{padding:20px}.gw-why-card p{margin:6px 0 0;color:var(--muted);font-size:14px}
+.gw-faq{display:grid;gap:10px;margin-top:16px;max-width:860px}
+.gw-faq summary{cursor:pointer;padding:18px 20px;font-weight:800;list-style:none}
+.gw-faq summary::-webkit-details-marker{display:none}
+.gw-faq summary::after{content:"+";float:right;color:var(--blue);font-size:20px;line-height:1}
+.gw-faq details[open] summary::after{content:"−"}
+.gw-faq p{margin:0;padding:0 20px 18px;color:var(--muted)}
+.gw-sticky{display:none}
 .gw-modal{position:fixed;inset:0;background:rgba(6,22,48,.6);display:grid;place-items:center;padding:16px;z-index:100}
 .gw-modal-card{width:min(520px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:#fff;border-radius:24px;padding:28px;box-shadow:0 30px 90px rgba(0,0,0,.25);position:relative}
 .gw-close{position:absolute;right:14px;top:12px;border:0;background:#f0f4fa;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer}
@@ -383,6 +492,7 @@ const CSS = `
   .gw-apps{grid-template-columns:repeat(4,1fr)}
   .gw-apps li:nth-child(4){border-right:0}.gw-apps li:nth-child(n+5){border-top:1px solid var(--line)}
   .gw-blist{grid-template-columns:1fr}
+  .gw-why{grid-template-columns:1fr 1fr}
   .gw-cta{flex-direction:column;align-items:flex-start}
 }
 @media(max-width:600px){
@@ -394,11 +504,25 @@ const CSS = `
   .gw .gw-btn{width:100%}
   .gw-float{left:12px;bottom:12px;font-size:13px}
   .gw-photo{border-width:5px;border-radius:24px}
-  .gw-apps{grid-template-columns:repeat(2,1fr)}
-  .gw-apps li{border-right:1px solid var(--line)!important}.gw-apps li:nth-child(even){border-right:0!important}
-  .gw-apps li:nth-child(n+3){border-top:1px solid var(--line)}
+  .gw-apps{grid-template-columns:repeat(4,1fr);border-radius:18px}
+  .gw-apps li{padding:12px 4px;border:0!important}
+  .gw-apps li span:not(.gw-tile){display:none}
+  .gw-apps b{font-size:12px}
+  .gw-apps img,.gw-apps .gw-tile{width:34px;height:34px}
   .gw-benefits,.gw-pricing{padding:22px}
   .gw-trust{grid-template-columns:1fr}
+  .gw-why{grid-template-columns:1fr}
+  .gw-table-wrap{overflow:visible;border:0;box-shadow:none;background:transparent}
+  .gw-table,.gw-table tbody,.gw-table tr,.gw-table th,.gw-table td{display:block;min-width:0}
+  .gw-table thead{display:none}
+  .gw-table tr{background:#fff;border:1px solid var(--line);border-radius:16px;margin-bottom:10px;padding:12px 14px}
+  .gw-table th,.gw-table td{padding:2px 0;border:0}
+  .gw-table tbody th{font-size:15px;margin-bottom:4px}
+  .gw-table td{display:flex;gap:8px;font-size:14px}
+  .gw-table td::before{content:attr(data-label);flex:0 0 118px;color:var(--muted);font-weight:600}
+  .gw-sticky{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;position:fixed;left:0;right:0;bottom:0;z-index:60;padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));background:rgba(255,255,255,.96);border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(16,42,86,.12)}
+  .gw .gw-sticky .gw-btn{min-height:46px;padding:0 8px;font-size:14px;border-radius:12px}
+  .gw-foot{padding-bottom:84px}
   .gw-cta{padding:26px;border-radius:24px}
 }
 @media(prefers-reduced-motion:reduce){.gw .gw-btn{transition:none}.gw .gw-btn:hover{transform:none}}
