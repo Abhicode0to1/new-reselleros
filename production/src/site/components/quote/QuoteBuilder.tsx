@@ -76,7 +76,12 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
     const seats = Math.max(1, Math.min(300, parseInt(params.get("seats") ?? "", 10) || 0));
     const t = params.get("term");
     const next: Record<string, number> = {};
-    if (ed && byName.has(ed)) next[ed] = seats || 1;
+    if (ed && byName.has(ed)) {
+      next[ed] = seats || 1;
+      /* Open on that product's category, not "All plans" (Pardeep, 4 Oct 2026). */
+      const v = byName.get(ed)?.vendor;
+      if (v) setCat(v);
+    }
     if (Object.keys(next).length) setLines(next);
     if (t === "annual" || t === "monthly") setTerm(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
