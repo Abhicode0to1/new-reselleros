@@ -12028,6 +12028,20 @@ export type Database = {
         }
         Returns: number
       }
+      update_employee_advance: {
+        Args: {
+          p_advance_id: string
+          p_amount: number
+          p_date: string
+          p_name: string
+          p_note?: string
+        }
+        Returns: undefined
+      }
+      delete_employee_advance: {
+        Args: { p_advance_id: string; p_delete_expenses?: boolean }
+        Returns: Json
+      }
       consume_prepaid_fifo: {
         Args: {
           p_amount: number
