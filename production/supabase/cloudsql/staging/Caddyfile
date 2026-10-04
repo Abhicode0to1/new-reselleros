@@ -1,11 +1,11 @@
 # Caddy — TLS (auto Let's Encrypt) + path routing for the Supabase data plane.
-# staging-api.anutech.in must resolve to THIS VM's public IP, DNS-only (grey cloud) in
-# Cloudflare, so Caddy can complete the ACME HTTP challenge and get a real cert.
+# 35-240-252-6.sslip.io resolves to this VM (35.240.252.6) by itself — sslip.io maps the
+# name to the IP, no DNS record needed (R-106, 4 Oct 2026). Caddy gets a real cert.
 #
 # supabase-js calls  /auth/v1/*  /rest/v1/*  /storage/v1/*  — handle_path strips
 # the matched prefix, so each backend receives the request at its own root.
 
-staging-api.anutech.in {
+35-240-252-6.sslip.io {
 	encode gzip
 
 	# GoTrue sets Access-Control-Allow-Origin on its ACTUAL responses, but answers

@@ -21,7 +21,7 @@ INST=resellersos-staging-db
 ZONE=asia-southeast1-a
 VM=staging-gateway
 BUCKET=gs://resellsubsos-prod-rehearsal/staging-tmp
-API_URL=https://staging-api.anutech.in
+API_URL=https://35-240-252-6.sslip.io   # sslip.io maps this name to 35.240.252.6; no DNS record needed
 APP_URL=https://resellersos-staging-njvk4nxhdq-as.a.run.app
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # gcloud on Windows is a native program: it cannot read Git Bash paths like /tmp/x or
@@ -33,7 +33,9 @@ cleanup() { rm -rf "$TMP"; gcloud storage rm -q "$BUCKET/roles.sql" "$BUCKET/che
 trap cleanup EXIT
 
 say() { printf '\n== %s\n' "$*"; }
-rnd() { openssl rand -hex 24; }
+# Passwords: the clone carries live's password policy (lower + upper + digit + symbol),
+# so each gets a fixed "Aa1_" tail. "_" is URL-safe, so they work inside postgres:// URLs.
+rnd() { printf "%sAa1_" "$(openssl rand -hex 24)"; }
 
 say "0. Checking this really is the staging database"
 cat > "$TMP/check.sql" <<'SQL'
@@ -111,7 +113,7 @@ CADDY_IMAGE=caddy:2.8
 ENV
 unset AUTHN_PW AUTHADM_PW STOR_PW
 gcloud compute scp --zone="$ZONE" --project="$P" --strict-host-key-checking=no \
-  "$(win "$TMP/.env")" "$(win "$HERE/Caddyfile")" "$(win "$HERE/../phase2/docker-compose.yml")" "$VM":~/ >/dev/null
+  "$(win "$TMP/.env")" "$(win "$HERE/Caddyfile")" "$(win "$HERE/../phase2/docker-compose.yml")" "$VM":. >/dev/null
 rm -f "$TMP/.env"
 gcloud compute ssh "$VM" --zone="$ZONE" --project="$P" --strict-host-key-checking=no \
   --command="chmod 600 ~/.env && sudo docker compose --env-file ~/.env -f ~/docker-compose.yml up -d" >/dev/null
