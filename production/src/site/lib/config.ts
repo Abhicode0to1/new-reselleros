@@ -67,11 +67,11 @@ export const ENQUIRY_API = `${RESELLEROS_URL}/api/public/enquiry/general`;
 export const ENQUIRY_WORKSPACE_API = `${RESELLEROS_URL}/api/public/enquiry/workspace`;
 
 /**
- * PLACEHOLDER — the handoff marks the phone number as fake on purpose
- * ("+91 98xxx xxxxx"). Replace with the real number before launch; the wa.me link is
- * built from it, so a fake number here means a dead WhatsApp button.
+ * Anutech's WhatsApp / call number (R-078, 4 Oct 2026: Pardeep — "9999930300", from his
+ * Google Workspace landing-page brief). Every wa.me link on the site is built from it.
+ * Until today this was the handoff's placeholder 919800000000, a dead button.
  */
-export const WHATSAPP_NUMBER = "919800000000";
+export const WHATSAPP_NUMBER: string = "919999930300";
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}`;
 
 /** The fake number above. While WHATSAPP_NUMBER still equals it, a page that must not

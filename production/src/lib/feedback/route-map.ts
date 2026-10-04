@@ -118,6 +118,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/lead-gen", file: "src/app/(app)/lead-gen/page.tsx" },
   { route: "/leads", file: "src/app/(app)/leads/page.tsx" },
   { route: "/login", file: "src/app/(auth)/login/page.tsx" },
+  { route: "/lp/google-workspace", file: "src/app/(lp)/lp/google-workspace/page.tsx" },
   { route: "/marketing", file: "src/app/(app)/marketing/page.tsx" },
   { route: "/marketing/ads", file: "src/app/(app)/marketing/ads/page.tsx" },
   { route: "/marketing/campaigns", file: "src/app/(app)/marketing/campaigns/page.tsx" },
