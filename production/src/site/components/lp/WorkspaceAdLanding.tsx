@@ -25,6 +25,7 @@ import { buyWorkspaceHref } from "@/lib/checkout/buy-link";
 import { WHATSAPP_NUMBER, WHATSAPP_READY, COMPANY } from "@/site/lib/config";
 import { useTurnstile } from "@/components/shared/turnstile";
 import { pickAdParams, withAdParams, rememberLanding } from "@/site/lib/ad-attribution";
+import { reportLeadConversion } from "@/site/lib/google-ads";
 
 /** Online checkout for Workspace — off until every edition's price is confirmed (see header). */
 const BUY_ONLINE = false;
@@ -334,6 +335,7 @@ function EnquiryModal({ kind, landing, defaultUsers, onClose }: { kind: "buy" | 
         throw new Error(typeof j?.error === "string" ? j.error : "Request nahi gayi");
       }
       setSent({ name: body.fullName, users }); setState("done");
+      void reportLeadConversion();   // no-op until GOOGLE_ADS_SEND_TO is set
     } catch (x) {
       setErr(x instanceof Error ? x.message : "Request nahi gayi"); setState("error");
     }
