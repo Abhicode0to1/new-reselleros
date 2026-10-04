@@ -177,6 +177,20 @@ export function WorkspaceAdLanding({
               <CallbackForm landing={landing} />
             </div>
             <div className="gw-visual">
+              <aside className="gw-promo" aria-label="Special offer">
+                <span className="gw-promo-tag">Special offer</span>
+                <div className="gw-promo-main">
+                  <div className="gw-promo-zero" aria-hidden><b>₹0</b><small>setup</small></div>
+                  <div>
+                    <p className="gw-promo-h">FREE Setup + Email Migration</p>
+                    <p className="gw-promo-s">Domain verify, users aur purana mail shift — sab hamari team karti hai. Koi extra charge nahi.</p>
+                  </div>
+                </div>
+                <div className="gw-promo-foot">
+                  <span>+ 14 din free trial · card nahi chahiye</span>
+                  <button type="button" className="gw-promo-btn" onClick={() => setModal("trial")}>Offer lo <span aria-hidden>→</span></button>
+                </div>
+              </aside>
               <img className="gw-photo" src="/lp/gw-hero.jpg" alt="A business owner working on Google Workspace" width={400} height={458} fetchPriority="high" decoding="async" />
               <div className="gw-float">Grow your business with Google<small>Secure · Collaborative · Productive</small></div>
             </div>
@@ -521,7 +535,19 @@ const CSS = `
 .gw .gw-full{width:100%}
 .gw .gw-btn[disabled]{opacity:.6;cursor:default;transform:none}
 .gw-note{margin-top:12px;font-size:13px;color:#6b7a92}
-.gw-visual{position:relative}
+.gw-visual{position:relative;display:grid;gap:18px}
+.gw-promo{position:relative;overflow:hidden;color:#fff;border-radius:24px;padding:18px 20px;background:linear-gradient(135deg,#0b57d0 0%,#1a73e8 55%,#34a853 130%);box-shadow:0 18px 40px rgba(11,87,208,.28)}
+.gw-promo::after{content:"";position:absolute;right:-40px;top:-40px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.12)}
+.gw-promo-tag{display:inline-block;background:#fbbc04;color:#202124;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:999px}
+.gw-promo-main{display:flex;gap:14px;align-items:center;margin-top:10px;position:relative;z-index:1}
+.gw-promo-zero{flex:none;width:76px;height:76px;border-radius:50%;background:#fff;color:#0b57d0;display:grid;place-content:center;text-align:center;line-height:1;box-shadow:0 0 0 5px rgba(255,255,255,.25);transform:rotate(-8deg)}
+.gw-promo-zero b{font-size:26px;font-weight:900}.gw-promo-zero small{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#3c4a5e}
+.gw-promo-h{margin:0;font-size:20px;font-weight:900;line-height:1.2}
+.gw-promo-s{margin:4px 0 0;font-size:14px;opacity:.92}
+.gw-promo-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.45);font-size:13px;font-weight:700;position:relative;z-index:1}
+.gw .gw-promo-btn{background:#fff;color:#0b57d0;border:0;border-radius:999px;padding:10px 18px;font:inherit;font-size:14px;font-weight:900;cursor:pointer;min-height:44px}
+.gw .gw-promo-btn:hover{background:#e8f0fe}
+.gw .gw-promo-btn:focus-visible{outline:3px solid #fbbc04;outline-offset:2px}
 .gw-photo{width:100%;aspect-ratio:1.18/1;object-fit:cover;object-position:center 20%;border-radius:32px;display:block;box-shadow:var(--shadow);border:8px solid rgba(255,255,255,.9)}
 .gw-float{position:absolute;left:-16px;bottom:22px;background:#fff;border:1px solid var(--line);box-shadow:var(--shadow);border-radius:18px;padding:14px 18px;font-weight:800}
 .gw-float small{display:block;color:var(--muted);font-weight:500;margin-top:2px}
@@ -629,6 +655,8 @@ const CSS = `
   .gw-buttons,.gw-cta-actions{display:grid;width:100%}
   .gw .gw-btn{width:100%}
   .gw-float{left:12px;bottom:12px;font-size:13px}
+  .gw-promo{padding:16px}.gw-promo-h{font-size:18px}.gw-promo-zero{width:64px;height:64px}.gw-promo-zero b{font-size:22px}
+  .gw .gw-promo-btn{width:100%}
   .gw-photo{border-width:5px;border-radius:24px}
   .gw-apps{grid-template-columns:repeat(4,1fr);border-radius:18px}
   .gw-apps li{padding:12px 4px;border:0!important}
