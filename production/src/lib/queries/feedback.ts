@@ -187,7 +187,10 @@ export function useSubmitFeedback() {
         ai_chat_summary: input.filedVia === "ai-chat" ? (input.aiChatSummary ?? null)?.slice(0, 1000) ?? null : null,
       });
       // Fatal on purpose. The old code logged this and thanked the reporter anyway.
-      if (error) throw error;
+      /* As an Error with the real message (5 Oct 2026): a PostgrestError is a plain object, so
+         both callers' `err instanceof Error` fell through to "Could not submit the report." —
+         on staging that hid "Could not find the 'filed_via' column … in the schema cache". */
+      if (error) throw new Error(`Report not saved: ${error.message}${error.code ? ` (${error.code})` : ""}`);
 
       const failedUploads: string[] = [];
       let uploaded = 0;
