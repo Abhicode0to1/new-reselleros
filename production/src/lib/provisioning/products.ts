@@ -27,6 +27,30 @@ export interface ProvisioningProduct {
    * than one hosting plan. Without it every request carried the quote's one plan.
    */
   plan?: string;
+  /**
+   * Domain only: the registration term the customer paid for, 1–10 (R-031). Read from the
+   * domain line's `years`; absent or out of range → 1, never a guess upward that would
+   * register (and spend) more than was paid.
+   */
+  years?: number;
+}
+
+/** A domain line's paid term: its `years` when a whole number 1–10, else 1 (R-031). */
+export function domainLineYears(l: unknown): number {
+  const y = Number((l as { years?: unknown } | null)?.years);
+  return Number.isInteger(y) && y >= 1 && y <= 10 ? y : 1;
+}
+
+/** Years per bought domain name; a name on two lines keeps its first line's term. */
+function domainYearsInLines(lineItems: unknown, domainItemIds?: ReadonlySet<string>): Map<string, number> {
+  const out = new Map<string, number>();
+  if (!Array.isArray(lineItems)) return out;
+  for (const l of lineItems) {
+    if (!isDomainPurchaseLine(l, domainItemIds)) continue;
+    const name = String((l as { domain?: unknown }).domain).trim().toLowerCase();
+    if (!out.has(name)) out.set(name, domainLineYears(l));
+  }
+  return out;
 }
 
 /** A hosting plan line: it names the domain the account is set up ON, not one to buy. */
@@ -88,16 +112,18 @@ export function provisioningProducts(input: {
   /** Catalogue items whose vendor is domain — see isDomainPurchaseLine. */
   domainItemIds?: ReadonlySet<string>;
 }): ProvisioningProduct[] {
+  const years = domainYearsInLines(input.lineItems, input.domainItemIds);
   const named = domainsInLines(input.lineItems, input.domainItemIds).map<ProvisioningProduct>((d) => ({
     vendor: "domain",
     domain: d,
     seats: 1,
+    years: years.get(d) ?? 1,
   }));
 
   if (input.vendor === "domain") {
     // Domain-only order: the named domains ARE the products. With none named (a quote
     // raised in the app), fall back to the single request it always produced.
-    return named.length ? named : [{ vendor: "domain", domain: input.domain, seats: 1 }];
+    return named.length ? named : [{ vendor: "domain", domain: input.domain, seats: 1, years: 1 }];
   }
 
   /* Hosting: one request per hosting LINE, each on its own domain and plan (R-032,

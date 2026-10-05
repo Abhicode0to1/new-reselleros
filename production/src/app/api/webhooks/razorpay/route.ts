@@ -545,6 +545,8 @@ export async function POST(request: NextRequest) {
         paymentMode: razorpayMode(keyIdForMode),
         blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
         note:        provisioning.reason,
+        // R-031: a new domain sale carries its paid term; a renewal is one year (renew-domains).
+        years:       isRenewal ? 1 : product.years,
       });
       console.log(`[webhooks/razorpay] provisioning ${queued} for ${quote.id} ${product.vendor}${product.domain ? ` ${product.domain}` : ""} — ${provisioning.reason}`);
     } else {

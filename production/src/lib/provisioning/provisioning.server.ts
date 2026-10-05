@@ -83,6 +83,8 @@ export interface ReadyDomainRequest {
   domain: string | null;
   amount_paid: number;
   note: string | null;
+  /** Paid term (R-031); absent until migration 20261005090000 is applied — read as 1. */
+  years?: number;
 }
 
 /**
@@ -109,7 +111,10 @@ async function listReadyDomainRows(kind: "registration" | "renewal", limit: numb
   if (!db) return [];
   let q = db
     .from("provisioning_requests")
-    .select("id, tenant_id, quote_id, domain, amount_paid, note")
+    /* "*" rather than a list so `years` (R-031) is read when the column exists and the
+       query still works before migration 20261005090000 lands — the register cron's
+       yearsFor() treats an absent value as 1. */
+    .select("*")
     .eq("vendor", "domain")
     .eq("status", "queued")
     .eq("payment_mode", "live")
@@ -182,6 +187,8 @@ export interface QueueProvisioningInput {
   paymentMode: "live" | "test";
   blocker: ProvisioningBlocker | null;
   note: string;
+  /** Domains: the paid registration term, 1–10 (R-031). Omitted → the column's default, 1. */
+  years?: number;
 }
 
 /**
@@ -213,6 +220,11 @@ export async function queueProvisioning(
       status:       "queued",
       blocker:      input.blocker,
       note:         input.note,
+      /* Written only when it says something the default does not. Every sale today is one
+         year (the cart refuses any other term), so a deploy that reaches this code before
+         migration 20261005090000 adds the column keeps queuing — an insert naming a
+         missing column would fail and leave a paid order queued for nobody. */
+      ...(input.years && Number.isInteger(input.years) && input.years > 1 && input.years <= 10 ? { years: input.years } : {}),
     });
 
     if (!error) return "queued";

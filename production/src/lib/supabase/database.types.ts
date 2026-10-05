@@ -344,6 +344,9 @@ export type QuoteLineItem = {
   bulk?: boolean;
   /** Per-domain breakdown for a bulk line. `qty` must equal the sum of these seats. */
   domains?: Array<{ domain: string; seats: number }>;
+  /** Domain registration lines only: years paid for, 1–10 (R-031). Absent → 1. The
+   *  register-domains cron registers for exactly this term. */
+  years?: number;
   /** Optional domain this subscription is provisioned against (Google Workspace /
    *  M365 / Zoho). Per-line because a quote can hold products for different domains. */
   domain?: string | null;

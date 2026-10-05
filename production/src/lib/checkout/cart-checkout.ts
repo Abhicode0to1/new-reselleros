@@ -127,6 +127,8 @@ interface QuoteLine {
   domain?: string;
   /** Domain lines only: whose name it is registered in (owner decision 22). */
   registrant?: Registrant;
+  /** Domain lines only: the registration term paid for (R-031). The cart sells 1 year. */
+  years?: number;
   /** Hosting lines only: the tier and the months paid for, read by the provisioning worker. */
   hostingPlan?: string;
   /**
@@ -260,6 +262,7 @@ async function priceDomainLines(
           rate: Math.round(hit.price),
           cost: 0,
           domain: e.domain,
+          years: 1, // the name says "1 year" and qty must be 1 — the term, stated (R-031)
         },
       });
     }
