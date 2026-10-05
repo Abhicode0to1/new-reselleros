@@ -6,8 +6,8 @@
 # It reuses LIVE's Google OAuth client: reads the client id + secret from the live auth
 # container (supabase-gateway) and writes them into staging-gateway's ~/.env, sets
 # GOOGLE_ENABLED=true and restarts staging's auth service. Nothing secret is printed or
-# written on this machine — the values go VM to VM through a pipe. ~/.env is backed up on
-# the staging VM as ~/.env.bak-google first. Live is only READ, never changed.
+# written to disk on this machine (held in memory between the two ssh calls only).
+# ~/.env is backed up on the staging VM as ~/.env.bak-google first. Live is only READ.
 #
 # ONE MORE STEP IS YOURS (Google does not allow it from a script): in Google Cloud Console
 # → APIs & Services → Credentials → the OAuth 2.0 Client used for live login → Authorised
@@ -22,24 +22,21 @@ say() { printf '\n== %s\n' "$1"; }
 
 say "0. Connect once to each server (answer 'y' if asked to store the host key)"
 # On Windows gcloud uses PuTTY's plink. The first connection to a VM asks "Store key in
-# cache? (y/n)" and reads the answer from STDIN — in step 1 stdin is the pipe carrying the
-# Google values, so the prompt swallowed them (5 Oct 2026). Answering it here, with nothing
-# piped, caches both keys so step 1 runs without a question.
+# cache? (y/n)" and reads the answer from STDIN. Answering it here, with nothing piped,
+# caches both keys so step 1 runs without a question.
 gcloud compute ssh supabase-gateway --zone="$Z" --project="$P" --command="true"
 gcloud compute ssh staging-gateway  --zone="$Z" --project="$P" --command="true"
 
 say "1. Copy live's Google client to staging (values are not shown)"
-# The remote scripts travel base64-encoded (5 Oct 2026, second run). The first version sent
-# quotes, pipes and {{ }} through gcloud -> plink on Windows, got no Google lines back, and
-# threw live's stderr away so nobody could see why. Base64 carries none of those characters.
-# Diagnostics (container name, how many settings, their NAMES) go to this screen on stderr;
-# the values only ever travel on stdout, VM to VM.
+# The remote scripts travel base64-encoded (5 Oct 2026, second run): quotes, pipes and {{ }}
+# sent through gcloud -> plink on Windows came back with nothing. Diagnostics (container
+# name, how many settings, their NAMES) go to this screen on stderr — never the values.
 LIVE_SH='set -o pipefail
 C=$(sudo docker ps --format "{{.Names}}" | grep -E "auth" | head -1)
 echo "live: auth container = ${C:-NONE FOUND}" >&2
 [ -n "$C" ] || exit 1
 ENVS=$(sudo docker inspect "$C" --format "{{range .Config.Env}}{{println .}}{{end}}")
-echo "live: Google settings = $(printf "%s\n" "$ENVS" | grep -cE "^GOTRUE_EXTERNAL_GOOGLE_(CLIENT_ID|SECRET)=") of 2; names: $(printf "%s\n" "$ENVS" | grep -oE "^GOTRUE_EXTERNAL_GOOGLE_[A-Z_]+" | tr "\n" " ")" >&2
+echo "live: Google settings = $(printf "%s\n" "$ENVS" | grep -cE "^GOTRUE_EXTERNAL_GOOGLE_(CLIENT_ID|SECRET)=") of 2" >&2
 printf "%s\n" "$ENVS" | grep -E "^GOTRUE_EXTERNAL_GOOGLE_(CLIENT_ID|SECRET)=" | sed -E "s/^GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=/GOOGLE_CLIENT_ID=/; s/^GOTRUE_EXTERNAL_GOOGLE_SECRET=/GOOGLE_SECRET=/"'
 STAGING_SH='set -e
 new=$(cat)
@@ -53,10 +50,16 @@ mv ~/.env.tmp ~/.env; chmod 600 ~/.env
 grep -E "^GOOGLE_" ~/.env | sed -E "s/=.+/=<set>/"'
 L64=$(printf '%s' "$LIVE_SH" | base64 -w0)
 S64=$(printf '%s' "$STAGING_SH" | base64 -w0)
-gcloud compute ssh supabase-gateway --zone="$Z" --project="$P" --strict-host-key-checking=no --quiet \
-  --command="echo $L64 | base64 -d > \$HOME/.rl.sh && bash \$HOME/.rl.sh; rc=\$?; rm -f \$HOME/.rl.sh; exit \$rc" \
-| gcloud compute ssh staging-gateway --zone="$Z" --project="$P" --strict-host-key-checking=no --quiet \
-  --command="echo $S64 | base64 -d > \$HOME/.rs.sh && bash \$HOME/.rs.sh; rc=\$?; rm -f \$HOME/.rs.sh; exit \$rc"
+# Not a live->staging pipe (5 Oct 2026, third run): live sent 2 lines, staging read 0 —
+# plink on Windows does not hand a piped stdin to the remote side. So the two values are
+# held in a shell variable here (memory only: never on disk, never printed), passed to
+# staging base64-encoded inside the command, and cleared straight after.
+VALS=$(gcloud compute ssh supabase-gateway --zone="$Z" --project="$P" --strict-host-key-checking=no --quiet \
+  --command="echo $L64 | base64 -d > \$HOME/.rl.sh && bash \$HOME/.rl.sh; rc=\$?; rm -f \$HOME/.rl.sh; exit \$rc" | tr -d '\r')
+V64=$(printf '%s\n' "$VALS" | base64 -w0); unset VALS
+gcloud compute ssh staging-gateway --zone="$Z" --project="$P" --strict-host-key-checking=no --quiet \
+  --command="echo $S64 | base64 -d > \$HOME/.rs.sh && echo $V64 | base64 -d | bash \$HOME/.rs.sh; rc=\$?; rm -f \$HOME/.rs.sh; exit \$rc"
+unset V64
 
 say "2. Restart staging auth with the new settings"
 gcloud compute ssh staging-gateway --zone="$Z" --project="$P" --strict-host-key-checking=no --quiet \
