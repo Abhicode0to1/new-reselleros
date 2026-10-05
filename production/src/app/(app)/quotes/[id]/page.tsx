@@ -197,6 +197,8 @@ export default function QuoteDetailPage() {
           provisioningTasks.map((t) => t.status as ProvisionStatus),
         ),
         signerName: signature?.signer_name ?? null,
+        // R-159: paid means the money is in, not that an invoice exists.
+        paid: quoteIsPaid(quote),
       })
     : null;
 

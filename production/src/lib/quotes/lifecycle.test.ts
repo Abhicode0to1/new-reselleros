@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { quoteLifecycle, lifecycleSummary, type LifecycleInput } from "./lifecycle";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const q = (over: Partial<LifecycleInput> = {}): LifecycleInput => ({
   status: "draft", paymentStatus: "none", invoiceId: null,
@@ -131,5 +133,21 @@ describe("lifecycleSummary", () => {
   it("reports completion when nothing is outstanding", () => {
     const done = q({ status: "accepted", paymentStatus: "invoiced", invoiceId: "INV-1", hasSignature: true, provisionStatus: "done" });
     expect(lifecycleSummary(quoteLifecycle(done).steps)).toBe("Invoiced — complete");
+  });
+});
+
+/* R-159: invoicing before payment must not tick "Paid". */
+describe("paid step follows the money, not the invoice (R-159)", () => {
+  const base = { status: "accepted" as const, paymentStatus: "invoiced" as const, invoiceId: "INV-1", hasSignature: false, provisionStatus: "not_required" as const };
+  it("invoiced with nothing received → Paid is still to do, and says the money is due", () => {
+    const paid = quoteLifecycle({ ...base, paid: false }).steps.find((s) => s.stage === "paid")!;
+    expect(paid.state).not.toBe("done");
+    expect(paid.detail).toBe("Invoiced before payment — the money is still due.");
+  });
+  it("invoiced and paid in full → Paid is done", () => {
+    expect(quoteLifecycle({ ...base, paid: true }).steps.find((s) => s.stage === "paid")!.state).toBe("done");
+  });
+  it("the quote page passes the money-based answer", () => {
+    expect(readFileSync(join(__dirname, "../../app/(app)/quotes/[id]/page.tsx"), "utf8")).toMatch(/paid: quoteIsPaid\(quote\)/);
   });
 });

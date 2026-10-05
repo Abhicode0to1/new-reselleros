@@ -19,9 +19,20 @@ const q = (payment_status: string | null) => ({ payment_status } as unknown as Q
 describe("quoteIsPaid", () => {
   it("is paid once the money is in", () => {
     expect(quoteIsPaid(q("received"))).toBe(true);
-    /* A tax invoice was raised against money that arrived. "Net 7 days from
-       acceptance" is as wrong here as on a `received` quote. */
-    expect(quoteIsPaid(q("invoiced"))).toBe(true);
+    /* Invoiced AND the payments cover the quote: "Net 7 days" is as wrong here as on a
+       `received` quote. ₹1 of rounding is tolerated. */
+    expect(quoteIsPaid({ payment_status: "invoiced", amount: 11800, payment_amount: 11800 } as unknown as Q)).toBe(true);
+    expect(quoteIsPaid({ payment_status: "invoiced", amount: 11800, payment_amount: 11799 } as unknown as Q)).toBe(true);
+  });
+
+  /* R-159 (Hitesh, Excel Technologies, 5 Oct 2026): "I converted a Quote into Invoice
+     without payment. Why is it showing quote paid?" generate_invoice writes 'invoiced'
+     whether or not money arrived — an invoice is not a payment. */
+  it("is NOT paid when it was invoiced before the money came", () => {
+    expect(quoteIsPaid({ payment_status: "invoiced", amount: 11800, payment_amount: 0 } as unknown as Q)).toBe(false);
+    expect(quoteIsPaid({ payment_status: "invoiced", amount: 11800, payment_amount: null } as unknown as Q)).toBe(false);
+    expect(quoteIsPaid({ payment_status: "invoiced", amount: 11800, payment_amount: 5000 } as unknown as Q)).toBe(false);
+    expect(quoteIsPaid(q("invoiced"))).toBe(false); // no amounts known → never assume paid
   });
 
   it("is NOT paid while a balance is genuinely still due", () => {

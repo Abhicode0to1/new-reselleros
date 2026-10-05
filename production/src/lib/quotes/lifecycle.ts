@@ -9,7 +9,8 @@
  *   Draft        the quote row exists
  *   Sent         status left 'draft'
  *   Signed       a quote_signatures row, OR status='accepted'
- *   Paid         payment_status is 'received' or 'invoiced'
+ *   Paid         the money is in: quoteIsPaid() — 'received', or 'invoiced' with the payments
+ *                covering the quote (R-159: invoicing before payment no longer reads as paid)
  *   Provisioned  every provisioning task is done (or there is nothing to provision)
  *   Invoiced     invoice_id is set
  *
@@ -49,6 +50,11 @@ export interface LifecycleInput {
   /** From overallProvisionStatus(). "not_required" = nothing to create. */
   provisionStatus: "pending" | "in_progress" | "done" | "failed" | "not_required";
   signerName?: string | null;
+  /**
+   * R-159: whether the money is in, from quoteIsPaid() (payments recorded vs the quote).
+   * Absent → the old reading of paymentStatus alone, for callers that have no amounts.
+   */
+  paid?: boolean;
 }
 
 const LABELS: Record<LifecycleStage, string> = {
@@ -72,7 +78,7 @@ export function quoteLifecycle(input: LifecycleInput): {
 
   const sent   = input.status !== "draft";
   const signed = input.hasSignature || input.status === "accepted";
-  const paid   = input.paymentStatus === "received" || input.paymentStatus === "invoiced";
+  const paid   = input.paid ?? (input.paymentStatus === "received" || input.paymentStatus === "invoiced");
   const invoiced = Boolean(input.invoiceId);
 
   const steps: LifecycleStep[] = [
@@ -101,7 +107,9 @@ export function quoteLifecycle(input: LifecycleInput): {
         ? "Payment received."
         : input.paymentStatus === "partial"
           ? "Part-paid — the balance is still outstanding."
-          : "No payment recorded.",
+          : input.paymentStatus === "invoiced"
+            ? "Invoiced before payment — the money is still due."
+            : "No payment recorded.",
     },
     {
       stage: "provisioned", label: LABELS.provisioned,
