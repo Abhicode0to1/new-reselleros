@@ -58,6 +58,27 @@ export interface FeedbackListFilter {
  * three cosmetic ones from this morning. `nullsLast` matters: an untriaged row has no
  * score yet and must not sort as if it were a zero.
  */
+/**
+ * How many reports sit in each status — for the tab counts (5 Oct 2026). "Run AI Auto-Fix"
+ * moves a report from Open to Queued for agent, and with a count only on the open tab the
+ * three queued reports looked like they had vanished. Same query-key prefix as the list, so
+ * every mutation that refreshes the list refreshes these too.
+ */
+export function useFeedbackCounts() {
+  return useQuery({
+    queryKey: ["feedback", "counts"],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.from("feedback").select("status").limit(5000);
+      if (error) throw error;
+      const out: Record<string, number> = { all: 0 };
+      for (const r of data ?? []) { out[r.status] = (out[r.status] ?? 0) + 1; out.all += 1; }
+      return out;
+    },
+    staleTime: 15_000,
+  });
+}
+
 export function useFeedbackList(filter: FeedbackListFilter = {}) {
   return useQuery({
     queryKey: ["feedback", filter.status ?? "all", filter.type ?? "all"],
