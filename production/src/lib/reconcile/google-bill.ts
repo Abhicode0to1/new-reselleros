@@ -243,6 +243,12 @@ export function newSubscriptionRow(a: {
 
 /** A customer name from a domain: "freighttiger.com" → "Freighttiger". Rename later. */
 export function nameFromDomain(domain: string): string {
-  const base = normDomain(domain).split(".")[0].replace(/[-_]+/g, " ").trim();
+  /* The company part, not the first label: "ai.tattvaspa.org" is Tattvaspa (not "Ai"), and
+     "merrymen.co.in" is Merrymen — skip a second-level suffix like co / com / org / net / ac. */
+  const labels = normDomain(domain).split(".").filter(Boolean);
+  const SLD = new Set(["co", "com", "org", "net", "ac", "edu", "gov", "gen", "firm", "ind", "ltd", "plc"]);
+  let i = labels.length - 2;
+  while (i > 0 && (SLD.has(labels[i]) || labels[i].length <= 2)) i -= 1;
+  const base = (labels[Math.max(0, i)] ?? "").replace(/[-_]+/g, " ").trim();
   return base ? base.split(" ").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ") : domain;
 }
