@@ -46,6 +46,7 @@ describe("a trial request through the enquiry routes does not email the owner", 
     const c = code("src/app/api/public/enquiry/workspace/route.ts");
     expect(c).toMatch(/trial:\s*z\.boolean\(\)\.optional\(\)/);
     expect(c).toMatch(/owner\.ok && !trial && sendEmail\(\{\s*to:\s*owner\.to/);
-    expect(c).toMatch(/owner\.ok && sendEmail\(\{\s*to:\s*email,/);
+    // The customer still gets the acknowledgement — addressed by its reply-to (support for the storefront).
+    expect(c).toMatch(/customerReplyTo && sendEmail\(\{\s*to:\s*email,/);
   });
 });

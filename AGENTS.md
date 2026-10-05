@@ -103,6 +103,9 @@ local-only switches, all ignored on the live site:
 - `ENGINE_ALLOW_TEST_PAYMENT_PROVISION=1` on DMS: only when its `RESELLEROS_SERVER_URL` is this machine
   (localhost / 127.0.0.1 / host.docker.internal). The DMS image is a production build and the live
   site still takes test-key payments, so neither NODE_ENV nor the key prefix could be the guard.
+- `NO_OWNER_PAYMENT_ALERT_LOCAL=1` here (5 Oct 2026, Pawan: owner alerts "only on my machine" off):
+  `ownerPaymentAlertAllowed()` in `lib/email/storefront-voice.ts` skips the "payment received" email to
+  the owner for local test payments; ignored on any deployed server, so live sales always reach the owner.
 - `node scripts/local-cron.mjs` runs `/api/cron/provision-hosting` every minute (localhost only), as
   Cloud Scheduler does on the live site every 15 min, 9–21 IST.
 The worker now tells DMS the real `paymentMode` instead of always "live". Measured end to end on
@@ -225,6 +228,13 @@ Mono, Anutech blue `#1668E3` (`site/site.css`). Built in DMS (`a40887b8`, `03d50
   only to domains (a hosting-only customer is never nagged; buying a domain asks for the address),
   and the banner reads the saved account, so a saved mobile is never called missing (DMS `96a27f82`,
   `26eecfde`).
+- **ResellerOS's own storefront emails sign the same way (5 Oct 2026):** for the storefront tenant
+  (`BUY_PAGE_TENANT_ID`) the paid-order, payment-failed, trial, trial-ended and enquiry emails sign
+  "— Anutech Digital" and a reply goes to support@anutech.in (`SUPPORT_EMAIL`), via
+  `storefrontVoice()` in `lib/email/storefront-voice.ts`. Every other tenant is a reseller and keeps
+  its own sign-off and reply-to — never sign a reseller's customer email as Anutech.
+- **Admin → Appearance in DMS** holds footer template, GSTIN and social links only; the Support widget
+  and "Phone number (Call Us)" switches changed nothing and were removed (owner, 5 Oct 2026).
 Any new customer-facing email or screen in DMS follows this; never a separate DMS identity.
 The DMS repo's working branch for Pawan is `website-pawan` too (renamed from `pawan-api-system` on
 3 Oct 2026; the old branch is deleted).

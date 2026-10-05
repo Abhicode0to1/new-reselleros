@@ -31,6 +31,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
+import { ownerPaymentAlertAllowed, storefrontVoice } from "@/lib/email/storefront-voice";
 import { buyPageTenantIdOrEmpty, simulatedPaymentAllowed } from "@/lib/checkout/live-guards";
 import { issueInvoiceForOnlinePayment } from "@/lib/checkout/online-invoice.server";
 import { publicDbError } from "@/app/api/public/_lib/db-error";
@@ -492,12 +493,14 @@ export async function POST(request: NextRequest) {
       if (!owner.ok) {
         console.error(`[checkout/workspace] simulated order ${quoteId} recorded, but no owner alert: ${owner.reason}`);
       }
+      const voice = storefrontVoice(BUY_PAGE_TENANT_ID);
+      const customerReplyTo = voice ? voice.replyTo : owner.ok ? owner.to : null;
       await Promise.allSettled([
         // Customer copy
-        owner.ok && sendEmail({
+        customerReplyTo && sendEmail({
           to:      email,
           from:    FROM_EMAIL,
-          replyTo: owner.to,
+          replyTo: customerReplyTo,
           kind:    "buy_page_checkout_sim_customer",
           route:   { tenantId: BUY_PAGE_TENANT_ID },
           subject: `[TEST] Payment received · ${quoteId} · ${amountFmt}`,
@@ -516,11 +519,11 @@ ORDER SUMMARY
   Domain      ${cleanDomain}
   Total       ${amountFmt} (incl 18% GST)
 
-— ${owner.ownerName || ownerTenant?.name?.trim() || "Your reseller"}
+${voice ? voice.signOff : `— ${(owner.ok ? owner.ownerName : "") || ownerTenant?.name?.trim() || "Your reseller"}`}
    (Simulated email — system test only)`,
         }),
-        // Owner alert — flagged clearly as test
-        owner.ok && sendEmail({
+        // Owner alert — flagged clearly as test (switched off on a developer machine only)
+        owner.ok && ownerPaymentAlertAllowed() && sendEmail({
           to:      owner.to,
           from:    FROM_EMAIL,
           kind:    "buy_page_checkout_sim_owner",
