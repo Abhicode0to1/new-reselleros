@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 
 import { Icon } from "@/components/ui/icon";
 import { IconButton } from "@/components/ui/button";
+import { AiHelpButton } from "@/components/shared/ai-help";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { CommandPalette, useCommandPalette } from "./command-palette";
@@ -152,6 +153,9 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
         </TooltipTrigger>
         <TooltipContent>Toggle theme</TooltipContent>
       </Tooltip>
+
+      {/* AI Help (R-158/R-162) — a small icon, not a floating button over the page. */}
+      <AiHelpButton />
 
       {/* Quick actions — page-aware "what should I do now" panel.
           Sits just left of the bell so the order reads as:

@@ -30,6 +30,37 @@ import { maskPII } from "@/lib/ux/signals";
 import { bugReportText, AI_FILED_TAG, type BugDraft, type HelpMessage, type HelpMode } from "@/lib/ai/app-help";
 import { pushTrail, isProblem, apiFailureWorthNoting, apiFailText, trailForPrompt, looksLikeSameBug, type TrailEvent, type TrailKind } from "@/lib/ai/test-trail";
 import { scanPage } from "@/components/shared/page-scan";
+import { IconButton } from "@/components/ui/button";
+
+/* Open/closed and "an error was caught" live outside the component (5 Oct 2026, Pardeep:
+   "ai help button ko top me chhota sa icon laga do"). The big floating button covered page
+   buttons (the Payment runs "Create" bar, list rows on phone); the trigger is now a small
+   icon in the top bar, which needs to open the same panel and show the same red dot. */
+type HelpUi = { open: boolean; alert: string | null };
+let helpUi: HelpUi = { open: false, alert: null };
+const helpListeners = new Set<() => void>();
+const setHelpUi = (patch: Partial<HelpUi>) => { helpUi = { ...helpUi, ...patch }; helpListeners.forEach((l) => l()); };
+const subscribeHelpUi = (l: () => void) => { helpListeners.add(l); return () => { helpListeners.delete(l); }; };
+const SERVER_UI: HelpUi = { open: false, alert: null };
+const useHelpUi = () => React.useSyncExternalStore(subscribeHelpUi, () => helpUi, () => SERVER_UI);
+
+/** The top-bar trigger: a small chat icon, with a red dot while an unseen error waits. */
+export function AiHelpButton() {
+  const { open, alert } = useHelpUi();
+  return (
+    <div className="relative">
+      <IconButton
+        icon={alert ? "alert" : "message"}
+        aria-label={alert ? "AI Help — an error was caught, open to report it" : "AI Help — ask about this page or report a bug"}
+        title={alert ? `Error caught: ${alert}` : "AI Help"}
+        aria-pressed={open}
+        onClick={() => setHelpUi({ open: !open })}
+        className={alert ? "text-rose" : undefined}
+      />
+      {alert && <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-rose ring-2 ring-paper animate-pulse pointer-events-none" aria-hidden="true" />}
+    </div>
+  );
+}
 
 interface ChatItem extends HelpMessage {
   draft?: BugDraft | null;
@@ -126,7 +157,9 @@ export function AiHelp() {
   const { data: currentUser } = useCurrentUser();
   const submit = useSubmitFeedback();
   const { trail, unseen, clearUnseen } = useTrail(pathname);
-  const [open, setOpen] = React.useState(false);
+  const { open } = useHelpUi();
+  const setOpen = React.useCallback((v: boolean) => setHelpUi({ open: v }), []);
+  React.useEffect(() => { setHelpUi({ alert: unseen?.text ?? null }); }, [unseen]);
   const [items, setItems] = React.useState<ChatItem[]>([]);
   const [text, setText] = React.useState("");
   const [busy, setBusy] = React.useState<false | HelpMode>(false);
@@ -213,24 +246,11 @@ export function AiHelp() {
 
   return (
     <div data-ai-help>
-      {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label={unseen ? "AI Help — ek error pakda gaya, report banayein" : "AI Help — app ke baare mein poochho ya bug batao"}
-          title={unseen ? `Error: ${unseen.text}` : "AI Help"}
-          className={`fixed z-50 right-4 bottom-20 md:bottom-5 h-12 pl-3.5 pr-4 rounded-full shadow-lg flex items-center gap-2 text-sm font-semibold hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber ${unseen ? "bg-red-600 text-white animate-pulse" : "bg-ink text-paper"}`}
-        >
-          <Icon name={unseen ? "alert" : "sparkles"} size={18} />
-          <span>{unseen ? "Error caught" : "AI Help"}</span>
-        </button>
-      )}
-
       {open && (
         <section
           role="dialog"
           aria-label="AI Help"
-          className="fixed z-50 right-2 left-2 bottom-20 md:left-auto md:right-5 md:bottom-5 md:w-[420px] h-[min(600px,calc(100vh-7rem))] flex flex-col rounded-2xl border border-hairline bg-paper shadow-2xl overflow-hidden"
+          className="fixed z-50 right-2 left-2 top-14 md:left-auto md:right-5 md:top-16 md:w-[420px] h-[min(600px,calc(100vh-7rem))] flex flex-col rounded-2xl border border-hairline bg-paper shadow-2xl overflow-hidden"
         >
           <header className="flex items-center gap-2 px-4 py-3 border-b border-hairline bg-paper-2/60">
             <Icon name="sparkles" size={16} className="text-amber-ink" />
@@ -268,7 +288,7 @@ export function AiHelp() {
             {items.length === 0 && (
               <div className="text-sm text-ink-2 space-y-2 p-1">
                 <p><b>Check this page</b> dabaiye: main screen jaanch kar bataunga kya galat hai, aur aage kya test karna hai.</p>
-                <p>Main aapke clicks aur errors khud yaad rakhta hoon. Bug mile to bas likhiye "ye galat hai" — steps main likh dunga. Error aate hi ye button laal ho jaayega.</p>
+                <p>Main aapke clicks aur errors khud yaad rakhta hoon. Bug mile to bas likhiye "ye galat hai" — steps main likh dunga. Error aate hi upar wala AI Help icon laal ho jaayega.</p>
                 <p className="text-ink-3 text-xs">Report tabhi jaati hai jab aap draft dekh kar <b>File</b> dabate hain — aapke naam se.</p>
               </div>
             )}
