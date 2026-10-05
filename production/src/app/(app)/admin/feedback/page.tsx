@@ -32,6 +32,7 @@ import { formatDate } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import {
   useFeedbackList,
+  useFeedbackCounts,
   usePlatformFeedbackList,
   useTriageFeedback,
   useDispatchFeedback,
@@ -153,11 +154,13 @@ function FeedbackCard({ row, userId }: { row: FeedbackWithShots; userId: string 
 
       await dispatch.mutateAsync({ id: row.id, userId });
 
-      toast.success("Directive queued and copied.", {
+      /* Says where the report went: it leaves the Open tab, and on 5 Oct three reports
+         "vanished" for the person who pressed it. */
+      toast.success("Moved to Queued for agent — directive copied.", {
         description: copied
-          ? "Paste it into Claude Code to start the fix. Nothing has changed in the code yet — this app cannot edit the repository."
-          : "Open the report below to copy the directive. Nothing has changed in the code yet.",
-        duration: 9_000,
+          ? "Not fixed yet: paste it into Claude Code to make the fix. The report waits in the Queued for agent tab."
+          : "Not fixed yet: open it in the Queued for agent tab to copy the directive for Claude Code.",
+        duration: 10_000,
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not queue this report.");
@@ -353,6 +356,7 @@ export default function AdminFeedbackPage() {
 
   const filter = tab === "all" ? {} : { status: tab as FeedbackStatus };
   const { data, isLoading, error } = useFeedbackList(filter);
+  const { data: counts } = useFeedbackCounts();
 
   /* ── Every workspace, for the platform owner ───────────────────────────────
      A tester with his own tenant filed a bug on 22 Aug and nobody could read it:
@@ -427,7 +431,7 @@ export default function AdminFeedbackPage() {
         onChange={setTab}
         items={STATUS_TABS.map((t) => ({
           ...t,
-          count: t.id === tab ? rows.length : undefined,
+          count: t.id === tab ? rows.length : counts?.[t.id],
         }))}
       />
 

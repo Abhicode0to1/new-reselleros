@@ -350,9 +350,34 @@ export function TaxInvoiceDialog({
               onClick={async () => {
                 setDownloadingPdf(true);
                 try {
-                  await downloadPdf();
+                  /* 5 Oct 2026, "Download PDF does not respond": the in-browser react-pdf render
+                     could hang without resolving or throwing — the button sat in loading forever,
+                     and an error, when there was one, only reached the console. Measured: the
+                     server renders the same InvoicePDF in ~4 s (it is the copy the customer is
+                     emailed), so it goes first; the browser render is the fallback, with a 25 s
+                     limit; if both fail, the person is told instead of left waiting. */
+                  const r = await fetch(`/api/invoices/${encodeURIComponent(invoice.id)}/pdf-link`, { cache: "no-store" });
+                  const j = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
+                  if (!r.ok || !j.url) throw new Error(j.error || `HTTP ${r.status}`);
+                  const a = document.createElement("a");
+                  a.href = j.url;
+                  a.download = `${invoice.id}.pdf`;
+                  a.rel = "noopener";
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
                 } catch (err) {
-                  console.error("Invoice PDF failed:", err);
+                  console.error("Server PDF link failed — rendering in the browser:", err);
+                  try {
+                    await Promise.race([
+                      downloadPdf(),
+                      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The PDF took too long")), 25_000)),
+                    ]);
+                  } catch (e2) {
+                    toast.error("Could not make the PDF.", {
+                      description: `${(e2 as Error).message}. Try again in a minute; if it keeps failing, report it from AI Help.`,
+                    });
+                  }
                 } finally {
                   setDownloadingPdf(false);
                 }

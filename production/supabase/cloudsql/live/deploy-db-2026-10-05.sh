@@ -74,6 +74,13 @@ has years    || apply 20261005090000_provisioning_requests_years.sql resellersos
 has filedvia || apply 20261005100000_feedback_filed_via_ai_chat.sql resellersos_migration
 has runs     || apply 20261005110000_payment_runs.sql resellersos_migration
 
+say "3b. Grant what the RLS policies already allow (cloudsql/09) — fixed a 403 on staging"
+# Staging, 5 Oct: /subscriptions got 403 on customer_contacts — 30 tables had policies for
+# signed-in users but no GRANT (migrations written the hosted-Supabase way). Live very likely has
+# the same gap. Grants only what each policy covers; server-only tables stay closed. Re-runnable.
+gcloud storage cp "$HERE/cloudsql/09-grant-what-policies-allow.sql" "$B/09-grant.sql" --project="$P" -q >/dev/null
+gcloud sql import sql "$I" "$B/09-grant.sql" --database="$DB" --user=resellersos_migration --project="$P" --quiet
+
 say "4. Tell PostgREST about the new columns (schema reload)"
 gcloud storage cp "$TMP/reload.sql" "$B/reload.sql" --project="$P" -q >/dev/null
 gcloud sql import sql "$I" "$B/reload.sql" --database="$DB" --user=resellersos_migration --project="$P" --quiet

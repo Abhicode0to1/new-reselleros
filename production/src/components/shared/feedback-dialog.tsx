@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -235,6 +236,14 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
           <DialogDescription className="text-xs text-ink-3">
             Write it in one box. Paste screenshots with <b>Ctrl + V</b> and they show right in the box.
           </DialogDescription>
+          {/* Where reports go (5 Oct 2026: "Admin / Feedback menu option missing from sidebar"
+              — it lives under Automation, which nobody looks in while reporting a bug). Same
+              owner/manager roles as the nav entry. */}
+          {(currentUser?.role === "owner" || currentUser?.role === "manager") && (
+            <Link href="/admin/feedback" onClick={() => onOpenChange(false)} className="text-xs font-semibold text-primary hover:underline self-start">
+              See all reports →
+            </Link>
+          )}
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
