@@ -133,6 +133,10 @@ export interface SubmitFeedbackInput {
   reporterName: string | null;
   reporterEmail: string | null;
   screenshots: { name: string; dataUrl: string }[];
+  /** R-158: "ai-chat" when the in-app AI Help drafted it after a chat; default "form". */
+  filedVia?: "form" | "ai-chat";
+  /** ai-chat only: two or three lines on the chat it came out of. */
+  aiChatSummary?: string | null;
 }
 
 export interface SubmitFeedbackResult {
@@ -179,6 +183,8 @@ export function useSubmitFeedback() {
         reported_by: input.reporterId,
         reporter_name: input.reporterName,
         reporter_email: input.reporterEmail,
+        filed_via: input.filedVia ?? "form",
+        ai_chat_summary: input.filedVia === "ai-chat" ? (input.aiChatSummary ?? null)?.slice(0, 1000) ?? null : null,
       });
       // Fatal on purpose. The old code logged this and thanked the reporter anyway.
       if (error) throw error;

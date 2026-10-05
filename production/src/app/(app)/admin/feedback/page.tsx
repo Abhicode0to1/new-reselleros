@@ -215,6 +215,7 @@ function FeedbackCard({ row, userId }: { row: FeedbackWithShots; userId: string 
             <span className="font-mono">{row.route_pattern ?? row.page_path ?? "screen unknown"}</span>
             <span className="text-ink-4">·</span>
             <span>{row.reporter_name ?? "Unknown reporter"}</span>
+            {row.filed_via === "ai-chat" && <Badge kind="info" size="sm">🤖 AI-drafted after chat</Badge>}
             <span className="text-ink-4">·</span>
             <span>{formatDate(row.created_at)}</span>
             {row.screenshots.length > 0 && (
@@ -276,7 +277,10 @@ function FeedbackCard({ row, userId }: { row: FeedbackWithShots; userId: string 
       {open && (
         <div className="pt-3 border-t border-hairline space-y-4">
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-ink-3 mb-1.5">What the reporter wrote</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-ink-3 mb-1.5">{row.filed_via === "ai-chat" ? "What the AI wrote (after the chat), filed by the reporter" : "What the reporter wrote"}</h4>
+            {row.filed_via === "ai-chat" && row.ai_chat_summary && (
+              <p className="text-xs text-ink-2 mb-1.5"><b>Chat:</b> {row.ai_chat_summary}</p>
+            )}
             <pre className="text-xs text-ink whitespace-pre-wrap font-mono bg-paper-2 border border-hairline rounded-md p-3 max-h-56 overflow-y-auto">
               {row.body}
             </pre>
@@ -543,6 +547,7 @@ function PlatformFeedbackList({
             <p className="mt-1 text-[12px] text-ink-2 leading-snug">{r.body}</p>
             <p className="mt-1 text-2xs text-ink-3">
               {r.reporter_name ?? "someone"} &middot; {r.reporter_email ?? "no email"}
+              {r.filed_via === "ai-chat" ? " · 🤖 AI-drafted after chat" : ""}
               {r.page_path ? ` · ${r.page_path}` : ""} &middot; {new Date(r.created_at).toLocaleString("en-IN")}
             </p>
             {r.screenshots.length > 0 && (

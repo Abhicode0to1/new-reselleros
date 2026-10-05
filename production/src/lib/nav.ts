@@ -571,6 +571,11 @@ export const APP_NAV: NavSection[] = [
         children: [
           { id: "ux-insights", href: "/ux-insights",    label: "UX Insights",      icon: "sparkles", roles: OM, hint: "Log kahan atakte hain — aur kya theek karna hai" },
           { id: "ui-insights", href: "/ui-insights",    label: "UI Insights",      icon: "layout",   roles: OM, hint: "Har page ka design score — aur kya badalna hai" },
+          /* The triage queue for bug reports (Report Bug, Ctrl+Shift+B, and AI Help). Next to
+             UX / UI Insights since 5 Oct 2026 (R-158): it sat under "Help & Tutorial" at the
+             bottom of the menu and Pardeep could not find it; the sidebar is at its row cap.
+             Owner/manager: reports quote whatever the reporter typed, often a customer's name. */
+          { id: "feedback",  href: "/admin/feedback",   label: "Bug Reports & AI Fixes", icon: "bug", roles: OM, hint: "Har report — Report Bug aur AI Help se; sab tenants ek saath" },
         ],
       },
       {
@@ -595,11 +600,6 @@ export const APP_NAV: NavSection[] = [
            The guide is static text (lib/help/content.ts), nothing tenant- or role-sensitive.
            The Feedback child keeps its own OM gate. */
         id: "help",      href: "/help",                 label: "Help & Tutorial",  icon: "question", roles: [...STAFF, "partner_agent"],
-        children: [
-          /* The triage queue for bug reports filed with Ctrl+Shift+B. Owner/manager: the
-             reports quote whatever the reporter typed, often a customer's name. */
-          { id: "feedback",  href: "/admin/feedback",       label: "Feedback & AI Fixes", icon: "bug", roles: OM },
-        ],
       },
     ],
   },

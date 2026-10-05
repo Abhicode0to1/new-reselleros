@@ -4763,11 +4763,13 @@ export type Database = {
       }
       feedback: {
         Row: {
+          ai_chat_summary: string | null
           body: string
           created_at: string
           directive: string | null
           dispatched_at: string | null
           dispatched_by: string | null
+          filed_via: string
           id: string
           inferred_type: string | null
           page_path: string | null
@@ -4792,11 +4794,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ai_chat_summary?: string | null
           body: string
           created_at?: string
           directive?: string | null
           dispatched_at?: string | null
           dispatched_by?: string | null
+          filed_via?: string
           id?: string
           inferred_type?: string | null
           page_path?: string | null
@@ -4821,11 +4825,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ai_chat_summary?: string | null
           body?: string
           created_at?: string
           directive?: string | null
           dispatched_at?: string | null
           dispatched_by?: string | null
+          filed_via?: string
           id?: string
           inferred_type?: string | null
           page_path?: string | null
@@ -8057,6 +8063,7 @@ export type Database = {
           updated_at: string
           vendor: string
           vendor_ref: string | null
+          years: number
         }
         Insert: {
           activated_at?: string | null
@@ -8075,6 +8082,7 @@ export type Database = {
           updated_at?: string
           vendor: string
           vendor_ref?: string | null
+          years?: number
         }
         Update: {
           activated_at?: string | null
@@ -8093,6 +8101,7 @@ export type Database = {
           updated_at?: string
           vendor?: string
           vendor_ref?: string | null
+          years?: number
         }
         Relationships: [
           {
