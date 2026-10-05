@@ -54,6 +54,8 @@ describe("wiring", () => {
   });
   it("thanks page finds an order whose invoice was issued; card goes to the Razorpay page", () => {
     expect(read("app/(public)/buy/workspace/thanks/fetch-order.ts")).toContain(`["received", "partial", "invoiced"]`);
-    expect(read("site/components/home/HomeV2.tsx")).toMatch(/const payHref = buyWorkspaceHref\(e\.name, seats\)/);
+    expect(read("site/components/home/HomeV2.tsx")).toMatch(/const onlinePay = buyWorkspaceHref\(e\.name, seats\)/);
+    // R-157: the Razorpay link only on annual — online payment is yearly, monthly is quoted.
+    expect(read("site/components/home/HomeV2.tsx")).toMatch(/const payHref = annual \? onlinePay : null/);
   });
 });

@@ -33,7 +33,7 @@ const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
 
 export const metadata: Metadata = {
-  title: "Buy Google Workspace · ResellerOS",
+  title: { absolute: "Buy Google Workspace · Anutech Digital" },
   description: "Google Workspace pricing for India. Annual GST invoice, hand-held migration, Hindi + English support. Premier Partner since 2014.",
 };
 

@@ -51,7 +51,7 @@ const noteOf = (n: string, fallback: string) => META[n]?.note ?? fallback;
 const MAIL_TODAY = ["Nothing yet — this is a new setup", "Personal Gmail or Yahoo", "cPanel or hosting mail", "Workspace / M365 from another reseller", "Not sure — please check for us"];
 
 const TRIAL_FAQ = [
-  { q: "What if we do not buy?", a: "The trial simply ends. We hand over any data you created and remove the mailboxes — nothing is charged and no card was taken." },
+  { q: "What if we do not buy?", a: "The trial simply ends. We hand over any data you created and remove the mailboxes — nothing is charged (the ₹1 card check was refunded the same day)." },
   { q: "Can we add people mid-trial?", a: "Yes, up to the vendor's free cap. Beyond that we tell you the rate first; nothing starts without your approval." },
   { q: "Will our current mail break?", a: "No. Your live mail keeps running on your existing provider until you decide — we only cut over when you say so." },
   { q: "Do we get the same rate afterwards?", a: `Yes, the published rate on the quote, and it stays the same at renewal. GST 18% (HSN ${COMPANY.hsn}) is billed separately.` },

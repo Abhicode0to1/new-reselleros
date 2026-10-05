@@ -141,7 +141,7 @@ export function WorkspaceAdLanding({
     setAd(pickAdParams(first.includes("?") ? first.slice(first.indexOf("?")) : ""));
   }, []);
 
-  const checkoutHref = useMemo(() => withAdParams((plan.edition ? buyWorkspaceHref(plan.edition, 5) : null) ?? "/buy/workspace", ad), [ad, plan.edition]);
+  const checkoutHref = useMemo(() => withAdParams((plan.edition ? buyWorkspaceHref(plan.edition, users) : null) ?? "/buy/workspace", ad), [ad, plan.edition, users]);
   const yearly = (annualPerSeatMo ?? 0) * 12;              // list price = renewal price
   const offerYear = Math.min(FIRST_YEAR_PER_USER, yearly);
   const offerMo = offerYear / 12;
@@ -534,6 +534,10 @@ function EnquiryModal({ kind, landing, plan, defaultUsers, onClose }: { kind: "b
       tierId: plan.key,
       billing: "annual",
       message: kind === "buy" ? `Google Ads landing page: wants to BUY ${plan.name}` : `Google Ads landing page: 14-day free trial request (${plan.name})`,
+      /* R-157: a trial is a trial (no priced quote is emailed), and a 30+ Starter enquiry on an
+         offer page is the first-year offer, which needs Google approval before it is quoted. */
+      ...(kind === "trial" ? { trial: true } : {}),
+      ...(kind === "buy" && plan.offer && users >= OFFER_MIN_USERS ? { offer: "starter-30" } : {}),
       pageUrl: landing || window.location.href,
       pageReferrer: document.referrer || undefined,
     };

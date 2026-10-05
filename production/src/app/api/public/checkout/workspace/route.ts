@@ -79,11 +79,12 @@ const checkoutSchema = z.object({
 // never charge a different price than enquiry/quote (audit fix #10).
 // (The enquiry route shares src/lib/pricing/workspace.ts; this in-file copy is
 // kept catalog-aligned — TODO: adopt the shared module here too for full DRY.)
+// R-157: Standard was 864 (an expired 20%-off promo). Enterprise is not sold online at all —
+// see the refusal in POST — so it has no fallback price here.
 const TIER_FALLBACK_MONTHLY: Record<string, number> = {
   starter:    270,
-  standard:   864,
+  standard:   1080,
   plus:       1380,
-  enterprise: 2400,
 };
 
 const TIER_DISPLAY_NAME: Record<string, string> = {
@@ -200,6 +201,16 @@ export async function POST(request: NextRequest) {
       );
     }
     const { fullName, companyName, email, phone, seats, domain, tierId, gstin, simulate, couponCode } = parsed.data;
+
+    /* R-157: Enterprise has no list price — it is quoted, never charged online (a catalogue
+       miss used to price it at an invented ₹2,400). Business plans stop at 300 users, Google's
+       own limit; above that the customer needs Enterprise, which is a quote too. */
+    if (tierId === "enterprise") {
+      return NextResponse.json({ error: "Enterprise is priced on a quote, not bought online. Nothing was charged. Please use \"Get a quote\"." }, { status: 400 });
+    }
+    if (seats > 300) {
+      return NextResponse.json({ error: "Google Workspace Business plans go up to 300 users. Nothing was charged. For more, ask for an Enterprise quote." }, { status: 400 });
+    }
 
     // ── Resolve Razorpay credentials ─────────────────────────────────────
     // Precedence: per-tenant `tenant_secrets` (Settings → Integrations)

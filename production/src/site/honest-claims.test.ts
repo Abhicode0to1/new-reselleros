@@ -31,3 +31,27 @@ describe("public site claims", () => {
     expect(read("components/home/HomeV2.tsx")).toContain("from: HOSTING_FROM_MO");
   });
 });
+
+/* R-157 (5 Oct 2026): Google Workspace flow audit. Claims the buy pages made that were not
+   true — a promo that was never charged, a refund of a fee never taken, an annual plan that
+   "cancels anytime" — must not come back. */
+describe("Google Workspace buy pages — no invented offers or promises", () => {
+  const buy = readFileSync(join(__dirname, "../app/(public)/buy/workspace/buy-workspace-client.tsx"), "utf8");
+  it("no hardcoded 20% first-20-users promo", () => {
+    expect(buy).not.toMatch(/First 20 users/i);
+    expect(buy).not.toMatch(/promoPrice:\s*864/);
+  });
+  it("no refund of a setup fee that is never charged", () => {
+    expect(buy).not.toMatch(/refund the setup fee/i);
+  });
+  it("annual plans are not sold as cancel-anytime / pro-rata refundable", () => {
+    expect(buy).not.toMatch(/pro-rata refunds/i);
+    expect(buy).not.toMatch(/>\s*Cancel anytime\s*</);
+  });
+  it("no invented monthly price", () => {
+    expect(buy).not.toMatch(/annual \* 1\.25/);
+  });
+  it("one support-hours answer", () => {
+    expect(buy).not.toMatch(/9am–9pm/);
+  });
+});

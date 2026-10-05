@@ -303,8 +303,13 @@ export function HomeV2({ editions, page = "email" }: { editions?: MergedEdition[
               const total = annual ? `${inr(e.annual * 12 * seats)}/yr` : `${inr(e.monthly * seats)}/mo`;
               /* R-120: Google editions go to the Razorpay checkout; M365 / Zoho have no online
                  buy yet and keep the WhatsApp request. */
-              const payHref = buyWorkspaceHref(e.name, seats);
-              const buyHref = payHref ?? WA(`Hi Anutech — I'd like to buy ${vendor.name} ${LABEL[e.name] ?? e.name} for ${seats} user${seats > 1 ? "s" : ""} (${annual ? "annual" : "monthly"}). Please send the payment link.`);
+              /* R-157: online payment is yearly only (the checkout writes an annual commitment), so
+                 with Monthly picked the card offers a monthly quote instead of a Buy that would charge
+                 a year. The quote link carries edition, users and term so nothing is typed twice. */
+              const quoteHref = `/quote?ed=${encodeURIComponent(e.name)}&seats=${seats}&term=${annual ? "annual" : "monthly"}`;
+              const onlinePay = buyWorkspaceHref(e.name, seats);
+              const payHref = annual ? onlinePay : null;
+              const buyHref = payHref ?? (onlinePay ? quoteHref : null) ?? WA(`Hi Anutech — I'd like to buy ${vendor.name} ${LABEL[e.name] ?? e.name} for ${seats} user${seats > 1 ? "s" : ""} (${annual ? "annual" : "monthly"}). Please send the payment link.`);
               return (
                 <div key={e.name} style={{ position: "relative", display: "flex", flexDirection: "column", padding: 20, border: `1px solid ${pop ? C.green : C.border}`, borderRadius: 12, background: pop ? C.greenT : C.surf, boxShadow: pop ? SH_GREEN : SH_CARD }}>
                   {/* Card order (2 Oct 2026): who it is for → the price, big → what N users cost →
@@ -323,11 +328,11 @@ export function HomeV2({ editions, page = "email" }: { editions?: MergedEdition[
                   <div style={{ fontSize: 12.5, color: C.ink2, marginTop: 8, padding: "7px 10px", background: pop ? "#fff" : C.sectT, borderRadius: 8 }}>
                     <b style={{ fontWeight: 600 }}>{total}</b> for {seats} user{seats > 1 ? "s" : ""} + GST
                   </div>
-                  <a href={buyHref} {...(payHref ? {} : { target: "_blank", rel: "noopener" })} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 600, padding: "11px 8px", borderRadius: 8, background: BTN_PRIMARY, color: "#fff", border: "none", marginTop: 14, boxShadow: SH_BTN, textDecoration: "none" }}>
-                    <CartIcon /> Buy now
+                  <a href={buyHref} {...(payHref || onlinePay ? {} : { target: "_blank", rel: "noopener" })} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 600, padding: "11px 8px", borderRadius: 8, background: BTN_PRIMARY, color: "#fff", border: "none", marginTop: 14, boxShadow: SH_BTN, textDecoration: "none" }}>
+                    {payHref || !onlinePay ? <><CartIcon /> Buy now</> : "Get a monthly quote"}
                   </a>
                   <p style={{ fontSize: 11, color: C.sec, textAlign: "center", margin: "6px 0 0" }}>
-                    {payHref ? "Pay online with Razorpay · billed yearly · GST invoice in ₹" : "Opens WhatsApp · we send the payment link · GST invoice in ₹"}
+                    {payHref ? "Pay online · billed yearly · GST invoice in ₹" : onlinePay ? "Monthly (flexible) is quoted · online payment is yearly" : "Opens WhatsApp · we send the payment link · GST invoice in ₹"}
                   </p>
                   <div style={{ height: 1, background: C.hair, margin: "16px 0 12px" }} />
                   {lowerName && (
@@ -350,7 +355,7 @@ export function HomeV2({ editions, page = "email" }: { editions?: MergedEdition[
                   {/* secondary actions as links — one primary button per card */}
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: "auto", paddingTop: 16, fontSize: 12.5, fontWeight: 600 }}>
                     <Link href={`/trial?ed=${encodeURIComponent(e.name)}&seats=${seats}`} style={{ color: C.blue, textDecoration: "none" }}>Try free →</Link>
-                    <Link href="/quote" style={{ color: C.blue, textDecoration: "none" }}>Get a written quote →</Link>
+                    <Link href={quoteHref as never} style={{ color: C.blue, textDecoration: "none" }}>Get a written quote →</Link>
                   </div>
                 </div>
               );

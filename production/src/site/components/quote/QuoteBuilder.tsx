@@ -159,7 +159,9 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
         body: JSON.stringify({
           fullName: name, companyName: company, email, phone,
           product: selected.length === 1 ? selected[0].label : `Multi-line quote (${selected.length} items)`,
-          seats: selected.reduce((s, p) => s + lines[p.name], 0),
+          /* R-157: the licence's own user count. Summing every line (domains, hosting, SSL too)
+             priced the automatic Workspace quote for users nobody asked for. */
+          seats: primary ? lines[primary.name] : selected.reduce((s, p) => s + lines[p.name], 0),
           requirement,
           edition: primary?.name, term,
         }),

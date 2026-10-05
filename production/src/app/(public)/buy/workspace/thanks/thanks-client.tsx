@@ -183,9 +183,9 @@ export function ThanksClient({
             Welcome aboard, {firstName}.
           </h1>
           <p className="text-base md:text-lg text-ink-3 leading-relaxed max-w-2xl mx-auto">
-            Your <GWInline /> order is confirmed. Our team will WhatsApp you
-            within 4 hours to verify your domain and start
-            provisioning.
+            Your <GWInline /> order is confirmed. Our team will call or WhatsApp you
+            the same working day to verify your domain and start
+            the setup.
           </p>
         </div>
       </section>
@@ -235,7 +235,7 @@ export function ThanksClient({
             </div>
 
             <div className="mt-5 pt-5 border-t border-hairline text-xs text-ink-3 leading-relaxed">
-              GST tax invoice (HSN 998313, 18% GST) will be emailed within 24 hours.
+              Your GST tax invoice (HSN 998313, 18% GST) comes with the payment confirmation email — if a detail is missing for it, we send it within one working day.
               Save this page or bookmark the link — you can return to it anytime.
             </div>
           </Card>
@@ -265,7 +265,7 @@ export function ThanksClient({
             },
             {
               done: false,
-              title: "Within 4 hours — our team WhatsApps you",
+              title: "Same working day — our team calls or WhatsApps you",
               body:  "We'll confirm your domain ownership (DNS TXT record method) and answer any pre-provisioning questions.",
               accent: true,
             },

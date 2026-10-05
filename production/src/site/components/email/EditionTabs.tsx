@@ -1,13 +1,16 @@
 "use client";
-/** Three suite tabs over the 11-row feature matrix. */
+/** Three suite tabs over the 11-row feature matrix. R-157: the price row comes from the live
+ *  catalogue when the page passes it (the matrix's own figures were Google's old ₹136/₹736). */
 import { useState } from "react";
 import { EDITION_MATRICES } from "@/site/lib/data/catalog";
 
 const SUITES = Object.keys(EDITION_MATRICES);
 
-export function EditionTabs() {
+export function EditionTabs({ prices }: { prices?: Readonly<Record<string, readonly [string, string, string]>> } = {}) {
   const [suite, setSuite] = useState(SUITES[0]);
   const m = EDITION_MATRICES[suite];
+  const live = prices?.[suite];
+  const rows = m.rows.map((row) => (live && /price per seat/i.test(row[0]) ? ([row[0], live[0], live[1], live[2]] as const) : row));
 
   return (
     <div>
@@ -29,7 +32,7 @@ export function EditionTabs() {
             </tr>
           </thead>
           <tbody>
-            {m.rows.map(([label, a, b, c]) => (
+            {rows.map(([label, a, b, c]) => (
               <tr key={label}>
                 <td style={{ fontWeight: 600 }}>{label}</td>
                 {[a, b, c].map((v, i) => (
