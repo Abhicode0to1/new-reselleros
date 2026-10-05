@@ -110,3 +110,21 @@ describe("AI Help prompt and answer, R-162 additions", () => {
     expect(bugReportText(d, { pagePath: "/q", reporterName: "P" })).not.toContain("What the app recorded");
   });
 });
+
+describe("AI Help knows what the page is for (5 Oct 2026)", async () => {
+  const { pagePurpose } = await import("./page-purpose");
+  it("uses the long note for screens a tooltip cannot explain", () => {
+    expect(pagePurpose("/accounting/google-bill-check")).toMatch(/LEAKAGE/);
+    expect(pagePurpose("/accounting/google-bill-check")).toMatch(/^Buy › COGS Bills › Google bill check/);
+  });
+  it("falls back to the nav label and hint, and to the closest parent for detail pages", () => {
+    expect(pagePurpose("/accounting/payment-runs")).toMatch(/Payment Runs/);
+    expect(pagePurpose("/quotes/Q-123")).toMatch(/Quotes/i);
+    expect(pagePurpose(null)).toBeNull();
+  });
+  it("tells the model to trust it, and has a check_failed mode that drafts without asking", () => {
+    const p = helpSystemPrompt({ pagePath: "/x", userName: null, role: null, mode: "check_failed", pagePurpose: "Test purpose" });
+    expect(p).toContain("WHAT THIS PAGE IS FOR (trust this over guessing from the URL or the buttons): Test purpose");
+    expect(p).toMatch(/MODE check_failed[\s\S]*do not ask first/);
+  });
+});
