@@ -171,6 +171,9 @@ export function DomainLanding() {
       cycle: "yearly",
       sku: `domain:${tld.replace(/^\./, "")}`,
       domain: primary.domain,
+      years: 1,
+      yearPrices: primary.prices, // R-156: 2/3/5-year terms, when the registry prices them
+      bundleFree,
     });
     if (hostingOn) {
       cart.add({

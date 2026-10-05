@@ -270,7 +270,7 @@ export default function CheckoutPage() {
           domain: hasHosting ? domain.trim() : undefined,
           lines: cart.lines.map((l) => {
             const i = hostingLines.findIndex((h) => h.key === l.key);
-            return { sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain, ...(i >= 0 ? { hostingDomain: typedFor(l.key, i).trim() || undefined } : {}) };
+            return { sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain, ...(l.years && l.years > 1 ? { years: l.years } : {}), ...(i >= 0 ? { hostingDomain: typedFor(l.key, i).trim() || undefined } : {}) };
           }),
           coupon: cart.coupon.trim() || undefined,
           address: hasDomain

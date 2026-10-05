@@ -495,3 +495,50 @@ describe("a quote is dated by the IST day (R-026)", () => {
     }
   });
 });
+
+/* R-156 (5 Oct 2026): a domain bought for several years. The term's price is the registry's
+   own N-year total, re-read at checkout; a term it does not price is refused, never 1-year × N;
+   yearly hosting still makes only the first year free. */
+describe("domain terms — 1/2/3/5 years", () => {
+  const multi = () => lookupDomains.mockResolvedValue({
+    ok: true, base: "acme", source: "engine",
+    domains: [{ domain: "acme.in", available: true, price: 749, currency: "INR", years: 1, priceKnown: true, prices: { "1": 749, "3": 2100 } }],
+  });
+
+  it("a 3-year line is charged the registry's 3-year total and carries years = 3", async () => {
+    multi();
+    const res = await POST(req({ address, lines: [{ sku: "domain:in", domain: "acme.in", qty: 1, years: 3 }] }));
+    expect(res.status).toBe(200);
+    const [line] = quote()!.line_items as { name: string; rate: number; years?: number }[];
+    expect(line).toEqual(expect.objectContaining({ name: "Domain acme.in — registration, 3 years", rate: 2100, years: 3 }));
+    expect(quote()!.amount).toBe(Math.round(2100 * 1.18));
+  });
+
+  it("a term the registry did not price is refused — nothing charged, no 749 × 5", async () => {
+    multi();
+    const res = await POST(req({ address, lines: [{ sku: "domain:in", domain: "acme.in", qty: 1, years: 5 }] }));
+    expect(res.status).toBe(400);
+    expect(String((await res.json()).error)).toContain("5-year price couldn't be confirmed");
+    expect(quote()).toBeUndefined();
+  });
+
+  it("with yearly hosting only the first year is free: 3 years pays 2100 − 749", async () => {
+    multi();
+    const res = await POST(req({
+      address,
+      lines: [{ sku: "domain:in", domain: "acme.in", qty: 1, years: 3 }, { sku: "hosting:starter", cycle: "yearly", qty: 1 }],
+    }));
+    expect(res.status).toBe(200);
+    const items = quote()!.line_items as { rate: number; domain?: string; years?: number }[];
+    const d = items.find((i) => i.domain);
+    expect(d?.rate).toBe(2100 - 749);
+    expect(d?.years).toBe(3);
+  });
+
+  it("no years sent → one year, as before", async () => {
+    multi();
+    await POST(req({ address, lines: [{ sku: "domain:in", domain: "acme.in", qty: 1 }] }));
+    const [line] = quote()!.line_items as { rate: number; years?: number }[];
+    expect(line).toEqual(expect.objectContaining({ rate: 749, years: 1 }));
+  });
+});

@@ -40,6 +40,23 @@ export interface CartLine {
    * registered, and a TLD alone ("Domain .in") told nobody which one was paid for.
    */
   domain?: string;
+  /**
+   * Domain lines only (R-156): the registration term picked, 1–10 (absent → 1), the total
+   * price of each offered term as the search showed it, and whether the line was added as
+   * the ₹0 domain bundled with yearly hosting (first year free, later years charged).
+   * Display only — the checkout re-prices the term from the registry.
+   */
+  years?: number;
+  yearPrices?: Record<string, number>;
+  bundleFree?: boolean;
+}
+
+/** A domain line's price for a term: the term's total, less the free first year when bundled. */
+export function domainTermPrice(yearPrices: Record<string, number> | undefined, years: number, bundleFree?: boolean): number | null {
+  const total = yearPrices?.[String(years)];
+  if (total === undefined) return null;
+  if (!bundleFree) return total;
+  return Math.max(0, total - (yearPrices?.["1"] ?? 0));
 }
 
 /** The two launch coupons from the handoff. Percent off the gross, before GST. */

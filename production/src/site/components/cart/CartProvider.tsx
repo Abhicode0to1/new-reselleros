@@ -14,7 +14,7 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { cartTotals, isSingleUnit, type CartLine, type CartTotals } from "@/site/lib/money";
+import { cartTotals, domainTermPrice, isSingleUnit, type CartLine, type CartTotals } from "@/site/lib/money";
 import { SEVERAL_HOSTING_PLANS_READY } from "@/lib/checkout/hosting-limit";
 
 const STORAGE_KEY = "anutech.cart.v1";
@@ -28,6 +28,8 @@ interface CartApi {
   /** Adds (or bumps qty of an identical line) and opens the drawer. */
   add: (line: Omit<CartLine, "key" | "qty"> & { qty?: number }) => void;
   setQty: (key: string, delta: number) => void;
+  /** Domain lines (R-156): pick the registration term; the price follows the search's totals. */
+  setYears: (key: string, years: number) => void;
   remove: (key: string) => void;
   clear: () => void;
   drawerOpen: boolean;
@@ -68,6 +70,9 @@ function load(): CartLine[] {
            dropped on load, so every line reached checkout unpriced and was refused. */
         sku: typeof l.sku === "string" ? l.sku : undefined,
         domain: typeof l.domain === "string" ? l.domain : undefined,
+        years: Number.isInteger(Number(l.years)) && Number(l.years) >= 1 && Number(l.years) <= 10 ? Number(l.years) : undefined,
+        yearPrices: l.yearPrices && typeof l.yearPrices === "object" ? (l.yearPrices as Record<string, number>) : undefined,
+        bundleFree: l.bundleFree === true ? true : undefined,
       }))
       // A cart saved before single-unit lines existed can hold "5 ×" a trial.
       .map((l) => (isSingleUnit(l) ? { ...l, qty: 1 } : l))
@@ -128,6 +133,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const setYears = useCallback((key: string, years: number) => {
+    setLines((prev) => {
+      const next = prev.map((l) => {
+        if (l.key !== key) return l;
+        const price = domainTermPrice(l.yearPrices, years, l.bundleFree);
+        if (price === null) return l; // a term the search did not price is not offered
+        // "Registration, 1 year" / "Domain registration · 1 year" → the picked term.
+        const term = `${years} year${years === 1 ? "" : "s"}`;
+        return { ...l, years, unitPrice: price, detail: l.detail.replace(/(registration\W+)\d+ years?/i, `$1${term}`) };
+      });
+      save(next);
+      return next;
+    });
+  }, []);
+
   const remove = useCallback((key: string) => {
     setLines((prev) => {
       const next = prev.filter((l) => l.key !== key);
@@ -155,13 +175,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setCoupon,
       add,
       setQty,
+      setYears,
       remove,
       clear,
       drawerOpen,
       closeDrawer: () => setDrawerOpen(false),
       justAdded,
     }),
-    [lines, totals, coupon, add, setQty, remove, clear, drawerOpen, justAdded],
+    [lines, totals, coupon, add, setQty, setYears, remove, clear, drawerOpen, justAdded],
   );
 
   return (

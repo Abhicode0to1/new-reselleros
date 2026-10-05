@@ -10,6 +10,7 @@ import Link from "@/site/components/ui/SiteLink";
 import { useRouter } from "next/navigation";
 import { useCart } from "./CartProvider";
 import { rupee, cycleLabel, isSingleUnit, isTrialLine, singleUnitNote } from "@/site/lib/money";
+import { DomainYears } from "@/site/components/cart/DomainYears";
 import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
 
 export function CartDrawer() {
@@ -66,9 +67,10 @@ export function CartDrawer() {
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{rupee(l.unitPrice * l.qty)}</div>
               </div>
               <div className="meta" style={{ margin: "3px 0 8px" }}>{l.detail}</div>
+              <DomainYears line={l} compact />
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontSize: 13, color: l.cycle === "monthly" ? "var(--primary)" : "var(--text-muted)" }}>
-                  {isTrialLine(l) ? "Free for 15 days" : cycleLabel(l.cycle)}
+                  {isTrialLine(l) ? "Free for 15 days" : (l.years ?? 1) > 1 ? `Renews after ${l.years} years` : cycleLabel(l.cycle)}
                 </span>
                 <span style={{ flex: 1 }} />
                 {/* Locked at 1 for a single-unit line, with the reason beside it (see cart page). */}

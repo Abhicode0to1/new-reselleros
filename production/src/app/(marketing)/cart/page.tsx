@@ -10,6 +10,7 @@ import Link from "@/site/components/ui/SiteLink";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, cycleLabel, COUPONS, isSingleUnit, isTrialLine, singleUnitNote } from "@/site/lib/money";
+import { DomainYears } from "@/site/components/cart/DomainYears";
 import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
 
 export default function CartPage() {
@@ -44,9 +45,14 @@ export default function CartPage() {
               <div style={{ flex: "1 1 240px" }}>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{l.label}</div>
                 <div className="meta" style={{ margin: "2px 0" }}>{l.detail}</div>
-                {!isTrialLine(l) && <div className="meta">{l.qty} × {rupee(l.unitPrice)} per {l.unit}</div>}
+                {!isTrialLine(l) && (
+                  (l.years ?? 1) > 1
+                    ? <div className="meta">{rupee(l.unitPrice)} for {l.years} years</div>
+                    : <div className="meta">{l.qty} × {rupee(l.unitPrice)} per {l.unit}</div>
+                )}
+                <DomainYears line={l} />
                 <div style={{ fontSize: 13, marginTop: 2, color: l.cycle === "monthly" ? "var(--primary)" : "var(--text-muted)" }}>
-                  {isTrialLine(l) ? `Free for 15 days · one trial per customer` : cycleLabel(l.cycle)}
+                  {isTrialLine(l) ? `Free for 15 days · one trial per customer` : (l.years ?? 1) > 1 ? `Renews after ${l.years} years, then yearly` : cycleLabel(l.cycle)}
                 </div>
               </div>
               {/* Every line shows the quantity control; a single-unit line shows it LOCKED

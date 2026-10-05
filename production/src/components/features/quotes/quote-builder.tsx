@@ -29,6 +29,7 @@ import { MarginPill, computeMargin } from "@/components/features/margin-pill";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { AddLineItemDialog } from "@/components/features/quotes/add-line-item-dialog";
 import { BulkDomainsDialog } from "@/components/features/quotes/bulk-domains-dialog";
+import { domainLineYears, isDomainPurchaseLine } from "@/lib/provisioning/products";
 import { ViewDomainsDialog } from "@/components/features/quotes/view-domains-dialog";
 import { matchLeadToCustomer, matchNote } from "@/lib/quotes/match-customer";
 import { SUPPORT_TIERS, findSupportSku, isSupportSkuId } from "@/lib/support/tiers";
@@ -62,6 +63,11 @@ import {
 import { slabPricing, nextSlabUpsell } from "@/lib/quotes/volume-tiers";
 import { SolutionPackagePicker } from "@/components/features/quotes/solution-package-picker";
 import { SupportPlanPicker } from "@/components/features/quotes/support-plan-picker";
+
+/** R-156: show the term picker on a domain REGISTRATION line — by its name too, so it is there
+ *  before the domain is typed (isDomainPurchaseLine needs the name filled in). */
+const isRegistrationLine = (l: QuoteLineItem) =>
+  !l.bulk && (isDomainPurchaseLine(l) || /\b(domain|registration)\b/i.test(l.name ?? ""));
 
 // Quote IDs are allocated at SAVE time via the central document-numbering RPC
 // (see migration 0004_document_series.sql) — this guarantees sequential per-tenant
@@ -838,6 +844,10 @@ export function QuoteBuilder() {
   };
   const updateDomain = (id: string, d: string) => {
     setLineItems((s) => s.map((l) => (l.id === id ? { ...l, domain: d || null } : l)));
+  };
+  /** R-156: a domain registration line's term. The register cron registers for exactly this. */
+  const updateYears = (id: string, years: number) => {
+    setLineItems((s) => s.map((l) => (l.id === id ? { ...l, years: years > 1 ? years : undefined } : l)));
   };
   /** What the customer may change on the public page. See LineAdjustControls. */
   const updateAdjustable = (id: string, patch: Partial<QuoteLineItem>) => {
@@ -1770,6 +1780,19 @@ export function QuoteBuilder() {
                         />
                       </label>
                     )}
+                    {isRegistrationLine(line) && (
+                      <label className="block col-span-2">
+                        <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Register for</span>
+                        <select
+                          value={domainLineYears(line)}
+                          onChange={(e) => updateYears(line.id, Number(e.target.value))}
+                          className="mt-0.5 w-full px-2 py-1.5 text-sm border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-amber focus:border-amber"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((y) => <option key={y} value={y}>{y} year{y === 1 ? "" : "s"}</option>)}
+                        </select>
+                        {domainLineYears(line) > 1 && <span className="text-2xs text-ink-3">Rate = the price for all {domainLineYears(line)} years</span>}
+                      </label>
+                    )}
                     </div>
                   <div className="text-2xs text-ink-3 inline-flex items-center gap-1 flex-wrap">
                     <span>Cost {isUsdBill ? "$" : "₹"}</span>
@@ -1923,6 +1946,20 @@ export function QuoteBuilder() {
                               title="Domain this subscription is set up on — optional"
                               className="text-2xs px-1.5 py-0.5 w-36 border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
                             />
+                          </div>
+                        )}
+                        {isRegistrationLine(line) && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Register for</span>
+                            <select
+                              aria-label={`Registration years for ${line.name}`}
+                              value={domainLineYears(line)}
+                              onChange={(e) => updateYears(line.id, Number(e.target.value))}
+                              title={domainLineYears(line) > 1 ? `Rate = the price for all ${domainLineYears(line)} years` : "Registration term"}
+                              className="text-2xs px-1.5 py-0.5 border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
+                            >
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((y) => <option key={y} value={y}>{y} yr{y === 1 ? "" : "s"}</option>)}
+                            </select>
                           </div>
                         )}
                       </div>

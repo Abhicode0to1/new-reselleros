@@ -584,10 +584,15 @@ export function QuotePDF(props: QuotePDFProps) {
                 <View key={line.id} style={s.tr} wrap={false}>
                   <View style={s.tdDesc}>
                     <Text style={s.lineName}>{pdfText(line.name)}</Text>
+                    {/* R-156: a multi-year domain line's rate is the whole term, not a year. */}
+                    {(line.years ?? 1) > 1 ? (
+                      <Text style={s.lineMeta}>Registration for {line.years} years, paid now · HSN 998313</Text>
+                    ) : (
                     <Text style={s.lineMeta}>
                       Per seat{perInvoice ? "" : " per year"} · HSN 998313
                       {line.commitment && ` · ${scheduleLabel(line.commitment, effectiveCycle)}`}
                     </Text>
+                    )}
                     {lineDiscountPct > 0 && (
                       <Text style={s.lineMeta}>
                         Discount: {lineDiscountPct}%

@@ -30,6 +30,31 @@ export interface LiveDomain {
   years: number;
   /** False when availability came back but the price did not — never sell such a row. */
   priceKnown: boolean;
+  /**
+   * R-156: TOTAL registration price (₹, before GST) per offered term, keyed "1", "2", "3",
+   * "5" — only the terms the registry actually prices. Absent or {"1"} only → the domain is
+   * sold for one year. Never extrapolated from the 1-year price.
+   */
+  prices?: Record<string, number>;
+}
+
+/** The terms a customer can pick (R-156). Ten is the registry's ceiling; these are the common ones. */
+export const DOMAIN_TERMS: readonly number[] = [1, 2, 3, 5];
+
+/**
+ * Keep only offered terms with a positive whole-rupee total; "1" always mirrors the 1-year
+ * price the row is sold at, so the two can never disagree. Exported for tests.
+ */
+export function cleanTermPrices(raw: unknown, oneYear: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (oneYear > 0) out["1"] = Math.round(oneYear);
+  if (!raw || typeof raw !== "object") return out;
+  for (const t of DOMAIN_TERMS) {
+    if (t === 1) continue;
+    const v = Number((raw as Record<string, unknown>)[String(t)]);
+    if (Number.isFinite(v) && v > 0) out[String(t)] = Math.round(v);
+  }
+  return out;
 }
 
 export type LiveLookup =
@@ -59,7 +84,8 @@ export async function lookupDomains(name: string, tlds: readonly string[]): Prom
       .map((tld): LiveDomain | null => {
         const a = byDomain.get(`${base}.${tld}`);
         if (!a) return null;
-        const register = priceByTld.get(tld)?.register ?? null;
+        const p = priceByTld.get(tld);
+        const register = p?.register ?? null;
         return {
           domain: a.domain,
           available: a.available,
@@ -67,6 +93,7 @@ export async function lookupDomains(name: string, tlds: readonly string[]): Prom
           currency: "INR",
           years: 1,
           priceKnown: a.available && register !== null,
+          prices: register !== null ? cleanTermPrices(p?.registerTotals, register) : {},
         };
       })
       .filter((d): d is LiveDomain => d !== null);
@@ -80,7 +107,13 @@ export async function lookupDomains(name: string, tlds: readonly string[]): Prom
     const res = await fetch(url, { signal: AbortSignal.timeout(12_000), cache: "no-store" });
     if (!res.ok) return { ok: false };
     const body = (await res.json()) as { base?: string; domains?: LiveDomain[] };
-    return { ok: true, base: body.base ?? base, domains: Array.isArray(body.domains) ? body.domains : [], source: "engine" };
+    /* The engine answers per row with its own fields; `prices` is passed through only when
+       it is a clean term → total map (an engine without R-156 sends none → 1 year only). */
+    const domains = (Array.isArray(body.domains) ? body.domains : []).map((d) => ({
+      ...d,
+      prices: d.priceKnown && d.price > 0 ? cleanTermPrices(d.prices, d.price) : {},
+    }));
+    return { ok: true, base: body.base ?? base, domains, source: "engine" };
   } catch (err) {
     console.error("[domains/live-lookup] upstream unreachable:", err);
     return { ok: false };
