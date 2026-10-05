@@ -358,6 +358,7 @@ paid hosting poore test ho sakein. Live site par inme se kuch nahi chalta.
 | ResellerOS `.env.local` | `HOSTING_TRIAL_LIVE=1`, `HOSTING_PROVISIONING_LIVE=1` | confirm/paid hosting DMS se account banwata hai |
 | ResellerOS `.env.local` | `ALLOW_TEST_PAYMENT_PROVISIONING=1` | Razorpay TEST payment par bhi hosting (domain kabhi nahi); production build me band |
 | ResellerOS `.env.local` | `ALLOW_REPEAT_TRIALS_LOCAL=1` | ek-trial-per-customer check band; production build me band |
+| ResellerOS `.env.local` | `NEXT_PUBLIC_MULTI_YEAR_DOMAINS_LOCAL=1` | cart me domain ke saal (1/2/3/5/10) chunne ka option; production build me band |
 | ResellerOS `.env.local` | `NO_OWNER_PAYMENT_ALERT_LOCAL=1` | test payment par owner ko "payment received" email nahi; live server par hamesha jaata hai |
 | DMS `.env.docker` | `DIRECTADMIN_*` = server1.anutech.in, `ENGINE_HOSTING_PROVISION_LIVE=1` | har test account **asli** server1 par banta hai |
 | DMS `.env.docker` | `ENGINE_ALLOW_TEST_PAYMENT_PROVISION=1` | test payment par DMS bhi account banata hai (sirf jab ResellerOS isi machine par ho) |

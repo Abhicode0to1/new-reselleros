@@ -56,6 +56,7 @@ import { startHostingTrial } from "@/lib/hosting/start-trial";
 import { hostingLimitProblem } from "./hosting-limit";
 import { hostingDomain, planDomains, BUY_A_DOMAIN_HREF } from "./hosting-domain";
 import { hostingRate } from "./hosting-prices";
+import { cleanDomainYears, priceDomainYears, yearsLabel } from "./domain-years";
 import { buyPageTenantId, buyPageTenantIdOrEmpty, BuyPageTenantMissingError, simulatedPaymentAllowed } from "./live-guards";
 import { issueInvoiceForOnlinePayment } from "./online-invoice.server";
 import { resolveStateCode, stateCodeFromName } from "@/lib/gst/gstin-state";
@@ -82,6 +83,8 @@ const lineSchema = z.object({
    * Absent on the first plan, the top-level `domain` is used, as before.
    */
   hostingDomain: z.string().max(253).optional(),
+  /** Domain lines only: years to register for (lib/checkout/domain-years.ts). Absent = 1. */
+  years: z.coerce.number().int().min(1).max(10).optional(),
 });
 const cartSchema = z.object({
   fullName: z.string().min(2).max(120),
@@ -136,6 +139,8 @@ interface QuoteLine {
    */
   hostingDomain?: string;
   months?: 1 | 12;
+  /** Domain lines only, when more than 1: the years paid for (lib/checkout/domain-years.ts). */
+  years?: number;
   /**
    * Hosting lines only: how the plan renews. `record_payment` creates a subscription ONLY
    * for a line carrying this, and the renewals cron works from that subscription. Missing
@@ -197,7 +202,8 @@ function repriceLine(sku: string | undefined, cycle: string | undefined, qty: nu
 }
 
 type DomainPricing =
-  | { ok: true; line: QuoteLine }
+  /** `perYear`: what one of the paid years costs, so the hosting bundle can make only the first free. */
+  | { ok: true; line: QuoteLine; perYear: number }
   | { ok: false; reason: string };
 
 /**
@@ -206,10 +212,10 @@ type DomainPricing =
  * available with a known price at this moment.
  */
 async function priceDomainLines(
-  lines: { sku?: string; label?: string; qty: number; domain?: string }[],
+  lines: { sku?: string; label?: string; qty: number; domain?: string; years?: number }[],
 ): Promise<Map<number, DomainPricing>> {
   const out = new Map<number, DomainPricing>();
-  const wanted = new Map<string, { idx: number; domain: string; tld: string }[]>();
+  const wanted = new Map<string, { idx: number; domain: string; tld: string; years: number }[]>();
 
   lines.forEach((l, idx) => {
     const m = /^domain:(.+)$/.exec((l.sku ?? "").toLowerCase());
@@ -229,7 +235,7 @@ async function priceDomainLines(
       return;
     }
     const list = wanted.get(parts.name) ?? [];
-    list.push({ idx, domain: `${parts.name}.${parts.tld}`, tld: parts.tld });
+    list.push({ idx, domain: `${parts.name}.${parts.tld}`, tld: parts.tld, years: cleanDomainYears(l.years ?? 1) });
     wanted.set(parts.name, list);
   });
 
@@ -249,16 +255,23 @@ async function priceDomainLines(
         out.set(e.idx, { ok: false, reason: `${e.domain} (its price couldn't be confirmed)` });
         continue;
       }
+      const priced = priceDomainYears(hit, e.years);
+      if (!priced.ok) {
+        out.set(e.idx, { ok: false, reason: priced.reason });
+        continue;
+      }
       out.set(e.idx, {
         ok: true,
+        perYear: priced.perYear,
         line: {
           id: newId(),
-          name: `Domain ${e.domain} — registration, 1 year`,
+          name: `Domain ${e.domain} — registration, ${yearsLabel(priced.years)}`,
           qty: 1,
           // Whole rupees, like every other line (CLAUDE.md §13).
-          rate: Math.round(hit.price),
+          rate: priced.total,
           cost: 0,
           domain: e.domain,
+          ...(priced.years > 1 ? { years: priced.years } : {}),
         },
       });
     }
@@ -396,6 +409,7 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
     let hasYearlyHosting = false;
     let hostingTier: string | null = null;
     const bundleEligible: QuoteLine[] = []; // domain + mailbox lines that go ₹0 with a yearly plan
+    const domainPerYear = new Map<QuoteLine, number>(); // a multi-year domain: only its first year is bundled
     const domainPricing = await priceDomainLines(lines);
     const domainNames: string[] = [];
     /* Each hosting line with what was typed for it, in cart order (one domain per plan). */
@@ -406,6 +420,7 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
         if (!dp.ok) { unpriced.push(dp.reason); continue; }
         items.push(dp.line);
         bundleEligible.push(dp.line);
+        domainPerYear.set(dp.line, dp.perYear);
         if (dp.line.domain) domainNames.push(dp.line.domain);
         continue;
       }
@@ -422,7 +437,11 @@ export async function runCartCheckout(request: NextRequest, body: unknown, chann
     // only when a YEARLY hosting line rides along. Otherwise they pay full reg —
     // the client's ₹0 is never trusted. A bare domain, or a monthly plan, is charged.
     if (hasYearlyHosting) {
-      for (const line of bundleEligible) line.rate = 0;
+      for (const line of bundleEligible) {
+        // A domain bought for several years: the bundle covers its first year, the rest is charged.
+        const years = line.years ?? 1;
+        line.rate = years > 1 ? Math.max(0, line.rate - Math.round(domainPerYear.get(line) ?? 0)) : 0;
+      }
     }
     if (unpriced.length) {
       return NextResponse.json(

@@ -476,3 +476,59 @@ describe("a quote is dated by the IST day (R-026)", () => {
     }
   });
 });
+
+describe("a domain for several years (lib/checkout/domain-years.ts — built, switched off)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const threeYearPrice = (perYear?: number) =>
+    lookupDomains.mockResolvedValueOnce({
+      ok: true, base: "acme", source: "engine",
+      domains: [{ domain: "acme.in", available: true, price: 749, currency: "INR", years: 1, priceKnown: true,
+        ...(perYear ? { pricePerYearByTenure: { 3: perYear } } : {}) }],
+    });
+
+  it("while switched off, 3 years is refused with the way out — nothing saved or charged", async () => {
+    threeYearPrice(699);
+    const res = await POST(req({ address, lines: [{ sku: "domain:in", domain: "acme.in", qty: 1, years: 3 }] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/registered for 1 year at a time for now — set it to 1 year/);
+    expect(quote()).toBeUndefined();
+  });
+
+  it("switched on: 3 years at the 3-year per-year price × 3, the line says 3 years and carries them", async () => {
+    vi.stubEnv("NEXT_PUBLIC_MULTI_YEAR_DOMAINS_LOCAL", "1");
+    threeYearPrice(699);
+    const res = await POST(req({ address, lines: [{ sku: "domain:in", domain: "acme.in", qty: 1, years: 3 }] }));
+    expect(res.status).toBe(200);
+    const items = quote()!.line_items as { name: string; rate: number; years?: number }[];
+    expect(items).toEqual([expect.objectContaining({ name: "Domain acme.in — registration, 3 years", rate: 2097, years: 3 })]);
+  });
+
+  it("switched on but no price for that tenure → refused, never the 1-year price × 3", async () => {
+    vi.stubEnv("NEXT_PUBLIC_MULTI_YEAR_DOMAINS_LOCAL", "1");
+    threeYearPrice();
+    const res = await POST(req({ address, lines: [{ sku: "domain:in", domain: "acme.in", qty: 1, years: 3 }] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/its price for 3 years couldn't be confirmed — choose 1 year/);
+    expect(quote()).toBeUndefined();
+  });
+
+  it("with yearly hosting only the first year is free; the other two are charged", async () => {
+    vi.stubEnv("NEXT_PUBLIC_MULTI_YEAR_DOMAINS_LOCAL", "1");
+    threeYearPrice(699);
+    const res = await POST(req({
+      address,
+      lines: [{ sku: "domain:in", domain: "acme.in", qty: 1, years: 3 }, { sku: "hosting:starter", cycle: "yearly", qty: 1 }],
+    }));
+    expect(res.status).toBe(200);
+    const items = quote()!.line_items as { rate: number; domain?: string; hostingPlan?: string }[];
+    expect(items.find((i) => i.domain && !i.hostingPlan)?.rate).toBe(1398);
+  });
+
+  it("1 year is unchanged and carries no years field", async () => {
+    const res = await POST(req({ address, lines: [{ sku: "domain:in", domain: "acme.in", qty: 1, years: 1 }] }));
+    expect(res.status).toBe(200);
+    const [line] = quote()!.line_items as Record<string, unknown>[];
+    expect(line.years).toBeUndefined();
+    expect(line.rate).toBe(749);
+  });
+});

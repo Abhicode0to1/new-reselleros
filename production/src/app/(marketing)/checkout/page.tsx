@@ -13,7 +13,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
-import { rupee, cycleLabel } from "@/site/lib/money";
+import { rupee, cycleLabel, lineTotal } from "@/site/lib/money";
+import { yearsLabel } from "@/lib/checkout/domain-years";
 import { missingCheckoutDetails, missingDetailsMessage } from "@/site/lib/checkout-details";
 import { BUY_A_DOMAIN_HREF } from "@/lib/checkout/hosting-domain";
 import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
@@ -262,7 +263,7 @@ export default function CheckoutPage() {
           domain: hasHosting ? domain.trim() : undefined,
           lines: cart.lines.map((l) => {
             const i = hostingLines.findIndex((h) => h.key === l.key);
-            return { sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain, ...(i >= 0 ? { hostingDomain: typedFor(l.key, i).trim() || undefined } : {}) };
+            return { sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain, ...((l.years ?? 1) > 1 ? { years: l.years } : {}), ...(i >= 0 ? { hostingDomain: typedFor(l.key, i).trim() || undefined } : {}) };
           }),
           coupon: cart.coupon.trim() || undefined,
           address: hasDomain
@@ -648,9 +649,9 @@ export default function CheckoutPage() {
             <div key={l.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-hairline)" }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{l.label} × {l.qty}</div>
-                <div className="meta" style={{ fontSize: 12 }}>{cycleLabel(l.cycle)}</div>
+                <div className="meta" style={{ fontSize: 12 }}>{(l.years ?? 1) > 1 ? `Registered for ${yearsLabel(l.years ?? 1)}` : cycleLabel(l.cycle)}</div>
               </div>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{rupee(l.unitPrice * l.qty)}</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{rupee(lineTotal(l))}</span>
             </div>
           ))}
           <div style={{ paddingTop: 10 }}>

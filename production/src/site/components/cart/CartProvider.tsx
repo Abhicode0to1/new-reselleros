@@ -16,6 +16,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { usePathname } from "next/navigation";
 import { cartTotals, isSingleUnit, type CartLine, type CartTotals } from "@/site/lib/money";
 import { SEVERAL_HOSTING_PLANS_READY } from "@/lib/checkout/hosting-limit";
+import { cleanDomainYears, multiYearDomainsOn } from "@/lib/checkout/domain-years";
 
 const STORAGE_KEY = "anutech.cart.v1";
 const NO_DRAWER_ROUTES = ["/cart", "/checkout", "/done"];
@@ -28,6 +29,8 @@ interface CartApi {
   /** Adds (or bumps qty of an identical line) and opens the drawer. */
   add: (line: Omit<CartLine, "key" | "qty"> & { qty?: number }) => void;
   setQty: (key: string, delta: number) => void;
+  /** Domain lines only: how many years to register for (lib/checkout/domain-years.ts). */
+  setYears: (key: string, years: number) => void;
   remove: (key: string) => void;
   clear: () => void;
   drawerOpen: boolean;
@@ -68,6 +71,8 @@ function load(): CartLine[] {
            dropped on load, so every line reached checkout unpriced and was refused. */
         sku: typeof l.sku === "string" ? l.sku : undefined,
         domain: typeof l.domain === "string" ? l.domain : undefined,
+        // Kept only while multi-year domains are on; otherwise a stored choice goes back to 1 year.
+        ...(multiYearDomainsOn() && cleanDomainYears(l.years) > 1 ? { years: cleanDomainYears(l.years) } : {}),
       }))
       // A cart saved before single-unit lines existed can hold "5 ×" a trial.
       .map((l) => (isSingleUnit(l) ? { ...l, qty: 1 } : l))
@@ -128,6 +133,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const setYears = useCallback((key: string, years: number) => {
+    setLines((prev) => {
+      const y = cleanDomainYears(years);
+      const next = prev.map((l) => {
+        if (l.key !== key || !(l.sku ?? "").toLowerCase().startsWith("domain:")) return l;
+        const { years: _old, ...rest } = l;
+        void _old;
+        return y > 1 ? { ...rest, years: y } : rest;
+      });
+      save(next);
+      return next;
+    });
+  }, []);
+
   const remove = useCallback((key: string) => {
     setLines((prev) => {
       const next = prev.filter((l) => l.key !== key);
@@ -155,13 +174,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setCoupon,
       add,
       setQty,
+      setYears,
       remove,
       clear,
       drawerOpen,
       closeDrawer: () => setDrawerOpen(false),
       justAdded,
     }),
-    [lines, totals, coupon, add, setQty, remove, clear, drawerOpen, justAdded],
+    [lines, totals, coupon, add, setQty, setYears, remove, clear, drawerOpen, justAdded],
   );
 
   return (

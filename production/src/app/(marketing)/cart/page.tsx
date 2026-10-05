@@ -9,7 +9,8 @@
 import Link from "@/site/components/ui/SiteLink";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
-import { rupee, cycleLabel, COUPONS, isSingleUnit, isTrialLine, singleUnitNote } from "@/site/lib/money";
+import { rupee, cycleLabel, COUPONS, isSingleUnit, isTrialLine, singleUnitNote, lineTotal } from "@/site/lib/money";
+import DomainYearsPicker, { domainCycleLabel, domainYearsNote } from "@/site/components/cart/DomainYearsPicker";
 import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
 
 export default function CartPage() {
@@ -46,8 +47,10 @@ export default function CartPage() {
                 <div className="meta" style={{ margin: "2px 0" }}>{l.detail}</div>
                 {!isTrialLine(l) && <div className="meta">{l.qty} × {rupee(l.unitPrice)} per {l.unit}</div>}
                 <div style={{ fontSize: 13, marginTop: 2, color: l.cycle === "monthly" ? "var(--primary)" : "var(--text-muted)" }}>
-                  {isTrialLine(l) ? `Free for 15 days · one trial per customer` : cycleLabel(l.cycle)}
+                  {isTrialLine(l) ? `Free for 15 days · one trial per customer` : domainCycleLabel(l, cycleLabel(l.cycle))}
                 </div>
+                {domainYearsNote(l) && <div className="meta" style={{ fontSize: 13, marginTop: 2 }}>{domainYearsNote(l)}</div>}
+                <div style={{ marginTop: 6 }}><DomainYearsPicker line={l} /></div>
               </div>
               {/* Every line shows the quantity control; a single-unit line shows it LOCKED
                   at 1, with the reason underneath (a locked control with no reason is the
@@ -66,7 +69,7 @@ export default function CartPage() {
                 );
               })()}
               <div style={{ alignSelf: "center", fontSize: 17, fontWeight: 700, minWidth: 90, textAlign: "right" }}>
-                {rupee(l.unitPrice * l.qty)}
+                {rupee(lineTotal(l))}
               </div>
               <button
                 onClick={() => cart.remove(l.key)}
