@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
+import { ImageViewer } from "@/components/shared/image-viewer";
 
 /* Types live with the triage engine now — one definition, so the dialog cannot offer a
    value the engine and the DB check constraint do not know about. */
@@ -223,8 +224,6 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         onPaste={handlePaste}
-        // Escape over an open preview closes the preview, not the whole report.
-        onEscapeKeyDown={(e) => { if (preview) { e.preventDefault(); setPreview(null); } }}
         className="sm:max-w-[620px] p-0 max-h-[92vh] flex flex-col overflow-hidden shadow-2xl z-[99999]"
       >
         <DialogHeader className="p-6 pb-4 border-b border-hairline bg-paper/95 backdrop-blur-xs sticky top-0 z-10 flex-shrink-0">
@@ -401,19 +400,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
           </div>
         </form>
 
-        {preview && (
-          <div
-            role="dialog"
-            aria-label={`Screenshot preview: ${preview.name}`}
-            className="absolute inset-0 z-20 bg-ink/80 flex items-center justify-center p-4"
-            onClick={() => setPreview(null)}
-          >
-            <img src={preview.dataUrl} alt={preview.name} className="max-w-full max-h-full rounded-lg shadow-2xl bg-paper" />
-            <button type="button" aria-label="Close preview" className="absolute top-3 right-3 w-8 h-8 rounded-full bg-paper text-ink flex items-center justify-center" onClick={() => setPreview(null)}>
-              <Icon name="x" size={16} />
-            </button>
-          </div>
-        )}
+        <ImageViewer src={preview?.dataUrl ?? null} name={preview?.name} onClose={() => setPreview(null)} />
       </DialogContent>
     </Dialog>
   );
