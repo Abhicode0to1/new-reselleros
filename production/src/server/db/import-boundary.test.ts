@@ -5,10 +5,13 @@
  *  1. The generated Prisma client, @prisma/*, and the context setter are imported only
  *     inside src/server/db.
  *  2. Cross-tenant job access (src/server/db/jobs) is imported only by src/app/api/cron/**.
- *  3. `new PrismaClient` exists only in src/server/db/index.ts and jobs.ts.
+ *  3. `new PrismaClient` exists only in src/server/db/index.ts, jobs.ts and gateway.ts.
  *  4. The tenant context is written only in src/server/db/{context,index}.ts, and always
  *     transaction-local: set_config(…, true). A session-level SET would survive COMMIT and
  *     ride the pooled connection into the next request — another tenant's, possibly.
+ *  5. The gateway's logins (src/server/db/gateway, incl. the service-role equivalent) are
+ *     used only by the PostgREST-compatible gateway in src/server/postgrest.
+ *  6. createAdminClient() call sites can only go DOWN (each is a full-bypass key today).
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
@@ -45,9 +48,22 @@ describe("database import boundary", () => {
     expect(bad.map((f) => f.path)).toEqual([]);
   });
 
-  test("new PrismaClient appears only in src/server/db/index.ts and jobs.ts", () => {
+  test("new PrismaClient appears only in src/server/db/index.ts, jobs.ts and gateway.ts", () => {
     const where = FILES.filter((f) => !isTest(f.path) && /new\s+PrismaClient\s*\(/.test(f.code)).map((f) => f.path).sort();
-    expect(where).toEqual(["server/db/index.ts", "server/db/jobs.ts"]);
+    expect(where).toEqual(["server/db/gateway.ts", "server/db/index.ts", "server/db/jobs.ts"]);
+  });
+
+  test("the gateway's logins are used only by src/server/postgrest", () => {
+    const bad = FILES.filter((f) => !inDb(f.path) && !f.path.startsWith("server/postgrest/") && !isTest(f.path))
+      .filter((f) => /from\s+["'](@\/server\/db\/gateway|[./]+\/server\/db\/gateway)["']/.test(f.code));
+    expect(bad.map((f) => f.path)).toEqual([]);
+  });
+
+  test("createAdminClient() call sites only go down", () => {
+    // Measured 5 Oct 2026. Lower this number when you move one to withTenant; never raise it.
+    const BASELINE = 205;
+    const count = FILES.filter((f) => !isTest(f.path)).reduce((n, f) => n + (f.code.match(/createAdminClient\(\)/g)?.length ?? 0), 0);
+    expect(count).toBeLessThanOrEqual(BASELINE);
   });
 
   test("the tenant context is set only by src/server/db, and only transaction-locally", () => {

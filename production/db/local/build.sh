@@ -58,8 +58,8 @@ if [ -z "$moved" ]; then cloudsql_move; fi
 # (docs/STAGING.md: --user=resellersos_migration), so it owns what they created too.
 run db/local/10-cloudsql-ownership.sql
 
-"${PSQL[@]}" -d "$DB" -v runtime_pw="'localdev'" -v jobs_pw="'localdev'" -f - < db/ops/10-runtime-roles.sql > /dev/null
-echo "  · roles app_runtime / app_jobs"
+"${PSQL[@]}" -d "$DB" -v runtime_pw="'localdev'" -v jobs_pw="'localdev'" -v anon_pw="'localdev'" -v service_pw="'localdev'" -f - < db/ops/10-runtime-roles.sql > /dev/null
+echo "  · roles app_runtime / app_jobs / app_anon / app_service"
 
 if [ -n "${SKIP_PRISMA:-}" ]; then echo "built without Prisma migrations: $DB"; exit 0; fi
 

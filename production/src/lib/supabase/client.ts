@@ -10,6 +10,19 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "./database.types";
 
+/**
+ * NEXT_PUBLIC_DATA_GATEWAY=1: database requests (/rest/v1) go to this app's own
+ * /api/sb/rest/v1 (Prisma gateway, src/server/postgrest) instead of the VM's PostgREST. The
+ * session token travels exactly as before; auth and storage still go to the VM for now.
+ */
+function rewriteRest(input: RequestInfo | URL): RequestInfo | URL {
+  if (process.env.NEXT_PUBLIC_DATA_GATEWAY !== "1" || typeof window === "undefined") return input;
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/+$/, "") + "/rest/v1/";
+  const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (!href.startsWith(base)) return input;
+  return window.location.origin + "/api/sb/rest/v1/" + href.slice(base.length);
+}
+
 export function createClient() {
   return createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,7 +52,7 @@ export function createClient() {
       //      instead of showing up in monitoring.
       global: {
         fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-          fetch(input, { ...init, cache: "no-store" }),
+          fetch(rewriteRest(input), { ...init, cache: "no-store" }),
       },
     },
   );

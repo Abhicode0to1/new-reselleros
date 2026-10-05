@@ -145,7 +145,8 @@
       ],
       "excludedFiles": [
         "src/server/db/**",
-        "src/app/api/cron/**"
+        "src/app/api/cron/**",
+        "src/server/postgrest/**"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -181,6 +182,13 @@
                   "**/server/db/jobs"
                 ],
                 "message": "Cross-tenant job access is for src/app/api/cron/** only. Request code uses withTenant()."
+              },
+              {
+                "group": [
+                  "@/server/db/gateway",
+                  "**/server/db/gateway"
+                ],
+                "message": "The gateway's logins are for src/server/postgrest only. Use withTenant() from @/server/db."
               }
             ]
           }
@@ -218,6 +226,50 @@
                   "**/server/db/context"
                 ],
                 "message": "Internal to src/server/db: only withTenant() may set the tenant context."
+              },
+              {
+                "group": [
+                  "@/server/db/gateway",
+                  "**/server/db/gateway"
+                ],
+                "message": "The gateway's logins are for src/server/postgrest only. Use withTenant() from @/server/db."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/server/postgrest/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@prisma/client",
+                  "@prisma/client/*",
+                  "@prisma/adapter-pg"
+                ],
+                "message": "Use withIdentity() from @/server/db/gateway."
+              },
+              {
+                "group": [
+                  "@/server/db/generated",
+                  "@/server/db/generated/*",
+                  "**/server/db/generated/**"
+                ],
+                "message": "Internal to src/server/db."
+              },
+              {
+                "group": [
+                  "@/server/db/context",
+                  "**/server/db/context"
+                ],
+                "message": "Internal to src/server/db."
               }
             ]
           }

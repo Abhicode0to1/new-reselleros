@@ -18,6 +18,7 @@ import "@/lib/sentry";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "./database.types";
+import { gatewayEnabled, gatewayFetch } from "@/server/postgrest/fetch";
 
 /* Next 15: cookies() returns a Promise. createClient() stays SYNCHRONOUS (≈390 call sites
    use `const supabase = createClient()`), and the await moves into the cookie callbacks —
@@ -46,6 +47,11 @@ export function createClient() {
           }
         },
       },
+      // DATA_GATEWAY=1: /rest/v1 is answered in-process by the Prisma gateway (src/server/postgrest)
+      // instead of the VM's PostgREST. Auth and storage still go to the VM until they move.
+      ...(gatewayEnabled()
+        ? { global: { fetch: gatewayFetch(process.env.NEXT_PUBLIC_SUPABASE_URL!, { allowService: false }) } }
+        : {}),
     },
   );
 }
@@ -76,8 +82,10 @@ export function createAdminClient() {
       // or an out-of-date payment/subscription status on /api/v1). Admin
       // queries must always hit the DB — never cache them.
       global: {
-        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-          fetch(input, { ...init, cache: "no-store" }),
+        fetch: gatewayEnabled()
+          ? gatewayFetch(process.env.NEXT_PUBLIC_SUPABASE_URL!, { allowService: true })
+          : (input: RequestInfo | URL, init?: RequestInit) =>
+              fetch(input, { ...init, cache: "no-store" }),
       },
     },
   );
