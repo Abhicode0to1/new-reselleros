@@ -124,5 +124,10 @@ describe("making the missing customer + subscription from the bill", async () =>
   it("names a customer after the domain", () => {
     expect(nameFromDomain("freighttiger.com")).toBe("Freighttiger");
     expect(nameFromDomain("murli-terracotta.com")).toBe("Murli Terracotta");
+    expect(nameFromDomain("ai.tattvaspa.org")).toBe("Tattvaspa");      // subdomain skipped
+    expect(nameFromDomain("merrymen.co.in")).toBe("Merrymen");         // .co.in
+    expect(nameFromDomain("ipcapitalcorp.co.uk")).toBe("Ipcapitalcorp");
+    expect(nameFromDomain("samruddha.co.ke")).toBe("Samruddha");
+    expect(nameFromDomain("gcs.in.net")).toBe("Gcs");                  // a 2-letter label is never the company
   });
 });

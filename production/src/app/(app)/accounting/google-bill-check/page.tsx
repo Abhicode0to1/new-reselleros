@@ -120,6 +120,18 @@ export default function GoogleBillCheckPage() {
   const partnerGap = partner && partnerBill.trim() ? Math.round((Number(partnerBill.replace(/[₹,\s]/g, "")) - partner.expected) * 100) / 100 : null;
   const linesOff = bill && bill.subtotal !== null ? Math.round((bill.linesTotal - bill.subtotal) * 100) / 100 : 0;
 
+  const visibleRows = check ? check.rows.filter((r) => showOk || r.status !== "ok") : [];
+  const usersLabel = (n: number) => `${n} user${n === 1 ? "" : "s"}`;
+  // A subscription with no price yet has no margin to show — "−₹529" there would read as a loss.
+  const marginText = (r: CheckRow) => (r.status === "needs_setup" ? "—" : inr(r.margin));
+  const marginClass = (r: CheckRow) => (r.status === "needs_setup" ? "text-ink-3" : r.margin < 0 ? "text-rose" : "text-emerald");
+  const RowAction = ({ r }: { r: CheckRow }) => {
+    if (canAdd && r.status === "no_customer") return <div className="mt-2 md:mt-0"><Button size="sm" variant="outline" onClick={() => setAddRow(r)}>Add</Button></div>;
+    if (canAdd && r.status === "no_subscription") return <div className="mt-2 md:mt-0"><Button size="sm" variant="outline" onClick={() => setAddRow(r)}>Add subscription</Button></div>;
+    if (r.status === "needs_setup" && r.customerRef) return <div className="mt-2 md:mt-0"><Link href={`/customers/${r.customerRef}` as never} className="text-xs font-semibold text-primary hover:underline">Set price &amp; users →</Link></div>;
+    return null;
+  };
+
   async function addAllMissing() {
     if (!check || !me?.tenantId) return;
     const missing = check.rows.filter((r) => r.status === "no_customer");
@@ -263,7 +275,32 @@ export default function GoogleBillCheckPage() {
               <Button size="sm" variant="outline" icon="download" onClick={exportCsv}>Download CSV</Button>
             </div>
           </div>
-          <Card className="overflow-x-auto mb-6">
+          {/* Phone: one card per domain — the 7-column table was clipped at 375px (5 Oct 2026). */}
+          <ul className="md:hidden space-y-2 mb-6">
+            {visibleRows.map((r) => (
+              <li key={r.domain + r.customerId}>
+                <Card className="p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium text-ink truncate">{r.domain}</div>
+                      <div className="text-2xs text-ink-3 truncate">
+                        {r.customerRef ? <Link href={`/customers/${r.customerRef}` as never} className="hover:underline">{r.customerName}</Link> : "No customer yet"}
+                        {r.plans.length > 0 && ` · ${r.plans.join(" + ")} · ${usersLabel(r.seats)}`}
+                      </div>
+                    </div>
+                    <Badge size="sm" kind={STATUS[r.status].kind} className="shrink-0">{STATUS[r.status].label}</Badge>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+                    <div><div className="text-ink-3">Google</div><div className="tabular-nums font-medium">{inr(r.googleCost)}</div></div>
+                    <div><div className="text-ink-3">You bill</div><div className="tabular-nums font-medium">{r.ourMonthly ? inr(r.ourMonthly) : "—"}</div></div>
+                    <div><div className="text-ink-3">Margin</div><div className={`tabular-nums font-semibold ${marginClass(r)}`}>{marginText(r)}</div></div>
+                  </div>
+                  <RowAction r={r} />
+                </Card>
+              </li>
+            ))}
+          </ul>
+          <Card className="hidden md:block overflow-x-auto mb-6">
             <table className="w-full text-sm">
               <thead className="text-xs text-ink-3 text-left">
                 <tr className="border-b border-hairline">
@@ -272,22 +309,18 @@ export default function GoogleBillCheckPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
-                {check.rows.filter((r) => showOk || r.status !== "ok").map((r) => (
+                {visibleRows.map((r) => (
                   <tr key={r.domain + r.customerId}>
                     <td className="px-3 py-2"><div className="font-medium text-ink">{r.domain}</div><div className="text-2xs text-ink-3 font-mono">{r.customerId}</div></td>
                     <td className="px-3 py-2">
                       {r.customerRef ? <Link href={`/customers/${r.customerRef}` as never} className="text-ink hover:underline">{r.customerName}</Link> : <span className="text-ink-3">—</span>}
-                      {r.plans.length > 0 && <div className="text-2xs text-ink-3">{r.plans.join(" + ")} · {r.seats} seats</div>}
+                      {r.plans.length > 0 && <div className="text-2xs text-ink-3">{r.plans.join(" + ")} · {usersLabel(r.seats)}</div>}
                     </td>
                     <td className="px-3 py-2"><Badge size="sm" kind={STATUS[r.status].kind}>{STATUS[r.status].label}</Badge></td>
                     <td className="px-3 py-2 text-right tabular-nums">{inr(r.googleCost)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.ourMonthly ? inr(r.ourMonthly) : "—"}</td>
-                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${r.margin < 0 ? "text-rose" : "text-emerald"}`}>{inr(r.margin)}</td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
-                      {canAdd && r.status === "no_customer" && <Button size="sm" variant="outline" onClick={() => setAddRow(r)}>Add</Button>}
-                      {canAdd && r.status === "no_subscription" && <Button size="sm" variant="outline" onClick={() => setAddRow(r)}>Add subscription</Button>}
-                      {r.status === "needs_setup" && r.customerRef && <Link href={`/customers/${r.customerRef}` as never} className="text-xs font-semibold text-primary hover:underline">Set price</Link>}
-                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${marginClass(r)}`}>{marginText(r)}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap"><RowAction r={r} /></td>
                   </tr>
                 ))}
               </tbody>
