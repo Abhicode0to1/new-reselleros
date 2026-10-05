@@ -229,6 +229,18 @@ Any new customer-facing email or screen in DMS follows this; never a separate DM
 The DMS repo's working branch for Pawan is `website-pawan` too (renamed from `pawan-api-system` on
 3 Oct 2026; the old branch is deleted).
 
+**The invoice PDF names each line's website and shows a settled invoice as paid** (3 Oct 2026,
+`add72978`; display only, no stored data changes). `lib/pdf/invoice-display.ts`, used by
+`InvoicePDF` and `QuotePDF`:
+- `lineDomainNote`: a line carrying a `domain` prints "For <domain>" under its name (skipped
+  when the name/detail already shows it, or on a bulk line).
+- `invoicePaidInFull`: nothing left to pay AND (status `paid`, or the adjusted advances cover the
+  total) → the date box reads "Paid on <date>" and the footer "Paid in full on <date>." Anything
+  still owed keeps its due date (R-038).
+The on-screen tax-invoice preview (`components/features/quotes/tax-invoice-dialog.tsx`) is in the
+Billing & Subscriptions section (§13) and still shows the old "Due Date" and no domain line; the
+hand-off note for its owner is in `Todos.md`.
+
 Open items for the integration are tracked in `Todos.md`, not here.
 
 ---
@@ -405,10 +417,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **9,106 tests
-passing across 567 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
-with 0 errors** — measured 3 Oct 2026 on `website-pawan` at `133fd00e`.
-Earlier markers: 9,100/566 at `3b0301ad` the same day; 8,410/517 on 30 Sep after merging `manager-pardeep` (C-053); 8,242/504 the same day before that merge; 8,193/499 after `9ad95378` (trials send the
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **9,117 tests
+passing across 568 files** (plus 2 files / 10 tests skipped), typecheck clean, **lint exit 0
+with 0 errors** — measured 3 Oct 2026 on `website-pawan` at `add72978`.
+Earlier markers: 9,106/567 at `133fd00e` the same day; 9,100/566 at `3b0301ad` the same day; 8,410/517 on 30 Sep after merging `manager-pardeep` (C-053); 8,242/504 the same day before that merge; 8,193/499 after `9ad95378` (trials send the
 owner no email); 8,111/486 on 29 Sep after merging `abhishek-pre-merge` (`3bebf671`: R-012 renewal quote,
 R-018 dunning pay link); 8,049/480 the same day after the fourth
 `pardeep-sir` merge (`ddde2754`); 7,972/477 the same day after the Tailwind dev-server fix; 7,933/472 on 28 Sep
