@@ -1,0 +1,201 @@
+"use client";
+
+/**
+ * Google bill check (R-164, 5 Oct 2026). Paste Google's monthly Workspace invoice (the one Google
+ * sends Net2Secure for Anutech's domains) and see, domain by domain, who the customer is, what
+ * Google charged, what we bill, and where money leaks. Read-only: nothing is saved.
+ * The pure rules and their tests: lib/reconcile/google-bill.ts.
+ */
+import * as React from "react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Icon } from "@/components/ui/icon";
+import { createClient } from "@/lib/supabase/client";
+import { downloadCSV } from "@/lib/csv";
+import { parseGoogleBill, checkBill, expectedPartnerBill, type SubLite, type CustomerLite, type RowStatus } from "@/lib/reconcile/google-bill";
+
+const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const STATUS: Record<RowStatus, { label: string; kind: "danger" | "warning" | "success" | "info" }> = {
+  no_customer: { label: "No customer", kind: "danger" },
+  no_subscription: { label: "No subscription", kind: "danger" },
+  loss: { label: "Below cost", kind: "warning" },
+  ok: { label: "OK", kind: "success" },
+};
+
+function useBooks() {
+  return useQuery({
+    queryKey: ["google-bill-check", "books"],
+    queryFn: async () => {
+      const supabase = createClient();
+      const [subs, custs] = await Promise.all([
+        supabase.from("subscriptions").select("id, customer_id, customer_name, domain, vendor, status, seats, vendor_seats, mrr, plan").eq("vendor", "google").limit(5000),
+        supabase.from("customers").select("id, name, domain").not("domain", "is", null).limit(10000),
+      ]);
+      if (subs.error) throw new Error(subs.error.message);
+      if (custs.error) throw new Error(custs.error.message);
+      return { subs: (subs.data ?? []) as SubLite[], customers: (custs.data ?? []) as CustomerLite[] };
+    },
+    staleTime: 60_000,
+  });
+}
+
+export default function GoogleBillCheckPage() {
+  const books = useBooks();
+  const [text, setText] = React.useState("");
+  const [partnerBill, setPartnerBill] = React.useState("");
+  const [perSeatYear, setPerSeatYear] = React.useState("10");
+  const [showOk, setShowOk] = React.useState(false);
+
+  const bill = React.useMemo(() => (text.trim() ? parseGoogleBill(text) : null), [text]);
+  const check = React.useMemo(() => (bill && bill.lines.length && books.data ? checkBill(bill.lines, books.data.subs, books.data.customers) : null), [bill, books.data]);
+  const subtotal = bill?.subtotal ?? bill?.linesTotal ?? 0;
+  const partner = check ? expectedPartnerBill(subtotal, check.totals.seats, Number(perSeatYear) || 0) : null;
+  const partnerGap = partner && partnerBill.trim() ? Math.round((Number(partnerBill.replace(/[₹,\s]/g, "")) - partner.expected) * 100) / 100 : null;
+  const linesOff = bill && bill.subtotal !== null ? Math.round((bill.linesTotal - bill.subtotal) * 100) / 100 : 0;
+
+  function exportCsv() {
+    if (!check) return;
+    downloadCSV(`google-bill-check-${bill?.invoiceNo ?? "invoice"}.csv`,
+      ["Domain", "Google customer ID", "Customer", "Status", "Google cost (₹)", "We bill /month (₹)", "Margin (₹)", "Seats", "Plans"],
+      check.rows.map((r) => [r.domain, r.customerId, r.customerName ?? "", STATUS[r.status].label, r.googleCost, r.ourMonthly, r.margin, r.seats, r.plans.join(" + ")]));
+  }
+
+  return (
+    <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto">
+      <div className="mb-5">
+        <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Purchases</p>
+        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Google bill check</h1>
+        <p className="text-sm text-ink-3 mt-1 max-w-2xl">
+          Paste Google&apos;s monthly Workspace invoice. Every domain is matched to a customer, so you see what Google charged, what you bill, and where money leaks. Nothing is saved.
+        </p>
+      </div>
+
+      <Card className="p-4 mb-5 space-y-3">
+        <label htmlFor="gbc-text" className="text-sm font-semibold text-ink">Google invoice text</label>
+        <p className="text-xs text-ink-3">Open the PDF → <b>Ctrl + A</b> → <b>Ctrl + C</b> → paste here. All pages, including the domain list.</p>
+        <textarea id="gbc-text" value={text} onChange={(e) => setText(e.target.value)} rows={6}
+          placeholder={"Invoice number: 5702996051\n…\naccesstel.in C04e9zwp8 529.20\n…"}
+          className="w-full rounded-lg border border-hairline bg-paper p-3 text-xs font-mono text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+        {bill && (
+          <div className="text-xs text-ink-2 flex flex-wrap gap-x-4 gap-y-1">
+            <span>Invoice <b>{bill.invoiceNo ?? "—"}</b></span>
+            <span>{bill.periodLabel ?? "period not found"}</span>
+            <span><b>{bill.lines.length}</b> domains read</span>
+            {bill.subtotal !== null && <span>Subtotal {inr(bill.subtotal)} · GST {inr(bill.gst ?? 0)} · Total {inr(bill.total ?? 0)}</span>}
+            {bill.subtotal !== null && Math.abs(linesOff) > 0.05 && (
+              <span className="text-rose font-semibold">Domain lines add up to {inr(bill.linesTotal)} — {inr(Math.abs(linesOff))} {linesOff < 0 ? "missing (a page not pasted?)" : "extra"}</span>
+            )}
+            {bill.unread.length > 0 && <span className="text-amber-ink">{bill.unread.length} line(s) not read: {bill.unread.slice(0, 2).join(" · ")}</span>}
+          </div>
+        )}
+      </Card>
+
+      {bill && bill.lines.length === 0 && (
+        <Card className="p-3 mb-4 text-sm text-amber-ink">
+          No domain lines found. Paste the whole PDF (Ctrl + A in the PDF first) — the lines look like
+          <span className="font-mono"> accesstel.in C04e9zwp8 529.20</span>.
+        </Card>
+      )}
+
+      {books.isError && <Card className="p-3 mb-4 text-sm text-rose">Could not load subscriptions: {(books.error as Error).message}</Card>}
+
+      {check && partner && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            <Tile label="Google charged" value={inr(check.totals.googleCost)} note={`${bill!.lines.length} domains`} />
+            <Tile label="You bill these domains" value={inr(check.totals.ourMonthly)} note="per month, from subscriptions" />
+            <Tile label="Margin" value={inr(check.totals.margin)} tone={check.totals.margin < 0 ? "rose" : "emerald"} note={`${check.totals.lossCount} below cost`} />
+            <Tile label="Leakage" value={inr(check.totals.leakage)} tone={check.totals.leakage > 0 ? "rose" : undefined} note={`${check.totals.leakageCount} domains with no billing`} />
+          </div>
+
+          <Card className="p-4 mb-5">
+            <div className="text-sm font-semibold text-ink mb-2">Net2Secure bill check</div>
+            <div className="flex flex-wrap items-end gap-4 text-sm">
+              <label className="flex flex-col gap-1 text-xs text-ink-3">Margin per user per year (₹)
+                <input value={perSeatYear} onChange={(e) => setPerSeatYear(e.target.value)} inputMode="decimal" className="w-28 rounded-md border border-hairline bg-paper px-2 py-1.5 text-sm text-ink" />
+              </label>
+              <div className="text-xs text-ink-3">
+                Expected = Google subtotal {inr(subtotal)} + {check.totals.seats} seats × ₹{perSeatYear || 0} ÷ 12 ({inr(partner.margin)})
+                <div className="text-base font-semibold text-ink mt-0.5">{inr(partner.expected)} + GST</div>
+              </div>
+              <label className="flex flex-col gap-1 text-xs text-ink-3">Net2Secure billed (before GST)
+                <input value={partnerBill} onChange={(e) => setPartnerBill(e.target.value)} inputMode="decimal" placeholder="e.g. 563110.28" className="w-40 rounded-md border border-hairline bg-paper px-2 py-1.5 text-sm text-ink" />
+              </label>
+              {partnerGap !== null && (
+                <Badge kind={Math.abs(partnerGap) <= 1 ? "success" : partnerGap > 0 ? "danger" : "info"}>
+                  {Math.abs(partnerGap) <= 1 ? "Matches" : partnerGap > 0 ? `Billed ${inr(partnerGap)} more than expected` : `Billed ${inr(-partnerGap)} less than expected`}
+                </Badge>
+              )}
+            </div>
+            <p className="text-2xs text-ink-3 mt-2">Seats are your subscription counts — Google&apos;s PDF has none. Ask Net2Secure for Google&apos;s invoice CSV for an exact per-user check.</p>
+          </Card>
+
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-ink">By domain</h2>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setShowOk((v) => !v)}>{showOk ? "Hide OK rows" : `Show OK rows (${check.rows.filter((r) => r.status === "ok").length})`}</Button>
+              <Button size="sm" variant="outline" icon="download" onClick={exportCsv}>Download CSV</Button>
+            </div>
+          </div>
+          <Card className="overflow-x-auto mb-6">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-ink-3 text-left">
+                <tr className="border-b border-hairline">
+                  <th className="px-3 py-2 font-semibold">Domain</th><th className="px-3 py-2 font-semibold">Customer</th><th className="px-3 py-2 font-semibold">Status</th>
+                  <th className="px-3 py-2 font-semibold text-right">Google</th><th className="px-3 py-2 font-semibold text-right">You bill</th><th className="px-3 py-2 font-semibold text-right">Margin</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-hairline">
+                {check.rows.filter((r) => showOk || r.status !== "ok").map((r) => (
+                  <tr key={r.domain + r.customerId}>
+                    <td className="px-3 py-2"><div className="font-medium text-ink">{r.domain}</div><div className="text-2xs text-ink-3 font-mono">{r.customerId}</div></td>
+                    <td className="px-3 py-2">
+                      {r.customerRef ? <Link href={`/customers/${r.customerRef}` as never} className="text-ink hover:underline">{r.customerName}</Link> : <span className="text-ink-3">—</span>}
+                      {r.plans.length > 0 && <div className="text-2xs text-ink-3">{r.plans.join(" + ")} · {r.seats} seats</div>}
+                    </td>
+                    <td className="px-3 py-2"><Badge size="sm" kind={STATUS[r.status].kind}>{STATUS[r.status].label}</Badge></td>
+                    <td className="px-3 py-2 text-right tabular-nums">{inr(r.googleCost)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.ourMonthly ? inr(r.ourMonthly) : "—"}</td>
+                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${r.margin < 0 ? "text-rose" : "text-emerald"}`}>{inr(r.margin)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+
+          {check.notOnBill.length > 0 && (
+            <>
+              <h2 className="text-sm font-semibold text-ink mb-1">You bill these, but Google did not charge them</h2>
+              <p className="text-xs text-ink-3 mb-2">Moved to another reseller, suspended, or the domain in ResellerOS is spelt differently. Check each.</p>
+              <Card className="mb-8">
+                <ul className="divide-y divide-hairline text-sm">
+                  {check.notOnBill.map((n) => (
+                    <li key={n.domain} className="flex items-center gap-3 px-3 py-2">
+                      <Icon name="alert" size={14} className="text-amber-ink shrink-0" />
+                      <span className="flex-1 min-w-0 truncate"><b>{n.customerName}</b> · {n.domain}</span>
+                      <span className="text-xs text-ink-3">{n.seats} seats</span>
+                      <span className="tabular-nums">{inr(n.ourMonthly)}/mo</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Tile({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: "rose" | "emerald" }) {
+  return (
+    <Card className="p-3">
+      <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+      <div className={`text-xl font-semibold tabular-nums mt-0.5 ${tone === "rose" ? "text-rose" : tone === "emerald" ? "text-emerald" : "text-ink"}`}>{value}</div>
+      {note && <div className="text-2xs text-ink-3 mt-0.5">{note}</div>}
+    </Card>
+  );
+}

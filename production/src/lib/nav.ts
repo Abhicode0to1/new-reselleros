@@ -436,7 +436,13 @@ export const APP_NAV: NavSection[] = [
          yet" and points back to Vendors / Purchase Orders. Not in the nav, on purpose. */
       { id: "purchase-orders", href: "/purchase-orders",           label: "Purchase Orders",      icon: "cart", roles: OMB },
       { id: "vendors",         href: "/accounting/vendors",        label: "Vendors Master",       icon: "users", roles: OMB },
-      { id: "bills",           href: "/accounting/bills",          label: "COGS Bills",           icon: "receipt", roles: OMB },
+      {
+        id: "bills",           href: "/accounting/bills",          label: "COGS Bills",           icon: "receipt", roles: OMB,
+        children: [
+          /* R-164: Google's monthly invoice (via Net2Secure) checked domain by domain. */
+          { id: "google-bill-check", href: "/accounting/google-bill-check", label: "Google bill check", icon: "search", roles: OMB, hint: "Google ka mahine ka bill — har domain ka customer, leakage, margin" },
+        ],
+      },
       {
         id: "bill-payments",   href: "/accounting/bill-payments",  label: "Payments Made",        icon: "rupee", roles: OMB,
         children: [

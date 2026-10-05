@@ -79,7 +79,7 @@ const ADDED_3OCT_OM = ["/ai-entry", "/online-orders", "/items/packages", "/accou
 /** …and Apprentice Academy (R-149), owner / manager in phase 1. */
 const ADDED_4OCT_OM = ["/items/subscriptions", "/items/products", "/marketing/landing-pages", "/academy"];
 /** R-163 (5 Oct 2026): Payment Runs, a child of Payments Made — same owner/manager/billing roles. */
-const ADDED_5OCT_OMB = ["/accounting/payment-runs"];
+const ADDED_5OCT_OMB = ["/accounting/payment-runs", "/accounting/google-bill-check"];
 const ADDED_3OCT_OWNER = ["/vault/personal/banking", "/vault/personal/expenses", "/vault/personal/wealth"];
 const ADDED_3OCT_BOOKS = ["/accounting/banking/brs", "/accounting/banking/rules", "/accounting/assets", "/accounting/business-loans",
   "/accounting/profitability", "/reports/purchases", "/accounting/tds-receivable/year-end", "/compliance/gst", "/compliance/income-tax", "/compliance/roc"];
