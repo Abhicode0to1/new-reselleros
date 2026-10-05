@@ -20,6 +20,14 @@ P=resellsubsos-prod
 
 say() { printf '\n== %s\n' "$1"; }
 
+say "0. Connect once to each server (answer 'y' if asked to store the host key)"
+# On Windows gcloud uses PuTTY's plink. The first connection to a VM asks "Store key in
+# cache? (y/n)" and reads the answer from STDIN — in step 1 stdin is the pipe carrying the
+# Google values, so the prompt swallowed them (5 Oct 2026). Answering it here, with nothing
+# piped, caches both keys so step 1 runs without a question.
+gcloud compute ssh supabase-gateway --zone="$Z" --project="$P" --command="true"
+gcloud compute ssh staging-gateway  --zone="$Z" --project="$P" --command="true"
+
 say "1. Copy live's Google client to staging (values are not shown)"
 gcloud compute ssh supabase-gateway --zone="$Z" --project="$P" --strict-host-key-checking=no --quiet \
   --command="sudo docker inspect pardeep-auth-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^GOTRUE_EXTERNAL_GOOGLE_(CLIENT_ID|SECRET)=' | sed -E 's/^GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=/GOOGLE_CLIENT_ID=/; s/^GOTRUE_EXTERNAL_GOOGLE_SECRET=/GOOGLE_SECRET=/'" 2>/dev/null \
