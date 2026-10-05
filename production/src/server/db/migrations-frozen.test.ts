@@ -8,7 +8,10 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 
-const LAST_SUPABASE_MIGRATION = "20261005100000_feedback_filed_via_ai_chat.sql";
+/* 20261005110000 (R-163, payment runs) was written on manager-pardeep the same day the freeze
+   landed on Abhishek; it is applied to staging and live the old way. The Prisma baseline
+   (0_init) still needs it — see the merge note. */
+const LAST_SUPABASE_MIGRATION = "20261005110000_payment_runs.sql";
 
 test("no new files in supabase/migrations (use prisma/migrations)", () => {
   const dir = join(__dirname, "..", "..", "..", "supabase", "migrations");
