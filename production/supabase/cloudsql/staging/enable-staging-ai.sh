@@ -18,7 +18,7 @@ envfield() { # $1 = var name, $2 = field under env[] (value | valueFrom.secretKe
   gcloud run services describe resellersos --region="$R" --project="$P" \
     --flatten="spec.template.spec.containers[].env[]" \
     --format="csv[no-heading,separator='|'](spec.template.spec.containers.env.name,spec.template.spec.containers.env.$2)" \
-    | tr -d '\r' | grep "^$1|" | head -1 | cut -d'|' -f2-
+    | tr -d '\r' | { grep "^$1|" || true; } | head -1 | cut -d'|' -f2-
 }
 
 say "1. How does live get GEMINI_API_KEY? (value not shown)"
