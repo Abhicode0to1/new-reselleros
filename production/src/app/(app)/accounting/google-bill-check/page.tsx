@@ -73,6 +73,8 @@ export default function GoogleBillCheckPage() {
   const [text, setText] = React.useState("");
   const [partnerBill, setPartnerBill] = React.useState("");
   const [perSeatYear, setPerSeatYear] = React.useState("10");
+  /** null = use the subscription seat count; a typed number overrides it. */
+  const [seatsInput, setSeatsInput] = React.useState<string | null>(null);
   const [showOk, setShowOk] = React.useState(false);
   const [fileName, setFileName] = React.useState<string | null>(null);
   const [reading, setReading] = React.useState(false);
@@ -100,7 +102,8 @@ export default function GoogleBillCheckPage() {
   const bill = React.useMemo(() => (text.trim() ? parseGoogleBill(text) : null), [text]);
   const check = React.useMemo(() => (bill && bill.lines.length && books.data ? checkBill(bill.lines, books.data.subs, books.data.customers) : null), [bill, books.data]);
   const subtotal = bill?.subtotal ?? bill?.linesTotal ?? 0;
-  const partner = check ? expectedPartnerBill(subtotal, check.totals.seats, Number(perSeatYear) || 0) : null;
+  const seats = seatsInput !== null && seatsInput.trim() !== "" ? Math.max(0, Math.round(Number(seatsInput) || 0)) : (check?.totals.seats ?? 0);
+  const partner = check ? expectedPartnerBill(subtotal, seats, Number(perSeatYear) || 0) : null;
   const partnerGap = partner && partnerBill.trim() ? Math.round((Number(partnerBill.replace(/[₹,\s]/g, "")) - partner.expected) * 100) / 100 : null;
   const linesOff = bill && bill.subtotal !== null ? Math.round((bill.linesTotal - bill.subtotal) * 100) / 100 : 0;
 
@@ -182,8 +185,15 @@ export default function GoogleBillCheckPage() {
               <label className="flex flex-col gap-1 text-xs text-ink-3">Margin per user per year (₹)
                 <input value={perSeatYear} onChange={(e) => setPerSeatYear(e.target.value)} inputMode="decimal" className="w-28 rounded-md border border-hairline bg-paper px-2 py-1.5 text-sm text-ink" />
               </label>
+              {/* Seats: the PDF has none, so the default is OUR seat count on the domains that
+                  matched — 0 when nothing matched (staging, or customers not set up). Editable, so the
+                  number on Net2Secure's bill can be checked as-is (5 Oct 2026, "0 seats kyo"). */}
+              <label className="flex flex-col gap-1 text-xs text-ink-3">Users (seats)
+                <input value={seatsInput ?? String(check.totals.seats)} onChange={(e) => setSeatsInput(e.target.value.trim() === "" ? null : e.target.value)} inputMode="numeric"
+                  className={`w-28 rounded-md border bg-paper px-2 py-1.5 text-sm text-ink ${seats === 0 ? "border-amber" : "border-hairline"}`} />
+              </label>
               <div className="text-xs text-ink-3">
-                Expected = Google subtotal {inr(subtotal)} + {check.totals.seats} seats × ₹{perSeatYear || 0} ÷ 12 ({inr(partner.margin)})
+                Expected = Google subtotal {inr(subtotal)} + {seats} users × ₹{perSeatYear || 0} ÷ 12 ({inr(partner.margin)})
                 <div className="text-base font-semibold text-ink mt-0.5">{inr(partner.expected)} + GST</div>
               </div>
               <label className="flex flex-col gap-1 text-xs text-ink-3">Net2Secure billed (before GST)
@@ -195,7 +205,13 @@ export default function GoogleBillCheckPage() {
                 </Badge>
               )}
             </div>
-            <p className="text-2xs text-ink-3 mt-2">Seats are your subscription counts — Google&apos;s PDF has none. Ask Net2Secure for Google&apos;s invoice CSV for an exact per-user check.</p>
+            <p className={`text-2xs mt-2 ${seats === 0 ? "text-amber-ink font-semibold" : "text-ink-3"}`}>
+              {seats === 0
+                ? `Users is 0: none of the ${bill!.lines.length} domains matched a Google subscription in ResellerOS, so no margin is added. Type the user count from Net2Secure's bill, or set up the customers' subscriptions.`
+                : seatsInput !== null
+                  ? "Using the users you typed. Clear the box to go back to your subscription count."
+                  : `Users = your subscription seats on the ${check.rows.filter((r) => r.seats > 0).length} matched domains (Google's PDF has no seat counts). Ask Net2Secure for Google's invoice CSV for an exact per-user check.`}
+            </p>
           </Card>
 
           <div className="flex items-center justify-between mb-2">
