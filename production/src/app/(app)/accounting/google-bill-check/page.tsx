@@ -3,24 +3,30 @@
 /**
  * Google bill check (R-164, 5 Oct 2026). Upload (or paste) Google's monthly Workspace invoice (the one Google
  * sends Net2Secure for Anutech's domains) and see, domain by domain, who the customer is, what
- * Google charged, what we bill, and where money leaks. Read-only: nothing is saved.
+ * Google charged, what we bill, and where money leaks. The bill is not saved; Add / Add all missing
+ * create the customer + Google subscription (components/features/reconcile/add-from-bill.tsx).
  * The pure rules and their tests: lib/reconcile/google-bill.ts.
  */
 import * as React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { createClient } from "@/lib/supabase/client";
 import { downloadCSV } from "@/lib/csv";
-import { parseGoogleBill, checkBill, expectedPartnerBill, type SubLite, type CustomerLite, type RowStatus } from "@/lib/reconcile/google-bill";
+import { toast } from "sonner";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useConfirm } from "@/components/providers/confirm-provider";
+import { AddFromBillDialog, createFromBill } from "@/components/features/reconcile/add-from-bill";
+import { parseGoogleBill, checkBill, expectedPartnerBill, nameFromDomain, type SubLite, type CustomerLite, type RowStatus, type CheckRow } from "@/lib/reconcile/google-bill";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const STATUS: Record<RowStatus, { label: string; kind: "danger" | "warning" | "success" | "info" }> = {
   no_customer: { label: "No customer", kind: "danger" },
   no_subscription: { label: "No subscription", kind: "danger" },
+  needs_setup: { label: "Set price & users", kind: "info" },
   loss: { label: "Below cost", kind: "warning" },
   ok: { label: "OK", kind: "success" },
 };
@@ -70,6 +76,13 @@ function useBooks() {
 
 export default function GoogleBillCheckPage() {
   const books = useBooks();
+  const qc = useQueryClient();
+  const { data: me } = useCurrentUser();
+  const confirm = useConfirm();
+  const canAdd = !!me?.role && ["owner", "manager", "billing", "accountant"].includes(me.role);
+  const [addRow, setAddRow] = React.useState<CheckRow | null>(null);
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const refreshBooks = () => { void qc.invalidateQueries({ queryKey: ["google-bill-check", "books"] }); void qc.invalidateQueries({ queryKey: ["subscriptions"] }); void qc.invalidateQueries({ queryKey: ["customers"] }); };
   const [text, setText] = React.useState("");
   const [partnerBill, setPartnerBill] = React.useState("");
   const [perSeatYear, setPerSeatYear] = React.useState("10");
@@ -107,6 +120,30 @@ export default function GoogleBillCheckPage() {
   const partnerGap = partner && partnerBill.trim() ? Math.round((Number(partnerBill.replace(/[₹,\s]/g, "")) - partner.expected) * 100) / 100 : null;
   const linesOff = bill && bill.subtotal !== null ? Math.round((bill.linesTotal - bill.subtotal) * 100) / 100 : 0;
 
+  async function addAllMissing() {
+    if (!check || !me?.tenantId) return;
+    const missing = check.rows.filter((r) => r.status === "no_customer");
+    const ok = await confirm({
+      title: `Add ${missing.length} customers and subscriptions?`,
+      body: `One customer per domain (named after it — rename later) and a Google subscription with this month's Google cost saved as the cost price.\nUsers (1) and your selling price are not on Google's bill, so they are left for you: each row will show "Set price & users".`,
+      confirmLabel: `Add ${missing.length}`,
+    });
+    if (!ok) return;
+    setBulkBusy(true);
+    try {
+      const res = await createFromBill(me.tenantId, missing.map((r) => ({
+        domain: r.domain, googleCost: r.googleCost, customerName: nameFromDomain(r.domain), plan: "Google Workspace", users: 1, sellPerUserMonth: null,
+      })));
+      toast.success(`Added ${res.customers} customers and ${res.subscriptions} subscriptions`, { description: "Set users and price on each — the rows now say 'Set price & users'." });
+      refreshBooks();
+    } catch (e) {
+      toast.error((e as Error).message, { description: "Some rows may have been added. Refresh — the list shows what is still missing." });
+      refreshBooks();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   function exportCsv() {
     if (!check) return;
     downloadCSV(`google-bill-check-${bill?.invoiceNo ?? "invoice"}.csv`,
@@ -120,7 +157,7 @@ export default function GoogleBillCheckPage() {
         <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Purchases</p>
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Google bill check</h1>
         <p className="text-sm text-ink-3 mt-1 max-w-2xl">
-          Upload Google&apos;s monthly Workspace invoice PDF. Every domain is matched to a customer, so you see what Google charged, what you bill, and where money leaks. Nothing is saved.
+          Upload Google&apos;s monthly Workspace invoice PDF. Every domain is matched to a customer, so you see what Google charged, what you bill, and where money leaks. The bill itself is not saved; Add creates the missing customer and subscription.
         </p>
       </div>
 
@@ -218,6 +255,11 @@ export default function GoogleBillCheckPage() {
             <h2 className="text-sm font-semibold text-ink">By domain</h2>
             <div className="flex gap-2">
               <Button size="sm" variant="ghost" onClick={() => setShowOk((v) => !v)}>{showOk ? "Hide OK rows" : `Show OK rows (${check.rows.filter((r) => r.status === "ok").length})`}</Button>
+              {canAdd && check.rows.some((r) => r.status === "no_customer") && (
+                <Button size="sm" variant="primary" icon="plus" loading={bulkBusy} onClick={() => void addAllMissing()}>
+                  Add all missing ({check.rows.filter((r) => r.status === "no_customer").length})
+                </Button>
+              )}
               <Button size="sm" variant="outline" icon="download" onClick={exportCsv}>Download CSV</Button>
             </div>
           </div>
@@ -226,7 +268,7 @@ export default function GoogleBillCheckPage() {
               <thead className="text-xs text-ink-3 text-left">
                 <tr className="border-b border-hairline">
                   <th className="px-3 py-2 font-semibold">Domain</th><th className="px-3 py-2 font-semibold">Customer</th><th className="px-3 py-2 font-semibold">Status</th>
-                  <th className="px-3 py-2 font-semibold text-right">Google</th><th className="px-3 py-2 font-semibold text-right">You bill</th><th className="px-3 py-2 font-semibold text-right">Margin</th>
+                  <th className="px-3 py-2 font-semibold text-right">Google</th><th className="px-3 py-2 font-semibold text-right">You bill</th><th className="px-3 py-2 font-semibold text-right">Margin</th><th className="px-3 py-2"><span className="sr-only">Action</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
@@ -241,6 +283,11 @@ export default function GoogleBillCheckPage() {
                     <td className="px-3 py-2 text-right tabular-nums">{inr(r.googleCost)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.ourMonthly ? inr(r.ourMonthly) : "—"}</td>
                     <td className={`px-3 py-2 text-right tabular-nums font-semibold ${r.margin < 0 ? "text-rose" : "text-emerald"}`}>{inr(r.margin)}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {canAdd && r.status === "no_customer" && <Button size="sm" variant="outline" onClick={() => setAddRow(r)}>Add</Button>}
+                      {canAdd && r.status === "no_subscription" && <Button size="sm" variant="outline" onClick={() => setAddRow(r)}>Add subscription</Button>}
+                      {r.status === "needs_setup" && r.customerRef && <Link href={`/customers/${r.customerRef}` as never} className="text-xs font-semibold text-primary hover:underline">Set price</Link>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -266,6 +313,9 @@ export default function GoogleBillCheckPage() {
             </>
           )}
         </>
+      )}
+      {addRow && me?.tenantId && books.data && (
+        <AddFromBillDialog row={addRow} customers={books.data.customers} tenantId={me.tenantId} onClose={() => setAddRow(null)} onDone={refreshBooks} />
       )}
     </div>
   );

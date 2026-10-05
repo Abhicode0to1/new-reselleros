@@ -105,3 +105,24 @@ describe("Net2Secure margin", () => {
     expect(normDomain(" https://www.Example.co.in/path ")).toBe("example.co.in");
   });
 });
+
+describe("making the missing customer + subscription from the bill", async () => {
+  const { newSubscriptionRow, nameFromDomain } = await import("./google-bill");
+  const base = { tenantId: "t", customerId: "c", customerName: "Freight Tiger", domain: "WWW.FreightTiger.com", plan: "Business Starter", syncedAt: "2026-10-05T00:00:00Z" };
+  it("spreads Google's monthly cost over the users and bills the selling price", () => {
+    const r = newSubscriptionRow({ ...base, users: 4, sellPerUserMonth: 270, googleCostMonth: 1058.4 });
+    expect(r).toMatchObject({ domain: "freighttiger.com", vendor: "google", status: "active", seats: 4, vendor_seats: 4, vendor_cost_per_seat_month: 265, mrr: 1080 });
+  });
+  it("leaves the price at 0 when none is given, so the page asks for it instead of inventing a margin", () => {
+    const r = newSubscriptionRow({ ...base, users: 0, sellPerUserMonth: null, googleCostMonth: 529.2 });
+    expect(r).toMatchObject({ seats: 1, mrr: 0, vendor_cost_per_seat_month: 529 });
+  });
+  it("a subscription billed at ₹0 shows as needs setup, not as a loss", () => {
+    const res = checkBill([{ domain: "a.in", customerId: "C1", amount: 100 }], [sub({ domain: "a.in", mrr: 0 })], []);
+    expect(res.rows[0].status).toBe("needs_setup");
+  });
+  it("names a customer after the domain", () => {
+    expect(nameFromDomain("freighttiger.com")).toBe("Freighttiger");
+    expect(nameFromDomain("murli-terracotta.com")).toBe("Murli Terracotta");
+  });
+});
