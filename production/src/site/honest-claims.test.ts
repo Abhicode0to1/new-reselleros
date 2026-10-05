@@ -55,3 +55,15 @@ describe("Google Workspace buy pages — no invented offers or promises", () => 
     expect(buy).not.toMatch(/9am–9pm/);
   });
 });
+
+/* R-157: one trial rule site-wide (Pardeep, 5 Oct 2026) — no card, nothing automatic. */
+describe("trial — no card anywhere", () => {
+  const trialForm = readFileSync(join(__dirname, "components/trial/TrialForm.tsx"), "utf8");
+  const trialPage = readFileSync(join(__dirname, "../app/(marketing)/trial/page.tsx"), "utf8");
+  it("no ₹1 card check and no auto-continue on the trial page", () => {
+    for (const f of [trialPage, trialForm.replace(/\/\*\*[\s\S]*?\*\//, "")]) {
+      expect(f).not.toMatch(/₹1 (card|authori|link|Razorpay)/i);
+      expect(f).not.toMatch(/continues at the published rate (afterwards )?unless you cancel/i);
+    }
+  });
+});
