@@ -74,6 +74,20 @@ export async function GET(request: NextRequest) {
     ? `${proto}://${fwdHost}`
     : (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "") ?? new URL(request.url).origin);
 
+  /* A password-recovery link in the token_hash form (5 Oct 2026). Supabase's own SSR
+     pattern for email links: `/callback?token_hash=…&type=recovery`. The code flow above
+     needs a PKCE verifier from the browser that asked; a recovery link made by an admin (or
+     an email template using {{ .TokenHash }}) has none, so it used to end on "no_code".
+     Recovery only — the one-time token signs the person in and the next stop is always
+     /reset-password, where they choose the password. */
+  const tokenHash = searchParams.get("token_hash");
+  if (!code && tokenHash && searchParams.get("type") === "recovery") {
+    const supabase = createClient();
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+    if (error) return NextResponse.redirect(`${origin}/login?error=link_expired`);
+    return NextResponse.redirect(`${origin}/reset-password`);
+  }
+
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=no_code`);
   }
