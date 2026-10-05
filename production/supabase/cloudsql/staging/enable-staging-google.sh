@@ -29,10 +29,34 @@ gcloud compute ssh supabase-gateway --zone="$Z" --project="$P" --command="true"
 gcloud compute ssh staging-gateway  --zone="$Z" --project="$P" --command="true"
 
 say "1. Copy live's Google client to staging (values are not shown)"
+# The remote scripts travel base64-encoded (5 Oct 2026, second run). The first version sent
+# quotes, pipes and {{ }} through gcloud -> plink on Windows, got no Google lines back, and
+# threw live's stderr away so nobody could see why. Base64 carries none of those characters.
+# Diagnostics (container name, how many settings, their NAMES) go to this screen on stderr;
+# the values only ever travel on stdout, VM to VM.
+LIVE_SH='set -o pipefail
+C=$(sudo docker ps --format "{{.Names}}" | grep -E "auth" | head -1)
+echo "live: auth container = ${C:-NONE FOUND}" >&2
+[ -n "$C" ] || exit 1
+ENVS=$(sudo docker inspect "$C" --format "{{range .Config.Env}}{{println .}}{{end}}")
+echo "live: Google settings = $(printf "%s\n" "$ENVS" | grep -cE "^GOTRUE_EXTERNAL_GOOGLE_(CLIENT_ID|SECRET)=") of 2; names: $(printf "%s\n" "$ENVS" | grep -oE "^GOTRUE_EXTERNAL_GOOGLE_[A-Z_]+" | tr "\n" " ")" >&2
+printf "%s\n" "$ENVS" | grep -E "^GOTRUE_EXTERNAL_GOOGLE_(CLIENT_ID|SECRET)=" | sed -E "s/^GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=/GOOGLE_CLIENT_ID=/; s/^GOTRUE_EXTERNAL_GOOGLE_SECRET=/GOOGLE_SECRET=/"'
+STAGING_SH='set -e
+new=$(cat)
+n=$(printf "%s\n" "$new" | grep -c "^GOOGLE_" || true)
+echo "staging: received $n of 2 Google lines" >&2
+[ "$n" = 2 ] || { echo "Nothing changed on staging."; exit 1; }
+cp ~/.env ~/.env.bak-google
+grep -vE "^GOOGLE_(ENABLED|CLIENT_ID|SECRET)=" ~/.env > ~/.env.tmp || true
+printf "%s\nGOOGLE_ENABLED=true\n" "$new" >> ~/.env.tmp
+mv ~/.env.tmp ~/.env; chmod 600 ~/.env
+grep -E "^GOOGLE_" ~/.env | sed -E "s/=.+/=<set>/"'
+L64=$(printf '%s' "$LIVE_SH" | base64 -w0)
+S64=$(printf '%s' "$STAGING_SH" | base64 -w0)
 gcloud compute ssh supabase-gateway --zone="$Z" --project="$P" --strict-host-key-checking=no --quiet \
-  --command="sudo docker inspect pardeep-auth-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^GOTRUE_EXTERNAL_GOOGLE_(CLIENT_ID|SECRET)=' | sed -E 's/^GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=/GOOGLE_CLIENT_ID=/; s/^GOTRUE_EXTERNAL_GOOGLE_SECRET=/GOOGLE_SECRET=/'" 2>/dev/null \
+  --command="echo $L64 | base64 -d > \$HOME/.rl.sh && bash \$HOME/.rl.sh; rc=\$?; rm -f \$HOME/.rl.sh; exit \$rc" \
 | gcloud compute ssh staging-gateway --zone="$Z" --project="$P" --strict-host-key-checking=no --quiet \
-  --command="set -e; cp ~/.env ~/.env.bak-google; new=\$(cat); n=\$(printf '%s\n' \"\$new\" | grep -c '^GOOGLE_' || true); [ \"\$n\" = 2 ] || { echo 'Did not receive both Google values from live — nothing changed.'; exit 1; }; grep -vE '^GOOGLE_(ENABLED|CLIENT_ID|SECRET)=' ~/.env > ~/.env.tmp; printf '%s\nGOOGLE_ENABLED=true\n' \"\$new\" >> ~/.env.tmp; mv ~/.env.tmp ~/.env; chmod 600 ~/.env; grep -E '^GOOGLE_' ~/.env | sed -E 's/=.+/=<set>/'"
+  --command="echo $S64 | base64 -d > \$HOME/.rs.sh && bash \$HOME/.rs.sh; rc=\$?; rm -f \$HOME/.rs.sh; exit \$rc"
 
 say "2. Restart staging auth with the new settings"
 gcloud compute ssh staging-gateway --zone="$Z" --project="$P" --strict-host-key-checking=no --quiet \
