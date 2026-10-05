@@ -68,9 +68,28 @@ steps:
       - -c
       - npm ci --no-audit --no-fund && npx prisma generate && npx tsc --noEmit && npx vitest run
 
+  # 0b. DEPS CACHE (5 Oct 2026, Pardeep: "cache kar do"). The note on --cache-from below was
+  #     right: it never worked because nothing was pulled. Now the deps stage (npm ci, ~43s +
+  #     COPY ~29s) has its own tag, pulled here and rebuilt from cache when package-lock.json
+  #     is unchanged. Every step tolerates a miss: no tag yet, or a failed pull, just means a
+  #     normal full build — this can never stop a deploy.
+  #     Beside the gate (5 Oct 2026 trial on E2_HIGHCPU_32, 32 GB): with the memory there, the
+  #     image no longer waits ~4 min for the tests. The gate still blocks the deploy — `push`
+  #     below has no waitFor, so it waits for EVERY earlier step, the gate included.
+  - id: deps-pull
+    waitFor: ['-']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args: [-c, 'docker pull $_IMAGE:deps || echo "no deps cache yet — full build"']
+  - id: deps
+    waitFor: [deps-pull]
+    name: gcr.io/cloud-builders/docker
+    dir: production
+    args: [build, --target=deps, --cache-from=$_IMAGE:deps, --tag=$_IMAGE:deps, .]
+
   # 1. Build the image, exactly as deploy.sh does today.
   - id: build
-    waitFor: [gate]
+    waitFor: [deps]
     name: gcr.io/cloud-builders/docker
     dir: production
     args:
@@ -99,6 +118,9 @@ steps:
       # image pehle `docker pull` ki gayi ho, aur har build ek KHAALI machine par shuru hota
       # hai. Yahan koi pull step hai hi nahi.
       #
+      # (5 Oct 2026: AB THEEK — step 0b pull karta hai aur deps stage ka apna tag hai. Neeche
+      # ka paragraph us waqt ka faisla hai, record ke liye.)
+      #
       # Jaan-boojhkar theek NAHI kiya gaya. Faayda sirf `npm ci` (43s) aur
       # `COPY --from=deps` (29s) tak hai — 431s me se 72s, aur wo bhi tab jab
       # package-lock.json na badla ho (pichhle 30 commit me 8 baar badla). Uske liye teen
@@ -109,6 +131,8 @@ steps:
       # Flag isliye chhodi hai ki wo nuksaan nahi karti, aur jis din pull step judega us din
       # kaam karne lagegi.
       - --cache-from=$_IMAGE:latest
+      # The deps layers just built (or restored) in step 0b — this is what makes the cache real.
+      - --cache-from=$_IMAGE:deps
       - .
 
   - id: push
@@ -161,6 +185,7 @@ substitutions:
 images:
   - $_IMAGE:$SHORT_SHA
   - $_IMAGE:latest
+  - $_IMAGE:deps
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -191,7 +216,12 @@ options:
   #
   # Isliye wapas 8 par. Agar kabhi phir se badhane ka mann ho, to pehle ye tabel padhna —
   # aur ek nahi, dono taraf ke KAI build naapna, warna jawab shor hi milega.
-  machineType: E2_HIGHCPU_8
+  #
+  # 5 Oct 2026 — DOOSRA TRIAL, alag sawaal: 32 core se `next build` tez nahi hota (upar), par
+  # 32 GB memory gate aur image ko SAATH chalne deti hai (~4 min) aur 8 GB wala SIGKILL band
+  # karti hai. Pardeep ne aazmaane ko kaha. Kai build naapo; fayda na dikhe to wapas
+  # E2_HIGHCPU_8 aur build/deps-pull ka waitFor [gate] par.
+  machineType: E2_HIGHCPU_32
 
 # 2 Oct 2026: the first full go-live build (562 commits) hit 1800s inside `next build`.
 timeout: 3600s
