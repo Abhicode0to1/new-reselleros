@@ -124,6 +124,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/learn", file: "src/app/learn/page.tsx" },
   { route: "/login", file: "src/app/(auth)/login/page.tsx" },
   { route: "/lp/google-workspace", file: "src/app/(lp)/lp/google-workspace/page.tsx" },
+  { route: "/lp/google-workspace-1", file: "src/app/(lp)/lp/google-workspace-1/page.tsx" },
   { route: "/lp/google-workspace-business-plus-1", file: "src/app/(lp)/lp/google-workspace-business-plus-1/page.tsx" },
   { route: "/lp/google-workspace-business-standard-1", file: "src/app/(lp)/lp/google-workspace-business-standard-1/page.tsx" },
   { route: "/lp/google-workspace-business-starter-1", file: "src/app/(lp)/lp/google-workspace-business-starter-1/page.tsx" },

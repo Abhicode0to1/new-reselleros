@@ -30,6 +30,8 @@ export interface LpPlan {
   copy: WorkspaceAdCopy;
   /** Landing path (variant 1) and its page title in the app's list. */
   path: string;
+  /** The all-plans category page: leads say "google-workspace", not one plan. */
+  category?: boolean;
 }
 
 const COMMON_EYEBROW = "Authorised Google Workspace Reseller";
@@ -124,3 +126,23 @@ export function compareRows(plan: LpPlan): [string, string, string][] {
     ["Help when stuck", "Online forums", "ANUTECH team + Google support"],
   ];
 }
+
+/**
+ * The Google Workspace category page (R-154, 5 Oct 2026): broad "google workspace" ads land
+ * here. It leads with the Starter offer (the plan most small businesses buy) and lists every
+ * plan below, so it borrows Starter's facts for the price card and its own copy for the hero.
+ */
+export const LP_CATEGORY: LpPlan = {
+  ...LP_PLANS.starter,
+  category: true,
+  copy: {
+    eyebrow: COMMON_EYEBROW,
+    h1Rest: "Workspace — har business ke liye plan",
+    h2: "Starter se Enterprise tak — sahi plan, sahi daam, setup hamari taraf se",
+    sub: "Gmail, Drive, Meet, Docs aur Gemini — 1 user se 1,000+ tak. Plan hum milkar chunte hain; domain, users aur purana mail hamari team shift karti hai.",
+  },
+  path: "/lp/google-workspace-1",
+};
+
+/** Plan order on the category page. */
+export const LP_PLAN_ORDER: readonly LpPlanKey[] = ["starter", "standard", "plus", "enterprise"];

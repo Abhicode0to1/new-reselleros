@@ -23,6 +23,14 @@ export const PUBLIC_SITE_ORIGIN = "https://anutech.in";
 
 export const AD_LANDING_PAGES: readonly AdLandingPage[] = [
   {
+    path: "/lp/google-workspace-1",
+    title: "Google Workspace (all plans) — Google Ads Landing Page 1",
+    product: "Google Workspace — category page for broad keywords",
+    offer: "Starter 30+ users ₹1,650 first year up top; all 4 plans with live prices below + free setup and migration",
+    captures: "Call-back form (name + mobile), enquiry per plan, Free trial, WhatsApp",
+    addedOn: "2026-10-05",
+  },
+  {
     path: "/lp/google-workspace-business-starter-1",
     title: "Google Workspace Business Starter — Google Ads Landing Page 1",
     product: "Google Workspace Business Starter",

@@ -30,6 +30,17 @@ import { reportLeadConversion } from "@/site/lib/google-ads";
 import { FIRST_YEAR_PER_USER, OFFER_MIN_USERS } from "@/site/lib/workspace-offer";
 import { LP_PLANS, compareRows, type LpPlan } from "@/site/lib/lp-plans";
 
+/** The one line per plan card that storage and Meet size do not already say. */
+const PLAN_HIGHLIGHT: Record<LpPlan["key"], string> = {
+  starter: "Professional email on your domain",
+  standard: "Gemini AI + meeting recordings",
+  plus: "Vault: mail retention & eDiscovery",
+  enterprise: "Enterprise security, no user limit",
+};
+
+/** One row of the category page's plan grid: the plan and its live yearly ₹/user/month. */
+export interface LpPlanPrice { plan: LpPlan; annual: number | null }
+
 /** Online checkout for Workspace — off until every edition's price is confirmed (see header). */
 const BUY_ONLINE = false;
 
@@ -79,12 +90,14 @@ function faqFor(plan: LpPlan): [string, string][] {
 }
 
 export function WorkspaceAdLanding({
-  annualPerSeatMo, plan = LP_PLANS.starter, copy,
+  annualPerSeatMo, plan = LP_PLANS.starter, copy, allPlans,
 }: {
   /** The plan's ₹ per user per month on the yearly plan (live catalogue); null = talk to us. */
   annualPerSeatMo: number | null;
   plan?: LpPlan;
   copy?: WorkspaceAdCopy;
+  /** Category page only: every plan, shown as a grid under the price card. */
+  allPlans?: readonly LpPlanPrice[];
 }) {
   const text = copy ?? plan.copy ?? DEFAULT_COPY;
   const priced = annualPerSeatMo != null && annualPerSeatMo > 0;
@@ -92,6 +105,8 @@ export function WorkspaceAdLanding({
   const [ad, setAd] = useState<URLSearchParams>(new URLSearchParams());
   const [landing, setLanding] = useState("");
   const [modal, setModal] = useState<null | "buy" | "trial">(null);
+  /** Category page: the plan a grid card asked about (null = this page's own plan). */
+  const [modalPlan, setModalPlan] = useState<LpPlan | null>(null);
   const [users, setUsers] = useState(1);
   const [exitOffer, setExitOffer] = useState(false);
 
@@ -153,7 +168,7 @@ export function WorkspaceAdLanding({
         <div className="gw-wrap gw-nav">
           <a href="#top" aria-label="ANUTECH Digital"><img src="/lp/anutech-logo.png" alt="ANUTECH Digital Pvt Ltd" className="gw-logo" width={210} height={70} /></a>
           <nav className="gw-links" aria-label="On this page">
-            <a href="#features">Features</a><a href="#offer">Price</a><a href="#compare">Compare</a><a href="#faq">FAQ</a>
+            <a href="#features">Features</a>{allPlans && <a href="#plans">Plans</a>}<a href="#offer">Price</a><a href="#compare">Compare</a><a href="#faq">FAQ</a>
           </nav>
           <div className="gw-nav-actions">
             {WHATSAPP_READY && <a className="gw-mini" href={wa} target="_blank" rel="noopener">WhatsApp</a>}
@@ -316,6 +331,35 @@ export function WorkspaceAdLanding({
           </aside>
         </section>
 
+        {allPlans && (
+        <section className="gw-wrap gw-sec" id="plans">
+          <div className="gw-kicker">Saare plans</div>
+          <h3 className="gw-h3">Apne business ke hisaab se plan chunein</h3>
+          <ul className="gw-plans">
+            {allPlans.map(({ plan: p, annual }) => (
+              <li key={p.key} className={`gw-plan${p.offer ? " gw-plan-hot" : ""}`}>
+                {p.offer && <span className="gw-plan-flag">{OFFER_MIN_USERS}+ users: pehla saal {inr(FIRST_YEAR_PER_USER)}/user</span>}
+                <b className="gw-plan-name">{p.name}</b>
+                <div className="gw-plan-price">
+                  {annual != null && annual > 0 ? <>{inr(annual)}<small>/user/mahina</small></> : <>Quote<small> — ek din mein</small></>}
+                </div>
+                <small className="gw-plan-year">{annual != null && annual > 0 ? `saalana plan · + GST` : "300+ users ke liye"}</small>
+                <ul className="gw-plan-facts">
+                  <li>{p.storage}</li>
+                  <li>{p.meetPeople}</li>
+                  <li>{PLAN_HIGHLIGHT[p.key]}</li>
+                </ul>
+                <button type="button" className="gw-btn gw-buy gw-full" onClick={() => { setModalPlan(p); setModal("buy"); }}>
+                  {annual != null && annual > 0 ? "Ye plan lein" : "Quote lein"}
+                </button>
+                <a className="gw-plan-more" href={withAdParams(p.path, ad)}>{p.name} ke baare mein →</a>
+              </li>
+            ))}
+          </ul>
+          <p className="gw-copy gw-plans-note">Pakka nahi kaunsa? Call-back maangiye — 5 minute mein sahi plan bata denge.</p>
+        </section>
+        )}
+
         <section className="gw-wrap gw-sec" id="compare">
           <div className="gw-kicker">Free Gmail vs Google Workspace</div>
           <h3 className="gw-h3">Business ke liye free Gmail kaafi kyun nahi</h3>
@@ -391,7 +435,7 @@ export function WorkspaceAdLanding({
         {WHATSAPP_READY && <a className="gw-btn gw-wa" href={wa} target="_blank" rel="noopener">WhatsApp</a>}
       </div>
 
-      {modal && <EnquiryModal kind={modal} landing={landing} plan={plan} defaultUsers={users} onClose={() => setModal(null)} />}
+      {modal && <EnquiryModal kind={modal} landing={landing} plan={modalPlan ?? plan} defaultUsers={users} onClose={() => { setModal(null); setModalPlan(null); }} />}
     </div>
   );
 }
@@ -414,7 +458,7 @@ function CallbackForm({ landing, plan, compact = false }: { landing: string; pla
       const res = await fetch("/api/public/callback", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...ts.headers },
-        body: JSON.stringify({ fullName, phone, plan: plan.key, pageUrl: landing || window.location.href, pageReferrer: document.referrer || undefined }),
+        body: JSON.stringify({ fullName, phone, plan: plan.category ? "any" : plan.key, pageUrl: landing || window.location.href, pageReferrer: document.referrer || undefined }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -432,7 +476,7 @@ function CallbackForm({ landing, plan, compact = false }: { landing: string; pla
       <div className={`gw-cb gw-cb-done${compact ? " gw-cb-compact" : ""}`} role="status">
         <b>Shukriya{name ? `, ${name.split(" ")[0]}` : ""}! Hum jald call karenge.</b>
         <span>{COMPANY.hours}{WHATSAPP_READY ? " · abhi baat karni ho to WhatsApp karein" : ""}</span>
-        {WHATSAPP_READY && <a className="gw-btn gw-wa" href={waLink(`Hello ANUTECH, I am ${name}. Mujhe Google Workspace ${plan.name} ke liye call chahiye.`)} target="_blank" rel="noopener">WhatsApp {PHONE_SHOWN}</a>}
+        {WHATSAPP_READY && <a className="gw-btn gw-wa" href={waLink(`Hello ANUTECH, I am ${name}. Mujhe Google Workspace${plan.category ? "" : ` ${plan.name}`} ke liye call chahiye.`)} target="_blank" rel="noopener">WhatsApp {PHONE_SHOWN}</a>}
       </div>
     );
   }
@@ -693,6 +737,21 @@ const CSS = `
 .gw-steps small{color:var(--muted);font-size:14px}
 .gw-modal{position:fixed;inset:0;background:rgba(6,22,48,.6);display:grid;place-items:center;padding:16px;z-index:100}
 .gw-modal-card > .gw-kicker{padding-right:40px}
+.gw-plans{list-style:none;margin:28px 0 0;padding:0;display:grid;grid-template-columns:1fr;gap:22px 16px}
+@media (min-width:600px){.gw-plans{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:1040px){.gw-plans{grid-template-columns:repeat(4,1fr)}}
+.gw-plan{position:relative;display:flex;flex-direction:column;gap:8px;background:#fff;border:1px solid #dbe4f0;border-radius:18px;padding:22px 18px 18px}
+.gw-plan-hot{border:2px solid #1a73e8;box-shadow:0 12px 30px rgba(26,115,232,.14)}
+.gw-plan-flag{position:absolute;top:-12px;left:16px;right:16px;background:#e8453c;color:#fff;font-size:11px;font-weight:800;letter-spacing:.02em;border-radius:999px;padding:4px 10px;text-align:center}
+.gw-plan-name{font-size:18px;color:#0b1f3a}
+.gw-plan-price{font-size:28px;font-weight:800;color:#0b1f3a;line-height:1.1;font-variant-numeric:tabular-nums}
+.gw-plan-price small{font-size:13px;font-weight:600;color:#5b6b82}
+.gw-plan-year{color:#5b6b82;font-size:12px}
+.gw-plan-facts{list-style:none;margin:4px 0 8px;padding:0;display:grid;gap:6px;font-size:14px;color:#33415a;flex:1}
+.gw-plan-facts li::before{content:"✓ ";color:#188038;font-weight:800}
+.gw-plan-more{font-size:13px;font-weight:700;color:#1a73e8;text-align:center;text-decoration:none}
+.gw-plan-more:hover{text-decoration:underline}
+.gw-plans-note{margin-top:16px;text-align:center}
 .gw-modal-card{width:min(520px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:#fff;border-radius:24px;padding:28px;box-shadow:0 30px 90px rgba(0,0,0,.25);position:relative}
 .gw-close{position:absolute;right:14px;top:12px;border:0;background:#f0f4fa;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer}
 .gw-form{display:grid;gap:12px;margin-top:16px}

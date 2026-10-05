@@ -24,8 +24,9 @@ const schema = z.object({
   phone: z.string().trim().min(10, "Please enter a 10-digit mobile number").max(20)
     .refine((p) => p.replace(/\D/g, "").length >= 10, "Please enter a 10-digit mobile number"),
   product: z.enum(["google-workspace"]).default("google-workspace"),
-  /** Which plan's landing page sent it (lib/lp-plans.ts); old pages send none = Starter. */
-  plan: z.enum(["starter", "standard", "plus", "enterprise"]).default("starter"),
+  /** Which plan's landing page sent it (lib/lp-plans.ts); old pages send none = Starter;
+   *  "any" = the all-plans category page, where the call decides the plan. */
+  plan: z.enum(["starter", "standard", "plus", "enterprise", "any"]).default("starter"),
   seats: z.coerce.number().int().min(1).max(300).optional(),
   pageUrl: z.string().max(1000).optional(),
   pageReferrer: z.string().max(1000).optional(),
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     company: fullName,                       // no company asked; the call fills it in
     contact_name: fullName,
     contact_phone: phone,
-    plan: `google-workspace-${plan}`,
+    plan: plan === "any" ? "google-workspace" : `google-workspace-${plan}`,
     seats: seats ?? null,
     stage: "new",
     source: "ads-callback",
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     tenantId: BUY_PAGE_TENANT_ID,
     kind: "lead.created",
     title: `Call back — ${fullName}`,
-    body: `${phone} · Google Workspace ${plan} (ad landing page)`,
+    body: `${phone} · Google Workspace${plan === "any" ? "" : ` ${plan}`} (ad landing page)`,
     href: "/leads",
     entityId: leadId,
   }).catch(() => null);
