@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Google bill check (R-164, 5 Oct 2026). Paste Google's monthly Workspace invoice (the one Google
+ * Google bill check (R-164, 5 Oct 2026). Upload (or paste) Google's monthly Workspace invoice (the one Google
  * sends Net2Secure for Anutech's domains) and see, domain by domain, who the customer is, what
  * Google charged, what we bill, and where money leaks. Read-only: nothing is saved.
  * The pure rules and their tests: lib/reconcile/google-bill.ts.
@@ -24,6 +24,32 @@ const STATUS: Record<RowStatus, { label: string; kind: "danger" | "warning" | "s
   loss: { label: "Below cost", kind: "warning" },
   ok: { label: "OK", kind: "success" },
 };
+
+/**
+ * Text of a PDF, one line per row as it reads on the page (5 Oct 2026, Pardeep: "pdf file upload
+ * ka option do"). Items on the same baseline are joined left to right — the domain table comes
+ * out as "accesstel.in C04e9zwp8 529.20", which is what parseGoogleBill reads. Same pdfjs set-up
+ * as the document viewer; nothing leaves the browser.
+ */
+async function pdfToText(file: File): Promise<string> {
+  const pdfjs = await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  let out = "";
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const tc = await (await pdf.getPage(p)).getTextContent();
+    const rows = new Map<number, { x: number; s: string }[]>();
+    for (const it of tc.items as { str?: string; transform?: number[] }[]) {
+      if (!it.str || !it.transform) continue;
+      const y = Math.round(it.transform[5]);
+      rows.set(y, [...(rows.get(y) ?? []), { x: it.transform[4], s: it.str }]);
+    }
+    for (const y of [...rows.keys()].sort((a, b) => b - a)) {
+      out += rows.get(y)!.sort((a, b) => a.x - b.x).map((i) => i.s).join(" ").replace(/\s+/g, " ").trim() + "\n";
+    }
+  }
+  return out;
+}
 
 function useBooks() {
   return useQuery({
@@ -48,6 +74,28 @@ export default function GoogleBillCheckPage() {
   const [partnerBill, setPartnerBill] = React.useState("");
   const [perSeatYear, setPerSeatYear] = React.useState("10");
   const [showOk, setShowOk] = React.useState(false);
+  const [fileName, setFileName] = React.useState<string | null>(null);
+  const [reading, setReading] = React.useState(false);
+  const [readError, setReadError] = React.useState<string | null>(null);
+  const [dragging, setDragging] = React.useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  async function loadFile(f: File | undefined | null) {
+    if (!f) return;
+    setReadError(null);
+    const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+    if (!isPdf && !/\.(txt|csv)$/i.test(f.name)) { setReadError("Choose the Google invoice PDF."); return; }
+    setReading(true);
+    try {
+      setText(isPdf ? await pdfToText(f) : await f.text());
+      setFileName(f.name);
+    } catch {
+      setReadError("Could not read this PDF. If it is password-protected, open it and paste the text instead.");
+    } finally {
+      setReading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   const bill = React.useMemo(() => (text.trim() ? parseGoogleBill(text) : null), [text]);
   const check = React.useMemo(() => (bill && bill.lines.length && books.data ? checkBill(bill.lines, books.data.subs, books.data.customers) : null), [bill, books.data]);
@@ -69,16 +117,33 @@ export default function GoogleBillCheckPage() {
         <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Purchases</p>
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Google bill check</h1>
         <p className="text-sm text-ink-3 mt-1 max-w-2xl">
-          Paste Google&apos;s monthly Workspace invoice. Every domain is matched to a customer, so you see what Google charged, what you bill, and where money leaks. Nothing is saved.
+          Upload Google&apos;s monthly Workspace invoice PDF. Every domain is matched to a customer, so you see what Google charged, what you bill, and where money leaks. Nothing is saved.
         </p>
       </div>
 
       <Card className="p-4 mb-5 space-y-3">
-        <label htmlFor="gbc-text" className="text-sm font-semibold text-ink">Google invoice text</label>
-        <p className="text-xs text-ink-3">Open the PDF → <b>Ctrl + A</b> → <b>Ctrl + C</b> → paste here. All pages, including the domain list.</p>
-        <textarea id="gbc-text" value={text} onChange={(e) => setText(e.target.value)} rows={6}
+        <input ref={fileRef} type="file" accept="application/pdf,.pdf,.txt,.csv" className="hidden" onChange={(e) => void loadFile(e.target.files?.[0])} />
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => fileRef.current?.click()}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileRef.current?.click(); } }}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); void loadFile(e.dataTransfer.files?.[0]); }}
+          className={`rounded-xl border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors ${dragging ? "border-primary bg-primary-soft/30" : "border-hairline hover:border-primary/50 hover:bg-paper-2"}`}
+        >
+          <Icon name="upload" size={22} className="mx-auto text-ink-3" />
+          <div className="text-sm font-semibold text-ink mt-1.5">{reading ? "Reading the PDF…" : fileName ? `${fileName} — choose another` : "Upload Google's invoice PDF"}</div>
+          <div className="text-xs text-ink-3 mt-0.5">Drop it here or click to choose. It is read in your browser — nothing is uploaded or saved.</div>
+        </div>
+        {readError && <p className="text-xs text-rose">{readError}</p>}
+        <details className="text-xs text-ink-3" open={!!text && !fileName}>
+          <summary className="cursor-pointer">Or paste the text (PDF → Ctrl + A → Ctrl + C)</summary>
+        <textarea id="gbc-text" aria-label="Google invoice text" value={text} onChange={(e) => { setText(e.target.value); setFileName(null); }} rows={6}
           placeholder={"Invoice number: 5702996051\n…\naccesstel.in C04e9zwp8 529.20\n…"}
-          className="w-full rounded-lg border border-hairline bg-paper p-3 text-xs font-mono text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+          className="mt-2 w-full rounded-lg border border-hairline bg-paper p-3 text-xs font-mono text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+        </details>
         {bill && (
           <div className="text-xs text-ink-2 flex flex-wrap gap-x-4 gap-y-1">
             <span>Invoice <b>{bill.invoiceNo ?? "—"}</b></span>
