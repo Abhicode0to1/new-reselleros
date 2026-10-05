@@ -37,7 +37,7 @@ if [ -n "$SECRET" ]; then
     --update-secrets="GEMINI_API_KEY=$SECRET:${VERSION:-latest}" ${MODEL:+--update-env-vars="GEMINI_MODEL=$MODEL"}
 else
   KEY=$(envfield GEMINI_API_KEY value)
-  [ -n "$KEY" ] || { echo "live has no GEMINI_API_KEY either — nothing changed."; exit 1; }
+  [ -n "$KEY" ] || { echo "Live has no GEMINI_API_KEY on the server — it keeps the key inside the app (Settings → Integrations → Gemini, per workspace). Nothing changed. Paste a key there on staging instead."; exit 1; }
   echo "live: plain value, ${#KEY} characters"
   say "2. Give staging the same value"
   gcloud run services update resellersos-staging --region="$R" --project="$P" --quiet \
