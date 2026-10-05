@@ -87,6 +87,9 @@ describe("AI Help prompt and answer, R-162 additions", () => {
     expect(parseHelpAnswer({ reply: "ok", checklist: ["a", "", "b", ...Array(20).fill("c")] })!.checklist).toHaveLength(8);
     expect(parseHelpAnswer({ reply: "ok" })!.checklist).toEqual([]);
   });
+  it("strips markdown the model slipped in", () => {
+    expect(parseHelpAnswer({ reply: "## Steps\n1. **'+ New Quote'** dabaiye" })!.reply).toBe("Steps\n1. '+ New Quote' dabaiye");
+  });
   it("sends the trail and the scan to the model as separate blocks", () => {
     const turn = helpUserTurn([{ role: "user", text: "Is page ko jaancho." }], { trail: "-3s CLICKED: Save", findings: "- [bad_text] NaN", outline: "Headings: Quotes" });
     expect(turn).toContain("WHAT THE APP RECORDED");
@@ -98,6 +101,8 @@ describe("AI Help prompt and answer, R-162 additions", () => {
     expect(helpSystemPrompt({ pagePath: "/x", userName: null, role: null, mode: "scan" })).toMatch(/MODE scan.*checklist/s);
     expect(helpSystemPrompt({ pagePath: "/x", userName: null, role: null, mode: "error" })).toMatch(/do not ask first/);
     expect(helpSystemPrompt({ pagePath: "/x", userName: null, role: null })).toMatch(/MODE chat/);
+    // The panel renders plain text: seen on staging 5 Oct, "**+ New Quote**" shown raw.
+    expect(helpSystemPrompt({ pagePath: "/x", userName: null, role: null })).toMatch(/no markdown/);
   });
   it("files the app's record with the report", () => {
     const d = parseHelpAnswer({ reply: "r", bugDraft: { title: "Save fails", actual: "500", type: "bug", severity: "high", steps: [] } })!.bugDraft!;

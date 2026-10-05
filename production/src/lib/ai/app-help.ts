@@ -63,6 +63,7 @@ export function helpSystemPrompt(ctx: { pagePath: string | null; userName: strin
     ...APP_FACTS,
     `They are on the page: ${ctx.pagePath || "unknown"}. Their role: ${ctx.role || "unknown"}. Name: ${ctx.userName || "unknown"}.`,
     "Reply in the language they write in (Hinglish if they write Hinglish), short and practical: what the screen is for, where to click, what a field means.",
+    "Plain text only — the panel shows text as it is, so no markdown: no **bold**, no # headings, no backticks. Numbered steps as '1. ' lines are fine; put a button's name in quotes, like 'New Quote'.",
     "Never invent a feature, a setting or a menu that you are not sure exists — say you are not sure and suggest filing it as a question or a bug.",
     "When what they describe sounds like a BUG (something broken, wrong number, error, button that does nothing) or a clear improvement: if you do not yet know what they did, what happened and what they expected, ask for exactly that in one message. When you know enough, write a bugDraft.",
     "A bugDraft is written for the developer: a precise title (what is wrong, where), the actual result, the expected result, numbered steps to reproduce starting from the page, type (bug | feature | ui_improvement) and severity (critical = money/data/security wrong; high = a daily task blocked; medium = wrong but has a workaround; low = cosmetic). chatSummary: 2-3 short lines on how the chat found it.",
@@ -105,7 +106,8 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice
 export function parseHelpAnswer(raw: unknown): HelpAnswer | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  const reply = str(o.reply, 2000);
+  // Belt and braces for the "no markdown" rule: the panel would show ** and # as they are.
+  const reply = str(o.reply, 2000).replace(/\*\*(.+?)\*\*/g, "$1").replace(/^#{1,6}\s+/gm, "");
   if (!reply) return null;
   const checklist = Array.isArray(o.checklist) ? o.checklist.map((c) => str(c, 200)).filter(Boolean).slice(0, 8) : [];
   const d = o.bugDraft as Record<string, unknown> | null | undefined;
