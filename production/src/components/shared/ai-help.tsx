@@ -1,14 +1,23 @@
 "use client";
 
 /**
- * AI Help — a chat icon on every app page (R-158, 5 Oct 2026). For people testing the app:
- * ask what a screen does or why something looks wrong; when the chat finds a bug, the AI
- * drafts a proper report, the person reads it and presses "File this report", and it lands
- * in Report Bug / Admin → Feedback under THEIR name, marked "🤖 AI-drafted after chat".
+ * AI Help — a chat icon on every app page (R-158, 5 Oct 2026), now a test co-pilot (R-162).
  *
- * Nothing is filed without that press: the draft is shown in full first (lib/ai/app-help.ts).
- * The chat lives only in this tab (state, not storage) — a closed panel keeps it, a reload
- * starts fresh.
+ * R-158: ask what a screen does or why something looks wrong; when the chat finds a bug, the
+ * AI drafts a proper report, the person reads it and presses "File this report", and it lands
+ * in Admin → Feedback under THEIR name, marked "🤖 AI-drafted after chat".
+ *
+ * R-162 ("testing ko fast aur fully automate karo, human intervention kam se kam"):
+ *  • a TRAIL of this tab — pages, clicks, errors shown, JS errors, failed API calls — so the
+ *    tester never writes steps; the AI writes them from the trail (lib/ai/test-trail.ts);
+ *  • the button turns red the moment something breaks, and "Report it" drafts the report
+ *    from the trail without a single typed word;
+ *  • "Check this page" scans the screen (page-scan.ts) and the AI says what is really wrong
+ *    plus what to test next on it;
+ *  • a draft that looks like an open report says so before anyone files it twice.
+ *
+ * Nothing is filed without the person's press: the draft is shown in full first. The trail
+ * and chat live only in this tab (memory, not storage); text is PII-masked before it is kept.
  */
 import * as React from "react";
 import { usePathname } from "next/navigation";
@@ -17,21 +26,110 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useSubmitFeedback } from "@/lib/queries/feedback";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { bugReportText, AI_FILED_TAG, type BugDraft, type HelpMessage } from "@/lib/ai/app-help";
+import { maskPII } from "@/lib/ux/signals";
+import { bugReportText, AI_FILED_TAG, type BugDraft, type HelpMessage, type HelpMode } from "@/lib/ai/app-help";
+import { pushTrail, isProblem, apiFailureWorthNoting, apiFailText, trailForPrompt, looksLikeSameBug, type TrailEvent, type TrailKind } from "@/lib/ai/test-trail";
+import { scanPage } from "@/components/shared/page-scan";
 
-interface ChatItem extends HelpMessage { draft?: BugDraft | null; filedId?: string; page?: string | null }
+interface ChatItem extends HelpMessage {
+  draft?: BugDraft | null;
+  filedId?: string;
+  page?: string | null;
+  checklist?: string[];
+  similar?: { id: string; title: string }[];
+  /** the trail as it was when this answer came back — filed with the report */
+  recorded?: string | null;
+}
 
 const SEV_LABEL: Record<BugDraft["severity"], string> = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
 const TYPE_LABEL: Record<BugDraft["type"], string> = { bug: "Bug", feature: "Feature", ui_improvement: "UI improvement" };
+const SELF = "[data-ai-help]";
+const CONTROL = "a,button,input,select,textarea,label,summary,[role=button],[role=tab],[role=menuitem],[role=option],[role=checkbox],[role=switch]";
+
+function controlLabel(el: Element): string {
+  const h = el as HTMLElement;
+  const t = h.getAttribute("aria-label") || h.getAttribute("title") || (h.innerText || "").trim().split("\n")[0] || h.getAttribute("placeholder") || h.getAttribute("name") || h.tagName.toLowerCase();
+  return `${h.tagName.toLowerCase() === "a" ? "link" : h.getAttribute("role") || h.tagName.toLowerCase()} "${(maskPII(t, 60) ?? "").slice(0, 60)}"`;
+}
+
+/** Records the tab's trail. Returns the live list (ref) and how many problems arrived unseen. */
+function useTrail(pathname: string) {
+  const trail = React.useRef<TrailEvent[]>([]);
+  const pathRef = React.useRef(pathname);
+  const [unseen, setUnseen] = React.useState<TrailEvent | null>(null);
+
+  const add = React.useCallback((kind: TrailKind, text: string | null | undefined) => {
+    if (!text) return;
+    const ev: TrailEvent = { kind, at: Date.now(), text: maskPII(text, 200) ?? "", path: pathRef.current };
+    trail.current = pushTrail(trail.current, ev);
+    if (isProblem(ev)) setUnseen(ev);
+  }, []);
+
+  React.useEffect(() => { pathRef.current = pathname; add("page", pathname); }, [pathname, add]);
+
+  React.useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      if (!(t instanceof Element) || t.closest(SELF)) return;
+      const c = t.closest(CONTROL);
+      if (c) add("click", controlLabel(c));
+    };
+    const onError = (e: ErrorEvent) => add("error", e.message);
+    const onRejection = (e: PromiseRejectionEvent) => {
+      const r = e.reason as { message?: string } | string | undefined;
+      add("error", typeof r === "string" ? r : r?.message ?? "Unhandled promise rejection");
+    };
+    const mo = new MutationObserver((muts) => {
+      for (const m of muts) for (const n of Array.from(m.addedNodes)) {
+        if (!(n instanceof Element)) continue;
+        const toastEl = n.matches?.("[data-sonner-toast][data-type=error]") ? n : n.querySelector?.("[data-sonner-toast][data-type=error]");
+        if (toastEl) add("toast_error", (toastEl.textContent || "").trim());
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+
+    /* Failed requests: wrap fetch once. The wrapper only reads the method, URL and status —
+       never a body — and our own AI Help calls are not recorded. */
+    const w = window as Window & { __aiHelpFetch?: typeof fetch };
+    const original = w.__aiHelpFetch ?? window.fetch;
+    w.__aiHelpFetch = original;
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const method = init?.method ?? (typeof input === "object" && "method" in input ? input.method : "GET");
+      try {
+        const res = await original(input, init);
+        if (!url.includes("/api/ai/help") && apiFailureWorthNoting(url, res.status)) add("api_fail", apiFailText(method, url, res.status));
+        return res;
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === "AbortError") && !url.includes("/api/ai/help")) add("api_fail", apiFailText(method, url, 0));
+        throw err;
+      }
+    };
+
+    document.addEventListener("click", onClick, true);
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+      mo.disconnect();
+      window.fetch = original;
+    };
+  }, [add]);
+
+  return { trail, unseen, clearUnseen: () => setUnseen(null) };
+}
 
 export function AiHelp() {
-  const pathname = usePathname();
+  const pathname = usePathname() || "/";
   const { data: currentUser } = useCurrentUser();
   const submit = useSubmitFeedback();
+  const { trail, unseen, clearUnseen } = useTrail(pathname);
   const [open, setOpen] = React.useState(false);
   const [items, setItems] = React.useState<ChatItem[]>([]);
   const [text, setText] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
+  const [busy, setBusy] = React.useState<false | HelpMode>(false);
   const [filing, setFiling] = React.useState<number | null>(null);
   const endRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
@@ -39,26 +137,51 @@ export function AiHelp() {
   React.useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [items, busy, open]);
   React.useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 50); }, [open]);
 
-  async function send(e?: React.FormEvent) {
-    e?.preventDefault();
-    const q = text.trim();
-    if (!q || busy) return;
-    const next: ChatItem[] = [...items, { role: "user", text: q, page: pathname }];
-    setItems(next); setText(""); setBusy(true);
+  async function ask(mode: HelpMode, typed?: string) {
+    if (busy) return;
+    const shown = mode === "scan" ? "🔍 Is page ko jaancho" : mode === "error" ? "⚠️ Abhi wale error ki report banao" : typed ?? "";
+    const prior = items.map(({ role, text: t }) => ({ role, text: t }));
+    const messages = mode === "chat" ? [...prior, { role: "user" as const, text: shown }] : prior;
+    let scan: ReturnType<typeof scanPage> | null = null;
+    if (mode === "scan") { try { scan = scanPage(trail.current, pathname); } catch { scan = { findings: [], outline: "" }; } }
+    if (mode === "error") clearUnseen();
+    setItems((s) => [...s, { role: "user", text: shown, page: pathname }]);
+    setBusy(mode);
+    const recorded = trailForPrompt(trail.current.slice(-15));
     try {
       const res = await fetch("/api/ai/help", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next.map(({ role, text: t }) => ({ role, text: t })), pagePath: pathname }),
+        body: JSON.stringify({
+          messages, pagePath: pathname, mode, trail: trail.current,
+          ...(scan ? { findings: scan.findings, outline: scan.outline } : {}),
+        }),
       });
-      const j = (await res.json().catch(() => ({}))) as { reply?: string; bugDraft?: BugDraft | null; error?: string };
-      const reply = j.reply || j.error || "Jawab nahi aaya — dobara try karein.";
-      setItems((s) => [...s, { role: "assistant", text: reply, draft: j.bugDraft ?? null, page: pathname }]);
+      const j = (await res.json().catch(() => ({}))) as { reply?: string; bugDraft?: BugDraft | null; checklist?: string[]; similar?: { id: string; title: string }[]; error?: string; ai?: boolean };
+      let reply = j.reply || j.error || "Jawab nahi aaya — dobara try karein.";
+      if (scan && scan.findings.length && j.ai !== true) reply += `\n\nAutomatic jaanch ne ${scan.findings.length} cheez(ein) pakdi:\n` + scan.findings.map((f) => `• ${f.detail}`).join("\n");
+      setItems((s) => {
+        /* The same bug drafted earlier in THIS chat (an error report, then a page scan that
+           finds the same failed call) is a duplicate too — say so on the new draft. */
+        const earlier = j.bugDraft
+          ? s.filter((x) => x.draft && looksLikeSameBug({ title: j.bugDraft!.title, pagePath: pathname }, { title: x.draft.title, page_path: x.page ?? null }))
+              .map((x) => ({ id: x.filedId ?? "draft", title: x.draft!.title }))
+          : [];
+        return [...s, { role: "assistant", text: reply, draft: j.bugDraft ?? null, checklist: j.checklist ?? [], similar: [...earlier, ...(j.similar ?? [])].slice(0, 3), page: pathname, recorded }];
+      });
     } catch {
       setItems((s) => [...s, { role: "assistant", text: "Connection nahi bana — dobara try karein. Bug ho to 'Report Bug' button bhi chalta hai." }]);
     } finally {
       setBusy(false);
     }
+  }
+
+  function send(e?: React.FormEvent) {
+    e?.preventDefault();
+    const q = text.trim();
+    if (!q || busy) return;
+    setText("");
+    void ask("chat", q);
   }
 
   async function file(idx: number) {
@@ -70,7 +193,7 @@ export function AiHelp() {
         tenantId: currentUser?.tenantId ?? "",
         reportedType: it.draft.type,
         reportedSeverity: it.draft.severity,
-        text: bugReportText(it.draft, { pagePath: it.page ?? pathname, reporterName: currentUser?.fullName ?? null }),
+        text: bugReportText(it.draft, { pagePath: it.page ?? pathname, reporterName: currentUser?.fullName ?? null, recorded: it.recorded ?? null }),
         pagePath: it.page ?? pathname,
         reporterId: currentUser?.userId ?? null,
         reporterName: currentUser?.fullName ?? null,
@@ -89,17 +212,17 @@ export function AiHelp() {
   }
 
   return (
-    <>
+    <div data-ai-help>
       {!open && (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="AI Help — app ke baare mein poochho ya bug batao"
-          title="AI Help"
-          className="fixed z-50 right-4 bottom-20 md:bottom-5 h-12 pl-3.5 pr-4 rounded-full bg-ink text-paper shadow-lg flex items-center gap-2 text-sm font-semibold hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber"
+          aria-label={unseen ? "AI Help — ek error pakda gaya, report banayein" : "AI Help — app ke baare mein poochho ya bug batao"}
+          title={unseen ? `Error: ${unseen.text}` : "AI Help"}
+          className={`fixed z-50 right-4 bottom-20 md:bottom-5 h-12 pl-3.5 pr-4 rounded-full shadow-lg flex items-center gap-2 text-sm font-semibold hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber ${unseen ? "bg-red-600 text-white animate-pulse" : "bg-ink text-paper"}`}
         >
-          <Icon name="sparkles" size={18} />
-          <span>AI Help</span>
+          <Icon name={unseen ? "alert" : "sparkles"} size={18} />
+          <span>{unseen ? "Error caught" : "AI Help"}</span>
         </button>
       )}
 
@@ -107,13 +230,13 @@ export function AiHelp() {
         <section
           role="dialog"
           aria-label="AI Help"
-          className="fixed z-50 right-2 left-2 bottom-20 md:left-auto md:right-5 md:bottom-5 md:w-[400px] h-[min(560px,calc(100vh-7rem))] flex flex-col rounded-2xl border border-hairline bg-paper shadow-2xl overflow-hidden"
+          className="fixed z-50 right-2 left-2 bottom-20 md:left-auto md:right-5 md:bottom-5 md:w-[420px] h-[min(600px,calc(100vh-7rem))] flex flex-col rounded-2xl border border-hairline bg-paper shadow-2xl overflow-hidden"
         >
           <header className="flex items-center gap-2 px-4 py-3 border-b border-hairline bg-paper-2/60">
             <Icon name="sparkles" size={16} className="text-amber-ink" />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold text-ink">AI Help</div>
-              <div className="text-2xs text-ink-3 truncate">Is page par: {pathname}</div>
+              <div className="text-2xs text-ink-3 truncate">On this page: {pathname}</div>
             </div>
             {items.length > 0 && (
               <button type="button" className="text-2xs text-ink-3 hover:text-ink" onClick={() => setItems([])}>New chat</button>
@@ -123,17 +246,44 @@ export function AiHelp() {
             </button>
           </header>
 
+          {unseen && (
+            <div className="px-3 py-2 border-b border-hairline bg-red-50 text-red-900 text-xs flex items-start gap-2">
+              <Icon name="alert" size={14} className="mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold">Error caught</div>
+                <div className="break-words">{unseen.text}</div>
+              </div>
+              <Button size="sm" variant="primary" disabled={!!busy} onClick={() => void ask("error")}>Report it</Button>
+              <button type="button" aria-label="Dismiss" className="p-1 opacity-70 hover:opacity-100" onClick={clearUnseen}><Icon name="x" size={12} /></button>
+            </div>
+          )}
+
+          <div className="px-3 py-2 border-b border-hairline flex gap-2">
+            <Button size="sm" variant="outline" icon="search" loading={busy === "scan"} disabled={!!busy} onClick={() => void ask("scan")}>
+              Check this page
+            </Button>
+          </div>
+
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
             {items.length === 0 && (
               <div className="text-sm text-ink-2 space-y-2 p-1">
-                <p>Testing karte koi confusion ho to yahan poochhiye — ye screen kis kaam ki hai, kahan click karna hai, number sahi kyun nahi dikh raha.</p>
-                <p>Bug mila to bataiye kya kiya aur kya hua. Main saaf report bana dunga; aap dekh kar <b>File</b> karenge, aur report aapke naam se jaayegi.</p>
+                <p><b>Check this page</b> dabaiye: main screen jaanch kar bataunga kya galat hai, aur aage kya test karna hai.</p>
+                <p>Main aapke clicks aur errors khud yaad rakhta hoon. Bug mile to bas likhiye "ye galat hai" — steps main likh dunga. Error aate hi ye button laal ho jaayega.</p>
+                <p className="text-ink-3 text-xs">Report tabhi jaati hai jab aap draft dekh kar <b>File</b> dabate hain — aapke naam se.</p>
               </div>
             )}
             {items.map((m, i) => (
               <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-                <div className={`max-w-[88%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-ink text-paper" : "bg-paper-2 text-ink"}`}>
+                <div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-ink text-paper" : "bg-paper-2 text-ink"}`}>
                   {m.text}
+                  {m.checklist && m.checklist.length > 0 && (
+                    <div className="mt-2 rounded-lg border border-hairline bg-paper p-2.5 text-ink">
+                      <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Test next</div>
+                      <ul className="text-xs space-y-1">
+                        {m.checklist.map((c, j) => <li key={j} className="flex gap-1.5"><span className="text-ink-3">☐</span><span>{c}</span></li>)}
+                      </ul>
+                    </div>
+                  )}
                   {m.draft && (
                     <div className="mt-2 rounded-lg border border-hairline bg-paper p-2.5 text-ink space-y-1.5">
                       <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Bug report — draft</div>
@@ -143,6 +293,12 @@ export function AiHelp() {
                       {m.draft.expected && <div className="text-xs"><b>Kya hona chahiye:</b> {m.draft.expected}</div>}
                       {m.draft.steps.length > 0 && (
                         <ol className="text-xs list-decimal pl-4 space-y-0.5">{m.draft.steps.map((s, j) => <li key={j}>{s}</li>)}</ol>
+                      )}
+                      {m.recorded && <div className="text-2xs text-ink-3">+ the app&apos;s record of your last steps is attached</div>}
+                      {m.similar && m.similar.length > 0 && !m.filedId && (
+                        <div className="text-xs rounded-md bg-amber-50 text-amber-900 px-2 py-1.5">
+                          <b>Already reported?</b> Same as: {m.similar.map((x) => `“${x.title}”`).join(", ")}. File only if this is different.
+                        </div>
                       )}
                       <div className="text-2xs text-ink-3">{AI_FILED_TAG} · aapke naam se: {currentUser?.fullName ?? "—"}</div>
                       {m.filedId ? (
@@ -155,7 +311,7 @@ export function AiHelp() {
                 </div>
               </div>
             ))}
-            {busy && <div className="text-xs text-ink-3 px-1">AI soch raha hai…</div>}
+            {busy && <div className="text-xs text-ink-3 px-1">{busy === "scan" ? "Page jaanch raha hoon…" : busy === "error" ? "Report bana raha hoon…" : "AI soch raha hai…"}</div>}
             <div ref={endRef} />
           </div>
 
@@ -166,16 +322,16 @@ export function AiHelp() {
               ref={inputRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
               rows={2}
               maxLength={1500}
               placeholder="Jaise: Invoice par GST galat kyun aa raha hai?"
               className="flex-1 resize-none rounded-lg border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber"
             />
-            <Button type="submit" size="sm" variant="primary" loading={busy} disabled={!text.trim()}>Send</Button>
+            <Button type="submit" size="sm" variant="primary" loading={busy === "chat"} disabled={!text.trim() || !!busy}>Send</Button>
           </form>
         </section>
       )}
-    </>
+    </div>
   );
 }

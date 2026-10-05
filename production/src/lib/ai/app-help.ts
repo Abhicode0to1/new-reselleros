@@ -32,7 +32,15 @@ export interface BugDraft {
   chatSummary: string;
 }
 
-export interface HelpAnswer { reply: string; bugDraft: BugDraft | null }
+/** checklist (R-162): what to try next on this screen, from the page scan. */
+export interface HelpAnswer { reply: string; bugDraft: BugDraft | null; checklist: string[] }
+
+/**
+ * Why AI Help was asked (R-162). "chat" = the person typed; "scan" = they pressed "Check this
+ * page" and the findings come with it; "error" = the app saw something break and they tapped
+ * "Report it", so the trail IS the description.
+ */
+export type HelpMode = "chat" | "scan" | "error";
 
 export const HELP_MAX_MESSAGES = 20;
 export const HELP_MAX_CHARS = 1500;
@@ -48,7 +56,8 @@ const APP_FACTS = [
   "There is a 'Report Bug' button in the top bar (Ctrl+Shift+B). Reports go to Admin → Feedback, where an AI triages them.",
 ];
 
-export function helpSystemPrompt(ctx: { pagePath: string | null; userName: string | null; role: string | null }): string {
+export function helpSystemPrompt(ctx: { pagePath: string | null; userName: string | null; role: string | null; mode?: HelpMode }): string {
+  const mode = ctx.mode ?? "chat";
   return [
     "You are AI Help inside ResellerOS. The person is testing the app and may be confused or may have found a bug.",
     ...APP_FACTS,
@@ -57,17 +66,34 @@ export function helpSystemPrompt(ctx: { pagePath: string | null; userName: strin
     "Never invent a feature, a setting or a menu that you are not sure exists — say you are not sure and suggest filing it as a question or a bug.",
     "When what they describe sounds like a BUG (something broken, wrong number, error, button that does nothing) or a clear improvement: if you do not yet know what they did, what happened and what they expected, ask for exactly that in one message. When you know enough, write a bugDraft.",
     "A bugDraft is written for the developer: a precise title (what is wrong, where), the actual result, the expected result, numbered steps to reproduce starting from the page, type (bug | feature | ui_improvement) and severity (critical = money/data/security wrong; high = a daily task blocked; medium = wrong but has a workaround; low = cosmetic). chatSummary: 2-3 short lines on how the chat found it.",
+    "You may also receive WHAT THE APP RECORDED (the person's recent clicks, pages, errors and failed API calls, oldest first; lines starting !! are problems). Use it: write the steps to reproduce FROM that trail instead of asking the person what they did, and quote the exact error or failed call. Ask only what the trail cannot tell you (usually: what they expected).",
+    mode === "scan"
+      ? "MODE scan: the person pressed 'Check this page'. You get AUTOMATIC FINDINGS and the PAGE OUTLINE. In reply: a one-line verdict, then what is really wrong (drop findings that are harmless and say why in a few words). If a finding is a real bug, write a bugDraft for the most serious one. Always fill checklist with 4-7 short, concrete things to test next on THIS screen, taken from the outline (which button, which edge case: empty value, 0, a huge amount, another GST state, the back button, phone width)."
+      : mode === "error"
+        ? "MODE error: the app caught a problem (the last !! lines of the trail) and the person tapped 'Report it'. Write the bugDraft straight away from the trail — do not ask first; give your best guess of the expected result and say it is a guess. reply: one or two lines on what broke."
+        : "MODE chat: answer the person. checklist may stay empty.",
     "Do not say the report is filed — the person files it with a button after reading your draft. Say: 'Draft taiyaar hai — neeche dekh kar File karein.'",
-    'Answer ONLY as JSON: {"reply": string, "bugDraft": null | {"title": string, "type": string, "severity": string, "actual": string, "expected": string, "steps": string[], "chatSummary": string}}',
+    'Answer ONLY as JSON: {"reply": string, "checklist": string[], "bugDraft": null | {"title": string, "type": string, "severity": string, "actual": string, "expected": string, "steps": string[], "chatSummary": string}}',
   ].join("\n");
 }
 
-/** The chat as one user turn for the model: last HELP_MAX_MESSAGES, each capped. */
-export function helpUserTurn(messages: readonly HelpMessage[]): string {
-  return messages
+/**
+ * The chat as one user turn for the model: last HELP_MAX_MESSAGES, each capped — plus, when
+ * the panel sent them (R-162), what the app recorded and what the page scan found.
+ */
+export function helpUserTurn(
+  messages: readonly HelpMessage[],
+  extra: { trail?: string | null; findings?: string | null; outline?: string | null } = {},
+): string {
+  const chat = messages
     .slice(-HELP_MAX_MESSAGES)
     .map((m) => `${m.role === "user" ? "PERSON" : "AI HELP"}: ${m.text.slice(0, HELP_MAX_CHARS)}`)
     .join("\n\n");
+  const blocks = [chat];
+  if (extra.trail) blocks.push(`WHAT THE APP RECORDED (oldest first):\n${extra.trail.slice(0, 6000)}`);
+  if (extra.findings) blocks.push(`AUTOMATIC FINDINGS on this page:\n${extra.findings.slice(0, 5000)}`);
+  if (extra.outline) blocks.push(`PAGE OUTLINE:\n${extra.outline.slice(0, 1500)}`);
+  return blocks.join("\n\n---\n\n");
 }
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -81,16 +107,18 @@ export function parseHelpAnswer(raw: unknown): HelpAnswer | null {
   const o = raw as Record<string, unknown>;
   const reply = str(o.reply, 2000);
   if (!reply) return null;
+  const checklist = Array.isArray(o.checklist) ? o.checklist.map((c) => str(c, 200)).filter(Boolean).slice(0, 8) : [];
   const d = o.bugDraft as Record<string, unknown> | null | undefined;
-  if (!d || typeof d !== "object") return { reply, bugDraft: null };
+  if (!d || typeof d !== "object") return { reply, bugDraft: null, checklist };
   const title = str(d.title, 160);
   const actual = str(d.actual, 1200);
-  if (!title || !actual) return { reply, bugDraft: null };
+  if (!title || !actual) return { reply, bugDraft: null, checklist };
   const type = TYPES.includes(d.type as FeedbackType) ? (d.type as FeedbackType) : "bug";
   const severity = SEVERITIES.includes(d.severity as FeedbackSeverity) ? (d.severity as FeedbackSeverity) : "medium";
   const steps = Array.isArray(d.steps) ? d.steps.map((s) => str(s, 300)).filter(Boolean).slice(0, 12) : [];
   return {
     reply,
+    checklist,
     bugDraft: { title, type, severity, actual, expected: str(d.expected, 1200), steps, chatSummary: str(d.chatSummary, 600) },
   };
 }
@@ -103,7 +131,7 @@ export const AI_FILED_TAG = "🤖 AI-drafted after chat";
  * dialog's rows are read), then the developer's sections, then the short AI tag with whose
  * report it is.
  */
-export function bugReportText(d: BugDraft, ctx: { pagePath: string | null; reporterName: string | null }): string {
+export function bugReportText(d: BugDraft, ctx: { pagePath: string | null; reporterName: string | null; recorded?: string | null }): string {
   const lines = [
     d.title,
     "",
@@ -114,6 +142,9 @@ export function bugReportText(d: BugDraft, ctx: { pagePath: string | null; repor
   ];
   if (d.expected) lines.push("", "What should happen:", d.expected);
   if (d.steps.length) lines.push("", "Steps to see it:", ...d.steps.map((s, i) => `${i + 1}. ${s}`));
+  /* R-162: the app's own record of the last moves and errors — the developer's best clue,
+     and the part no reporter writes down. */
+  if (ctx.recorded) lines.push("", "What the app recorded (last steps):", ctx.recorded.slice(0, 2500));
   lines.push("", `${AI_FILED_TAG} with ${ctx.reporterName || "the reporter"}.`);
   return lines.join("\n");
 }
