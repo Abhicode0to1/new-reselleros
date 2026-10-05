@@ -21,13 +21,16 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import { rateLimit } from "@/lib/security/rate-limit";
 import { maskPII } from "@/lib/ux/signals";
+import { pagePurpose } from "@/lib/ai/page-purpose";
 import { helpSystemPrompt, helpUserTurn, parseHelpAnswer, HELP_MAX_CHARS, HELP_MAX_MESSAGES } from "@/lib/ai/app-help";
 import { trailForPrompt, findingsForPrompt, looksLikeSameBug, TRAIL_MAX, FINDINGS_MAX, type TrailEvent, type Finding } from "@/lib/ai/test-trail";
 
 const bodySchema = z.object({
   messages: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().trim().min(1).max(HELP_MAX_CHARS * 2) })).max(HELP_MAX_MESSAGES * 2).default([]),
   pagePath: z.string().max(300).nullable().optional(),
-  mode: z.enum(["chat", "scan", "error"]).default("chat"),
+  mode: z.enum(["chat", "scan", "error", "check_failed"]).default("chat"),
+  /** check_failed: the "Test next" line the person marked as failed. */
+  failedCheck: z.string().trim().max(300).optional(),
   trail: z.array(z.object({
     kind: z.enum(["page", "click", "error", "api_fail", "toast_error"]),
     at: z.number(),
@@ -59,7 +62,10 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Message samajh nahi aaya — dobara likhiye." }, { status: 400 });
   const { pagePath, mode, outline } = parsed.data;
   const messages = [...parsed.data.messages];
-  if (mode !== "chat") messages.push({ role: "user", text: MODE_PROMPT[mode] });
+  if (mode === "check_failed") {
+    if (!parsed.data.failedCheck) return NextResponse.json({ error: "Which test failed?" }, { status: 400 });
+    messages.push({ role: "user", text: `Ye test fail hua: "${parsed.data.failedCheck}". Iski bug report banao.` });
+  } else if (mode !== "chat") messages.push({ role: "user", text: MODE_PROMPT[mode] });
   if (!messages.length || messages[messages.length - 1].role !== "user") return NextResponse.json({ error: "Last message must be yours." }, { status: 400 });
 
   const trail: TrailEvent[] = (parsed.data.trail ?? []).map((e) => ({ ...e, text: maskPII(e.text, 200) ?? "", path: e.path }));
@@ -74,7 +80,7 @@ export async function POST(request: NextRequest) {
   const raw = await geminiJson<unknown>({
     apiKey: gemini.apiKey,
     model: gemini.model,
-    system: helpSystemPrompt({ pagePath: pagePath ?? null, userName: me?.full_name ?? null, role: me?.role ?? null, mode }),
+    system: helpSystemPrompt({ pagePath: pagePath ?? null, userName: me?.full_name ?? null, role: me?.role ?? null, mode, pagePurpose: pagePurpose(pagePath) }),
     user: helpUserTurn(messages, {
       trail: trail.length ? trailForPrompt(trail) : null,
       findings: mode === "scan" ? findingsForPrompt(findings) : null,

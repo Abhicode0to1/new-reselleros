@@ -40,7 +40,7 @@ export interface HelpAnswer { reply: string; bugDraft: BugDraft | null; checklis
  * page" and the findings come with it; "error" = the app saw something break and they tapped
  * "Report it", so the trail IS the description.
  */
-export type HelpMode = "chat" | "scan" | "error";
+export type HelpMode = "chat" | "scan" | "error" | "check_failed";
 
 export const HELP_MAX_MESSAGES = 20;
 export const HELP_MAX_CHARS = 1500;
@@ -56,12 +56,15 @@ const APP_FACTS = [
   "There is a 'Report Bug' button in the top bar (Ctrl+Shift+B). Reports go to Admin → Feedback, where an AI triages them.",
 ];
 
-export function helpSystemPrompt(ctx: { pagePath: string | null; userName: string | null; role: string | null; mode?: HelpMode }): string {
+export function helpSystemPrompt(ctx: { pagePath: string | null; userName: string | null; role: string | null; mode?: HelpMode; pagePurpose?: string | null }): string {
   const mode = ctx.mode ?? "chat";
   return [
     "You are AI Help inside ResellerOS. The person is testing the app and may be confused or may have found a bug.",
     ...APP_FACTS,
     `They are on the page: ${ctx.pagePath || "unknown"}. Their role: ${ctx.role || "unknown"}. Name: ${ctx.userName || "unknown"}.`,
+    ctx.pagePurpose
+      ? `WHAT THIS PAGE IS FOR (trust this over guessing from the URL or the buttons): ${ctx.pagePurpose}`
+      : "This page's purpose is not described — infer it from the outline, and say so if unsure.",
     "Reply in the language they write in (Hinglish if they write Hinglish), short and practical: what the screen is for, where to click, what a field means.",
     "Plain text only — the panel shows text as it is, so no markdown: no **bold**, no # headings, no backticks. Numbered steps as '1. ' lines are fine; put a button's name in quotes, like 'New Quote'.",
     "Never invent a feature, a setting or a menu that you are not sure exists — say you are not sure and suggest filing it as a question or a bug.",
@@ -72,7 +75,9 @@ export function helpSystemPrompt(ctx: { pagePath: string | null; userName: strin
       ? "MODE scan: the person pressed 'Check this page'. You get AUTOMATIC FINDINGS and the PAGE OUTLINE. In reply: a one-line verdict, then what is really wrong (drop findings that are harmless and say why in a few words). If a finding is a real bug, write a bugDraft for the most serious one. Always fill checklist with 4-7 short, concrete things to test next on THIS screen, taken from the outline (which button, which edge case: empty value, 0, a huge amount, another GST state, the back button, phone width)."
       : mode === "error"
         ? "MODE error: the app caught a problem (the last !! lines of the trail) and the person tapped 'Report it'. Write the bugDraft straight away from the trail — do not ask first; give your best guess of the expected result and say it is a guess. reply: one or two lines on what broke."
-        : "MODE chat: answer the person. checklist may stay empty.",
+        : mode === "check_failed"
+          ? "MODE check_failed: the person ran one of your suggested tests (quoted in their message) and pressed 'failed'. Write the bugDraft NOW — do not ask first: the title says what failed and where; expected = what the test said should happen; actual = that it did not, plus anything the trail shows (errors, failed calls); steps = the test itself, from this page. If something is unknown, write 'not recorded' rather than inventing it. reply: one line."
+          : "MODE chat: answer the person. checklist may stay empty.",
     "Do not say the report is filed — the person files it with a button after reading your draft. Say: 'Draft taiyaar hai — neeche dekh kar File karein.'",
     'Answer ONLY as JSON: {"reply": string, "checklist": string[], "bugDraft": null | {"title": string, "type": string, "severity": string, "actual": string, "expected": string, "steps": string[], "chatSummary": string}}',
   ].join("\n");

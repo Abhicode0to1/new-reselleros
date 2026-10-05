@@ -164,6 +164,8 @@ export function AiHelp() {
   const [text, setText] = React.useState("");
   const [busy, setBusy] = React.useState<false | HelpMode>(false);
   const [filing, setFiling] = React.useState<number | null>(null);
+  /** "Test next" marks, keyed "<message index>:<line index>". */
+  const [checks, setChecks] = React.useState<Record<string, "ok" | "fail">>({});
   const endRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -172,7 +174,7 @@ export function AiHelp() {
 
   async function ask(mode: HelpMode, typed?: string) {
     if (busy) return;
-    const shown = mode === "scan" ? "🔍 Is page ko jaancho" : mode === "error" ? "⚠️ Abhi wale error ki report banao" : typed ?? "";
+    const shown = mode === "scan" ? "🔍 Is page ko jaancho" : mode === "error" ? "⚠️ Abhi wale error ki report banao" : mode === "check_failed" ? `✗ Test fail: ${typed ?? ""}` : typed ?? "";
     const prior = items.map(({ role, text: t }) => ({ role, text: t }));
     const messages = mode === "chat" ? [...prior, { role: "user" as const, text: shown }] : prior;
     let scan: ReturnType<typeof scanPage> | null = null;
@@ -188,6 +190,7 @@ export function AiHelp() {
         body: JSON.stringify({
           messages, pagePath: pathname, mode, trail: trail.current,
           ...(scan ? { findings: scan.findings, outline: scan.outline } : {}),
+          ...(mode === "check_failed" ? { failedCheck: typed } : {}),
         }),
       });
       const j = (await res.json().catch(() => ({}))) as { reply?: string; bugDraft?: BugDraft | null; checklist?: string[]; similar?: { id: string; title: string }[]; error?: string; ai?: boolean };
@@ -259,7 +262,7 @@ export function AiHelp() {
               <div className="text-2xs text-ink-3 truncate">On this page: {pathname}</div>
             </div>
             {items.length > 0 && (
-              <button type="button" className="text-2xs text-ink-3 hover:text-ink" onClick={() => setItems([])}>New chat</button>
+              <button type="button" className="text-2xs text-ink-3 hover:text-ink" onClick={() => { setItems([]); setChecks({}); }}>New chat</button>
             )}
             <button type="button" aria-label="Close" className="p-1 text-ink-3 hover:text-ink" onClick={() => setOpen(false)}>
               <Icon name="x" size={16} />
@@ -300,7 +303,27 @@ export function AiHelp() {
                     <div className="mt-2 rounded-lg border border-hairline bg-paper p-2.5 text-ink">
                       <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Test next</div>
                       <ul className="text-xs space-y-1">
-                        {m.checklist.map((c, j) => <li key={j} className="flex gap-1.5"><span className="text-ink-3">☐</span><span>{c}</span></li>)}
+                        {/* Each suggested test can be marked (5 Oct 2026, Pardeep): ✓ passed, or
+                            ✗ failed — which drafts the bug report for that test straight away. */}
+                        {m.checklist.map((c, j) => {
+                          const k = `${i}:${j}`;
+                          const st = checks[k];
+                          return (
+                            <li key={j} className="flex items-start gap-1.5">
+                              <span className={`flex-1 ${st === "ok" ? "line-through text-ink-3" : st === "fail" ? "text-rose" : ""}`}>{c}</span>
+                              <span className="flex gap-1 shrink-0">
+                                <button type="button" aria-label={`Passed: ${c}`} title="Worked"
+                                  disabled={!!st || !!busy}
+                                  onClick={() => setChecks((s) => ({ ...s, [k]: "ok" }))}
+                                  className={`w-6 h-6 rounded-md border text-xs font-bold ${st === "ok" ? "bg-emerald text-white border-emerald" : "border-hairline text-emerald hover:bg-emerald-soft"} disabled:opacity-60`}>✓</button>
+                                <button type="button" aria-label={`Failed: ${c}`} title="Did not work — draft a bug report"
+                                  disabled={!!st || !!busy}
+                                  onClick={() => { setChecks((s) => ({ ...s, [k]: "fail" })); void ask("check_failed", c); }}
+                                  className={`w-6 h-6 rounded-md border text-xs font-bold ${st === "fail" ? "bg-rose text-white border-rose" : "border-hairline text-rose hover:bg-rose-soft"} disabled:opacity-60`}>✗</button>
+                              </span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
