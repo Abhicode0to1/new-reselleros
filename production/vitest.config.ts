@@ -28,6 +28,7 @@ export default defineConfig({
     // can only be reached by extracting it. Keeping those under src/ would imply the app
     // ships them.
     include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
-    exclude: ["node_modules", "e2e", ".next", "dist", "playwright-report", "test-results"],
+    // tests/isolation needs a real Postgres (npm run db:local) — run it with npm run test:isolation.
+    exclude: ["node_modules", "e2e", ".next", "dist", "playwright-report", "test-results", "tests/isolation/**"],
   },
 });
