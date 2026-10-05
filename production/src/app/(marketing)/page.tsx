@@ -1,59 +1,49 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { HomeV2 } from "@/site/components/home/HomeV2";
-import { HOME_FAQS } from "@/site/lib/data/home-faqs";
+import { HomeCompany } from "@/site/components/home/HomeCompany";
+import { COMPANY_FAQS } from "@/site/lib/data/company-faqs";
 import { COMPANY, SITE_URL } from "@/site/lib/config";
 import { fetchLiveWorkspace, mergeEditions } from "@/site/lib/live-catalog";
+import { MAIL_RATES } from "@/site/lib/data/catalog";
 
 /**
- * Home — the email-first "Anutech Home v2" (5 Sep 2026). The body is <HomeV2/>
- * (suite → edition → Buy/Trial/Quote); the shared chrome wraps it.
+ * Home — the whole company (R-155, 5 Oct 2026). Pardeep: the home is about Anutech Digital,
+ * not one category, and custom software / office automation gets the most weight; email,
+ * domains, hosting and SSL follow as "IT for your office". The old email-first home
+ * (HomeV2) is now the Business Email category page at /email, with its Product JSON-LD.
  *
- * A signed-in operator hitting "/" is sent to their workspace; "?preview=1"
- * keeps them on the marketing page (the logo links there so it never bounces).
- *
- * SEO + AI answer-ability (per the 5 Sep web research): the JSON-LD @graph now
- * also carries a Product + AggregateOffer per suite with real ₹ prices, and a
- * FAQPage matching the on-page FAQ — the markup an engine or an LLM reads to
- * quote what Anutech sells and for how much. Every figure comes from
- * LICENCE_EDITIONS, never invented.
+ * A signed-in operator hitting "/" is sent to their workspace; "?preview=1" keeps them on
+ * the marketing page (the logo links there so it never bounces).
  */
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Anutech Digital — Google Workspace, Microsoft 365, Zoho, Domains, Hosting & Email in India",
+    absolute: "Anutech Digital — Custom software & office automation, business email, domains and hosting in India",
   },
   description:
-    "Anutech Digital is a Delhi-based Google Premier Partner (since 2014). Buy Google Workspace, Microsoft 365 and Zoho licences, domains, cPanel hosting and business email in rupees — published prices, GST invoices, free migration and WhatsApp support.",
+    "Anutech Digital builds custom software and office automation for Indian businesses — leads, quotes, GST invoices, approvals, staff and reports in one system. Fixed quotes, demos at every milestone. Also Google Workspace, Microsoft 365, domains and hosting since 2014.",
   keywords: [
     "Anutech Digital",
-    "Google Workspace price India",
-    "Microsoft 365 reseller India",
-    "Zoho Workplace India",
-    "business email India GST invoice",
-    "buy domain India rupees",
-    "cPanel hosting India",
-    "Google Premier Partner Delhi",
+    "custom software development India",
+    "office automation software India",
+    "business process automation Delhi",
+    "custom CRM and billing software",
+    "GST invoice software custom",
+    "Google Workspace partner India",
+    "business email domains hosting India",
   ],
   alternates: { canonical: `${SITE_URL}/` },
   openGraph: {
-    title: "Anutech Digital — Google Workspace, Microsoft 365, Zoho, Domains & Hosting",
+    title: "Anutech Digital — Custom software & office automation",
     description:
-      "Google Premier Partner in Delhi since 2014. Licences, domains, hosting and business email in rupees — published prices, GST invoices, free migration, WhatsApp support.",
+      "Software built for how your business works: enquiries, quotes, GST invoices, approvals, staff and reports. Fixed quote first, a working demo at every milestone. Delhi, since 2014.",
     url: `${SITE_URL}/`,
     siteName: "Anutech Digital",
     type: "website",
     locale: "en_IN",
   },
 };
-
-/** Suite → its editions, for the Product/Offer structured data. */
-const SUITES: { name: string; prefix: string; desc: string }[] = [
-  { name: "Google Workspace", prefix: "GW ", desc: "Gmail, Meet, Drive and Docs on your own domain, billed in rupees with a GST invoice." },
-  { name: "Microsoft 365", prefix: "M365 ", desc: "Outlook, Teams and OneDrive for your team, billed in rupees with a GST invoice." },
-  { name: "Zoho Workplace", prefix: "Zoho", desc: "Mail plus Writer, Sheet and Show — the cheapest full suite, billed in rupees." },
-];
 
 export default async function HomePage(
   props: {
@@ -65,10 +55,10 @@ export default async function HomePage(
   const { data: { user } } = await supabase.auth.getUser();
   if (user && searchParams.preview !== "1") redirect("/dashboard");
 
-  // Real GW prices from the app catalogue override the placeholder rates, so the
-  // home shows the same figure the quote does (falls back to placeholders if the
-  // app is unreachable). Same source the /quote page uses.
+  // "Business email from ₹…" on the IT card: the cheapest of the live licence rates and
+  // the Anutech Mail mailbox, so the card never undercuts or overstates /email.
   const editions = mergeEditions(await fetchLiveWorkspace());
+  const emailFrom = Math.min(MAIL_RATES["Anutech Mail"] ?? Infinity, ...editions.map((e) => e.annual));
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -81,7 +71,7 @@ export default async function HomePage(
         url: SITE_URL,
         logo: `${SITE_URL}/anutech-digital-logo.png`,
         description:
-          "Delhi-based Google Premier Partner (since 2014) selling Google Workspace, Microsoft 365 and Zoho licences, domains, cPanel hosting and business email to Indian businesses, in rupees with GST invoices. Maker of ResellerOS.",
+          "Delhi-based software company (since 2014) building custom software and office automation for Indian businesses, and a Google Premier Partner selling Google Workspace, Microsoft 365 and Zoho licences, domains, hosting and business email with GST invoices. Maker of ResellerOS.",
         foundingDate: "2014",
         award: "Google Premier Partner",
         taxID: COMPANY.gstin,
@@ -97,36 +87,18 @@ export default async function HomePage(
         publisher: { "@id": `${SITE_URL}/#organization` },
         inLanguage: "en-IN",
       },
-      // One Product per suite, with an AggregateOffer over its real editions.
-      ...SUITES.map((s) => {
-        const eds = editions.filter((e) => e.name.startsWith(s.prefix));
-        const prices = eds.map((e) => e.annual);
-        return {
-          "@type": "Product",
-          name: s.name,
-          description: s.desc,
-          brand: { "@type": "Brand", name: s.name },
-          category: "Business email and productivity suite",
-          offers: {
-            "@type": "AggregateOffer",
-            priceCurrency: "INR",
-            lowPrice: Math.min(...prices),
-            highPrice: Math.max(...prices),
-            offerCount: eds.length,
-            offers: eds.map((e) => ({
-              "@type": "Offer",
-              name: `${e.name} — per user / month (annual, GST extra)`,
-              priceCurrency: "INR",
-              price: e.annual,
-              url: `${SITE_URL}/#products`,
-              seller: { "@id": `${SITE_URL}/#organization` },
-            })),
-          },
-        };
-      }),
+      {
+        "@type": "Service",
+        name: "Custom software and office automation",
+        serviceType: "Custom software development",
+        description: "Software built around a business's own process: enquiries and leads, quotes and GST invoices, approvals, staff and salary, reports and dashboards. Fixed quote with milestones, a working demo at each milestone, training and support after go-live.",
+        provider: { "@id": `${SITE_URL}/#organization` },
+        areaServed: "IN",
+        url: `${SITE_URL}/#software`,
+      },
       {
         "@type": "FAQPage",
-        mainEntity: HOME_FAQS.map((f) => ({
+        mainEntity: COMPANY_FAQS.map((f) => ({
           "@type": "Question",
           name: f.q,
           acceptedAnswer: { "@type": "Answer", text: f.a },
@@ -142,7 +114,7 @@ export default async function HomePage(
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <HomeV2 editions={editions} />
+      <HomeCompany emailFrom={emailFrom} />
     </>
   );
 }

@@ -2,7 +2,8 @@
  * POST /api/public/callback — "Call me back" from an ad landing page (R-139, 4 Oct 2026).
  *
  * Two fields (name + mobile): on a phone, every extra field loses ad visitors before they
- * submit, and the team calls them anyway. Creates a lead with the ad attribution (gclid /
+ * submit, and the team calls them anyway. Since 5 Oct 2026 (R-155) the home page's custom
+ * software form posts here too: product "custom-software" plus an optional one-line need. Creates a lead with the ad attribution (gclid /
  * utm via pageUrl), tells the owner in-app and by email, and never auto-sends anything to the
  * visitor (we only have a phone number). Turnstile + per-IP and per-number rate limits.
  */
@@ -23,7 +24,9 @@ const schema = z.object({
   fullName: z.string().trim().min(2, "Please enter your name").max(120),
   phone: z.string().trim().min(10, "Please enter a 10-digit mobile number").max(20)
     .refine((p) => p.replace(/\D/g, "").length >= 10, "Please enter a 10-digit mobile number"),
-  product: z.enum(["google-workspace"]).default("google-workspace"),
+  product: z.enum(["google-workspace", "custom-software"]).default("google-workspace"),
+  /** Custom software only: what they want built or automated, in their words. */
+  need: z.string().trim().max(600).optional(),
   /** Which plan's landing page sent it (lib/lp-plans.ts); old pages send none = Starter;
    *  "any" = the all-plans category page, where the call decides the plan. */
   plan: z.enum(["starter", "standard", "plus", "enterprise", "any"]).default("starter"),
@@ -41,7 +44,9 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: [...new Set(parsed.error.issues.map((i) => i.message))].join(", ") }, { status: 400 });
   }
-  const { fullName, phone, seats, plan } = parsed.data;
+  const { fullName, phone, seats, plan, product, need } = parsed.data;
+  const software = product === "custom-software";
+  const what = software ? "Custom software" : `Google Workspace${plan === "any" ? "" : ` ${plan}`}`;
   const digits = phone.replace(/\D/g, "").slice(-10);
 
   if (!rateLimit(`callback:ip:${clientIp(request.headers)}`, { limit: 5, windowMs: 10 * 60_000 }).ok ||
@@ -58,12 +63,14 @@ export async function POST(request: NextRequest) {
     company: fullName,                       // no company asked; the call fills it in
     contact_name: fullName,
     contact_phone: phone,
-    plan: plan === "any" ? "google-workspace" : `google-workspace-${plan}`,
+    plan: software ? "custom-software" : plan === "any" ? "google-workspace" : `google-workspace-${plan}`,
     seats: seats ?? null,
     stage: "new",
-    source: "ads-callback",
+    source: software ? "website-callback" : "ads-callback",
     ...captureFromRequest(request, body),
-    notes: "Call-back request from the Google Workspace ad landing page. Call within working hours.",
+    notes: software
+      ? `Call-back request for custom software / office automation from the website home page.${need ? ` They wrote: "${need}"` : ""} Call within working hours.`
+      : "Call-back request from the Google Workspace ad landing page. Call within working hours.",
   });
   if (error) {
     console.error("[api/public/callback] lead insert failed:", error.message);
@@ -74,7 +81,7 @@ export async function POST(request: NextRequest) {
     tenantId: BUY_PAGE_TENANT_ID,
     kind: "lead.created",
     title: `Call back — ${fullName}`,
-    body: `${phone} · Google Workspace${plan === "any" ? "" : ` ${plan}`} (ad landing page)`,
+    body: `${phone} · ${what}${software ? " (website)" : " (ad landing page)"}`,
     href: "/leads",
     entityId: leadId,
   }).catch(() => null);
@@ -86,8 +93,8 @@ export async function POST(request: NextRequest) {
       from: FROM_EMAIL,
       kind: "ads_callback_alert",
       route: { tenantId: BUY_PAGE_TENANT_ID },
-      subject: `📞 Call back now — ${fullName} (${phone}) · Google Workspace ad`,
-      text: `Someone on the Google Workspace ad page asked for a call back.\n\nNAME   ${fullName}\nPHONE  ${phone}\n${seats ? `USERS  ${seats}\n` : ""}\nCall them while the interest is fresh. The lead is ${leadId} in your pipeline.`,
+      subject: `📞 Call back now — ${fullName} (${phone}) · ${software ? "Custom software" : "Google Workspace ad"}`,
+      text: `Someone on the ${software ? "website home page (custom software)" : "Google Workspace ad page"} asked for a call back.\n\nNAME   ${fullName}\nPHONE  ${phone}\n${seats ? `USERS  ${seats}\n` : ""}${need ? `NEED   ${need}\n` : ""}\nCall them while the interest is fresh. The lead is ${leadId} in your pipeline.`,
     }).catch(() => null);
   }
 

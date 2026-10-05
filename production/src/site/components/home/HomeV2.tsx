@@ -1,7 +1,13 @@
 "use client";
 
 /**
- * HomeV2 — the email-first home ("Anutech Home v2" handoff, 5 Sep 2026),
+ * HomeV2 — the email-first page ("Anutech Home v2" handoff, 5 Sep 2026). Since 5 Oct 2026
+ * (R-155) it is the Business Email category page at /email, not the home: the home is
+ * about the whole company (HomeCompany). On /email it drops the "rest of the catalogue"
+ * and ResellerOS bands (the home carries those) and adds Anutech Mail, the ₹79 mailbox
+ * the header promises.
+ *
+ * Originally the email-first home,
  * rebuilt to the handoff's HIGH-FIDELITY design (Pardeep: the zip's home design
  * is much better). Two questions in order — which suite, then which edition —
  * ending in Buy / Start trial / Get a quote.
@@ -30,15 +36,17 @@ import { buyWorkspaceHref } from "@/lib/checkout/buy-link";
 import { HOSTING_FROM_MO } from "@/site/lib/data/hosting-landing-v2";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { HOME_FAQS } from "@/site/lib/data/home-faqs";
+import { MAIL_OPTIONS } from "@/site/lib/data/copy";
+import { MAIL_RATES } from "@/site/lib/data/catalog";
 
 /* Design tokens — the handoff's exact palette. */
-const C = {
+export const C = {
   ink: "#0C1116", ink2: "#2A333D", body: "#4A5560", sec: "#5C6672", faint: "#8A939E",
   blue: "#1668E3", blueDk: "#0A47A0", green: "#0F7B4F", greenT: "#EEF7F0", greenT2: "#E7F4ED",
   surf: "#fff", surfT: "#FBFCFE", sectT: "#F7FAFD", strip: "#F5F7FB", stripBd: "#E6EAF0",
   border: "#D6DCE4", borderL: "#E0E5EC", hair: "#EEF1F5", strong: "#C6CED8", tableHead: "#EEF2F8",
 };
-const MONO = "var(--font-mono), 'IBM Plex Mono', monospace";
+export const MONO = "var(--font-mono), 'IBM Plex Mono', monospace";
 const BTN_PRIMARY = "linear-gradient(180deg, #1668E3, #0A47A0)";
 const SH_CARD = "0 12px 30px -26px rgba(12,17,22,.3)";
 const SH_GREEN = "0 20px 46px -30px rgba(15,123,79,.55)";
@@ -113,7 +121,7 @@ const CROSS_ROWS: readonly { label: string; gw: string; ms: string; zoho: string
  *  real pages. `gst` is "+ GST 18%" or "No charge" per the design. `icon` keys a
  *  simple line-art glyph that fills a tinted 16:9 band (consistent across all
  *  four — no half-empty photo slots). */
-const CATALOGUE_V2: readonly { name: string; href: string; from: string; unit: string; gst: string; body: string; tags: string[]; cta: string; icon: "globe" | "server" | "lock" | "tag"; img?: string }[] = [
+export const CATALOGUE_V2: readonly { name: string; href: string; from: string; unit: string; gst: string; body: string; tags: string[]; cta: string; icon: "globe" | "server" | "lock" | "tag"; img?: string }[] = [
   { name: "Domains", href: "/domains", from: "₹249", unit: "from · first year", gst: "+ GST 18%", body: "500+ extensions, register and renew price on one row.", tags: ["500+ TLDS", "FREE DNS", "WHOIS PRIVACY"], cta: "See domain rates", icon: "globe", img: "/domain-search.jpg" },
   { name: "Web hosting", href: "/hosting", from: HOSTING_FROM_MO, unit: "from · /mo, billed yearly", gst: "+ GST 18%", body: "cPanel and LiteSpeed on NVMe, Mumbai and Bengaluru.", tags: ["CPANEL", "LITESPEED", "99.9% SLA"], cta: "See hosting plans", icon: "server", img: "/cat-hosting.png" },
   { name: "SSL & security", href: "/ssl", from: "₹0", unit: "free DV", gst: "No charge", body: "Free DV on every hosted site; wildcard and OV when needed.", tags: ["DV", "OV", "WILDCARD"], cta: "See SSL options", icon: "lock", img: "/cat-ssl.jpg" },
@@ -139,7 +147,8 @@ const wrap = (extra?: React.CSSProperties): React.CSSProperties => ({ maxWidth: 
 const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: C.blue };
 const monoNum = (extra?: React.CSSProperties): React.CSSProperties => ({ fontFamily: MONO, fontVariantNumeric: "tabular-nums", ...extra });
 
-export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
+export function HomeV2({ editions, page = "email" }: { editions?: MergedEdition[]; page?: "email" | "home" } = {}) {
+  const onEmail = page === "email";
   const [vendorKey, setVendorKey] = useState<VendorKey>("gw");
   const [billing, setBilling] = useState<Billing>("annual");
   const [seats, setSeats] = useState(1);
@@ -494,7 +503,35 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
         </div>
       </section>
 
-      {/* ── CATALOGUE — the rest of what we sell ───────────────────────────── */}
+      {/* ── ANUTECH MAIL — the simple mailbox (email page only) ───────────── */}
+      {onEmail && (() => {
+        const am = MAIL_OPTIONS.find((m) => m.name === "Anutech Mail");
+        if (!am) return null;
+        return (
+          <section id="anutech-mail" style={{ background: C.sectT, borderTop: `1px solid ${C.hair}` }}>
+            <div style={wrap({ padding: "40px 48px", display: "grid", gridTemplateColumns: mob ? "1fr" : "1.2fr 1fr", gap: mob ? 18 : 40, alignItems: "center" })}>
+              <div>
+                <div style={{ ...eyebrow, marginBottom: 10 }}>Only need mail?</div>
+                <h2 style={{ fontSize: mob ? 25 : 28, fontWeight: 700, letterSpacing: "-0.03em", color: C.ink, margin: "0 0 8px", textWrap: "balance" as const }}>Anutech Mail — a plain mailbox on your domain</h2>
+                <p style={{ fontSize: 15, lineHeight: 1.55, color: C.body, margin: 0, maxWidth: 560 }}>No Docs or Meet, just reliable email hosted in India. Right for teams that live in Outlook or their phone and need nothing else.</p>
+              </div>
+              <div style={{ background: C.surf, border: `1px solid ${C.borderL}`, borderRadius: 12, padding: "18px 20px", boxShadow: SH_CARD }}>
+                <span style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                  <span style={monoNum({ fontSize: 26, fontWeight: 500, letterSpacing: "-0.03em", color: C.ink })}>{inr(MAIL_RATES["Anutech Mail"] ?? 79)}</span>
+                  <span style={{ fontSize: 12, color: C.sec }}>/mailbox/mo + GST</span>
+                </span>
+                <ul style={{ listStyle: "none", margin: "10px 0 14px", padding: 0, display: "grid", gap: 5 }}>
+                  {am.lines.map((l) => <li key={l} style={{ fontSize: 13.5, color: C.ink2 }}><span style={{ color: C.green, fontWeight: 700 }}>✓</span> {l}</li>)}
+                </ul>
+                <Link href="/quote" style={{ display: "inline-block", background: BTN_PRIMARY, color: "#fff", borderRadius: 8, padding: "10px 18px", fontSize: 14, fontWeight: 600, textDecoration: "none", boxShadow: SH_BTN }}>Get a mailbox quote →</Link>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* ── CATALOGUE — the rest of what we sell (old home only) ──────────── */}
+      {!onEmail && (
       <section id="catalogue" style={{ background: C.sectT, borderTop: `1px solid ${C.hair}`, scrollMarginTop: 80 }}>
         <div style={wrap({ padding: "44px 48px 48px" })}>
           <div style={eyebrow}>The rest of the catalogue</div>
@@ -527,6 +564,7 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
           </div>
         </div>
       </section>
+      )}
 
       {/* ── TRUST ──────────────────────────────────────────────────────────── */}
       <section style={{ background: C.sectT, borderTop: `1px solid ${C.borderL}` }}>
@@ -563,7 +601,8 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
         })}
       </section>
 
-      {/* ── RESELLEROS ─────────────────────────────────────────────────────── */}
+      {/* ── RESELLEROS (old home only — the new home has its own) ─────────── */}
+      {!onEmail && (
       <section style={{ background: "#FFF6F0", borderTop: "1px solid #F5D9C6" }}>
         <div style={wrap({ padding: "40px 48px" })}>
           <div style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: "#C2410C", marginBottom: 10 }}>For resellers</div>
@@ -575,13 +614,14 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 }
 
 /** A designed graphic band for catalogue cards with no photo — richer than a
  *  lone icon, in the same flat-illustration spirit as the domains image. */
-function CatScene({ kind }: { kind: string }) {
+export function CatScene({ kind }: { kind: string }) {
   const blue = "#1668E3", soft = "#B9D0F5", fill = "#DCE8FB";
   if (kind === "lock") {
     return (

@@ -14,6 +14,8 @@ import { COMPANY, WHATSAPP_URL, WHATSAPP_READY, CLIENT_AREA_URL } from "@/site/l
 export function UtilityBar() {
   const pathname = usePathname();
   const onDomains = pathname.startsWith("/domains");
+  /* The home leads with custom software (R-155); "free migration" is an email promise. */
+  const onHome = pathname === "/";
   return (
     <div style={{ background: "var(--dark)", color: "#C3CBD6", fontSize: 13, padding: "9px 0" }}>
       <div className="wrap" style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
@@ -21,6 +23,8 @@ export function UtilityBar() {
           /* The domains page leads with the offer — the ₹0 lever is the whole page's
              thesis, so the utility bar states it first (offer text in warm accent). */
           <span><span style={{ color: "#FFC9A8" }}>Domain ₹0 with any 1-year hosting plan</span> · GST invoice on every order</span>
+        ) : onHome ? (
+          <span>Custom software &amp; office automation · Google Premier Partner since 2014</span>
         ) : (
           <span>Free migration on every plan · GST invoice on every order</span>
         )}
@@ -81,6 +85,10 @@ export function Breadcrumb() {
 }
 
 export function CtaBand() {
+  /* The home ends with its own custom-software call band (R-155); this one is the
+     licence quote ask, right for every other page. */
+  const pathname = usePathname();
+  if (pathname === "/") return null;
   return (
     <section style={{ background: "var(--dark)", color: "#fff", padding: "56px 0" }}>
       <div className="wrap" style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>

@@ -38,7 +38,7 @@ export const SWITCH_REASONS = [
   { them: "THEM: DEPOSIT FIRST, SEE YOUR RATE LATER", us: "Rate card published, ₹0 to join", body: "No advance deposit and no slab to buy into. The price you read today is the price on order one." },
   { them: "THEM: PRICING TIERS THAT MOVE WITH VOLUME", us: "One rate at every volume", body: "You never have to forecast next quarter's sales to know this quarter's cost. Quote clients with confidence." },
   { them: "THEM: RATES IN USD ON AN INDIAN SITE", us: "Billed in ₹, GST invoice every time", body: "No FX gap between quote and renewal. GSTIN on the invoice, input credit where you are eligible." },
-  { them: "THEM: TICKET QUEUE AND A CHATBOT", us: "WhatsApp, and someone who knows your account", body: "Eleven-minute average first reply in working hours. Migrations are done by us, not documented for you." },
+  { them: "THEM: TICKET QUEUE AND A CHATBOT", us: "WhatsApp, and someone who knows your account", body: "A person replies in working hours, Mon–Sat. Migrations are done by us, not documented for you." },
 ] as const;
 
 /** Why-us table. "ANUTECH DIGITAL" column renders on the dark band in --primary-on-dark. */
@@ -49,7 +49,7 @@ export const COMPARE_ROWS = [
   { label: "Currency", us: "₹, GST stated separately", them: "Often USD, GST unclear" },
   { label: "Renewal price", us: "Next to the first-year price", them: "Found at renewal time" },
   { label: "Migration", us: "Free, done by us", them: "A documentation article" },
-  { label: "Support", us: "WhatsApp, 11-minute average", them: "Ticket queue, chatbot first" },
+  { label: "Support", us: "WhatsApp, answered by a person", them: "Ticket queue, chatbot first" },
   { label: "Who answers", us: "Someone who can change your account", them: "Tier-one, then escalation" },
   { label: "Datacentre", us: "Mumbai and Bengaluru", them: "Usually US, India optional" },
   { label: "Contract", us: "Monthly or yearly, cancel any time", them: "Tenure-locked promo pricing" },
@@ -107,5 +107,5 @@ export const PROOF_POINTS = [
   "Published prices, renewal shown up front",
   "GST invoice on every order",
   "Free migration, done by us",
-  "WhatsApp support, 11-min average reply",
+  "WhatsApp support from a person",
 ] as const;

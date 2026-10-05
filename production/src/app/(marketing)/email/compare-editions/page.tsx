@@ -43,7 +43,7 @@ export default function CompareEditionsPage() {
             ))}
           </div>
           <div style={{ display: "flex", gap: 12, marginTop: 30 }}>
-            <Link href="/email#calculator" className="btn btn-primary">Price it in the calculator</Link>
+            <Link href="/email#products" className="btn btn-primary">Price it in the calculator</Link>
             <Link href="/quote" className="btn btn-outline">Get a quote instead</Link>
           </div>
         </div>

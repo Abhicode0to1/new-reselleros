@@ -1,6 +1,7 @@
 "use client";
 /**
- * Sticky header with five hover/keyboard mega-menus, the cart badge, and the mobile drawer.
+ * Sticky header with six hover/keyboard mega-menus (Custom software first since R-155, 5 Oct
+ * 2026 — the company leads with it), the cart badge, and the mobile drawer.
  *
  * The IA rule this file enforces comes from the handoff's first paragraph: two audiences
  * that must never be mixed. ResellerOS is a nav item of its own; everything else is a
@@ -26,6 +27,22 @@ interface Menu {
 }
 
 const MENUS: readonly Menu[] = [
+  {
+    label: "Custom software", href: "/#software",
+    cols: [
+      [
+        { label: "Office automation", note: "Leads, GST billing, staff, approvals", href: "/#software" },
+        { label: "How a project works", note: "Fixed quote, demo every milestone", href: "/#how" },
+        { label: "Talk to us", note: "A free first call", href: "/#start" },
+      ],
+      [
+        { label: "Our own software", note: "ResellerOS — we run on it daily", href: "/reselleros" },
+        { label: "Questions", note: "Cost, timeline, support", href: "/#faq" },
+        { label: "Why us", note: "Us vs the usual way", href: "/why-us" },
+      ],
+    ],
+    promo: { tag: "FREE FIRST CALL", title: "Software built for how your business works", body: "Fixed quote before we start, a working demo at every milestone, GST invoice.", cta: "Tell us what to automate", href: "/#start" },
+  },
   {
     label: "Domains", href: "/domains",
     cols: [
@@ -64,7 +81,7 @@ const MENUS: readonly Menu[] = [
       [
         { label: "Business email", note: "Mailboxes from ₹79/mo", href: "/email" },
         { label: "Compare editions", note: "GW, M365, Zoho side by side", href: "/email/compare-editions" },
-        { label: "Licence calculator", note: "Priced live, GST separate", href: "/email#calculator" },
+        { label: "Licence calculator", note: "Priced live, GST separate", href: "/email#products" },
       ],
       [
         { label: "Google Workspace", note: "Plans and pricing in INR", href: "/google-workspace/pricing" },
@@ -109,7 +126,8 @@ const MENUS: readonly Menu[] = [
 ];
 
 const MOBILE_PAGES = [
-  { label: "Home", note: "The whole catalogue", href: "/" },
+  { label: "Home", note: "Everything Anutech does", href: "/" },
+  { label: "Custom software", note: "Office automation, built for you", href: "/#software" },
   { label: "Domains", note: "500+ extensions, from ₹249/yr", href: "/domains" },
   { label: "Hosting", note: "cPanel on NVMe, from ₹49.99/mo", href: "/hosting" },
   { label: "Business email", note: "Mailboxes from ₹79/mo", href: "/email" },
@@ -158,7 +176,7 @@ export function Header() {
             the app instead of the company home they clicked for. "?preview=1" is the
             root page's built-in bypass: it shows the Anutech Digital home to everyone,
             signed in or not. */}
-        <Link href="/?preview=1" style={{ display: "flex", alignItems: "center", gap: 10 }} aria-label="Anutech Digital home">
+        <Link href="/?preview=1" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }} aria-label="Anutech Digital home">
           {/* New ANUTECH logo, the wordmark is in the image (Pardeep, 4 Oct 2026). */}
           <Image src="/lp/anutech-logo.png" alt="ANUTECH Digital Pvt Ltd" width={120} height={40} priority style={{ objectFit: "contain", height: 40, width: "auto" }} />
         </Link>
@@ -171,6 +189,7 @@ export function Header() {
             return (
               <div
                 key={m.label}
+                className="nav-item"
                 role="button"
                 tabIndex={0}
                 aria-expanded={open === m.label}
@@ -182,7 +201,7 @@ export function Header() {
                   else if (e.key === "ArrowDown") { e.preventDefault(); setOpen(m.label); }
                 }}
                 style={{
-                  padding: "24px 12px", fontSize: 15, fontWeight: isActive ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap",
+                  padding: "24px 10px", fontSize: 15, fontWeight: isActive ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap",
                   color: isActive ? activeNav : "var(--text)",
                   boxShadow: isActive ? `inset 0 -2px 0 0 ${accent}` : "none",
                 }}
@@ -193,8 +212,9 @@ export function Header() {
           })}
           <Link
             href="/why-us"
+            className="nav-item nav-why"
             style={{
-              padding: "24px 12px", fontSize: 15, fontWeight: pathname === "/why-us" ? 600 : 500,
+              padding: "24px 10px", fontSize: 15, whiteSpace: "nowrap", fontWeight: pathname === "/why-us" ? 600 : 500,
               color: pathname === "/why-us" ? activeNav : "var(--text)",
               boxShadow: pathname === "/why-us" ? `inset 0 -2px 0 0 ${accent}` : "none",
             }}

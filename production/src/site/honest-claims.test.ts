@@ -12,6 +12,7 @@ const read = (rel: string) => readFileSync(join(__dirname, rel), "utf8");
 const FILES = [
   "components/home/HomeV2.tsx", "lib/data/copy.ts", "components/chrome/Chrome.tsx",
   "components/chrome/Header.tsx", "components/trial/TrialForm.tsx", "components/agent/AgentChat.tsx",
+  "components/home/HomeCompany.tsx", "lib/data/home-faqs.ts", "lib/data/company-faqs.ts",
 ];
 
 describe("public site claims", () => {
@@ -19,7 +20,7 @@ describe("public site claims", () => {
     for (const f of FILES) expect(read(f), f).not.toMatch(/· Google review"/);
   });
   it("no unmeasured 11-minute reply time", () => {
-    for (const f of FILES) expect(read(f), f).not.toMatch(/11 min|~11 MIN|11 minutes|~11 minute/i);
+    for (const f of FILES) expect(read(f), f).not.toMatch(/11[ -]min|11 minutes|eleven[ -]minute/i);
   });
   it("one hosting 'from' price everywhere — the /hosting Starter yearly rate", () => {
     expect(HOSTING_FROM_MO).toBe(`₹${Math.min(...HOSTING_TIERS.map((t) => t.yearlyMo))}`);
