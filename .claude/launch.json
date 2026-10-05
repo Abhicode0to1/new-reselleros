@@ -36,6 +36,20 @@
       "port": 3001
     },
     {
+      "name": "ResellerOS (no VM, fast)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start",
+        "--prefix",
+        "production",
+        "--",
+        "-p",
+        "3001"
+      ],
+      "port": 3001
+    },
+    {
       "name": "website",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
