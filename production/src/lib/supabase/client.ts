@@ -8,7 +8,9 @@
  *   const { data } = await supabase.from("leads").select("*");
  */
 import { createBrowserClient } from "@supabase/ssr";
+import { createClient as createSupabaseJs } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
+import { browserAccessToken, browserAuth } from "@/lib/auth/browser-auth";
 
 /**
  * NEXT_PUBLIC_DATA_GATEWAY=1: database requests (/rest/v1) go to this app's own
@@ -23,7 +25,25 @@ function rewriteRest(input: RequestInfo | URL): RequestInfo | URL {
   return window.location.origin + "/api/sb/rest/v1/" + href.slice(base.length);
 }
 
-export function createClient() {
+type BrowserClient = ReturnType<typeof createBrowserClient<Database>>;
+let authjsSingleton: BrowserClient | null = null;
+
+/* NEXT_PUBLIC_AUTH_PROVIDER=authjs: no GoTrue session in the browser. supabase-js runs without
+   its auth module, requests carry the token from /api/auth/supabase-token, and `client.auth`
+   is answered by Auth.js (src/lib/auth/browser-auth.ts) — so screens keep calling
+   supabase.auth.* unchanged. */
+function authjsBrowserClient(): BrowserClient {
+  if (authjsSingleton) return authjsSingleton;
+  const client = createSupabaseJs<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    accessToken: browserAccessToken,
+    global: { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(rewriteRest(input), { ...init, cache: "no-store" }) },
+  });
+  authjsSingleton = Object.assign(client, { auth: browserAuth() }) as unknown as BrowserClient;
+  return authjsSingleton;
+}
+
+export function createClient(): BrowserClient {
+  if (process.env.NEXT_PUBLIC_AUTH_PROVIDER === "authjs") return authjsBrowserClient();
   return createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

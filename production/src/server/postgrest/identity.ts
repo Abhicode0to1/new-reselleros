@@ -41,6 +41,14 @@ export function verifyJwt(token: string, secret: string, now = Date.now()): Reco
   return claims;
 }
 
+/** HS256 JWT with the same secret — used for Storage signed URLs, as Supabase Storage does. */
+export function signJwt(claims: Record<string, unknown>, secret: string): string {
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const head = b64({ alg: "HS256", typ: "JWT" });
+  const body = b64(claims);
+  return `${head}.${body}.${createHmac("sha256", secret).update(`${head}.${body}`).digest("base64url")}`;
+}
+
 export function identityFromHeaders(headers: Headers, opts: { allowService: boolean }): Identity {
   const auth = headers.get("authorization") ?? "";
   const token = /^bearer\s+(.+)$/i.exec(auth)?.[1]?.trim();

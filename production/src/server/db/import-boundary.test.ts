@@ -48,9 +48,15 @@ describe("database import boundary", () => {
     expect(bad.map((f) => f.path)).toEqual([]);
   });
 
-  test("new PrismaClient appears only in src/server/db/index.ts, jobs.ts and gateway.ts", () => {
+  test("new PrismaClient appears only in the src/server/db pool files", () => {
     const where = FILES.filter((f) => !isTest(f.path) && /new\s+PrismaClient\s*\(/.test(f.code)).map((f) => f.path).sort();
-    expect(where).toEqual(["server/db/gateway.ts", "server/db/index.ts", "server/db/jobs.ts"]);
+    expect(where).toEqual(["server/db/auth-store.ts", "server/db/gateway.ts", "server/db/index.ts", "server/db/jobs.ts"]);
+  });
+
+  test("the login store (password hashes, two-step secrets) is used only by src/server/auth", () => {
+    const bad = FILES.filter((f) => !inDb(f.path) && !f.path.startsWith("server/auth/") && !isTest(f.path))
+      .filter((f) => /from\s+["'](@\/server\/db\/auth-store|[./]+\/server\/db\/auth-store)["']/.test(f.code));
+    expect(bad.map((f) => f.path)).toEqual([]);
   });
 
   test("the gateway's logins are used only by src/server/postgrest", () => {

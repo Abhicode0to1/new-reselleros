@@ -18,13 +18,34 @@ import "@/lib/sentry";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "./database.types";
+import { createClient as createSupabaseJs } from "@supabase/supabase-js";
 import { gatewayEnabled, gatewayFetch } from "@/server/postgrest/fetch";
+import { authProvider } from "@/server/auth/authjs";
+import { accessTokenForRequest, adminAuth, serverAuth } from "@/server/auth/compat";
+
+type ServerClient = ReturnType<typeof createServerClient<Database>>;
+
+const noStoreFetch = (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, cache: "no-store" });
+
+/* AUTH_PROVIDER=authjs: the session is Auth.js's, not GoTrue's. The supabase-js client is built
+   without its own auth module; requests carry a short-lived token minted for the Auth.js user
+   (src/server/auth/supabase-jwt.ts), and `client.auth` answers from Auth.js
+   (src/server/auth/compat.ts) — so the ~190 existing call sites keep working unchanged. */
+function authjsClient(key: string, kind: "user" | "admin"): ServerClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const client = createSupabaseJs<Database>(url, key, {
+    accessToken: kind === "admin" ? async () => key : accessTokenForRequest,
+    global: { fetch: gatewayEnabled() ? gatewayFetch(url, { allowService: kind === "admin" }) : noStoreFetch },
+  });
+  return Object.assign(client, { auth: kind === "admin" ? adminAuth() : serverAuth() }) as unknown as ServerClient;
+}
 
 /* Next 15: cookies() returns a Promise. createClient() stays SYNCHRONOUS (≈390 call sites
    use `const supabase = createClient()`), and the await moves into the cookie callbacks —
    @supabase/ssr accepts async getAll/setAll. cookies() is still read inside the same
    request (every query runs within it), so behaviour is unchanged. */
-export function createClient() {
+export function createClient(): ServerClient {
+  if (authProvider() === "authjs") return authjsClient(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, "user");
   const cookieStore = cookies();
 
   return createServerClient<Database>(
@@ -61,10 +82,11 @@ export function createClient() {
  * Use ONLY in trusted server code (route handlers, webhooks, migrations).
  * NEVER call from Server Components used in normal request flow.
  */
-export function createAdminClient() {
+export function createAdminClient(): ServerClient {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set");
   }
+  if (authProvider() === "authjs") return authjsClient(process.env.SUPABASE_SERVICE_ROLE_KEY, "admin");
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -84,8 +106,7 @@ export function createAdminClient() {
       global: {
         fetch: gatewayEnabled()
           ? gatewayFetch(process.env.NEXT_PUBLIC_SUPABASE_URL!, { allowService: true })
-          : (input: RequestInfo | URL, init?: RequestInit) =>
-              fetch(input, { ...init, cache: "no-store" }),
+          : noStoreFetch,
       },
     },
   );

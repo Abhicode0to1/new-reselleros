@@ -12,6 +12,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./database.types";
+import { gatewayEnabled, gatewayFetch } from "@/server/postgrest/fetch";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
@@ -37,6 +38,10 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
+      // DATA_GATEWAY=1: the role lookup below goes to the in-process gateway, not the VM.
+      ...(gatewayEnabled()
+        ? { global: { fetch: gatewayFetch(process.env.NEXT_PUBLIC_SUPABASE_URL!, { allowService: false }) } }
+        : {}),
     },
   );
 

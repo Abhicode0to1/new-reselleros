@@ -84,3 +84,22 @@ alter default privileges for role postgres in schema public grant execute on fun
 alter table storage.buckets owner to supabase_storage_admin;
 alter table storage.objects owner to supabase_storage_admin;
 alter function storage.foldername(text) owner to supabase_storage_admin;
+
+-- GoTrue's MFA table (v2.151 shape), so two-step sign-in can be tested locally and the
+-- Auth.js code writes the same rows GoTrue reads (rollback stays possible).
+do $$ begin create type auth.factor_type as enum ('totp', 'webauthn', 'phone');
+exception when duplicate_object then null; end $$;
+do $$ begin create type auth.factor_status as enum ('unverified', 'verified');
+exception when duplicate_object then null; end $$;
+create table if not exists auth.mfa_factors (
+  id uuid primary key, user_id uuid not null references auth.users(id) on delete cascade,
+  friendly_name text, factor_type auth.factor_type not null, status auth.factor_status not null,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  secret text, phone text, last_challenged_at timestamptz
+);
+alter table auth.mfa_factors owner to supabase_auth_admin;
+alter type auth.factor_type owner to supabase_auth_admin;
+alter type auth.factor_status owner to supabase_auth_admin;
+
+-- Supabase Storage's own uniqueness rule (bucketid_objname), relied on by upsert.
+create unique index if not exists bucketid_objname on storage.objects (bucket_id, name);
