@@ -63,3 +63,68 @@ use `public.current_user_id()` / `public.current_tenant_id()` — never `auth.ui
 `auth.role()` (the isolation suite fails on them). Locally: `npm run db:local` rebuilds the
 database from git and applies it; `npm run test:isolation` proves isolation;
 `npm run test:isolation:mutation` proves the proof.
+
+---
+
+# Switching the VM off (data gateway + Auth.js + Cloud Storage)
+
+Three switches, each independent, each reversible by unsetting it. Turn them on **in this
+order on staging**, check, then production. When all three are on, nothing calls
+`api.anutech.in` and the `supabase-gateway` VM can be stopped.
+
+Verified locally on 5 Oct 2026 with no PostgREST, GoTrue or Storage running: sign-in,
+middleware gate, dashboard, customer create, cross-tenant insert refused, quote →
+`record_payment` → receipt voucher `RV-DEMO-27-0001`, duplicate payment recognised.
+
+## 0. Before anything — run the roles scripts (as `postgres`)
+
+```bash
+psql "<admin url>" -v runtime_pw="'…'" -v jobs_pw="'…'" -v anon_pw="'…'" -v service_pw="'…'" -f production/db/ops/10-runtime-roles.sql
+psql "<admin url>" -v auth_pw="'…'" -f production/db/ops/20-auth-login.sql
+npx prisma migrate deploy        # includes 20261005150000_gateway_logins
+```
+
+Secrets (Secret Manager → Cloud Run env): `DATABASE_URL` (app_runtime), `ANON_DATABASE_URL`
+(app_anon), `SERVICE_DATABASE_URL` (app_service), `AUTH_DATABASE_URL` (app_auth),
+`JOBS_DATABASE_URL` (app_jobs), `SUPABASE_JWT_SECRET` (the value the VM's PostgREST has as
+`PGRST_JWT_SECRET`), `AUTH_SECRET` (new: `openssl rand -base64 32`).
+Connections: 5 pools × `DB_POOL_MAX` × max instances must stay under Cloud SQL `max_connections`
+— set `DB_POOL_MAX=3` to start.
+
+## 1. Data — PostgREST off
+
+Cloud Run env: `DATA_GATEWAY=1`. Build args: `NEXT_PUBLIC_DATA_GATEWAY=1`.
+Effect: every `.from()` / `.rpc()` is answered by `src/server/postgrest` (proven identical to
+PostgREST v12.2.3 — `tests/isolation/postgrest-parity.test.ts`). Undo: unset both, redeploy.
+
+## 2. Login — GoTrue off
+
+Cloud Run env: `AUTH_PROVIDER=authjs`, `AUTH_SECRET`, `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`
+(or the existing `GOOGLE_OAUTH_CLIENT_ID/SECRET`). Build arg: `NEXT_PUBLIC_AUTH_PROVIDER=authjs`.
+Google Cloud console → the OAuth client → add redirect URI
+`https://<app host>/api/auth/callback/google`.
+Effect: everyone signs in once more (old GoTrue sessions are not carried over); passwords,
+Google accounts and two-step factors are. Undo: unset, redeploy — accounts are in the same
+tables GoTrue reads.
+
+## 3. Files — Storage API off
+
+Create a private bucket (e.g. `resellsubsos-prod-files`, asia-southeast1, uniform access,
+no public access). Grant the Cloud Run service account `roles/storage.objectAdmin` on it.
+Cloud Run env: `STORAGE_BACKEND=gcs`, `GCS_BUCKET=<name>`.
+Copy existing files from the VM's storage volume into the bucket keeping
+`<bucket_id>/<object name>` as the key (storage.objects rows stay as they are).
+Stored public logo URLs point at the VM — rewrite them once:
+```sql
+update public.tenants set logo_url = replace(logo_url, 'https://api.anutech.in/storage/v1/', 'https://<app host>/api/sb/storage/v1/')
+ where logo_url like 'https://api.anutech.in/storage/v1/%';
+```
+Undo: unset `STORAGE_BACKEND`.
+
+## 4. Point the app at itself, then stop the VM
+
+Build arg `NEXT_PUBLIC_SUPABASE_URL=https://<app host>/api/sb` (supabase-js now talks only to
+the app). Watch a week. Then stop (not delete) the `supabase-gateway` VM; delete it and the
+`api.anutech.in` DNS record after 30 quiet days. Anything else that called `api.anutech.in`
+directly (scripts, other apps) must be found first — DMS talks to this app over HTTP, not to
+the VM (`.claude/skills/resellersos-env`).
