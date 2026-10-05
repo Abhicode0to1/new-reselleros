@@ -3,24 +3,30 @@
 /**
  * Google bill check (R-164, 5 Oct 2026). Upload (or paste) Google's monthly Workspace invoice (the one Google
  * sends Net2Secure for Anutech's domains) and see, domain by domain, who the customer is, what
- * Google charged, what we bill, and where money leaks. Read-only: nothing is saved.
+ * Google charged, what we bill, and where money leaks. The bill is not saved; Add / Add all missing
+ * create the customer + Google subscription (components/features/reconcile/add-from-bill.tsx).
  * The pure rules and their tests: lib/reconcile/google-bill.ts.
  */
 import * as React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { createClient } from "@/lib/supabase/client";
 import { downloadCSV } from "@/lib/csv";
-import { parseGoogleBill, checkBill, expectedPartnerBill, type SubLite, type CustomerLite, type RowStatus } from "@/lib/reconcile/google-bill";
+import { toast } from "sonner";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useConfirm } from "@/components/providers/confirm-provider";
+import { AddFromBillDialog, createFromBill } from "@/components/features/reconcile/add-from-bill";
+import { parseGoogleBill, checkBill, expectedPartnerBill, nameFromDomain, type SubLite, type CustomerLite, type RowStatus, type CheckRow } from "@/lib/reconcile/google-bill";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const STATUS: Record<RowStatus, { label: string; kind: "danger" | "warning" | "success" | "info" }> = {
   no_customer: { label: "No customer", kind: "danger" },
   no_subscription: { label: "No subscription", kind: "danger" },
+  needs_setup: { label: "Set price & users", kind: "info" },
   loss: { label: "Below cost", kind: "warning" },
   ok: { label: "OK", kind: "success" },
 };
@@ -70,9 +76,18 @@ function useBooks() {
 
 export default function GoogleBillCheckPage() {
   const books = useBooks();
+  const qc = useQueryClient();
+  const { data: me } = useCurrentUser();
+  const confirm = useConfirm();
+  const canAdd = !!me?.role && ["owner", "manager", "billing", "accountant"].includes(me.role);
+  const [addRow, setAddRow] = React.useState<CheckRow | null>(null);
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const refreshBooks = () => { void qc.invalidateQueries({ queryKey: ["google-bill-check", "books"] }); void qc.invalidateQueries({ queryKey: ["subscriptions"] }); void qc.invalidateQueries({ queryKey: ["customers"] }); };
   const [text, setText] = React.useState("");
   const [partnerBill, setPartnerBill] = React.useState("");
   const [perSeatYear, setPerSeatYear] = React.useState("10");
+  /** null = use the subscription seat count; a typed number overrides it. */
+  const [seatsInput, setSeatsInput] = React.useState<string | null>(null);
   const [showOk, setShowOk] = React.useState(false);
   const [fileName, setFileName] = React.useState<string | null>(null);
   const [reading, setReading] = React.useState(false);
@@ -100,9 +115,34 @@ export default function GoogleBillCheckPage() {
   const bill = React.useMemo(() => (text.trim() ? parseGoogleBill(text) : null), [text]);
   const check = React.useMemo(() => (bill && bill.lines.length && books.data ? checkBill(bill.lines, books.data.subs, books.data.customers) : null), [bill, books.data]);
   const subtotal = bill?.subtotal ?? bill?.linesTotal ?? 0;
-  const partner = check ? expectedPartnerBill(subtotal, check.totals.seats, Number(perSeatYear) || 0) : null;
+  const seats = seatsInput !== null && seatsInput.trim() !== "" ? Math.max(0, Math.round(Number(seatsInput) || 0)) : (check?.totals.seats ?? 0);
+  const partner = check ? expectedPartnerBill(subtotal, seats, Number(perSeatYear) || 0) : null;
   const partnerGap = partner && partnerBill.trim() ? Math.round((Number(partnerBill.replace(/[₹,\s]/g, "")) - partner.expected) * 100) / 100 : null;
   const linesOff = bill && bill.subtotal !== null ? Math.round((bill.linesTotal - bill.subtotal) * 100) / 100 : 0;
+
+  async function addAllMissing() {
+    if (!check || !me?.tenantId) return;
+    const missing = check.rows.filter((r) => r.status === "no_customer");
+    const ok = await confirm({
+      title: `Add ${missing.length} customers and subscriptions?`,
+      body: `One customer per domain (named after it — rename later) and a Google subscription with this month's Google cost saved as the cost price.\nUsers (1) and your selling price are not on Google's bill, so they are left for you: each row will show "Set price & users".`,
+      confirmLabel: `Add ${missing.length}`,
+    });
+    if (!ok) return;
+    setBulkBusy(true);
+    try {
+      const res = await createFromBill(me.tenantId, missing.map((r) => ({
+        domain: r.domain, googleCost: r.googleCost, customerName: nameFromDomain(r.domain), plan: "Google Workspace", users: 1, sellPerUserMonth: null,
+      })));
+      toast.success(`Added ${res.customers} customers and ${res.subscriptions} subscriptions`, { description: "Set users and price on each — the rows now say 'Set price & users'." });
+      refreshBooks();
+    } catch (e) {
+      toast.error((e as Error).message, { description: "Some rows may have been added. Refresh — the list shows what is still missing." });
+      refreshBooks();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   function exportCsv() {
     if (!check) return;
@@ -117,7 +157,7 @@ export default function GoogleBillCheckPage() {
         <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Purchases</p>
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Google bill check</h1>
         <p className="text-sm text-ink-3 mt-1 max-w-2xl">
-          Upload Google&apos;s monthly Workspace invoice PDF. Every domain is matched to a customer, so you see what Google charged, what you bill, and where money leaks. Nothing is saved.
+          Upload Google&apos;s monthly Workspace invoice PDF. Every domain is matched to a customer, so you see what Google charged, what you bill, and where money leaks. The bill itself is not saved; Add creates the missing customer and subscription.
         </p>
       </div>
 
@@ -182,8 +222,15 @@ export default function GoogleBillCheckPage() {
               <label className="flex flex-col gap-1 text-xs text-ink-3">Margin per user per year (₹)
                 <input value={perSeatYear} onChange={(e) => setPerSeatYear(e.target.value)} inputMode="decimal" className="w-28 rounded-md border border-hairline bg-paper px-2 py-1.5 text-sm text-ink" />
               </label>
+              {/* Seats: the PDF has none, so the default is OUR seat count on the domains that
+                  matched — 0 when nothing matched (staging, or customers not set up). Editable, so the
+                  number on Net2Secure's bill can be checked as-is (5 Oct 2026, "0 seats kyo"). */}
+              <label className="flex flex-col gap-1 text-xs text-ink-3">Users (seats)
+                <input value={seatsInput ?? String(check.totals.seats)} onChange={(e) => setSeatsInput(e.target.value.trim() === "" ? null : e.target.value)} inputMode="numeric"
+                  className={`w-28 rounded-md border bg-paper px-2 py-1.5 text-sm text-ink ${seats === 0 ? "border-amber" : "border-hairline"}`} />
+              </label>
               <div className="text-xs text-ink-3">
-                Expected = Google subtotal {inr(subtotal)} + {check.totals.seats} seats × ₹{perSeatYear || 0} ÷ 12 ({inr(partner.margin)})
+                Expected = Google subtotal {inr(subtotal)} + {seats} users × ₹{perSeatYear || 0} ÷ 12 ({inr(partner.margin)})
                 <div className="text-base font-semibold text-ink mt-0.5">{inr(partner.expected)} + GST</div>
               </div>
               <label className="flex flex-col gap-1 text-xs text-ink-3">Net2Secure billed (before GST)
@@ -195,13 +242,24 @@ export default function GoogleBillCheckPage() {
                 </Badge>
               )}
             </div>
-            <p className="text-2xs text-ink-3 mt-2">Seats are your subscription counts — Google&apos;s PDF has none. Ask Net2Secure for Google&apos;s invoice CSV for an exact per-user check.</p>
+            <p className={`text-2xs mt-2 ${seats === 0 ? "text-amber-ink font-semibold" : "text-ink-3"}`}>
+              {seats === 0
+                ? `Users is 0: none of the ${bill!.lines.length} domains matched a Google subscription in ResellerOS, so no margin is added. Type the user count from Net2Secure's bill, or set up the customers' subscriptions.`
+                : seatsInput !== null
+                  ? "Using the users you typed. Clear the box to go back to your subscription count."
+                  : `Users = your subscription seats on the ${check.rows.filter((r) => r.seats > 0).length} matched domains (Google's PDF has no seat counts). Ask Net2Secure for Google's invoice CSV for an exact per-user check.`}
+            </p>
           </Card>
 
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold text-ink">By domain</h2>
             <div className="flex gap-2">
               <Button size="sm" variant="ghost" onClick={() => setShowOk((v) => !v)}>{showOk ? "Hide OK rows" : `Show OK rows (${check.rows.filter((r) => r.status === "ok").length})`}</Button>
+              {canAdd && check.rows.some((r) => r.status === "no_customer") && (
+                <Button size="sm" variant="primary" icon="plus" loading={bulkBusy} onClick={() => void addAllMissing()}>
+                  Add all missing ({check.rows.filter((r) => r.status === "no_customer").length})
+                </Button>
+              )}
               <Button size="sm" variant="outline" icon="download" onClick={exportCsv}>Download CSV</Button>
             </div>
           </div>
@@ -210,7 +268,7 @@ export default function GoogleBillCheckPage() {
               <thead className="text-xs text-ink-3 text-left">
                 <tr className="border-b border-hairline">
                   <th className="px-3 py-2 font-semibold">Domain</th><th className="px-3 py-2 font-semibold">Customer</th><th className="px-3 py-2 font-semibold">Status</th>
-                  <th className="px-3 py-2 font-semibold text-right">Google</th><th className="px-3 py-2 font-semibold text-right">You bill</th><th className="px-3 py-2 font-semibold text-right">Margin</th>
+                  <th className="px-3 py-2 font-semibold text-right">Google</th><th className="px-3 py-2 font-semibold text-right">You bill</th><th className="px-3 py-2 font-semibold text-right">Margin</th><th className="px-3 py-2"><span className="sr-only">Action</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
@@ -225,6 +283,11 @@ export default function GoogleBillCheckPage() {
                     <td className="px-3 py-2 text-right tabular-nums">{inr(r.googleCost)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.ourMonthly ? inr(r.ourMonthly) : "—"}</td>
                     <td className={`px-3 py-2 text-right tabular-nums font-semibold ${r.margin < 0 ? "text-rose" : "text-emerald"}`}>{inr(r.margin)}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {canAdd && r.status === "no_customer" && <Button size="sm" variant="outline" onClick={() => setAddRow(r)}>Add</Button>}
+                      {canAdd && r.status === "no_subscription" && <Button size="sm" variant="outline" onClick={() => setAddRow(r)}>Add subscription</Button>}
+                      {r.status === "needs_setup" && r.customerRef && <Link href={`/customers/${r.customerRef}` as never} className="text-xs font-semibold text-primary hover:underline">Set price</Link>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -250,6 +313,9 @@ export default function GoogleBillCheckPage() {
             </>
           )}
         </>
+      )}
+      {addRow && me?.tenantId && books.data && (
+        <AddFromBillDialog row={addRow} customers={books.data.customers} tenantId={me.tenantId} onClose={() => setAddRow(null)} onDone={refreshBooks} />
       )}
     </div>
   );

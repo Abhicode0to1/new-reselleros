@@ -14,7 +14,8 @@
  *     suspended? transferred to another reseller?).
  *
  * The PDF has no seat counts, so the Net2Secure margin is estimated from OUR seat counts; the
- * per-SKU check waits for Google's CSV. Everything here is read-only maths; nothing is saved.
+ * per-SKU check waits for Google's CSV. The checks are read-only maths; the page writes only
+ * when a person presses Add (newSubscriptionRow below).
  */
 
 export interface BillLine { domain: string; customerId: string; amount: number }
@@ -108,7 +109,8 @@ export interface CustomerLite { id: string; name: string; domain: string | null 
 export const normDomain = (s: string | null | undefined) =>
   (s || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
 
-export type RowStatus = "ok" | "loss" | "no_subscription" | "no_customer";
+/** needs_setup: a subscription exists but we bill ₹0 for it (made from the bill, price not set yet). */
+export type RowStatus = "ok" | "loss" | "needs_setup" | "no_subscription" | "no_customer";
 
 export interface CheckRow {
   domain: string;
@@ -158,7 +160,7 @@ export function checkBill(lines: readonly BillLine[], subs: readonly SubLite[], 
     const ourMonthly = ss.reduce((a, s) => a + Number(s.mrr || 0), 0);
     const seats = ss.reduce((a, s) => a + Number(s.vendor_seats ?? s.seats ?? 0), 0);
     const margin = Math.round((ourMonthly - l.amount) * 100) / 100;
-    const status: RowStatus = !ss.length && !cust ? "no_customer" : !ss.length ? "no_subscription" : margin < 0 ? "loss" : "ok";
+    const status: RowStatus = !ss.length && !cust ? "no_customer" : !ss.length ? "no_subscription" : ourMonthly === 0 ? "needs_setup" : margin < 0 ? "loss" : "ok";
     return {
       domain: l.domain, customerId: l.customerId, googleCost: l.amount,
       customerName: ss[0]?.customer_name ?? cust?.name ?? null,
@@ -190,7 +192,7 @@ export function checkBill(lines: readonly BillLine[], subs: readonly SubLite[], 
   };
 }
 
-const STATUS_RANK: Record<RowStatus, number> = { no_customer: 0, no_subscription: 1, loss: 2, ok: 3 };
+const STATUS_RANK: Record<RowStatus, number> = { no_customer: 0, no_subscription: 1, needs_setup: 2, loss: 3, ok: 4 };
 
 /**
  * What Net2Secure should bill for this month: Google's subtotal + ₹`perSeatYear` per seat per
@@ -200,4 +202,47 @@ const STATUS_RANK: Record<RowStatus, number> = { no_customer: 0, no_subscription
 export function expectedPartnerBill(googleSubtotal: number, seats: number, perSeatYear = 10): { margin: number; expected: number } {
   const margin = Math.round(((seats * perSeatYear) / 12) * 100) / 100;
   return { margin, expected: Math.round((googleSubtotal + margin) * 100) / 100 };
+}
+
+// ─── Making the missing subscription ───────────────────────────────────────────
+
+export const GOOGLE_PLANS = ["Business Starter", "Business Standard", "Business Plus", "Enterprise", "Google Workspace"] as const;
+
+/**
+ * The subscription row for a domain on Google's bill (5 Oct 2026, Pardeep: "customer add karne
+ * ka option … sabki subscription banaye aur google ke cost price ko handle kare").
+ *
+ * Google's cost for the month is spread over the users: vendor_cost_per_seat_month is what the
+ * existing COGS / licence-leakage columns read. Whole rupees, as those columns are integers.
+ * A missing selling price stays 0 on purpose — the page then shows "Set price & users" instead
+ * of inventing a margin.
+ */
+export function newSubscriptionRow(a: {
+  tenantId: string; customerId: string; customerName: string; domain: string;
+  plan: string; users: number; sellPerUserMonth: number | null; googleCostMonth: number; syncedAt: string;
+}) {
+  const users = Math.max(1, Math.round(a.users));
+  return {
+    tenant_id: a.tenantId,
+    customer_id: a.customerId,
+    customer_name: a.customerName,
+    domain: normDomain(a.domain),
+    plan: a.plan,
+    vendor: "google" as const,
+    status: "active" as const,
+    seats: users,
+    used: 0,
+    mrr: a.sellPerUserMonth && a.sellPerUserMonth > 0 ? Math.round(a.sellPerUserMonth * users) : 0,
+    outstanding_amount: 0,
+    auto_renew: true,
+    vendor_seats: users,
+    vendor_cost_per_seat_month: Math.round(Math.max(0, a.googleCostMonth) / users),
+    vendor_synced_at: a.syncedAt,
+  };
+}
+
+/** A customer name from a domain: "freighttiger.com" → "Freighttiger". Rename later. */
+export function nameFromDomain(domain: string): string {
+  const base = normDomain(domain).split(".")[0].replace(/[-_]+/g, " ").trim();
+  return base ? base.split(" ").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ") : domain;
 }
