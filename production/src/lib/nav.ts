@@ -437,7 +437,14 @@ export const APP_NAV: NavSection[] = [
       { id: "purchase-orders", href: "/purchase-orders",           label: "Purchase Orders",      icon: "cart", roles: OMB },
       { id: "vendors",         href: "/accounting/vendors",        label: "Vendors Master",       icon: "users", roles: OMB },
       { id: "bills",           href: "/accounting/bills",          label: "COGS Bills",           icon: "receipt", roles: OMB },
-      { id: "bill-payments",   href: "/accounting/bill-payments",  label: "Payments Made",        icon: "rupee", roles: OMB },
+      {
+        id: "bill-payments",   href: "/accounting/bill-payments",  label: "Payments Made",        icon: "rupee", roles: OMB,
+        children: [
+          /* R-163: pick due bills → owner approves → one bank bulk file → mark paid. A child, not
+             a row: the nav is at its 45-row cap (nav-s30.test.ts). */
+          { id: "payment-runs", href: "/accounting/payment-runs", label: "Payment Runs", icon: "send", roles: OMB, hint: "Due bills ek saath — approve, bank file, paid" },
+        ],
+      },
       {
         id: "expenses",        href: "/accounting/expenses",       label: "Expenses",             icon: "rupee", roles: OMB,
         children: [

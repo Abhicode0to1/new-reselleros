@@ -78,6 +78,8 @@ const ADDED_3OCT_OM = ["/ai-entry", "/online-orders", "/items/packages", "/accou
  *  owner/manager roles as /items — new addresses, not new access. */
 /** …and Apprentice Academy (R-149), owner / manager in phase 1. */
 const ADDED_4OCT_OM = ["/items/subscriptions", "/items/products", "/marketing/landing-pages", "/academy"];
+/** R-163 (5 Oct 2026): Payment Runs, a child of Payments Made — same owner/manager/billing roles. */
+const ADDED_5OCT_OMB = ["/accounting/payment-runs"];
 const ADDED_3OCT_OWNER = ["/vault/personal/banking", "/vault/personal/expenses", "/vault/personal/wealth"];
 const ADDED_3OCT_BOOKS = ["/accounting/banking/brs", "/accounting/banking/rules", "/accounting/assets", "/accounting/business-loans",
   "/accounting/profitability", "/reports/purchases", "/accounting/tds-receivable/year-end", "/compliance/gst", "/compliance/income-tax", "/compliance/roc"];
@@ -90,6 +92,7 @@ const removedFor = (role: string) => REMOVED_3OCT[role] ?? [];
 const addedFor = (role: string) => [
   ...(role === "owner" || role === "manager" ? ADDED_3OCT_OM : []),
   ...(role === "owner" || role === "manager" ? ADDED_4OCT_OM : []),
+  ...(role === "owner" || role === "manager" || role === "billing" ? ADDED_5OCT_OMB : []),
   ...(role === "owner" ? ADDED_3OCT_OWNER : []),
   ...(BOOKS_ROLES.includes(role) ? ADDED_3OCT_BOOKS : []),
   ...(role === "billing" ? ADDED_3OCT_BILLING : []),

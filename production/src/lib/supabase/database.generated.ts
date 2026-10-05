@@ -12066,6 +12066,105 @@ export type Database = {
           },
         ]
       }
+      payment_run_items: {
+        Row: {
+          amount: number
+          doc_id: string
+          doc_ref: string | null
+          id: string
+          run_id: string
+          source: string
+          tenant_id: string
+          vendor_id: string | null
+          vendor_name: string
+        }
+        Insert: {
+          amount?: number
+          doc_id?: string
+          doc_ref?: string | null
+          id?: string
+          run_id?: string
+          source?: string
+          tenant_id?: string
+          vendor_id?: string | null
+          vendor_name?: string
+        }
+        Update: {
+          amount?: number
+          doc_id?: string
+          doc_ref?: string | null
+          id?: string
+          run_id?: string
+          source?: string
+          tenant_id?: string
+          vendor_id?: string | null
+          vendor_name?: string
+        }
+        Relationships: []
+      }
+      payment_runs: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          bank_account_id: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          created_by: string
+          id: string
+          note: string | null
+          paid_at: string | null
+          paid_by: string | null
+          paid_on: string | null
+          pay_on: string
+          run_no: string
+          status: string
+          tenant_id: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bank_account_id?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          note?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_on?: string | null
+          pay_on?: string
+          run_no?: string
+          status?: string
+          tenant_id?: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bank_account_id?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          note?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_on?: string | null
+          pay_on?: string
+          run_no?: string
+          status?: string
+          tenant_id?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vendor_bills: {
         Row: {
           attachment_url: string | null
@@ -12172,6 +12271,9 @@ export type Database = {
       vendors: {
         Row: {
           address: string | null
+          bank_account_name: string | null
+          bank_account_no: string | null
+          bank_ifsc: string | null
           city: string | null
           contact_email: string | null
           contact_name: string | null
@@ -12189,9 +12291,13 @@ export type Database = {
           tenant_id: string
           udyam: string | null
           updated_at: string
+          upi_id: string | null
         }
         Insert: {
           address?: string | null
+          bank_account_name?: string | null
+          bank_account_no?: string | null
+          bank_ifsc?: string | null
           city?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -12209,9 +12315,13 @@ export type Database = {
           tenant_id: string
           udyam?: string | null
           updated_at?: string
+          upi_id?: string | null
         }
         Update: {
           address?: string | null
+          bank_account_name?: string | null
+          bank_account_no?: string | null
+          bank_ifsc?: string | null
           city?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -12229,6 +12339,7 @@ export type Database = {
           tenant_id?: string
           udyam?: string | null
           updated_at?: string
+          upi_id?: string | null
         }
         Relationships: [
           {
@@ -13457,6 +13568,21 @@ export type Database = {
           p_paid_on: string
           p_period?: string
         }
+        Returns: undefined
+      }
+      approve_payment_run: { Args: { p_run_id: string }; Returns: undefined }
+      cancel_payment_run: { Args: { p_run_id: string }; Returns: undefined }
+      create_payment_run: {
+        Args: {
+          p_bank_account_id: string
+          p_items: Json
+          p_note?: string
+          p_pay_on?: string
+        }
+        Returns: string
+      }
+      mark_payment_run_paid: {
+        Args: { p_paid_on?: string; p_run_id: string }
         Returns: undefined
       }
       pay_vendor_bill: {
