@@ -159,7 +159,8 @@ function QueueRow({
 }
 
 export function PriorityCallQueue({
-  leads, tenantName, onOutcome, onOpen, onLogCall, onLogWhatsApp, limit = 3,
+  /* 5 by default (was 3) — AI Help report, 5 Oct 2026: "show at least 5 priority call tasks". */
+  leads, tenantName, onOutcome, onOpen, onLogCall, onLogWhatsApp, limit = 5,
 }: {
   /** Due follow-ups (slim rows — queries/leads.ts#useDueLeads, S40); buildCallQueue re-checks them. */
   leads: readonly LeadListRow[];
