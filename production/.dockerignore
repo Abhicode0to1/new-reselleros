@@ -31,7 +31,9 @@ coverage
 playwright.config.ts
 playwright-report
 test-results
-vitest.config.ts
+# vitest*.config.ts, not just vitest.config.ts (5 Oct 2026): R-161 added vitest.isolation.config.ts,
+# which imports ./vitest.config — with only the base excluded, next build's type check failed on it.
+vitest*.config.ts
 __tests__
 
 # IDE / editor
