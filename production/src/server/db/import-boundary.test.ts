@@ -65,6 +65,16 @@ describe("database import boundary", () => {
     expect(bad.map((f) => f.path)).toEqual([]);
   });
 
+  test("supabase-js clients are built only in src/lib/supabase (so the VM switches reach them)", () => {
+    // A client built straight from supabase-js bypasses the in-process gateway and Auth.js —
+    // with the VM off it would call the public route with the service key and be refused.
+    // Use createClient/createAdminClient from @/lib/supabase/server, or createBareClient from @/lib/supabase/bare.
+    const bad = FILES.filter((f) => !isTest(f.path) && !f.path.startsWith("lib/supabase/"))
+      .filter((f) => /import\s*\{[^}]*\bcreateClient\b[^}]*\}\s*from\s*["']@supabase\/supabase-js["']/.test(f.code)
+        || /\b(createServerClient|createBrowserClient)\s*[<(]/.test(f.code));
+    expect(bad.map((f) => f.path)).toEqual([]);
+  });
+
   test("createAdminClient() call sites only go down", () => {
     // Measured 5 Oct 2026. Lower this number when you move one to withTenant; never raise it.
     const BASELINE = 205;
