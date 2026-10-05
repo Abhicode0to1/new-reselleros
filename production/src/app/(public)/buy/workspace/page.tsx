@@ -16,6 +16,12 @@
  * If the catalog has zero matching SKUs (fresh install, accidentally disabled
  * everything), we still render the page with a friendly "contact us" message
  * instead of an empty product grid.
+ *
+ * R-027 (5 Oct 2026): the QA check timed out (20 s) on the test service. Measured: 8–10 s on
+ * a freshly started instance (staging right after a push, the idle test service), 0.2–0.8 s
+ * once warm. The page then ran its two database reads ONE AFTER THE OTHER with no limit, so a
+ * cold connection paid twice. They now run together, each capped at 3 s: a slow read shows
+ * the "contact us" grid or quote-only checkout instead of hanging the page.
  */
 import { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -35,6 +41,8 @@ export const metadata: Metadata = {
 // catalog to reflect on the buy page within seconds.
 export const dynamic = "force-dynamic";
 
+const READ_TIMEOUT_MS = 3_000;
+
 async function fetchGoogleWorkspaceItems(): Promise<CatalogItem[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -45,7 +53,8 @@ async function fetchGoogleWorkspaceItems(): Promise<CatalogItem[]> {
     .eq("kind",   "main")
     .eq("is_active", true)
     .ilike("name", "Google Workspace%")
-    .order("msrp", { ascending: true });
+    .order("msrp", { ascending: true })
+    .abortSignal(AbortSignal.timeout(READ_TIMEOUT_MS));
 
   if (error) {
     console.error("[buy/workspace] catalog fetch failed:", error);
@@ -69,6 +78,7 @@ async function isRazorpayConfigured(): Promise<boolean> {
       .from("tenant_secrets")
       .select("razorpay_key_id, razorpay_key_secret")
       .eq("tenant_id", BUY_PAGE_TENANT_ID)
+      .abortSignal(AbortSignal.timeout(READ_TIMEOUT_MS))
       .maybeSingle();
     if (data?.razorpay_key_id && data.razorpay_key_secret) return true;
   } catch { /* fall through to env */ }
@@ -86,14 +96,14 @@ export default async function BuyWorkspacePage(props: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const pick = parseBuyParams(await props.searchParams);
-  const catalogItems = await fetchGoogleWorkspaceItems();
+  // Both reads at once (R-027) — each is capped, so the page waits at most ~3 s, not the sum.
+  const [catalogItems, configured] = await Promise.all([fetchGoogleWorkspaceItems(), isRazorpayConfigured()]);
   // Live when Razorpay is fully configured. When it isn't:
   //  · non-prod (or ALLOW_SIMULATED_CHECKOUT=1) → "simulation": Buy now stays
   //    visible for Pardeep to walk the full pipeline, clearly TEST-MODE banded.
   //  · production without that flag → "disabled": the online-buy CTA is hidden
   //    so a REAL customer never sees a "Simulate payment" button on a public
   //    storefront before Razorpay go-live. They get "Get a GST quote" instead.
-  const configured = await isRazorpayConfigured();
   // R-079: never on a production deployment, whatever ALLOW_SIMULATED_CHECKOUT says — same gate as the route.
   const allowSim = simulatedPaymentAllowed();
   const paymentMode: "live" | "simulation" | "disabled" = configured
