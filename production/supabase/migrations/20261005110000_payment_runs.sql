@@ -58,14 +58,14 @@ create table if not exists public.payment_runs (
   pay_on          date not null default current_date,
   total           bigint not null default 0 check (total >= 0),
   note            text check (note is null or length(note) <= 500),
-  created_by      uuid not null references auth.users(id),
+  created_by      uuid not null,   -- auth uid; no FK: the migration role may not reference auth.users on Cloud SQL
   created_at      timestamptz not null default now(),
-  approved_by     uuid references auth.users(id),
+  approved_by     uuid,
   approved_at     timestamptz,
-  paid_by         uuid references auth.users(id),
+  paid_by         uuid,
   paid_at         timestamptz,
   paid_on         date,
-  cancelled_by    uuid references auth.users(id),
+  cancelled_by    uuid,
   cancelled_at    timestamptz,
   updated_at      timestamptz not null default now(),
   unique (tenant_id, run_no)
