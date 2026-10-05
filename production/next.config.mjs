@@ -55,6 +55,16 @@ const nextConfig = {
      `next lint` on every push (.github/workflows/ci.yml) and the local gate runs it too.
      Type checking stays ON here: it is what catches typedRoutes, which plain tsc does not. */
   eslint: { ignoreDuringBuilds: true },
+  /* 5 Oct 2026: two Cloud Build runs died with SIGKILL inside `next build` on the 8 GB
+     E2_HIGHCPU_8 machine (once in the morning, once after R-161 added `prisma generate`).
+     The main process may take 6 GB (NODE_HEAP_MB) and Next starts cpus-1 = 7 worker
+     processes beside it for page generation, each with its own heap — together past 8 GB.
+     A bigger machine was measured on 29 Aug (cloudbuild.yaml): ~11% faster, 4x the price.
+     So: fewer workers and webpack's own memory savings instead; same machine, same cost. */
+  experimental: {
+    cpus: 3,
+    webpackMemoryOptimizations: true,
+  },
   images: {
     /* Deep study 27 Sep 2026: next 14.2.35 carries an unauthenticated RCE advisory in the
        Image Optimization API (AVIF path). Until the Next 15/16 upgrade lands, serve images

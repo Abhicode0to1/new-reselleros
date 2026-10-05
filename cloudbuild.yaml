@@ -68,9 +68,27 @@ steps:
       - -c
       - npm ci --no-audit --no-fund && npx tsc --noEmit && npx vitest run
 
+  # 0b. DEPS CACHE (5 Oct 2026, Pardeep: "cache kar do"). The note on --cache-from below was
+  #     right: it never worked because nothing was pulled. Now the deps stage (npm ci, ~43s +
+  #     COPY ~29s) has its own tag, pulled here and rebuilt from cache when package-lock.json
+  #     is unchanged. Every step tolerates a miss: no tag yet, or a failed pull, just means a
+  #     normal full build — this can never stop a deploy.
+  #     After the gate, not beside it: the gate's tsc + vitest already use ~6 of the 8 GB, and
+  #     an npm ci running next to them is exactly the SIGKILL this file is trying to stop.
+  - id: deps-pull
+    waitFor: [gate]
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args: [-c, 'docker pull $_IMAGE:deps || echo "no deps cache yet — full build"']
+  - id: deps
+    waitFor: [deps-pull]
+    name: gcr.io/cloud-builders/docker
+    dir: production
+    args: [build, --target=deps, --cache-from=$_IMAGE:deps, --tag=$_IMAGE:deps, .]
+
   # 1. Build the image, exactly as deploy.sh does today.
   - id: build
-    waitFor: [gate]
+    waitFor: [gate, deps]
     name: gcr.io/cloud-builders/docker
     dir: production
     args:
@@ -99,6 +117,9 @@ steps:
       # image pehle `docker pull` ki gayi ho, aur har build ek KHAALI machine par shuru hota
       # hai. Yahan koi pull step hai hi nahi.
       #
+      # (5 Oct 2026: AB THEEK — step 0b pull karta hai aur deps stage ka apna tag hai. Neeche
+      # ka paragraph us waqt ka faisla hai, record ke liye.)
+      #
       # Jaan-boojhkar theek NAHI kiya gaya. Faayda sirf `npm ci` (43s) aur
       # `COPY --from=deps` (29s) tak hai — 431s me se 72s, aur wo bhi tab jab
       # package-lock.json na badla ho (pichhle 30 commit me 8 baar badla). Uske liye teen
@@ -109,6 +130,8 @@ steps:
       # Flag isliye chhodi hai ki wo nuksaan nahi karti, aur jis din pull step judega us din
       # kaam karne lagegi.
       - --cache-from=$_IMAGE:latest
+      # The deps layers just built (or restored) in step 0b — this is what makes the cache real.
+      - --cache-from=$_IMAGE:deps
       - .
 
   - id: push
@@ -161,6 +184,7 @@ substitutions:
 images:
   - $_IMAGE:$SHORT_SHA
   - $_IMAGE:latest
+  - $_IMAGE:deps
 
 options:
   logging: CLOUD_LOGGING_ONLY
