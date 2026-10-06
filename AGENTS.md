@@ -258,6 +258,17 @@ The on-screen tax-invoice preview (`components/features/quotes/tax-invoice-dialo
 Billing & Subscriptions section (§13) and still shows the old "Due Date" and no domain line; the
 hand-off note for its owner is in `Todos.md`.
 
+**Every buying path passed end to end on localhost (5–6 Oct 2026, Razorpay TEST, real server1):** shop hosting
+trial (confirm → account → Customer Portal login), shop paid hosting, shop domain, DMS cart with two plans, the
+portal's Buy hosting dialog and Register domain dialog — each with its invoice, subscription and (hosting) the
+server1 account, then terminated and purged. A test payment never registers a domain (it is queued and held).
+Re-run them with the scripts' flow, not by hand: buy → deliver the real webhook (Razorpay cannot reach localhost)
+→ the local cron (`scripts/local-cron.mjs`) sets up hosting within a minute → check server1 → terminate in DMS
+admin → purge the rows.
+**Engine retries reuse one commandId per request per day** (`provisionCommandId` → `rsos-hostprov-<row>-<date>`), so
+DMS replays a stored outcome — except a failure that never reached a provider, which it now runs again (DMS
+`1c6180bf`). Before that, one DirectAdmin timeout turned a paid order into "failed, set it up by hand".
+
 Open items for the integration are tracked in `Todos.md`, not here.
 
 ---
