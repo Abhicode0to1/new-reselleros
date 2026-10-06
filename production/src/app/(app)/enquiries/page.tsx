@@ -553,7 +553,7 @@ export default function EnquiriesPage() {
                 {isEmptySearch(parsed) && folder === "inbox" && (
                   <p data-testid="enquiries-empty-guidance" className="mx-auto mt-2 max-w-md text-center text-xs leading-relaxed text-ink-3">
                     Enquiries arrive here when a customer emails your sales address or fills in your
-                    buy-page form. Use the folders on the left (Starred, Snoozed, Converted Leads, Sent,
+                    buy-page form. Use the folder list (Starred, Snoozed, Converted Leads, Sent,
                     Done) to sort them once they do.
                   </p>
                 )}
