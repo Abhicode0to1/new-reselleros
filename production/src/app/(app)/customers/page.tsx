@@ -780,6 +780,8 @@ export default function CustomersPage() {
                             ? null
                             : <Badge kind={m.kind} size="sm" dot={m.dot}>{m.label}</Badge>;
                         })()}
+                        {/* R-166: same warning as the desktop Place of supply cell. */}
+                        {missingInvoiceState(c) && <Badge kind="warning" size="sm">State missing</Badge>}
                       </div>
                       <p className="text-2xs text-ink-3 truncate mt-0.5">
                         {customerSubline(c) || "—"}
