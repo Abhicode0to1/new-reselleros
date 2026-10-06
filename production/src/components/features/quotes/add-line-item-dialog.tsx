@@ -29,6 +29,8 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { useItems } from "@/lib/queries/items";
 import { catalogDefaultQty } from "@/lib/quotes/line-items";
+import { headlinePrice, isOwnService } from "@/lib/catalog/headline-price";
+import { catalogYearlyPrice } from "@/lib/quotes/catalog-line";
 import { rupee } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { formatForeign } from "@/lib/currency";
@@ -107,9 +109,7 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
     // ₹/seat/YEAR (the canonical storage unit). Default commitment is
     // "annual_yearly" so we use the annual tier × 12. The commitment picker
     // can later switch to monthly which recalculates via updateCommitment().
-    const annualTier  = it.prices?.annual;
-    const monthlyTier = it.prices?.monthly;
-    const usdTier     = it.prices?.usd;
+    const usdTier    = it.prices?.usd;
     let msrpPerYear: number;
     let wholesalePerYear: number;
     if (useIntlUsd && usdTier && usdTier.msrp > 0) {
@@ -120,11 +120,12 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
       msrpPerYear      = Math.round(usdTier.msrp * 12 * rate);
       wholesalePerYear = Math.round(usdTier.wholesale * 12 * rate);
     } else {
-      // Domestic (or no USD price) → the ₹ catalog price, as before.
-      const msrpPerMo      = annualTier?.msrp      ?? monthlyTier?.msrp      ?? it.msrp;
-      const wholesalePerMo = annualTier?.wholesale ?? monthlyTier?.wholesale ?? it.wholesale;
-      msrpPerYear      = msrpPerMo * 12;
-      wholesalePerYear = wholesalePerMo * 12;
+      // Domestic (or no USD price) → the ₹ catalog price, shared with the quote's
+      // product chips and support toggle (lib/quotes/catalog-line.ts). A yearly-total
+      // plan (support "(Yearly)") is priced from prices.annual_total there.
+      const p = catalogYearlyPrice(it);
+      msrpPerYear      = p.rate;
+      wholesalePerYear = p.cost;
     }
 
     onAdd({
@@ -236,6 +237,9 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
                             >
                               {it.vendor}
                             </Badge>
+                            {it.kind === "addon" && (
+                              <Badge size="sm" kind="outline" className="shrink-0">Add-on</Badge>
+                            )}
                           </div>
                           <div className="text-2xs text-ink-3 font-mono truncate">{it.id}</div>
                         </div>
@@ -252,16 +256,20 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
                             </div>
                           ) : (
                             <div className="font-medium text-sm">
-                              {rupee(it.msrp)}/mo
+                              {rupee(headlinePrice(it).amount)}/{headlinePrice(it).unit}
                               {isUsd && <span className="block text-3xs text-amber-ink font-normal">set the exchange rate to show {currency}</span>}
                             </div>
                           )}
+                          {isOwnService(it) ? (
+                            <div className="text-3xs text-ink-3">Own service</div>
+                          ) : (
                           <div className={cn(
                             "text-3xs",
                             it.margin_pct >= 18 ? "text-emerald" : it.margin_pct >= 14 ? "text-amber-ink" : "text-rose"
                           )}>
                             {it.margin_pct}% margin
                           </div>
+                          )}
                         </div>
                         <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber text-white text-xs font-semibold px-2.5 py-1.5">
                           <Icon name="plus" size={13} /> Add

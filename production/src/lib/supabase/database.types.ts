@@ -344,6 +344,9 @@ export type QuoteLineItem = {
   bulk?: boolean;
   /** Per-domain breakdown for a bulk line. `qty` must equal the sum of these seats. */
   domains?: Array<{ domain: string; seats: number }>;
+  /** Domain registration lines only: years paid for, 1–10 (R-031). Absent → 1. The
+   *  register-domains cron registers for exactly this term. */
+  years?: number;
   /** Optional domain this subscription is provisioned against (Google Workspace /
    *  M365 / Zoho). Per-line because a quote can hold products for different domains. */
   domain?: string | null;
@@ -1250,6 +1253,8 @@ type ArgNullable = {
   reconcile_salary_advance_split: "p_notes";
   pay_statutory_dues: "p_notes" | "p_challan_no" | "p_period";
   mark_attendance: "p_ip";
+  save_package: "p_id" | "p_pitch";
+  academy_review_task: "p_marks";
 };
 
 /** jsonb / setof RPCs ka return shape (generator sirf `Json` likhta hai). */

@@ -26,9 +26,11 @@ import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { GST_STATE_BY_CODE } from "@/lib/utils";
+import { GST_STATE_OPTIONS, stateCodeFromGstin } from "@/lib/gst/gstin-state";
 import type { SitePromoRow, SitePromoBannerStyle } from "@/lib/supabase/database.types";
 import { thanksUrl } from "./thanks/thanks-url";
 import { BusyPanel } from "@/components/ui/busy-panel";
+import { useTurnstile } from "@/components/shared/turnstile";
 import { COMPANY, WHATSAPP_NUMBER, WHATSAPP_READY, whatsappDisplay } from "@/site/lib/config";
 
 // ──────────────────────────────────────────────────────────────────────
@@ -152,8 +154,9 @@ function whatsappLink(message: string): string {
 
 // ──────────────────────────────────────────────────────────────────────
 // Pricing math — calculates annual cost incl GST for visitor's seat count,
-// AND the rupee saving vs buying from Google direct (Google charges full
-// ₹1080/user — we have a 20% promo for first 20 users on Standard).
+// AND the rupee saving when a tier carries a real promo price. R-157 (5 Oct 2026): the
+// hardcoded 20%-off promo for the first twenty users on Standard was removed — no such offer existed
+// and the page charged the full rate anyway. Real sales come from Online Promos (site_promos).
 // ──────────────────────────────────────────────────────────────────────
 interface PriceCalc {
   annual:    number;   // pre-GST annual subscription
@@ -359,7 +362,10 @@ function buildTiers(catalog: CatalogItem[]): Tier[] {
     const slug    = slugFromName(item.name);
     const preset  = TIER_PRESETS[slug];
     const annual  = item.prices?.annual?.msrp  ?? item.msrp;
-    const monthly = item.prices?.monthly?.msrp ?? Math.round(annual * 1.25);
+    /* R-157: used to multiply the annual rate by 1.25 when no monthly existed — an invented rate. Only a real
+       flexible price above the annual one is shown (a lower one is a stale catalogue row). */
+    const flex = item.prices?.monthly?.msrp ?? null;
+    const monthly = flex != null && flex > annual ? flex : null;
     return {
       id:           slug,
       catalogId:    item.id,
@@ -406,8 +412,6 @@ const FALLBACK_TIERS: Tier[] = [
     name: "Business Standard",
     monthlyPrice: 1300,
     annualPrice:  1080,
-    promoPrice:   864,
-    promoLabel:   "20% off · first 20 users · 12 months",
     maxUsers:     300,
     isPopular:    true,
     cta:          "Get a quote",
@@ -570,8 +574,8 @@ const SHOW_SOCIAL_PROOF = false;
 interface TimelineStep { time: string; title: string; body: string; }
 const POST_PURCHASE_TIMELINE: TimelineStep[] = [
   { time: "0 min",  title: "You pay via Razorpay",         body: "UPI, NEFT, card, net-banking — your choice."                                       },
-  { time: "15 min", title: "GST invoice in your inbox",    body: "Plus a WhatsApp confirmation from your account manager."                          },
-  { time: "2 hours", title: "Onboarding call scheduled",   body: "We call to confirm domain, MX records, and migration source."                     },
+  { time: "Right away", title: "GST invoice in your inbox", body: "The order confirmation email carries your GST tax invoice."                       },
+  { time: "Same day", title: "Onboarding call",            body: "We call or WhatsApp to confirm domain, MX records, and migration source."           },
   { time: "Same day", title: "Domain verified",            body: "DNS configured, admin console handed over with your owner credentials."           },
   { time: "24 hours", title: "Team emails live",           body: "Custom @yourcompany.com working. Old mail still migrating in background."         },
 ];
@@ -698,8 +702,8 @@ function PremierBadgeShowcase() {
  *   │  [Avatar 80×80]  Pardeep Sharma │
  *   │                   Founder · ...  │
  *   ├────────────────────────────────┤
- *   │  "If we don't go live in 24h,    │
- *   │   I refund the setup fee."       │
+ *   │  "Setup and migration are free  │
+ *   │   — my team does them."         │
  *   │   — Pardeep                      │
  *   ├────────────────────────────────┤
  *   │  [▓▓▓▓ WhatsApp +91… ▓▓▓▓]    │
@@ -750,7 +754,7 @@ function FounderHero({ waMessage }: { waMessage: string }) {
 
         {/* Signed promise — the page's strongest conversion signal */}
         <blockquote className="font-serif text-base md:text-lg text-ink leading-snug mb-6 pl-4 border-l-4 border-amber">
-          &ldquo;If we don&apos;t go live in 24 hours, I refund the setup fee personally.
+          &ldquo;Setup and migration are free &mdash; my team does them, not yours.
           You&apos;ll have my WhatsApp from day one.&rdquo;
         </blockquote>
 
@@ -1224,7 +1228,15 @@ function GoogleCalendarIcon({ size = 32 }: { size?: number }) {
 export function BuyWorkspaceClient({
   catalogItems = [],
   paymentMode = "simulation",
+  initialTierId,
+  initialSeats,
+  openBuy = false,
 }: {
+  /** R-120: edition and seats chosen on the home card (lib/checkout/buy-link.ts). */
+  initialTierId?: string;
+  initialSeats?: number;
+  /** Open the payment dialog on arrival — the card's "Buy now" meant buy, not browse. */
+  openBuy?: boolean;
   /** Server-fetched, enabled Google Workspace SKUs from the reseller's Item
    *  Catalog. When empty, we fall back to the hardcoded FALLBACK_TIERS. */
   catalogItems?: CatalogItem[];
@@ -1248,6 +1260,18 @@ export function BuyWorkspaceClient({
     [catalogItems],
   );
   const [billing, setBilling] = React.useState<"monthly" | "annual">("annual");
+  /* Flexible (monthly) billing is offered only when every priced plan has a real monthly
+     rate; the saving shown is the largest real one, not a fixed "20%". */
+  const pricedTiers = TIERS.filter((t) => t.annualPrice != null);
+  const monthlyAvailable = pricedTiers.length > 0 && pricedTiers.every((t) => t.monthlyPrice != null);
+  const annualSavePct = monthlyAvailable
+    ? Math.max(0, ...pricedTiers.map((t) => Math.round((1 - (t.annualPrice as number) / (t.monthlyPrice as number)) * 100)))
+    : 0;
+  /* The Standard annual rate as the catalogue has it — the "same price" section quotes it. */
+  const stdPrice = (() => {
+    const std = TIERS.find((t) => t.id === "standard");
+    return std?.annualPrice != null ? `₹${std.annualPrice.toLocaleString("en-IN")}` : "the same";
+  })();
   const [selectedTier, setSelectedTier] = React.useState<Tier | null>(null);
   // Separate state for the trial dialog — different flow, different form fields.
   const [trialDialogOpen, setTrialDialogOpen] = React.useState(false);
@@ -1262,10 +1286,24 @@ export function BuyWorkspaceClient({
   // middle tier, else the first. Works for any catalog shape — 3 SKUs or 4.
   const defaultTierId =
     TIERS.find((t) => t.isPopular)?.id ?? TIERS[Math.floor(TIERS.length / 2)]?.id ?? "standard";
-  const [selectedTierId, setSelectedTierId] = React.useState<string>(defaultTierId);
-  const [seats, setSeats] = React.useState<number>(10);
+  const [selectedTierId, setSelectedTierId] = React.useState<string>(
+    initialTierId && TIERS.some((t) => t.id === initialTierId) ? initialTierId : defaultTierId,
+  );
+  const [seats, setSeats] = React.useState<number>(initialSeats ?? 10);
   const selectedTierObj = TIERS.find((t) => t.id === selectedTierId) ?? TIERS[0];
   const calc = React.useMemo(() => calcForTier(selectedTierObj, seats), [selectedTierObj, seats]);
+  /* Arrived from "Buy now": open the Razorpay dialog once, on that edition — only when this
+     page can actually take the payment and the edition has an annual online price. */
+  const openedFromCard = React.useRef(false);
+  /* R-157: with online payment off (production before Razorpay go-live) the customer who
+     pressed "Buy now" used to land on a page with no pay button — a dead end. They now get
+     the GST-quote form on the same edition and seat count, which is the way to buy today. */
+  React.useEffect(() => {
+    if (openedFromCard.current || !openBuy) return;
+    openedFromCard.current = true;
+    if (paymentMode === "disabled" || selectedTierObj?.annualPrice == null) { setSelectedTier(selectedTierObj); return; }
+    setBuyNowTier(selectedTierObj);
+  }, [openBuy, paymentMode, selectedTierObj]);
 
   // Site promo — currently-active auto-applied sale (from /online-promos).
   // Fetched per-tier/seat so eligibility filters work. Banner shown sticky
@@ -1288,13 +1326,10 @@ export function BuyWorkspaceClient({
       <header className="border-b border-hairline bg-paper sticky top-0 z-40 backdrop-blur-sm bg-paper/95">
         <div className="max-w-[1240px] mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-ink text-paper rounded-md grid place-items-center font-serif text-lg flex-shrink-0">
-              R
-            </div>
-            <div className="hidden sm:block">
-              <div className="font-serif text-base leading-none">ANUTECH DIGITAL</div>
-              <div className="text-3xs text-ink-3 mt-1">Cloud Reseller · India</div>
-            </div>
+            <a href="/" aria-label="Anutech Digital home">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/lp/anutech-logo.png" alt="ANUTECH Digital Pvt Ltd" width={120} height={40} className="h-10 w-auto" />
+            </a>
           </div>
           {/* Tiny partner pill */}
           <div
@@ -1556,7 +1591,7 @@ export function BuyWorkspaceClient({
                   style={{ background: "#25D366", boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
                 >
                   <Icon name="whatsapp" size={20} className="text-paper" />
-                  WhatsApp us — quote in 10 min
+                  WhatsApp us for a quote
                 </a>
               )}
               <Button
@@ -1598,7 +1633,7 @@ export function BuyWorkspaceClient({
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Icon name="check" size={13} className="text-emerald" />
-                Cancel anytime
+                Add users any time
               </span>
             </div>
           </div>
@@ -1624,7 +1659,7 @@ export function BuyWorkspaceClient({
               Same price · more service
             </div>
             <h2 className="font-serif text-3xl md:text-4xl tracking-tight mb-3">
-              Both cost ₹1,080. Only one comes with{" "}
+              Both cost {stdPrice}. Only one comes with{" "}
               <span className="text-amber">a person who picks up your call.</span>
             </h2>
             <p className="text-base text-ink-3 max-w-2xl mx-auto leading-relaxed">
@@ -1644,11 +1679,11 @@ export function BuyWorkspaceClient({
                     </div>
                     <h3 className="font-serif text-xl text-ink">ANUTECH DIGITAL</h3>
                   </div>
-                  <div className="font-serif text-2xl text-ink">₹1,080</div>
+                  <div className="font-serif text-2xl text-ink">{stdPrice}</div>
                 </div>
                 <ul className="space-y-2.5">
                   <CompareBullet positive>Hand-held migration from M365/Zoho (zero downtime)</CompareBullet>
-                  <CompareBullet positive>Hindi + English phone support, 9am–9pm IST</CompareBullet>
+                  <CompareBullet positive>Hindi + English phone support, {COMPANY.hours}</CompareBullet>
                   <CompareBullet positive>Dedicated account manager (one human, not a ticket queue)</CompareBullet>
                   <CompareBullet positive>GST invoice with HSN code (CGST + SGST or IGST)</CompareBullet>
                   <CompareBullet positive>Razorpay · UPI · NEFT · card · net-banking</CompareBullet>
@@ -1667,17 +1702,14 @@ export function BuyWorkspaceClient({
                     </div>
                     <h3 className="font-serif text-xl text-ink-3">Google direct</h3>
                   </div>
-                  <div className="font-serif text-2xl text-ink-3">₹1,080</div>
+                  <div className="font-serif text-2xl text-ink-3">{stdPrice}</div>
                 </div>
                 <ul className="space-y-2.5">
-                  <CompareBullet>DIY migration (you handle CSV exports, MX records)</CompareBullet>
-                  <CompareBullet>Email-only support · bot-first chat</CompareBullet>
-                  <CompareBullet>No named account manager — every ticket starts fresh</CompareBullet>
-                  <CompareBullet positive>GST invoice (basic, no HSN guidance)</CompareBullet>
-                  <CompareBullet>Credit card only · no UPI · no NEFT</CompareBullet>
-                  <CompareBullet>DNS docs in English only (you read &amp; configure)</CompareBullet>
-                  <CompareBullet>Monthly billing default · annual via admin console</CompareBullet>
-                  <CompareBullet>Standard Google support tier</CompareBullet>
+                  <CompareBullet>You move old mail, contacts and calendars yourself</CompareBullet>
+                  <CompareBullet>You add the DNS and MX records yourself</CompareBullet>
+                  <CompareBullet>Support from Google's help centre and support channels</CompareBullet>
+                  <CompareBullet>No local person who knows your account</CompareBullet>
+                  <CompareBullet positive>Same Google Workspace, same features</CompareBullet>
                 </ul>
               </div>
             </div>
@@ -1734,7 +1766,8 @@ export function BuyWorkspaceClient({
           </p>
         </div>
 
-        {/* Billing toggle */}
+        {/* Billing toggle — only when the catalogue has real flexible prices (R-157) */}
+        {monthlyAvailable && (
         <div className="flex justify-center mb-10">
           <div className="inline-flex p-1 rounded-lg bg-paper-2 border border-hairline">
             <button
@@ -1752,12 +1785,15 @@ export function BuyWorkspaceClient({
               }`}
             >
               Annual
+              {annualSavePct > 0 && (
               <span className="text-3xs bg-amber-soft text-amber-ink px-1.5 py-0.5 rounded font-semibold">
-                Save 20%
+                Save up to {annualSavePct}%
               </span>
+              )}
             </button>
           </div>
         </div>
+        )}
 
         {/* Pricing grid — one column per enabled SKU in the Item Catalog.
             Adapts from 3 to 4 cards depending on what Pardeep has switched on. */}
@@ -1876,7 +1912,7 @@ export function BuyWorkspaceClient({
           <div className="space-y-3">
             <FaqItem
               q="Is the pricing same as Google direct?"
-              a="Yes — we charge the same MRP that Google publishes for India (₹270/user/month for Starter annual). The difference is what's bundled around the price: hands-on migration, dedicated account manager, Hindi support, GST invoice, and Razorpay payments. Google direct gives you a credit-card-based portal and email-only support."
+              a="Yes — the same per-user price Google publishes for India; every rate on this page is that price. The difference is what comes with it: setup and migration done by us, a person on the phone in Hindi or English, a GST invoice in rupees, and UPI / NEFT / card payment."
             />
             <FaqItem
               q="Can I get a GST invoice?"
@@ -1884,15 +1920,15 @@ export function BuyWorkspaceClient({
             />
             <FaqItem
               q="What if I'm switching from Microsoft 365 / Zoho?"
-              a="We do the migration for you — emails, contacts, calendars, drive files. Free of cost for plans of 5+ users. Most migrations finish in 24-48 hours with zero downtime."
+              a="We do the migration for you — emails, contacts, calendars, drive files — free, for any number of users. Most migrations finish in 24-48 hours with zero downtime."
             />
             <FaqItem
               q="Annual or monthly — what's better?"
-              a="Annual upfront saves 17% over monthly billing AND keeps the relationship simple — one invoice, one year, one payment cycle. Most Indian SMEs prefer this. Monthly is available if cashflow is tight."
+              a="Annual costs less per user and is one invoice for the year. It is a 12-month commitment: you can add users any time, but not remove them or cancel before the year ends. Flexible (monthly) costs more but you can add or remove users and stop at the end of any month."
             />
             <FaqItem
               q="What if I want to cancel?"
-              a="Cancel anytime from your admin console. Annual plans get pro-rata refunds (minus 30-day notice). Monthly plans stop at the end of the current billing cycle. No questions, no exit fees."
+              a="On the annual plan you pay for the full year — users can be added any time but not removed, and it cannot be cancelled mid-year (this is Google's own rule for annual plans). A flexible (monthly) plan can be stopped at the end of any month. Not sure? Start with the free 14-day trial."
             />
             <FaqItem
               q="Do you support Google Workspace Migrate tool?"
@@ -1907,7 +1943,7 @@ export function BuyWorkspaceClient({
         <Card className="p-8 text-center">
           <h2 className="font-serif text-3xl mb-3">Ready to switch?</h2>
           <p className="text-base text-ink-3 mb-6 leading-relaxed">
-            Tell us how many users and we'll send a GST quote within an hour.
+            Tell us how many users and we'll send a GST quote the same working day.
           </p>
           <Button
             variant="primary"
@@ -2012,8 +2048,7 @@ function PricingCard({
   const price = billing === "monthly" ? tier.monthlyPrice : tier.annualPrice;
   const promo = billing === "annual" ? tier.promoPrice : null;
 
-  // For the Standard card, calculate the rupee saving — the page's ONLY real
-  // differentiator vs Google direct (both charge the same ₹1080 MRP).
+  // A rupee saving shows only when the tier carries a real promo price (none do today).
   const savingPerUserPerYear =
     promo && price ? (price - promo) * 12 : 0;
 
@@ -2023,19 +2058,9 @@ function PricingCard({
         ? "border-amber border-2 shadow-xl ring-4 ring-amber-soft/40"
         : ""
     }`}>
-      {/* Standard tier gets a bold red ribbon — the 20% promo is the page's
-          single decisive lever, so the badge has to fight for attention. */}
-      {tier.isPopular && billing === "annual" && (
-        <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
-          <div
-            className="px-4 py-1.5 text-paper text-2xs font-bold uppercase tracking-wider rounded-md shadow-md"
-            style={{ background: "linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)" }}
-          >
-            20% OFF · First 20 users · 12 months
-          </div>
-        </div>
-      )}
-      {tier.isPopular && billing !== "annual" && (
+      {/* R-157: was a red 20%-off ribbon (for the first twenty users) on annual — a promo that did not
+          exist. The popular plan is marked as popular, nothing more. */}
+      {tier.isPopular && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <div className="px-3 py-1 bg-amber text-paper text-xs font-semibold rounded-full shadow-sm">
             ★ Most Popular
@@ -2094,18 +2119,12 @@ function PricingCard({
           <div className="text-2xs text-ink-3 mb-4">Up to {tier.maxUsers} users</div>
         )}
 
-        {/* Urgency line — quote validity, NOT manipulative countdown */}
-        {tier.isPopular && billing === "annual" && (
-          <div className="text-2xs text-ink-3 mb-3 italic">
-            Quote valid 7 days · lock this rate for 12 months
-          </div>
-        )}
 
         {/* Dual CTA stack for buyable tiers: Razorpay instant-buy primary +
             "Get a quote" secondary (for visitors who want Pardeep-touch
             before paying — GST review, custom seats, PO process). Enterprise
             shows the single "Contact sales" CTA. */}
-        {onBuyNow && price !== null ? (
+        {onBuyNow && price !== null && billing === "annual" ? (
           <div className="space-y-2">
             <Button
               variant="primary"
@@ -2489,6 +2508,7 @@ function EnquiryDialog({
     resolver: zodResolver(enquirySchema),
     defaultValues: { tierId: tier.id, billing, seats: initialSeats },
   });
+  const ts = useTurnstile(); // R-020
 
   async function onSubmit(values: EnquiryForm) {
     // Derive the human-readable state name from the GST code so the lead (and the
@@ -2497,11 +2517,12 @@ function EnquiryDialog({
     const state     = stateCode ? `${GST_STATE_BY_CODE[stateCode]} (${stateCode})` : undefined;
     const res = await fetch("/api/public/enquiry/workspace", {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...ts.headers },
       body:    JSON.stringify({ ...values, stateCode, state }),
     });
     const json = await res.json() as { success?: boolean; error?: string };
     if (!res.ok || json.error) {
+      ts.reset();
       toast.error(json.error ?? "Could not submit enquiry. Please try again.");
       return;
     }
@@ -2584,6 +2605,7 @@ function EnquiryDialog({
             </FormField>
 
             <BusyPanel active={isSubmitting} title="Sending your enquiry" steps={["Sending your details to our team", "Preparing a GST quote for you"]} />
+            {ts.widget}
             <Button
               type="submit"
               variant="primary"
@@ -2689,6 +2711,12 @@ const buyNowSchema = z.object({
   tierId:      z.string(),
   gstin:       z.string().optional(),
   couponCode:  z.string().optional(),
+  stateCode:   z.string().optional(),
+}).superRefine((v, ctx) => {
+  /* R-173: the GST invoice needs a place of supply; a valid GSTIN carries one. */
+  if (!v.stateCode && !stateCodeFromGstin(v.gstin)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["stateCode"], message: "Select your state — the GST invoice needs it" });
+  }
 });
 type BuyNowForm = z.infer<typeof buyNowSchema>;
 
@@ -3270,7 +3298,7 @@ function BuyNowDialog({
                 <Icon name="check" size={11} className="text-emerald" /> GST tax invoice
               </span>
               <span className="inline-flex items-center gap-1">
-                <Icon name="check" size={11} className="text-emerald" /> Cancel anytime
+                <Icon name="check" size={11} className="text-emerald" /> Add users any time
               </span>
               <span className="inline-flex items-center gap-1">
                 <Icon name="check" size={11} className="text-emerald" /> Migration help included
@@ -3330,6 +3358,24 @@ function BuyNowDialog({
               </p>
             </FormField>
 
+            {/* R-173 (6 Oct 2026): this form had no state at all, so every buyer without a
+                GSTIN became a customer whose GST invoice was refused ("no state on record").
+                Required unless a valid GSTIN gives the state. */}
+            <FormField label="Your state (for the GST invoice)" required htmlFor="buy-state">
+              <select
+                id="buy-state"
+                aria-invalid={!!errors.stateCode}
+                {...register("stateCode")}
+                className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+              >
+                <option value="">Select your state</option>
+                {GST_STATE_OPTIONS.map((o) => (
+                  <option key={o.code} value={o.code}>{o.name}</option>
+                ))}
+              </select>
+              {errors.stateCode?.message && <p className="text-xs text-rose mt-1">{errors.stateCode.message}</p>}
+            </FormField>
+
             <BusyPanel active={isSubmitting} title="Preparing your secure payment" steps={["Re-checking the price on our server", "Creating your order", "Opening the Razorpay payment window"]} />
             <Button
               type="submit"
@@ -3353,7 +3399,7 @@ function BuyNowDialog({
               ) : (
                 <>
                   Powered by Razorpay · UPI · Cards · NetBanking · EMI<br />
-                  GST tax invoice emailed within 24 hours of payment.
+                  Your GST tax invoice comes with the payment confirmation email.
                 </>
               )}
             </p>

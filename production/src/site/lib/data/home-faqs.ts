@@ -25,6 +25,6 @@ export const HOME_FAQS: readonly { q: string; a: string }[] = [
   },
   {
     q: "Who answers when I need help?",
-    a: "Support is on WhatsApp with an eleven-minute average first reply in working hours (Mon–Sat, 10:00–19:00 IST), and it is someone who can actually change your account — not a ticket queue or a chatbot. Migrations are done by us, free, at any size.",
+    a: "Support is on WhatsApp in working hours (Mon–Sat, 10:00–19:00 IST), and it is someone who can actually change your account — not a ticket queue or a chatbot. Migrations are done by us, free, at any size.",
   },
 ];

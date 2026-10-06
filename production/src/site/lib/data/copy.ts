@@ -9,7 +9,7 @@
 
 export const CATALOGUE = [
   { name: "Domains", from: "from ₹249/yr", body: "500+ extensions with register, renew and transfer prices on one row.", chips: ["500+ TLDS", "FREE DNS", "WHOIS PRIVACY"], href: "/domains" },
-  { name: "Web hosting", from: "from ₹159/mo", body: "cPanel and LiteSpeed on NVMe, in Mumbai and Bengaluru.", chips: ["CPANEL", "LITESPEED", "99.9% SLA"], href: "/hosting" },
+  { name: "Web hosting", from: "from ₹49.99/mo", body: "cPanel and LiteSpeed on NVMe, in Mumbai and Bengaluru.", chips: ["CPANEL", "LITESPEED", "99.9% SLA"], href: "/hosting" },
   { name: "Business email", from: "from ₹79/mo", body: "Anutech Mail, Google Workspace or Microsoft 365 — quoted side by side.", chips: ["NO SEAT MINIMUM", "FREE MIGRATION"], href: "/email" },
   { name: "SSL & security", from: "from ₹0", body: "Free DV on every site, wildcard and OV when a client needs the paperwork.", chips: ["DV", "OV", "WILDCARD"], href: "/ssl" },
   { name: "Reseller program", from: "₹0 to join", body: "Published wholesale rates with no slabs and no advance deposit.", chips: ["NO DEPOSIT", "ONE RATE", "WHITE LABEL"], href: "/reseller" },
@@ -24,23 +24,21 @@ export const CASES = [
 
 export const TRUST = [
   { value: "12+ yrs", label: "RESELLING SINCE 2014" },
-  { value: "11 min", label: "AVG WHATSAPP FIRST REPLY", primary: true },
+  /* Was an average-first-reply figure in minutes — nobody measures that (2 Oct 2026). */
+  { value: "A person", label: "ANSWERS ON WHATSAPP", primary: true },
   { value: "99.9%", label: "UPTIME SLA, CREDITED" },
   { value: "₹0", label: "MIGRATION FEE, ANY SIZE" },
 ] as const;
 
-export const REVIEWS = [
-  { stars: "★★★★★", quote: "Quoted three options with GST broken out the same afternoon. We picked the cheapest one and they agreed it was enough.", name: "Ritu Malhotra", role: "Nirvaan Clinics · Google review" },
-  { stars: "★★★★★", quote: "Eleven sites moved over a weekend with no downtime. I have paid four figures for worse migrations.", name: "Rohan Deshpande", role: "Studio Anka · Google review" },
-  { stars: "★★★★☆", quote: "Renewal price printed next to the first-year price. That is the whole reason we stopped shopping around.", name: "Aditya Menon", role: "Bharat Freight · Google review" },
-] as const;
+/* REVIEWS removed 2 Oct 2026: three "Google review" quotes that were sample text, not reviews.
+   Real ones go here only with a link to where the customer wrote them. */
 
 /** Wholesale page: THEM vs us. Never a competitor's name. */
 export const SWITCH_REASONS = [
   { them: "THEM: DEPOSIT FIRST, SEE YOUR RATE LATER", us: "Rate card published, ₹0 to join", body: "No advance deposit and no slab to buy into. The price you read today is the price on order one." },
   { them: "THEM: PRICING TIERS THAT MOVE WITH VOLUME", us: "One rate at every volume", body: "You never have to forecast next quarter's sales to know this quarter's cost. Quote clients with confidence." },
   { them: "THEM: RATES IN USD ON AN INDIAN SITE", us: "Billed in ₹, GST invoice every time", body: "No FX gap between quote and renewal. GSTIN on the invoice, input credit where you are eligible." },
-  { them: "THEM: TICKET QUEUE AND A CHATBOT", us: "WhatsApp, and someone who knows your account", body: "Eleven-minute average first reply in working hours. Migrations are done by us, not documented for you." },
+  { them: "THEM: TICKET QUEUE AND A CHATBOT", us: "WhatsApp, and someone who knows your account", body: "A person replies in working hours, Mon–Sat. Migrations are done by us, not documented for you." },
 ] as const;
 
 /** Why-us table. "ANUTECH DIGITAL" column renders on the dark band in --primary-on-dark. */
@@ -51,7 +49,7 @@ export const COMPARE_ROWS = [
   { label: "Currency", us: "₹, GST stated separately", them: "Often USD, GST unclear" },
   { label: "Renewal price", us: "Next to the first-year price", them: "Found at renewal time" },
   { label: "Migration", us: "Free, done by us", them: "A documentation article" },
-  { label: "Support", us: "WhatsApp, 11-minute average", them: "Ticket queue, chatbot first" },
+  { label: "Support", us: "WhatsApp, answered by a person", them: "Ticket queue, chatbot first" },
   { label: "Who answers", us: "Someone who can change your account", them: "Tier-one, then escalation" },
   { label: "Datacentre", us: "Mumbai and Bengaluru", them: "Usually US, India optional" },
   { label: "Contract", us: "Monthly or yearly, cancel any time", them: "Tenure-locked promo pricing" },
@@ -109,5 +107,5 @@ export const PROOF_POINTS = [
   "Published prices, renewal shown up front",
   "GST invoice on every order",
   "Free migration, done by us",
-  "WhatsApp support, 11-min average reply",
+  "WhatsApp support from a person",
 ] as const;

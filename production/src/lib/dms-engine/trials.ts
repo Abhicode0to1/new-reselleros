@@ -47,6 +47,20 @@ async function call(path: string, init: RequestInit & { key: string }): Promise<
 }
 
 /**
+ * Can a free hosting trial start on this server at all? It needs DMS to answer "has this
+ * customer had one before" (checkTrialHistory), so without the engine URL + read key every
+ * trial was refused at the last step with an HTTP 500. 2 Oct 2026 go-live: Pardeep chose
+ * "trials paused until DMS is connected" — the checkout asks this first and says so.
+ */
+export function trialsConfigured(): boolean {
+  return Boolean(BASE_URL && READ_KEY);
+}
+
+/** What the customer is told while trials are paused. */
+export const TRIALS_PAUSED_MESSAGE =
+  "Free hosting trials are paused for a few days. Nothing was saved. Email us and we'll set your trial up by hand, or buy a plan now.";
+
+/**
  * Has this customer had a free trial in either app? Never answers "no" when it
  * does not know: an unconfigured, unreachable or failing DMS is `ok: false`, and
  * the caller refuses the trial (AGENTS.md §2).

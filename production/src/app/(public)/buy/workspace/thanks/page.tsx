@@ -22,7 +22,7 @@ import { ThanksClient } from "./thanks-client";
 import { fetchOrder } from "./fetch-order";
 
 export const metadata: Metadata = {
-  title: "Order confirmed · ResellerOS",
+  title: { absolute: "Order confirmed · Anutech Digital" },
   description: "Your Google Workspace order is confirmed. Our team will WhatsApp you within 4 hours to verify your domain.",
 };
 

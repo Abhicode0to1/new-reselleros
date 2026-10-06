@@ -84,7 +84,7 @@ export function LeadsKanbanBoard({ boardLeads, columnTotals, serverColumnTotals,
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <div className="flex-1 min-h-[460px] flex flex-col overflow-hidden">
       {/* Auto-fit Kanban grid stretching 100% of remaining viewport height.
 
           `lg:grid-cols-none` is load-bearing — without it the first two columns
@@ -102,8 +102,13 @@ export function LeadsKanbanBoard({ boardLeads, columnTotals, serverColumnTotals,
           `auto-cols-[minmax(220px,1fr)]` only ever applies to the IMPLICIT columns. The
           four implicit columns took 880px of a 779px container, leaving the explicit
           pair's `1fr` to resolve to 0. Resetting the template makes all six implicit, so
-          every column gets the 220px floor and the row scrolls as intended (1380px). */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-none lg:grid-flow-col lg:auto-cols-[minmax(220px,1fr)] lg:grid-rows-1 gap-3 overflow-x-auto overflow-y-hidden pb-1">
+          every column gets the 220px floor and the row scrolls as intended (1380px).
+
+          4 Oct 2026: the two-column grid between sm and lg is gone too. At an 800px window
+          the sidebar leaves ~470px, the 2x3 grid squeezed each row to a header and the cards
+          had no height at all ("Won 8" with nothing under it — Pardeep). From sm up the board
+          is now always one scrolling row of columns, each at least 240px. */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-none sm:grid-flow-col sm:auto-cols-[minmax(240px,1fr)] sm:grid-rows-1 gap-3 overflow-x-auto overflow-y-hidden pb-1">
         {stages.map((stage) => {
           const stageLeads = boardLeads.filter((l) => l.stage === stage.id);
           /* count · ₹ total · probability-weighted ₹ (lib/leads/forecast.ts). From the server

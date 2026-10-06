@@ -2,7 +2,8 @@
  * POST /api/auth/signup
  *
  * Server-side signup using the service role key so we can:
- * 1. Create the auth user with email_confirm = true (no email verification needed)
+ * 1. Create the auth user — confirmed only when an invite token proves the mailbox; everyone
+ *    else is unconfirmed and gets a verification link (R-048, 4 Oct 2026)
  * 2. Decide where that person BELONGS
  * 3. Create only what that decision calls for
  *
@@ -29,10 +30,12 @@
  * `pending_approval` is not a failure and must not be shown as one.
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { turnstileRefusal } from "@/lib/security/turnstile-guard";
 import { createAdminClient } from "@/lib/supabase/server";
 import { initials } from "@/lib/utils";
 import { normalizeEmail, type InviteMatch } from "@/lib/auth/membership";
 import { decideOnboarding } from "@/lib/auth/domain";
+import { startEmailVerification } from "@/lib/auth/email-verification";
 import {
   findVerifiedDomainTenant,
   openJoinRequest,
@@ -50,6 +53,10 @@ export async function POST(request: NextRequest) {
       /** Invite-email ke link se aaya raaz — iske bina invite se join NAHI hota. */
       inviteToken?: string;
     };
+
+    /* R-020: a bot is refused here; a no-op until TURNSTILE_SECRET_KEY is set. */
+    const botRefusal = await turnstileRefusal(request.headers, body);
+    if (botRefusal) return botRefusal;
 
     const { password, fullName, companyName, gstin } = body;
     const email = normalizeEmail(body.email);
@@ -112,11 +119,17 @@ export async function POST(request: NextRequest) {
       domainMatch,
     });
 
-    // ── 2. Create auth user (auto-confirmed, no email needed) ──────────────
+    // ── 2. Create auth user ────────────────────────────────────────────────
+    /* R-048 (4 Oct 2026): only an INVITE proves the mailbox (the token came by email to this
+       address), so only an invited signup is confirmed here. Everyone else is created
+       unconfirmed and must follow the link sent below before GoTrue lets them sign in —
+       otherwise anyone could open an account, or a join request to someone's company, with
+       an address they do not own. */
+    const confirmedByInvite = decision.mode === "join";
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true,           // skip email verification
+      email_confirm: confirmedByInvite,
       user_metadata: {
         full_name: fullName,
         company_name: companyName,
@@ -175,6 +188,7 @@ export async function POST(request: NextRequest) {
       }
 
       const origin = originOf(request);
+      const verify = await startEmailVerification(admin, { userId, email, name: fullName, origin });
       await notifyOwnerOfJoinRequest({
         tenantId:   decision.tenantId,
         tenantName: decision.tenantName,
@@ -188,6 +202,8 @@ export async function POST(request: NextRequest) {
         status: "pending_approval",
         tenantName: decision.tenantName,
         alreadyPending: parked.alreadyPending,
+        needsVerification: true,
+        verificationSent: verify.sent,
       });
     }
 
@@ -229,7 +245,11 @@ export async function POST(request: NextRequest) {
     // an unverified claim routes nobody (0242) — so it cannot misfire.
     await claimDomainQuietly(admin, tenantId, email);
 
-    return NextResponse.json({ success: true, status: "created", userId, tenantId });
+    const verify = await startEmailVerification(admin, { userId, email, name: fullName, origin: originOf(request) });
+    return NextResponse.json({
+      success: true, status: "created", userId, tenantId,
+      needsVerification: true, verificationSent: verify.sent,
+    });
   } catch (e) {
     const err = e as Error;
     return NextResponse.json({ error: err.message }, { status: 500 });

@@ -117,3 +117,72 @@ export function stateCodeFromName(input: string | null | undefined): string | nu
   }
   return null;
 }
+
+/**
+ * Fill a customer row's `state_code` from what the form holds, before it is saved (6 Oct 2026).
+ *
+ * WHY: the customer form only set `state_code` from a VERIFIED GSTIN. A customer with no GSTIN
+ * (unregistered business, individual) whose state was picked or typed by hand saved
+ * `state = "Delhi"` and `state_code = NULL` — and `generate_invoice` reads only `state_code`,
+ * so that customer could never be invoiced: "has no state on record", while the customer page
+ * plainly showed Delhi. Found on staging creating the first test invoice.
+ *
+ * Order, same as `resolveStateCode`: a code already on the row wins (it came from a GSTIN or a
+ * human), then a valid GSTIN, then the state NAME — only when it matches a GST state exactly.
+ * Foreign customers get nothing (no Indian place of supply). Rows that do not touch state or
+ * GSTIN pass through untouched, so a partial update never clears a code.
+ */
+export function withStateCode<T extends {
+  state?: string | null;
+  state_code?: string | null;
+  gstin?: string | null;
+  country?: string | null;
+}>(row: T): T {
+  if (row.state_code?.trim()) return row;
+  if (row.state === undefined && row.gstin === undefined) return row;
+  const country = (row.country ?? "").trim().toLowerCase();
+  if (country && !["in", "ind", "india"].includes(country)) return row;
+  const code = stateCodeFromGstin(row.gstin) ?? stateCodeFromName(row.state);
+  return code ? { ...row, state_code: code } : row;
+}
+
+/**
+ * True when a customer's tax invoice will be REFUSED for want of a state (R-166, 6 Oct 2026).
+ *
+ * Mirrors generate_invoice exactly: it reads `customers.state_code` only, and refuses an Indian
+ * customer whose code is empty ("has no state on record"). Foreign customers have no Indian
+ * place of supply and are never refused for it. A typed state name or a GSTIN does not count
+ * here — until it reaches state_code (withStateCode does that on the next save), the invoice
+ * still stops, and that is what this filter is for. Live, 6 Oct: 17 such customers.
+ */
+export function missingInvoiceState(c: { state_code?: string | null; country?: string | null }): boolean {
+  const country = (c.country ?? "").trim().toLowerCase();
+  if (country && !["in", "ind", "india"].includes(country)) return false;
+  return !(c.state_code ?? "").trim();
+}
+
+/** The GST states a person can pick, A–Z (R-173). 97/99 are tax-system codes, not places. */
+export const GST_STATE_OPTIONS: { code: string; name: string }[] = Object.entries(GST_STATE_BY_CODE)
+  .filter(([code]) => Number(code) < 97)
+  .map(([code, name]) => ({ code, name }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+/**
+ * Why this customer cannot be saved yet, or null (R-173, 6 Oct 2026).
+ *
+ * Every Indian customer needs a place of supply: a tax invoice is refused without it
+ * (generate_invoice — "no state on record"), GSTIN or not. Live had 17 customers in that state.
+ * It is satisfied by a state code already on the row, a valid GSTIN, or a state NAME that maps to
+ * a GST state — the same order withStateCode() uses to fill state_code on save. Foreign customers
+ * have no Indian place of supply and are never asked.
+ */
+export function stateRequiredMessage(row: {
+  state?: string | null; state_code?: string | null; gstin?: string | null; country?: string | null;
+}): string | null {
+  const country = (row.country ?? "").trim().toLowerCase();
+  if (country && !["in", "ind", "india"].includes(country)) return null;
+  if ((row.state_code ?? "").trim() || stateCodeFromGstin(row.gstin) || stateCodeFromName(row.state)) return null;
+  return (row.state ?? "").trim()
+    ? `"${String(row.state).trim()}" is not a GST state name — pick the state from the list. The GST invoice needs it.`
+    : "Choose the state — the GST invoice cannot be made without it (it decides CGST + SGST or IGST).";
+}

@@ -9,6 +9,590 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      academy_apprentice_skills: {
+        Row: {
+          apprentice_id: string
+          mentor_note: string | null
+          percent: number
+          skill_id: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          apprentice_id: string
+          mentor_note?: string | null
+          percent?: number
+          skill_id: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          apprentice_id?: string
+          mentor_note?: string | null
+          percent?: number
+          skill_id?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_apprentice_skills_apprentice_id_fkey"
+            columns: ["apprentice_id"]
+            isOneToOne: false
+            referencedRelation: "academy_apprentices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_apprentice_skills_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "academy_skills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_apprentice_skills_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_apprentice_skills_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_apprentice_skills_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academy_apprentices: {
+        Row: {
+          address: string | null
+          code: string
+          course: string | null
+          created_at: string
+          date_of_birth: string | null
+          email: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          end_date: string | null
+          full_name: string
+          id: string
+          institute: string | null
+          joining_date: string | null
+          mentor_user_id: string | null
+          notes: string | null
+          phone: string | null
+          program_id: string | null
+          qualification: string | null
+          start_date: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          code?: string
+          course?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          end_date?: string | null
+          full_name: string
+          id?: string
+          institute?: string | null
+          joining_date?: string | null
+          mentor_user_id?: string | null
+          notes?: string | null
+          phone?: string | null
+          program_id?: string | null
+          qualification?: string | null
+          start_date?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          code?: string
+          course?: string | null
+          created_at?: string
+          date_of_birth?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          end_date?: string | null
+          full_name?: string
+          id?: string
+          institute?: string | null
+          joining_date?: string | null
+          mentor_user_id?: string | null
+          notes?: string | null
+          phone?: string | null
+          program_id?: string | null
+          qualification?: string | null
+          start_date?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_apprentices_mentor_user_id_fkey"
+            columns: ["mentor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_apprentices_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "academy_programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_apprentices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_apprentices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academy_evaluations: {
+        Row: {
+          ai_tool_usage: number
+          apprentice_id: string
+          code_quality: number
+          communication: number
+          created_at: string
+          evaluated_by: string | null
+          id: string
+          improve: string | null
+          next_focus: string | null
+          problem_solving: number
+          strengths: string | null
+          task_completion: number
+          technical: number
+          tenant_id: string
+          total: number | null
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          ai_tool_usage: number
+          apprentice_id: string
+          code_quality: number
+          communication: number
+          created_at?: string
+          evaluated_by?: string | null
+          id?: string
+          improve?: string | null
+          next_focus?: string | null
+          problem_solving: number
+          strengths?: string | null
+          task_completion: number
+          technical: number
+          tenant_id: string
+          total?: number | null
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          ai_tool_usage?: number
+          apprentice_id?: string
+          code_quality?: number
+          communication?: number
+          created_at?: string
+          evaluated_by?: string | null
+          id?: string
+          improve?: string | null
+          next_focus?: string | null
+          problem_solving?: number
+          strengths?: string | null
+          task_completion?: number
+          technical?: number
+          tenant_id?: string
+          total?: number | null
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_evaluations_apprentice_id_fkey"
+            columns: ["apprentice_id"]
+            isOneToOne: false
+            referencedRelation: "academy_apprentices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_evaluations_evaluated_by_fkey"
+            columns: ["evaluated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_evaluations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_evaluations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academy_modules: {
+        Row: {
+          created_at: string
+          id: string
+          position: number
+          program_id: string
+          tenant_id: string
+          title: string
+          topics: string[]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position?: number
+          program_id: string
+          tenant_id: string
+          title: string
+          topics?: string[]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position?: number
+          program_id?: string
+          tenant_id?: string
+          title?: string
+          topics?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_modules_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "academy_programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_modules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_modules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academy_programs: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_programs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_programs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academy_skills: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_skills_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_skills_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academy_submissions: {
+        Row: {
+          apprentice_id: string
+          attempt: number
+          feedback: string | null
+          github_url: string | null
+          id: string
+          link_url: string | null
+          marks: number | null
+          note: string | null
+          review_result: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          submitted_at: string
+          task_id: string
+          tenant_id: string
+        }
+        Insert: {
+          apprentice_id: string
+          attempt?: number
+          feedback?: string | null
+          github_url?: string | null
+          id?: string
+          link_url?: string | null
+          marks?: number | null
+          note?: string | null
+          review_result?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          submitted_at?: string
+          task_id: string
+          tenant_id: string
+        }
+        Update: {
+          apprentice_id?: string
+          attempt?: number
+          feedback?: string | null
+          github_url?: string | null
+          id?: string
+          link_url?: string | null
+          marks?: number | null
+          note?: string | null
+          review_result?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          submitted_at?: string
+          task_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_submissions_apprentice_id_fkey"
+            columns: ["apprentice_id"]
+            isOneToOne: false
+            referencedRelation: "academy_apprentices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_submissions_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_submissions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "academy_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_submissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_submissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academy_tasks: {
+        Row: {
+          apprentice_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          difficulty: string
+          due_date: string | null
+          est_minutes: number | null
+          id: string
+          instructions: string | null
+          kind: string
+          module_id: string | null
+          priority: string
+          reference_url: string | null
+          status: string
+          submission_type: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          apprentice_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          difficulty?: string
+          due_date?: string | null
+          est_minutes?: number | null
+          id?: string
+          instructions?: string | null
+          kind?: string
+          module_id?: string | null
+          priority?: string
+          reference_url?: string | null
+          status?: string
+          submission_type?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          apprentice_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          difficulty?: string
+          due_date?: string | null
+          est_minutes?: number | null
+          id?: string
+          instructions?: string | null
+          kind?: string
+          module_id?: string | null
+          priority?: string
+          reference_url?: string | null
+          status?: string
+          submission_type?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_tasks_apprentice_id_fkey"
+            columns: ["apprentice_id"]
+            isOneToOne: false
+            referencedRelation: "academy_apprentices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_tasks_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "academy_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_tasks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academy_tasks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       access_credentials: {
         Row: {
           account_ref: string | null
@@ -209,6 +793,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ad_accounts_connected_user_id_fkey"
+            columns: ["connected_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ad_accounts_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -3314,6 +3905,36 @@ export type Database = {
           },
         ]
       }
+      email_verifications: {
+        Row: {
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          token_hash: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+          token_hash: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          token_hash?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       emi_payments: {
         Row: {
           amount: number
@@ -4142,11 +4763,13 @@ export type Database = {
       }
       feedback: {
         Row: {
+          ai_chat_summary: string | null
           body: string
           created_at: string
           directive: string | null
           dispatched_at: string | null
           dispatched_by: string | null
+          filed_via: string
           id: string
           inferred_type: string | null
           page_path: string | null
@@ -4171,11 +4794,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ai_chat_summary?: string | null
           body: string
           created_at?: string
           directive?: string | null
           dispatched_at?: string | null
           dispatched_by?: string | null
+          filed_via?: string
           id?: string
           inferred_type?: string | null
           page_path?: string | null
@@ -4200,11 +4825,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ai_chat_summary?: string | null
           body?: string
           created_at?: string
           directive?: string | null
           dispatched_at?: string | null
           dispatched_by?: string | null
+          filed_via?: string
           id?: string
           inferred_type?: string | null
           page_path?: string | null
@@ -4456,6 +5083,13 @@ export type Database = {
           website_uri?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "gbp_locations_connected_user_id_fkey"
+            columns: ["connected_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "gbp_locations_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -5115,14 +5749,11 @@ export type Database = {
         Row: {
           adjusted_advances: Json
           amount: number
+          billing_address: string | null
           created_at: string
-          customer_id: string | null
           customer_country: string | null
           customer_gstin: string | null
-          billing_address: string | null
-          pos_state_code: string | null
-          seller_gstin: string | null
-          seller_state_code: string | null
+          customer_id: string | null
           customer_name: string
           due_date: string | null
           first_advance_at: string | null
@@ -5136,8 +5767,11 @@ export type Database = {
           paid_amount: number
           paid_date: string | null
           pdf_url: string | null
+          pos_state_code: string | null
           quote_id: string | null
           razorpay_id: string | null
+          seller_gstin: string | null
+          seller_state_code: string | null
           status: Database["public"]["Enums"]["invoice_status"]
           tax_amount: number | null
           tax_rate: number | null
@@ -5148,14 +5782,11 @@ export type Database = {
         Insert: {
           adjusted_advances?: Json
           amount: number
+          billing_address?: string | null
           created_at?: string
-          customer_id?: string | null
           customer_country?: string | null
           customer_gstin?: string | null
-          billing_address?: string | null
-          pos_state_code?: string | null
-          seller_gstin?: string | null
-          seller_state_code?: string | null
+          customer_id?: string | null
           customer_name: string
           due_date?: string | null
           first_advance_at?: string | null
@@ -5169,8 +5800,11 @@ export type Database = {
           paid_amount?: number
           paid_date?: string | null
           pdf_url?: string | null
+          pos_state_code?: string | null
           quote_id?: string | null
           razorpay_id?: string | null
+          seller_gstin?: string | null
+          seller_state_code?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           tax_amount?: number | null
           tax_rate?: number | null
@@ -5181,14 +5815,11 @@ export type Database = {
         Update: {
           adjusted_advances?: Json
           amount?: number
+          billing_address?: string | null
           created_at?: string
-          customer_id?: string | null
           customer_country?: string | null
           customer_gstin?: string | null
-          billing_address?: string | null
-          pos_state_code?: string | null
-          seller_gstin?: string | null
-          seller_state_code?: string | null
+          customer_id?: string | null
           customer_name?: string
           due_date?: string | null
           first_advance_at?: string | null
@@ -5202,8 +5833,11 @@ export type Database = {
           paid_amount?: number
           paid_date?: string | null
           pdf_url?: string | null
+          pos_state_code?: string | null
           quote_id?: string | null
           razorpay_id?: string | null
+          seller_gstin?: string | null
+          seller_state_code?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           tax_amount?: number | null
           tax_rate?: number | null
@@ -6268,6 +6902,122 @@ export type Database = {
           },
         ]
       }
+      package_items: {
+        Row: {
+          created_at: string
+          fixed_qty: number | null
+          id: string
+          item_id: string
+          optional: boolean
+          package_id: string
+          qty_mode: string
+          sort_order: number
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          fixed_qty?: number | null
+          id?: string
+          item_id: string
+          optional?: boolean
+          package_id: string
+          qty_mode?: string
+          sort_order?: number
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          fixed_qty?: number | null
+          id?: string
+          item_id?: string
+          optional?: boolean
+          package_id?: string
+          qty_mode?: string
+          sort_order?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "package_items_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_items_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      packages: {
+        Row: {
+          created_at: string
+          discount_pct: number
+          id: string
+          is_active: boolean
+          name: string
+          pitch: string | null
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount_pct?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          pitch?: string | null
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount_pct?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          pitch?: string | null
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_mandates: {
         Row: {
           auth_link: string | null
@@ -7313,6 +8063,7 @@ export type Database = {
           updated_at: string
           vendor: string
           vendor_ref: string | null
+          years: number
         }
         Insert: {
           activated_at?: string | null
@@ -7331,6 +8082,7 @@ export type Database = {
           updated_at?: string
           vendor: string
           vendor_ref?: string | null
+          years?: number
         }
         Update: {
           activated_at?: string | null
@@ -7349,6 +8101,7 @@ export type Database = {
           updated_at?: string
           vendor?: string
           vendor_ref?: string | null
+          years?: number
         }
         Relationships: [
           {
@@ -10774,6 +11527,57 @@ export type Database = {
           },
         ]
       }
+      ui_page_scores: {
+        Row: {
+          id: string
+          issues: Json
+          path: string
+          prev_score: number | null
+          samples: number
+          score: number
+          surface: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          issues?: Json
+          path: string
+          prev_score?: number | null
+          samples?: number
+          score: number
+          surface: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          issues?: Json
+          path?: string
+          prev_score?: number | null
+          samples?: number
+          score?: number
+          surface?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ui_page_scores_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ui_page_scores_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_google_tokens: {
         Row: {
           access_token: string | null
@@ -10852,9 +11656,11 @@ export type Database = {
           email: string
           employee_id: string | null
           full_name: string | null
+          gets_new_leads: boolean
           id: string
           initials: string | null
           is_active: boolean
+          last_lead_assigned_at: string | null
           manager_id: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
@@ -10870,9 +11676,11 @@ export type Database = {
           email: string
           employee_id?: string | null
           full_name?: string | null
+          gets_new_leads?: boolean
           id: string
           initials?: string | null
           is_active?: boolean
+          last_lead_assigned_at?: string | null
           manager_id?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
@@ -10888,9 +11696,11 @@ export type Database = {
           email?: string
           employee_id?: string | null
           full_name?: string | null
+          gets_new_leads?: boolean
           id?: string
           initials?: string | null
           is_active?: boolean
+          last_lead_assigned_at?: string | null
           manager_id?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
@@ -10920,6 +11730,183 @@ export type Database = {
           },
           {
             foreignKeyName: "users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ux_analysis_runs: {
+        Row: {
+          events_seen: number
+          id: number
+          insights: number
+          mode: string
+          ran_at: string
+          tenant_id: string | null
+        }
+        Insert: {
+          events_seen?: number
+          id?: never
+          insights?: number
+          mode: string
+          ran_at?: string
+          tenant_id?: string | null
+        }
+        Update: {
+          events_seen?: number
+          id?: never
+          insights?: number
+          mode?: string
+          ran_at?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ux_analysis_runs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ux_analysis_runs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ux_events: {
+        Row: {
+          created_at: string
+          detail: string | null
+          id: number
+          kind: string
+          metrics: Json | null
+          ms: number | null
+          path: string
+          session_id: string
+          surface: string
+          target: string | null
+          tenant_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          id?: never
+          kind: string
+          metrics?: Json | null
+          ms?: number | null
+          path: string
+          session_id: string
+          surface: string
+          target?: string | null
+          tenant_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          id?: never
+          kind?: string
+          metrics?: Json | null
+          ms?: number | null
+          path?: string
+          session_id?: string
+          surface?: string
+          target?: string | null
+          tenant_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ux_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ux_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_with_parent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ux_insights: {
+        Row: {
+          agent: string
+          card_ref: string | null
+          category: string
+          created_at: string
+          done_at: string | null
+          evidence: string
+          fix: string
+          id: string
+          path: string
+          problem: string
+          sessions: number
+          severity: string
+          signature: string
+          status: string
+          surface: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent?: string
+          card_ref?: string | null
+          category: string
+          created_at?: string
+          done_at?: string | null
+          evidence: string
+          fix: string
+          id?: string
+          path: string
+          problem: string
+          sessions?: number
+          severity: string
+          signature: string
+          status?: string
+          surface: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent?: string
+          card_ref?: string | null
+          category?: string
+          created_at?: string
+          done_at?: string | null
+          evidence?: string
+          fix?: string
+          id?: string
+          path?: string
+          problem?: string
+          sessions?: number
+          severity?: string
+          signature?: string
+          status?: string
+          surface?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ux_insights_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ux_insights_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "v_tenant_with_parent"
@@ -11079,6 +12066,105 @@ export type Database = {
           },
         ]
       }
+      payment_run_items: {
+        Row: {
+          amount: number
+          doc_id: string
+          doc_ref: string | null
+          id: string
+          run_id: string
+          source: string
+          tenant_id: string
+          vendor_id: string | null
+          vendor_name: string
+        }
+        Insert: {
+          amount?: number
+          doc_id?: string
+          doc_ref?: string | null
+          id?: string
+          run_id?: string
+          source?: string
+          tenant_id?: string
+          vendor_id?: string | null
+          vendor_name?: string
+        }
+        Update: {
+          amount?: number
+          doc_id?: string
+          doc_ref?: string | null
+          id?: string
+          run_id?: string
+          source?: string
+          tenant_id?: string
+          vendor_id?: string | null
+          vendor_name?: string
+        }
+        Relationships: []
+      }
+      payment_runs: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          bank_account_id: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          created_by: string
+          id: string
+          note: string | null
+          paid_at: string | null
+          paid_by: string | null
+          paid_on: string | null
+          pay_on: string
+          run_no: string
+          status: string
+          tenant_id: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bank_account_id?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          note?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_on?: string | null
+          pay_on?: string
+          run_no?: string
+          status?: string
+          tenant_id?: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bank_account_id?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          note?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_on?: string | null
+          pay_on?: string
+          run_no?: string
+          status?: string
+          tenant_id?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vendor_bills: {
         Row: {
           attachment_url: string | null
@@ -11185,6 +12271,9 @@ export type Database = {
       vendors: {
         Row: {
           address: string | null
+          bank_account_name: string | null
+          bank_account_no: string | null
+          bank_ifsc: string | null
           city: string | null
           contact_email: string | null
           contact_name: string | null
@@ -11202,9 +12291,13 @@ export type Database = {
           tenant_id: string
           udyam: string | null
           updated_at: string
+          upi_id: string | null
         }
         Insert: {
           address?: string | null
+          bank_account_name?: string | null
+          bank_account_no?: string | null
+          bank_ifsc?: string | null
           city?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -11222,9 +12315,13 @@ export type Database = {
           tenant_id: string
           udyam?: string | null
           updated_at?: string
+          upi_id?: string | null
         }
         Update: {
           address?: string | null
+          bank_account_name?: string | null
+          bank_account_no?: string | null
+          bank_ifsc?: string | null
           city?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -11242,6 +12339,7 @@ export type Database = {
           tenant_id?: string
           udyam?: string | null
           updated_at?: string
+          upi_id?: string | null
         }
         Relationships: [
           {
@@ -11774,6 +12872,46 @@ export type Database = {
       }
     }
     Functions: {
+      _employee_advance_cash_leg: {
+        Args: {
+          p_account: string
+          p_adv: string
+          p_credit: number
+          p_date: string
+          p_debit: number
+          p_tenant: string
+          p_text: string
+        }
+        Returns: string
+      }
+      academy_can_manage: { Args: never; Returns: boolean }
+      academy_load_default_program: { Args: never; Returns: string }
+      academy_load_default_skills: { Args: never; Returns: number }
+      academy_my_apprentice_id: { Args: never; Returns: string }
+      academy_my_tenant_id: { Args: never; Returns: string }
+      academy_review_task: {
+        Args: {
+          p_feedback: string
+          p_marks: number
+          p_result: string
+          p_task_id: string
+        }
+        Returns: undefined
+      }
+      academy_staff_sees: {
+        Args: { p_apprentice_id: string }
+        Returns: boolean
+      }
+      academy_start_task: { Args: { p_task_id: string }; Returns: undefined }
+      academy_submit_task: {
+        Args: {
+          p_github: string
+          p_link: string
+          p_note: string
+          p_task_id: string
+        }
+        Returns: number
+      }
       accept_project_quote: { Args: { p_project_id: string }; Returns: string }
       accept_quote: { Args: { p_quote_id: string }; Returns: Json }
       ad_channel_guess: { Args: { p_text: string }; Returns: string }
@@ -11896,30 +13034,6 @@ export type Database = {
         }
         Returns: number
       }
-      give_employee_advance: {
-        Args: {
-          p_account?: string
-          p_amount: number
-          p_date?: string
-          p_method?: string
-          p_name: string
-          p_note?: string
-        }
-        Returns: string
-      }
-      settle_employee_advance: {
-        Args: { p_account?: string; p_advance_id: string; p_date?: string }
-        Returns: number
-      }
-      top_up_employee_advance: {
-        Args: {
-          p_account?: string
-          p_advance_id: string
-          p_amount: number
-          p_date?: string
-        }
-        Returns: number
-      }
       consume_prepaid_fifo: {
         Args: {
           p_amount: number
@@ -12028,6 +13142,8 @@ export type Database = {
       current_tenant_id: { Args: never; Returns: string }
       current_user_has_role: { Args: { p_roles: string[] }; Returns: boolean }
       current_user_is_owner: { Args: never; Returns: boolean }
+      customer_name_key: { Args: { p_name: string }; Returns: string }
+      customer_names_agree: { Args: { a: string; b: string }; Returns: boolean }
       default_doc_prefix: { Args: { p_doc_type: string }; Returns: string }
       delete_bank_account: {
         Args: { p_account_id: string }
@@ -12044,6 +13160,10 @@ export type Database = {
         Returns: undefined
       }
       delete_customer: { Args: { p_customer_id: string }; Returns: Json }
+      delete_employee_advance: {
+        Args: { p_advance_id: string; p_delete_expenses?: boolean }
+        Returns: Json
+      }
       delete_employee_loan: { Args: { p_loan_id: string }; Returns: undefined }
       delete_expense_claim: { Args: { p_claim_id: string }; Returns: undefined }
       delete_payment: { Args: { p_payment_id: string }; Returns: Json }
@@ -12230,6 +13350,17 @@ export type Database = {
         Returns: string[]
       }
       get_tenant_backup: { Args: { p_id: string }; Returns: Json }
+      give_employee_advance: {
+        Args: {
+          p_account?: string
+          p_amount: number
+          p_date?: string
+          p_method?: string
+          p_name: string
+          p_note?: string
+        }
+        Returns: string
+      }
       guard_backup_owner_only: { Args: never; Returns: undefined }
       hierarchy_sees_all: { Args: never; Returns: boolean }
       import_indiamart_lead: {
@@ -12249,6 +13380,17 @@ export type Database = {
         Returns: string
       }
       indian_fiscal_year: { Args: { p_date?: string }; Returns: string }
+      invoice_party_snapshot: {
+        Args: { p_customer: string; p_tenant: string }
+        Returns: {
+          billing_address: string
+          customer_country: string
+          customer_gstin: string
+          pos_state_code: string
+          seller_gstin: string
+          seller_state_code: string
+        }[]
+      }
       issue_credit_note: {
         Args: {
           p_gross_amount: number
@@ -12330,6 +13472,15 @@ export type Database = {
         Returns: string
       }
       mark_self_attendance: { Args: never; Returns: string }
+      match_existing_customer: {
+        Args: {
+          p_company: string
+          p_email: string
+          p_gstin: string
+          p_tenant: string
+        }
+        Returns: string
+      }
       merge_leads: {
         Args: { p_duplicate_id: string; p_primary_id: string }
         Returns: undefined
@@ -12419,6 +13570,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      approve_payment_run: { Args: { p_run_id: string }; Returns: undefined }
+      cancel_payment_run: { Args: { p_run_id: string }; Returns: undefined }
+      create_payment_run: {
+        Args: {
+          p_bank_account_id: string
+          p_items: Json
+          p_note?: string
+          p_pay_on?: string
+        }
+        Returns: string
+      }
+      mark_payment_run_paid: {
+        Args: { p_paid_on?: string; p_run_id: string }
+        Returns: undefined
+      }
       pay_vendor_bill: {
         Args: {
           p_amount: number
@@ -12447,6 +13613,7 @@ export type Database = {
         Returns: string
       }
       portal_touch_login: { Args: never; Returns: undefined }
+      purge_ux_events: { Args: never; Returns: number }
       raise_project_milestone_invoice: {
         Args: { p_milestone_id: string }
         Returns: string
@@ -12763,6 +13930,17 @@ export type Database = {
         Args: { p_pay_date: string; p_period: string }
         Returns: string
       }
+      save_package: {
+        Args: {
+          p_discount_pct: number
+          p_id: string
+          p_is_active: boolean
+          p_items: Json
+          p_name: string
+          p_pitch: string
+        }
+        Returns: string
+      }
       set_document_series_start: {
         Args: {
           p_doc_type: string
@@ -12780,6 +13958,10 @@ export type Database = {
       set_subscription_auto_renew: {
         Args: { p_sub_id: string; p_value: boolean }
         Returns: boolean
+      }
+      settle_employee_advance: {
+        Args: { p_account?: string; p_advance_id: string; p_date?: string }
+        Returns: number
       }
       settle_expense_advance: {
         Args: {
@@ -12855,10 +14037,29 @@ export type Database = {
           title: string
         }[]
       }
+      top_up_employee_advance: {
+        Args: {
+          p_account?: string
+          p_advance_id: string
+          p_amount: number
+          p_date?: string
+        }
+        Returns: number
+      }
       undo_my_last_punch: { Args: never; Returns: string }
       unreconcile_bank_receipt: {
         Args: { p_txn_id: string; p_undo_sale?: boolean }
         Returns: Json
+      }
+      update_employee_advance: {
+        Args: {
+          p_advance_id: string
+          p_amount: number
+          p_date: string
+          p_name: string
+          p_note?: string
+        }
+        Returns: undefined
       }
       update_project_details: {
         Args: {

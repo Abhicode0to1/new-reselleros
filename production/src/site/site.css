@@ -174,3 +174,10 @@
 .anutech-site .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .anutech-site .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
 .anutech-site .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+/* Six menus since R-155 (Custom software first): between the 980px breakpoint and a full
+   1200px row the items tighten so the header never overflows. */
+@media (min-width: 980px) and (max-width: 1199px) {
+  .anutech-site .nav-item { padding-left: 5px !important; padding-right: 5px !important; font-size: 13.5px !important; }
+  .anutech-site .nav-why { display: none !important; } /* also under Custom software */
+}

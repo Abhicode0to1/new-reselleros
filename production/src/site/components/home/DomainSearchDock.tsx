@@ -78,6 +78,8 @@ export function DomainSearchDock() {
       unitPrice: r.price,
       unit: "year",
       cycle: "yearly",
+      years: 1,
+      yearPrices: r.prices, // R-156: the terms the registry priced; the cart offers them
     });
   };
 

@@ -15,7 +15,9 @@ export async function fetchOrder(quoteId: string, token: string | null | undefin
   // Both shapes of quote number: today's Q-<tenant code>-2026-27-0042 (next_document_number with
   // the tenant's doc_code) and the older Q-2026-27-0042. Until 29 Sep 2026 only the older one was
   // accepted, so every customer since tenant codes arrived got the "no order found" page.
-  if (!/^Q-(?:[A-Z0-9]{2,8}-)?[0-9]{4}-[0-9]{2}-[0-9]{4}$/.test(quoteId)) return null;
+  // And since 30 Sep 2026 (20260930172000, CGST Rule 46(b) 16 characters) the short shape
+  // Q-<code>-27-0005: FY as two digits. Found 2 Oct when a test purchase landed on "not found".
+  if (!/^Q-(?:[A-Z0-9]{2,8}-)?(?:[0-9]{4}-)?[0-9]{2}-[0-9]{4,}$/.test(quoteId)) return null;
   // No token, no lookup: a guessed number never reaches the database.
   if (!token) return null;
   const admin = createAdminClient();
@@ -24,7 +26,10 @@ export async function fetchOrder(quoteId: string, token: string | null | undefin
     .select("id, tenant_id, public_token, customer_name, plan, seats, amount, payment_status, payment_received_at, line_items, created_date")
     .eq("id", quoteId)
     .eq("tenant_id", BUY_PAGE_TENANT_ID)
-    .in("payment_status", ["received", "partial"])
+    /* "invoiced" too (R-120): the GST invoice is issued straight after record_payment (webhook
+       and simulated checkout alike) and moves the quote to payment_status 'invoiced' — so a
+       paid order was answered "no order found" the moment its invoice existed. */
+    .in("payment_status", ["received", "partial", "invoiced"])
     .maybeSingle();
   if (error || !data) return null;
   if (!quoteTokenMatches(token, data.public_token)) return null;

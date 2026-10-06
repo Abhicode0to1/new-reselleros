@@ -36,6 +36,22 @@ const REL = "production/supabase/migrations"; // path as git sees it from the re
 const DIR = join(APP, "supabase", "migrations");
 const NAME = /^(\d{14})_[a-z0-9_]+\.sql$/;
 
+/**
+ * Rule 3 assumes an edited file has already run on production. On 2 Oct 2026 that was false
+ * for the migrations written after the 8 Sep deploy (c81a9067): a rehearsal on a Cloud SQL
+ * clone of production found these four fail there, and a forward migration cannot help a file
+ * that stops the run before the forward one is reached. So they were fixed in place, with
+ * Pardeep's approval. Staging and local already ran the old text — harmless (same FK target
+ * ids; pg_trgm already installed). Named, not a pattern, so every other edit is still refused.
+ * REMOVE this set once the go-live has applied them — after that rule 3 is true for them too.
+ */
+const NOT_YET_ON_PRODUCTION = new Set([
+  "20260910100000_customer_contacts.sql", // duplicate enquiry-contact emails on real data
+  "20260927250000_gbp.sql",               // FK to auth.users refused for the prod migration role
+  "20260927260000_ad_platforms.sql",      // same
+  "20260930110000_scale_indexes.sql",     // prod has no `extensions` schema
+]);
+
 const argBase = (() => { const i = process.argv.indexOf("--base"); return i > 0 ? process.argv[i + 1] : null; })();
 const BASE = argBase || process.env.MIGRATION_BASE || "origin/main";
 
@@ -85,6 +101,10 @@ if (baseOk) {
       if (v && !baseSet.has(fa) && v <= newestOnBase)
         problems.push(`out of order: ${fa} is not newer than ${newestOnBase} (newest on ${BASE}) — regenerate its timestamp`);
     } else if (code === "M") {
+      if (NOT_YET_ON_PRODUCTION.has(fa)) {
+        console.log(`note: ${fa} edited — allowed, it has never run on production (see NOT_YET_ON_PRODUCTION)`);
+        continue;
+      }
       problems.push(`edited an existing migration: ${fa} — it has likely run already; write a new forward migration`);
     } else if (code === "D") {
       problems.push(`deleted an existing migration: ${fa}`);

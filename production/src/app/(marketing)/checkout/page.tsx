@@ -13,8 +13,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
-import { rupee, cycleLabel, lineTotal } from "@/site/lib/money";
-import { yearsLabel } from "@/lib/checkout/domain-years";
+import { rupee, cycleLabel } from "@/site/lib/money";
 import { missingCheckoutDetails, missingDetailsMessage } from "@/site/lib/checkout-details";
 import { BUY_A_DOMAIN_HREF } from "@/lib/checkout/hosting-domain";
 import { hostingLimitWarning } from "@/lib/checkout/hosting-limit";
@@ -137,6 +136,15 @@ export default function CheckoutPage() {
      server starts the trial and emails a confirmation link. */
   const hasTrial = cart.lines.some((l) => (l.sku || "").startsWith("hosting-trial:"));
   const isTrialCart = hasTrial && cart.lines.length === 1;
+  /* Trials need the DMS engine (lib/dms-engine/trials.ts#trialsConfigured). null = still asking. */
+  const [trialsOpen, setTrialsOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!hasTrial) return;
+    fetch("/api/public/trial/hosting/status", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { open?: boolean }) => setTrialsOpen(j.open !== false))
+      .catch(() => setTrialsOpen(true)); // the server still refuses with a clear message
+  }, [hasTrial]);
   const trialMixed = hasTrial && cart.lines.length > 1;
   /* More than one hosting account in the cart: the server refuses it at Pay, so say it here. */
   const hostingWarning = hostingLimitWarning(cart.lines);
@@ -263,7 +271,7 @@ export default function CheckoutPage() {
           domain: hasHosting ? domain.trim() : undefined,
           lines: cart.lines.map((l) => {
             const i = hostingLines.findIndex((h) => h.key === l.key);
-            return { sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain, ...((l.years ?? 1) > 1 ? { years: l.years } : {}), ...(i >= 0 ? { hostingDomain: typedFor(l.key, i).trim() || undefined } : {}) };
+            return { sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain, ...(l.years && l.years > 1 ? { years: l.years } : {}), ...(i >= 0 ? { hostingDomain: typedFor(l.key, i).trim() || undefined } : {}) };
           }),
           coupon: cart.coupon.trim() || undefined,
           address: hasDomain
@@ -539,9 +547,17 @@ export default function CheckoutPage() {
                       "Emailing your confirmation link",
                     ]}
                   />
+                  {trialsOpen === false ? (
+                    <div role="status" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14 }}>
+                      Free hosting trials are paused for a few days. Email{" "}
+                      <a href={`mailto:${COMPANY.supportEmail}?subject=${encodeURIComponent("Please start my hosting trial")}`} style={{ fontWeight: 600 }}>{COMPANY.supportEmail}</a>
+                      {" "}and we will set your trial up by hand.
+                    </div>
+                  ) : (
                   <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={paying || trialMixed} onClick={() => proceed(() => void startTrial())}>
                     {paying ? "Starting your trial…" : "Start my 15-day free trial"}
                   </button>
+                  )}
                   <p className="meta" style={{ marginTop: 10 }}>
                     We email you a link to confirm your address; the account is set up once you click it.
                   </p>
@@ -649,9 +665,9 @@ export default function CheckoutPage() {
             <div key={l.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-hairline)" }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{l.label} × {l.qty}</div>
-                <div className="meta" style={{ fontSize: 12 }}>{(l.years ?? 1) > 1 ? `Registered for ${yearsLabel(l.years ?? 1)}` : cycleLabel(l.cycle)}</div>
+                <div className="meta" style={{ fontSize: 12 }}>{cycleLabel(l.cycle)}</div>
               </div>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{rupee(lineTotal(l))}</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{rupee(l.unitPrice * l.qty)}</span>
             </div>
           ))}
           <div style={{ paddingTop: 10 }}>

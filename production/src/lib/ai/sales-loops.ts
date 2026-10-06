@@ -22,7 +22,8 @@ export type LoopSkipReason =
   | "customer_replied"
   | "deal_closed"
   | "human_took_over"
-  | "lead_is_junk";
+  | "lead_is_junk"
+  | "quote_settled";
 
 export interface LoopCandidate {
   /** Lead stage at the moment the cron looked. */
@@ -37,6 +38,12 @@ export interface LoopCandidate {
    * was scheduled is what the agent was already answering, not a reason to cancel.
    */
   lastCustomerMessageAt: Date | null;
+  /**
+   * R-115: the lead's newest quote is accepted, rejected or paid. A chase that arrives after
+   * the customer has already said yes (or paid) reads as nobody looking at the account.
+   * Optional so callers that never quote keep their old behaviour.
+   */
+  quoteSettled?: boolean;
 }
 
 export type LoopVerdict =
@@ -57,6 +64,10 @@ export function shouldNudge(c: LoopCandidate): LoopVerdict {
       reason: "human_took_over",
       detail: "a person is handling this lead — an automated nudge would talk over them",
     };
+  }
+
+  if (c.quoteSettled) {
+    return { nudge: false, reason: "quote_settled", detail: "the quote has already been accepted, rejected or paid" };
   }
 
   if (CLOSED_STAGES.has(c.stage)) {

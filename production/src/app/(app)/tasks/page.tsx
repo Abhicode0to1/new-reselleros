@@ -14,6 +14,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { TASK_TABS } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 import {
   useTasks,
@@ -51,7 +53,7 @@ const KIND_META: Record<TaskKind, { icon: string; label: string }> = {
 
 // ─── Page ─────────────────────────────────────────────────────────────────
 export default function TasksPage() {
-  const [tab, setTab] = React.useState<TaskBucket>("today");
+  const [tab, setTab] = useUrlChoice<TaskBucket>("tab", TASK_TABS, "today"); // R-118
   const [addOpen, setAddOpen] = React.useState(false);
   const [editingTask, setEditingTask] = React.useState<TaskWithLink | null>(null);
 

@@ -53,6 +53,7 @@ import { grossAmount } from "@/lib/quotes/amounts";
    the ±1 has exactly one home; it also carries the month clamp (31 Jan + 1 month is
    28 Feb, and JavaScript's own Date rolls it to 3 March). */
 import { termEndInclusive } from "@/lib/billing/schedule";
+import { findPlanProduct, type LeadPrefill } from "@/lib/subscriptions/lead-prefill";
 /* The same countdown the subscriptions list and /payments render, so the hint under
    the field cannot disagree with the chip the operator sees a second later. */
 import { paymentDueState, todayIST } from "@/lib/subscriptions/payment-due";
@@ -107,9 +108,11 @@ interface Props {
     lineItems: QuoteLineItem[];
     domain: string;
   }) => void;
+  /** R-073: a won deal's details — the form opens filled in (lib/subscriptions/lead-prefill.ts). */
+  prefill?: LeadPrefill | null;
 }
 
-export function AddSubscriptionDialog({ open, onOpenChange, onSuccess, onNeedsPayment }: Props) {
+export function AddSubscriptionDialog({ open, onOpenChange, onSuccess, onNeedsPayment, prefill = null }: Props) {
   const { data: me } = useCurrentUser();
   const qc = useQueryClient();
 
@@ -399,6 +402,44 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess, onNeedsPa
   }, [contactPool, contactName, contactEmail]);
 
   /** Take an existing person: fill the boxes and remember we are LINKING, not creating. */
+  /* ── R-073: fill the form from a won deal, once per lead, after the catalog and the
+     customer list have loaded (the plan is matched to a catalog product so the price comes
+     from the catalog, not from the lead's deal value). */
+  const prefilledFor = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!open || !prefill || prefilledFor.current === prefill.leadId) return;
+    if (catalogLoading) return;
+    if (prefill.customerId && !existingCustomers.some((c) => c.id === prefill.customerId) && existingCustomers.length === 0) return;
+    prefilledFor.current = prefill.leadId;
+    const existing = prefill.customerId ? existingCustomers.find((c) => c.id === prefill.customerId) : undefined;
+    if (existing) {
+      handleSelectExistingCustomer(existing.id);
+    } else {
+      setCustomerName(prefill.customerName);
+      setDomain(prefill.domain);
+      setContactName(prefill.contactName);
+      setContactEmail(prefill.contactEmail);
+      setContactPhone(prefill.contactPhone);
+    }
+    if (prefill.seats) setSeatsText(String(prefill.seats));
+    setBillingChoice(prefill.billingChoice);
+    const product = prefill.plan ? findPlanProduct(products, prefill.plan) : undefined;
+    if (product) {
+      const terms = billingTerms(prefill.billingChoice, product);
+      setVendor(product.vendor);
+      setIsCustomPlan(false);
+      setItemId(product.id);
+      setPlan(product.name);
+      setPriceText(String(terms.suggestedSellPerSeat));
+      setRenewalDate(termEndInclusive(startDate, terms.termMonths));
+    } else if (prefill.plan) {
+      setIsCustomPlan(true);
+      setItemId(null);
+      setPlan(prefill.plan);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per lead; the setters are stable
+  }, [open, prefill, catalogLoading, products, existingCustomers]);
+
   const pickContact = (p: { id: string; full_name: string | null; email: string | null; phone: string | null }) => {
     setPickedContactId(p.id);
     setContactName(p.full_name ?? "");

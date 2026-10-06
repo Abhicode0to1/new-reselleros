@@ -8,6 +8,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,11 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState } from "@/components/shared/empty-state";
-import { TabBar } from "@/components/ui/tabs";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
 import { rupee, formatDate } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import { useMoneyOut } from "@/lib/queries/payments-made";
-import { summarisePaidOut, paidOutCsvRows, PAID_OUT_CSV_HEADERS, GROUP_LABEL, type PaidGroup } from "@/lib/accounting/payments-made";
+import { summarisePaidOut, paidOutCsvRows, PAID_OUT_CSV_HEADERS, GROUP_LABEL, paymentEditHref, type PaidGroup } from "@/lib/accounting/payments-made";
 import { istToday } from "@/lib/dates/ist";
 
 type Tab = "all" | PaidGroup;
@@ -28,7 +29,10 @@ function todayIso(): string { return istToday(); }
 
 export default function PaymentsMadePage() {
   const { data, isLoading, error } = useMoneyOut();
-  const [tab, setTab] = React.useState<Tab>("all");
+  const router = useRouter();
+  /* One filter, not seven tabs (2 Oct 2026, Pardeep: "isko ek hi me kar do") — the tab row ran
+     off the screen after the third tab. In the URL, so a link can open one group. */
+  const [tab, setTab] = useUrlChoice<Tab>("type", TABS, "all");
   const [q, setQ] = React.useState("");
   /* Analytics card folds like the one on Payments Received; the choice is remembered per browser. */
   const [analyticsOpen, setAnalyticsOpen] = React.useState(true);
@@ -82,7 +86,13 @@ export default function PaymentsMadePage() {
             <div className="rounded-md border border-hairline p-3"><p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Top payee</p><p className="font-serif text-lg text-ink mt-1 truncate">{summary.topPayee ? `${summary.topPayee.name}` : "—"}</p>{summary.topPayee && <p className="text-xs text-ink-3">{rupee(summary.topPayee.amount)} all-time</p>}</div>
           </div>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">
-            {summary.byGroup.map((g) => <span key={g.group}>{g.label} <b className="text-ink-2">{rupee(g.amount)}</b> ({g.count})</span>)}
+            {/* Each group is also the filter — one click shows that group's payments. */}
+            {summary.byGroup.map((g) => (
+              <button key={g.group} type="button" onClick={() => setTab(g.group)} aria-pressed={tab === g.group}
+                className={"rounded px-1 -mx-1 hover:bg-paper-2 " + (tab === g.group ? "bg-amber-soft/50 text-ink" : "")}>
+                {g.label} <b className="text-ink-2">{rupee(g.amount)}</b> ({g.count})
+              </button>
+            ))}
           </div>
           </>)}
         </Card>
@@ -90,14 +100,25 @@ export default function PaymentsMadePage() {
 
       {/* Tabs + search stay pinned under the top bar (h-14) while the list scrolls. */}
       <div className="sticky top-14 z-20 -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 pt-2 pb-1 bg-paper/95 backdrop-blur-sm border-b border-hairline">
-      <TabBar
-        className="overflow-y-hidden mb-3"
-        value={tab}
-        onChange={(v) => setTab(v as Tab)}
-        items={TABS.map((t) => ({ id: t, label: t === "all" ? "All payments" : GROUP_LABEL[t], count: countOf(t) || undefined, dot: t === "unreconciled" && countOf(t) ? "rose" : undefined }))}
-      />
       <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+        <label className="inline-flex items-center gap-2 text-sm text-ink-2">
+          <span className="text-ink-3">Show</span>
+          <select
+            aria-label="Payment type"
+            value={tab}
+            onChange={(e) => setTab(e.target.value as Tab)}
+            className="rounded-md border border-hairline bg-paper px-2.5 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+          >
+            {TABS.map((t) => {
+              const n = countOf(t);
+              if (t !== "all" && n === 0) return null;
+              return <option key={t} value={t}>{t === "all" ? "All payments" : GROUP_LABEL[t]} ({n})</option>;
+            })}
+          </select>
+        </label>
         <p className="text-sm text-ink-3">Showing {rows.length} of {lines.length} payments · <b className="text-ink">{rupee(shown)}</b>{tab === "all" ? ` · ${rupee(summary.allTime)} paid all-time` : ""}</p>
+        </div>
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Payee, what, bill no., narration…" className="w-full sm:w-80" aria-label="Search payments" />
       </div>
       </div>
@@ -112,13 +133,16 @@ export default function PaymentsMadePage() {
         <>
           <ul className="md:hidden space-y-2">
             {rows.map((l) => (
-              <li key={l.id} className="rounded-lg border border-hairline bg-paper p-3">
+              <li key={l.id}>
+                {/* The whole card opens the payment's record (paymentEditHref). */}
+                <Link href={paymentEditHref(l) as Route} className="block rounded-lg border border-hairline bg-paper p-3 hover:border-amber/60">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-ink truncate">{l.payee}</span>
                   <span className="font-serif tabular-nums text-rose">− {rupee(l.amount)}</span>
                 </div>
                 <div className="mt-1 text-xs text-ink-3">{formatDate(l.txn_date)} · {l.what}{l.reference ? ` · ${l.reference}` : ""} · {l.account}</div>
-                {l.group === "unreconciled" && <Link href={"/accounting/banking" as Route} className="text-xs text-amber-ink underline">Reconcile →</Link>}
+                {l.group === "unreconciled" && <span className="text-xs text-amber-ink underline">Reconcile →</span>}
+                </Link>
               </li>
             ))}
           </ul>
@@ -132,10 +156,14 @@ export default function PaymentsMadePage() {
                 </thead>
                 <tbody>
                   {rows.map((l) => (
-                    <tr key={l.id} className="border-b border-hairline last:border-0 hover:bg-paper-2/40">
+                    <tr key={l.id} onClick={() => router.push(paymentEditHref(l) as Route)}
+                      className="border-b border-hairline last:border-0 hover:bg-paper-2/40 cursor-pointer" title="Open this payment">
                       <td className="p-3 whitespace-nowrap text-ink-2">{formatDate(l.txn_date)}</td>
-                      <td className="p-3 font-medium text-ink">{l.payee}</td>
-                      <td className="p-3 text-ink-2">{l.group === "unreconciled" ? <Link href={"/accounting/banking" as Route} className="text-amber-ink underline">Not reconciled — book it →</Link> : l.what}</td>
+                      <td className="p-3 font-medium text-ink">
+                        {/* A real link too, for keyboard and new-tab users; the row click is the shortcut. */}
+                        <Link href={paymentEditHref(l) as Route} onClick={(e) => e.stopPropagation()} className="hover:underline">{l.payee}</Link>
+                      </td>
+                      <td className="p-3 text-ink-2">{l.group === "unreconciled" ? <span className="text-amber-ink underline">Not reconciled — book it →</span> : l.what}</td>
                       <td className="p-3 font-mono text-xs text-ink-3">{l.reference ?? "—"}</td>
                       <td className="p-3 text-ink-2">{l.account}</td>
                       <td className="p-3 text-right font-serif tabular-nums text-rose">− {rupee(l.amount)}</td>

@@ -5,9 +5,11 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useItems, useDeleteItem, useLoadDefaultCatalog, useSyncHostingCatalog, useSyncDomainCatalog } from "@/lib/queries/items";
+import { productCount } from "@/lib/items/catalog-state";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { OneTimeItemForm } from "@/components/features/items/one-time-item-form";
 import { ItemForm } from "@/components/features/items/item-form";
@@ -24,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { catalogCostCoverage } from "@/lib/catalog/cost-coverage";
+import { headlinePrice, isOwnService } from "@/lib/catalog/headline-price";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -105,7 +108,12 @@ export default function ItemsPage() {
   const loadDefaults = useLoadDefaultCatalog();
   const confirm = useConfirm();
 
-  const [catalogType, setCatalogType] = React.useState<"subscription" | "one_time">("subscription");
+  /* /items and /items/subscriptions = subscription catalog, /items/products = product
+     catalog — one page, three addresses, so the menu can link to each and the tab keeps the URL in step. */
+  const pathname = usePathname();
+  const router = useRouter();
+  const catalogType: "subscription" | "one_time" = pathname?.startsWith("/items/products") ? "one_time" : "subscription";
+  const setCatalogType = (v: "subscription" | "one_time") => router.replace(v === "one_time" ? "/items/products" : "/items/subscriptions");
   const [vendor, setVendor] = React.useState("all");
   const [kind,   setKind]   = React.useState("all");
   const [search, setSearch] = React.useState("");
@@ -154,7 +162,7 @@ export default function ItemsPage() {
 
   const CATALOG_TABS: TabBarItem[] = [
     { id: "subscription", label: "Subscription Catalog", count: subItems.length },
-    { id: "one_time",     label: "Items Catalog",        count: oneTimeItems.length },
+    { id: "one_time",     label: "Product Catalog",      count: oneTimeItems.length },
   ];
 
   // Aggregates (subscription)
@@ -185,7 +193,7 @@ export default function ItemsPage() {
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Catalog</p>
           <h1 className="font-serif text-3xl md:text-4xl leading-tight">
-            {catalogType === "subscription" ? "Subscription Catalog" : "Items Catalog"}
+            {catalogType === "subscription" ? "Subscription Catalog" : "Product Catalog"}
           </h1>
           <p className="text-sm text-ink-3 mt-1">
             {catalogType === "subscription"
@@ -194,6 +202,9 @@ export default function ItemsPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
+          <Link href="/items/packages" className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-paper-2">
+            <Icon name="package" size={14} /> Packages
+          </Link>
           <div className="w-56">
             <Input
               prefix={<Icon name="search" size={14} />}
@@ -335,6 +346,20 @@ export default function ItemsPage() {
         </Card>
       )}
 
+      {/* Only the seeded support tiers, no products yet — the empty state below never shows
+          for such a tenant, so offer the default catalog here (lib/items/catalog-state.ts). */}
+      {!isLoading && !error && items && items.length > 0 && productCount(items) === 0 && (
+        <Card className="mb-4 p-4 flex flex-wrap items-center justify-between gap-3 border-amber/40 bg-amber-soft/20">
+          <div>
+            <p className="text-sm font-semibold text-ink">No products yet</p>
+            <p className="text-xs text-ink-3">Only support plans (add-ons) are here. Load Google Workspace, Microsoft 365, Zoho and add-ons, then edit rates anytime.</p>
+          </div>
+          <Button variant="primary" icon="package" loading={loadDefaults.isPending} onClick={() => loadDefaults.mutate()}>
+            Load default catalog
+          </Button>
+        </Card>
+      )}
+
       {/* Empty — show load-default-catalog CTA */}
       {!isLoading && !error && items && items.length === 0 && (
         <EmptyState
@@ -389,9 +414,9 @@ export default function ItemsPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-serif text-base tabular-nums text-ink">
-                      {rupee(it.msrp)}<span className="text-3xs text-ink-3 font-sans">/mo</span>
+                      {rupee(headlinePrice(it).amount)}<span className="text-3xs text-ink-3 font-sans">/{headlinePrice(it).unit}</span>
                     </p>
-                    <p className="text-3xs text-ink-3">{it.margin_pct}% margin</p>
+                    <p className="text-3xs text-ink-3">{isOwnService(it) ? "Own service" : `${it.margin_pct}% margin`}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-2 border-t border-hairline/60">
@@ -456,16 +481,23 @@ export default function ItemsPage() {
                       </Badge>
                     </td>
                     <td className="p-3 font-mono text-xs text-ink-2">{it.hsn ?? "—"}</td>
-                    <td className="p-3 text-right tabular-nums text-sm">{rupee(it.msrp)}</td>
+                    <td className="p-3 text-right tabular-nums text-sm">
+                      {rupee(headlinePrice(it).amount)}
+                      {headlinePrice(it).unit === "yr" && <span className="text-3xs text-ink-3">/yr</span>}
+                    </td>
                     <td className="p-3 text-right tabular-nums text-sm text-ink-3">
                       {/* "₹0" reads as a free product. It almost always means nobody has
                           entered the vendor's price — and that is what blinds the margin
-                          check, so the cell has to say which of the two it is. */}
+                          check, so the cell has to say which of the two it is. Support is
+                          our own service, so its ₹0 is real. */}
                       {it.wholesale > 0
                         ? rupee(it.wholesale)
-                        : <span className="text-amber-ink font-medium">Not set</span>}
+                        : isOwnService(it)
+                          ? "—"
+                          : <span className="text-amber-ink font-medium">Not set</span>}
                     </td>
                     <td className="p-3 text-right">
+                      {isOwnService(it) ? <span className="text-xs text-ink-3">Own service</span> : (
                       <div className={cn(
                         "tabular-nums text-sm font-medium",
                         tone === "emerald" && "text-emerald",
@@ -475,6 +507,7 @@ export default function ItemsPage() {
                         {rupee(margin)}
                         <div className="text-3xs">{it.margin_pct}%</div>
                       </div>
+                      )}
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -532,7 +565,7 @@ export default function ItemsPage() {
       {!isLoading && items && items.length > 0 && (
         <div className="pt-4 mt-2 border-t border-hairline space-y-4">
           {(() => {
-            const lowMargin = (items ?? []).filter((i) => i.margin_pct < 14).length;
+            const lowMargin = (items ?? []).filter((i) => !isOwnService(i) && i.margin_pct < 14).length;
             return (
               <GeminiCard title="Catalog intelligence" compact>
                 <b>{lowMargin} {lowMargin === 1 ? "item has" : "items have"} margin below 14%.</b>{" "}

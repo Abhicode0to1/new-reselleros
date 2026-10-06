@@ -14,6 +14,9 @@ import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { isValidGstin } from "@/lib/utils";
+import { useTurnstile } from "@/components/shared/turnstile";
+import { GoogleAuthButton } from "@/components/features/auth/google-button";
+import { ResendVerification } from "@/components/features/auth/resend-verification";
 
 const schema = z.object({
   companyName: z.string().min(2, "Company name is required"),
@@ -32,6 +35,8 @@ export default function SignupPage() {
   const [gstLoading, setGstLoading] = React.useState(false);
   /** Set when the signup matched an existing workspace's verified domain. */
   const [pending, setPending] = React.useState<string | null>(null);
+  /** R-048: the address a confirmation link went to; the form is replaced by "check your inbox". */
+  const [verifyEmail, setVerifyEmail] = React.useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -41,6 +46,8 @@ export default function SignupPage() {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const configured = isSupabaseConfigured();
+  /* R-020: bot check on signup (renders nothing until the Turnstile site key exists). */
+  const ts = useTurnstile();
 
   const handleGstinBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const val = e.target.value.trim().toUpperCase();
@@ -65,11 +72,11 @@ export default function SignupPage() {
   };
 
   async function onSubmit(values: FormData) {
-    // Server-side signup: uses service role key to create auth user
-    // (auto-confirmed) + tenant + user record atomically.
+    // Server-side signup: uses service role key to create the auth user
+    // (unconfirmed unless invited — R-048) + tenant + user record atomically.
     const res = await fetch("/api/auth/signup", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...ts.headers },
       body: JSON.stringify({
         email:       values.email,
         password:    values.password,
@@ -88,9 +95,11 @@ export default function SignupPage() {
       error?: string;
       status?: "joined" | "pending_approval" | "created";
       tenantName?: string;
+      needsVerification?: boolean;
     };
 
     if (!res.ok || json.error) {
+      ts.reset();
       toast.error(json.error ?? "Signup failed. Please try again.");
       return;
     }
@@ -100,6 +109,14 @@ export default function SignupPage() {
     // tenant — the stranded state. Show the wait instead; it is not a failure.
     if (json.status === "pending_approval") {
       setPending(json.tenantName ?? "your company's workspace");
+      if (json.needsVerification) setVerifyEmail(values.email);
+      return;
+    }
+
+    /* R-048: a password signup must confirm its email before it can sign in — signing in
+       now would only fail with "Email not confirmed". An invited signup is already confirmed. */
+    if (json.needsVerification) {
+      setVerifyEmail(values.email);
       return;
     }
 
@@ -142,7 +159,9 @@ export default function SignupPage() {
             existing workspace is what lets you see your team&apos;s customers, quotes and invoices.
           </div>
           <p className="mt-4 text-xs text-ink-3">
-            You&apos;ll be able to sign in as soon as they approve. Nothing else is needed from you.
+            {verifyEmail
+              ? <>Two things before you can sign in: confirm your email (we sent a link to <b>{verifyEmail}</b>), and the owner&apos;s approval.</>
+              : <>You&apos;ll be able to sign in as soon as they approve. Nothing else is needed from you.</>}
           </p>
           <Link
             href="/login"
@@ -151,6 +170,28 @@ export default function SignupPage() {
             Back to sign in
           </Link>
         </div>
+      </Card>
+    );
+  }
+
+  if (verifyEmail) {
+    return (
+      <Card>
+        <div className="text-center mb-5">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-soft">
+            <Icon name="mail" size={22} className="text-amber-ink" />
+          </div>
+          <h1 className="font-serif text-2xl mb-2">Check your inbox</h1>
+          <p className="text-sm text-ink-2 leading-relaxed">
+            We sent a confirmation link to <b className="text-ink">{verifyEmail}</b>. Open it to finish
+            creating your account — then sign in. The link works for 48 hours.
+          </p>
+        </div>
+        <details className="text-sm">
+          <summary className="cursor-pointer text-ink-3 text-center">Didn&apos;t get it?</summary>
+          <div className="mt-3"><ResendVerification initialEmail={verifyEmail} /></div>
+        </details>
+        <Link href="/login" className="mt-5 block text-center text-sm text-amber font-medium hover:underline">Back to sign in</Link>
       </Card>
     );
   }
@@ -172,6 +213,17 @@ export default function SignupPage() {
           </div>
         </div>
       )}
+
+      {/* R-102: same OAuth path as login. A new Google user has no company yet, so the
+          callback sends them to /welcome to create one — the fields below are for the
+          email route only. */}
+      <GoogleAuthButton label="Sign up with Google" nextPath="/dashboard" disabled={!configured} />
+
+      <div className="my-5 flex items-center gap-3 text-xs text-ink-3">
+        <div className="flex-1 h-px bg-hairline" />
+        <span>or sign up with email</span>
+        <div className="flex-1 h-px bg-hairline" />
+      </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <FormField label="Company name" required htmlFor="companyName">
@@ -248,6 +300,7 @@ export default function SignupPage() {
           </div>
         </FormField>
 
+        {ts.widget}
         <Button
           type="submit"
           variant="primary"

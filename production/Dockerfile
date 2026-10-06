@@ -70,6 +70,13 @@ ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_APP_ENV=""
 ENV NEXT_PUBLIC_APP_ENV=$NEXT_PUBLIC_APP_ENV
 
+# R-161 no-VM switches, browser half (the server half is Cloud Run env: DATA_GATEWAY,
+# AUTH_PROVIDER, STORAGE_BACKEND). "" = off. db/ops/README.md "Switching the VM off".
+ARG NEXT_PUBLIC_DATA_GATEWAY=""
+ENV NEXT_PUBLIC_DATA_GATEWAY=$NEXT_PUBLIC_DATA_GATEWAY
+ARG NEXT_PUBLIC_AUTH_PROVIDER=""
+ENV NEXT_PUBLIC_AUTH_PROVIDER=$NEXT_PUBLIC_AUTH_PROVIDER
+
 # Web-push VAPID PUBLIC key. Public by design — the browser sends it to the push
 # service when subscribing, so it ends up in the client bundle either way (RFC 8292).
 #
@@ -103,7 +110,26 @@ ENV NEXT_TELEMETRY_DISABLED=1
 #
 # If this returns, the next lever is real: 128 pages and 152 API routes type-checked in one
 # pass. Splitting that is work, and buying heap first is the cheap half.
-ENV NODE_OPTIONS=--max-old-space-size=6144
+# ─── MADE OVERRIDABLE 29 Sep 2026, AND WHY ──────────────────────────────────
+# The note above says "raising the machine instead would cost money for RAM Node was
+# never going to ask for". On Next 14 that held — this app built on E2_HIGHCPU_8 as
+# recently as 17 Sep. On Next 15 the first build after the upgrade died silently inside
+# "Linting and checking validity of types" after 26 minutes: INTERNAL_ERROR, empty
+# failureInfo, no error line. A kernel OOM kill writes nothing, which is that shape.
+#
+# The obvious answer — a 32 GB machine — is refused: E2_HIGHCPU_32 is quota-blocked in
+# asia-south1 for this project ("Cloud Build cannot run builds of this machine type in
+# this region"). So the build has to fit in 8 GB instead.
+#
+# 6144 of 8192 MB leaves ~2 GB for the OS, npm and the type-checker's child processes,
+# and Next 15 evidently wants more than that margin. A LOWER cap is therefore not a
+# downgrade: it makes Node collect earlier and stay inside the container, instead of the
+# container being killed with no message.
+#
+# Default unchanged, so production's build is byte-identical to what has been shipping.
+# Only the test build passes something else.
+ARG NODE_HEAP_MB=6144
+ENV NODE_OPTIONS=--max-old-space-size=${NODE_HEAP_MB}
 
 RUN npm run build
 

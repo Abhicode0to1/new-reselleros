@@ -44,7 +44,7 @@ import { usePayments } from "@/lib/queries/payments";
 import { formatDate } from "@/lib/utils";
 import {
   customerKeywords, leadKeywords, quoteKeywords,
-  invoiceKeywords, subscriptionKeywords, contactKeywords,
+  invoiceKeywords, subscriptionKeywords, contactKeywords, matchesAllTerms,
 } from "@/lib/search/keywords";
 import AddSeatsDialog from "@/components/features/subscriptions/add-seats-dialog";
 import type { Subscription } from "@/lib/supabase/database.types";
@@ -159,7 +159,10 @@ export function CommandPalette({
      A beat after the last keystroke, so typing a name is one query, not one per letter. */
   const [leadQuery, setLeadQuery] = React.useState("");
   React.useEffect(() => {
-    const t = setTimeout(() => setLeadQuery(query), 200);
+    /* A phone typed with spaces ("94949 47304") is sent as its digits — the server
+       matches the stored number as one string. */
+    const q = /^[\d\s+\-()]+$/.test(query.trim()) ? query.replace(/\D/g, "") : query;
+    const t = setTimeout(() => setLeadQuery(q), 200);
     return () => clearTimeout(t);
   }, [query]);
   const { data: leads } = useLeadSearch(leadQuery, open);
@@ -176,15 +179,32 @@ export function CommandPalette({
   // the operator types, so cmdk can filter the whole set rather than a truncated
   // slice of it. See PREVIEW_PER_GROUP for why this is conditional.
   const searching = query.trim().length > 0;
-  const cap = React.useCallback(
-    <T,>(rows: T[]): T[] => (searching ? rows : rows.slice(0, PREVIEW_PER_GROUP)),
-    [searching],
-  );
+  /* The palette filters itself (2 Oct 2026): every typed word must be in the row.
+     cmdk's fuzzy scoring matched letters scattered across a line ("Muskaan" found
+     "Sachin KUmar TAkSh…") and hid leads that arrived from the server after the
+     keystroke — Pardeep: "search button kaam hi nahi kar raha". */
+  const pick = <T,>(rows: T[] | undefined | null, fields: (r: T) => (string | number | null | undefined)[]): T[] =>
+    !rows ? [] : searching ? rows.filter((r) => matchesAllTerms(fields(r), query)) : rows.slice(0, PREVIEW_PER_GROUP);
+
+  const fCustomers = pick(customers, (c) => [c.name, c.id, ...customerKeywords(c)]);
+  const fLeads = pick(leads, (l) => [l.company, l.stage, ...leadKeywords({ ...l, email: l.contact_email, phone: l.contact_phone })]);
+  const fContacts = pick(contacts, (c) => [c.name, c.company, c.email, c.phone, ...contactKeywords(c)]);
+  const fQuotes = pick(quotes, (q) => [q.id, q.customer_name, q.status, ...quoteKeywords(q)]);
+  const fInvoices = pick(invoices, (inv) => [inv.id, inv.customer_name, inv.status, ...invoiceKeywords(inv)]);
+  const fSubs = pick(subscriptions, (s) => [s.customer_name, s.plan, s.status, ...subscriptionKeywords(s)]);
+  const fSeats = query.trim().length >= 2 ? activeSubs.filter((s) => matchesAllTerms([s.customer_name, s.plan], query)) : [];
+  const fPayments = pick(payments, (p) => [p.customer_id ? customerNameById.get(p.customer_id) : null, p.reference, p.method, p.amount]);
+  const fPages = searching ? pageItems.filter((i) => matchesAllTerms([i.label, i.section], query)) : pageItems;
+  const count = (shown: unknown[], all: unknown[] | undefined | null) => (searching ? shown.length : (all?.length ?? 0));
+
+  /* A contact opens the record it came from, not the contacts list. */
+  const contactHref = (c: { source: string; refId: string }) =>
+    c.source === "lead" ? `/leads?lead=${c.refId}` : c.source === "customer" ? `/customers/${c.refId}` : "/contacts";
 
   // Pages — role-filtered + href-deduped (see pageItems). Placed first while searching.
-  const pagesGroup = (
+  const pagesGroup = fPages.length > 0 && (
     <Command.Group heading="Pages">
-      {pageItems.map((item) => (
+      {fPages.map((item) => (
         <PaletteItem
           key={item.id}
           icon={item.icon}
@@ -195,6 +215,18 @@ export function CommandPalette({
       ))}
     </Command.Group>
   );
+
+  const quickActions = [
+    { icon: "sparkles", label: "AI Entry",              meta: "Paste or photograph anything — it fills the entry", href: "/ai-entry" },
+    { icon: "plus",    label: "Create new lead",        meta: "Open the quick-add form",                     href: "/leads?action=quick-add" },
+    { icon: "file",    label: "Create new quote",       meta: "Open Quote Builder",                          href: "/quotes/new" },
+    { icon: "receipt", label: "Create invoice",         meta: "Direct GST tax invoice",                      href: "/quotes/new?invoice=1" },
+    { icon: "rupee",   label: "Record a payment",       meta: "Open an invoice to record what you received", href: "/invoices" },
+    { icon: "users",   label: "Add new customer",       meta: "Open new customer form",                      href: "/customers/new" },
+    { icon: "send",    label: "Launch new campaign",    meta: "Email or WhatsApp blast",                     href: "/campaigns" },
+    { icon: "mail",    label: "Send renewal reminders", meta: "Go to Renewals",                              href: "/renewals" },
+  ];
+  const fActions = searching ? quickActions.filter((a) => matchesAllTerms([a.label, a.meta], query)) : quickActions;
 
   // Which subscription the seats dialog is open for, if any.
   const [addSeatsSub, setAddSeatsSub] = React.useState<Subscription | null>(null);
@@ -214,7 +246,7 @@ export function CommandPalette({
         >
           <Command
             label="Command palette"
-            shouldFilter
+            shouldFilter={false}
             className="bg-transparent"
           >
             {/* Search input */}
@@ -243,57 +275,20 @@ export function CommandPalette({
               {searching && pagesGroup}
 
               {/* Quick actions */}
+              {fActions.length > 0 && (
               <Command.Group heading="Quick Actions" className="cmdk-group">
-                <PaletteItem
-                  icon="plus"
-                  label="Create new lead"
-                  meta="Open the quick-add form"
-                  onSelect={() => go("/leads?action=quick-add")}
-                />
-                <PaletteItem
-                  icon="file"
-                  label="Create new quote"
-                  meta="Open Quote Builder"
-                  onSelect={() => go("/quotes/new")}
-                />
-                <PaletteItem
-                  icon="receipt"
-                  label="Create invoice"
-                  meta="Direct GST tax invoice"
-                  onSelect={() => go("/quotes/new?invoice=1")}
-                />
-                <PaletteItem
-                  icon="rupee"
-                  label="Record a payment"
-                  meta="Open an invoice to record what you received"
-                  onSelect={() => go("/invoices")}
-                />
-                <PaletteItem
-                  icon="users"
-                  label="Add new customer"
-                  meta="Open new customer form"
-                  onSelect={() => go("/customers/new")}
-                />
-                <PaletteItem
-                  icon="send"
-                  label="Launch new campaign"
-                  meta="Email or WhatsApp blast"
-                  onSelect={() => go("/campaigns")}
-                />
-                <PaletteItem
-                  icon="mail"
-                  label="Send renewal reminders"
-                  meta="Go to Renewals"
-                  onSelect={() => go("/renewals")}
-                />
+                {fActions.map((a) => (
+                  <PaletteItem key={a.label} icon={a.icon} label={a.label} meta={a.meta} onSelect={() => go(a.href)} />
+                ))}
               </Command.Group>
+              )}
 
               {!searching && pagesGroup}
 
               {/* Customers — real, tenant-scoped */}
-              {customers && customers.length > 0 && (
-                <Command.Group heading={`Customers · ${customers.length}`}>
-                  {cap(customers).map((c) => {
+              {fCustomers.length > 0 && (
+                <Command.Group heading={`Customers · ${count(fCustomers, customers)}`}>
+                  {fCustomers.map((c) => {
                     const meta = [c.contact_name, c.contact_email, c.domain].filter(Boolean).join(" · ");
                     return (
                       <PaletteItem
@@ -311,9 +306,9 @@ export function CommandPalette({
 
               {/* Leads — real, tenant-scoped. Deep-links to /leads?lead=<id>
                   which pops the detail drawer (existing pattern). */}
-              {leads && leads.length > 0 && (
-                <Command.Group heading={`Leads · ${leads.length}`}>
-                  {cap(leads).map((l) => {
+              {fLeads.length > 0 && (
+                <Command.Group heading={`Leads · ${fLeads.length}`}>
+                  {fLeads.map((l) => {
                     const stage = l.stage ? `${l.stage}` : "";
                     const value = l.value ? rupee(l.value, { compact: true }) : "";
                     const plan = l.plan ?? "No plan";
@@ -336,25 +331,25 @@ export function CommandPalette({
               )}
 
               {/* Contacts — unified across leads/customers/imported */}
-              {contacts && contacts.length > 0 && (
-                <Command.Group heading={`Contacts · ${contacts.length}`}>
-                  {cap(contacts).map((c) => (
+              {fContacts.length > 0 && (
+                <Command.Group heading={`Contacts · ${count(fContacts, contacts)}`}>
+                  {fContacts.map((c) => (
                     <PaletteItem
                       key={c.id}
                       icon="user"
                       label={c.name || c.email || c.phone || "(unnamed)"}
                       meta={[c.company, c.email, c.phone].filter(Boolean).join(" · ")}
                       keywords={contactKeywords(c)}
-                      onSelect={() => go("/contacts")}
+                      onSelect={() => go(contactHref(c))}
                     />
                   ))}
                 </Command.Group>
               )}
 
               {/* Quotes — real tenant-scoped quotes with status + ₹ */}
-              {quotes && quotes.length > 0 && (
-                <Command.Group heading={`Quotes · ${quotes.length}`}>
-                  {cap(quotes).map((q) => {
+              {fQuotes.length > 0 && (
+                <Command.Group heading={`Quotes · ${count(fQuotes, quotes)}`}>
+                  {fQuotes.map((q) => {
                     const total = q.amount != null ? rupee(q.amount, { compact: true }) : "";
                     const meta = [q.customer_name, total, q.status].filter(Boolean).join(" · ");
                     return (
@@ -373,9 +368,9 @@ export function CommandPalette({
 
               {/* Invoices — real, tenant-scoped. Deep-links to /invoices?open=<id>
                   which auto-opens that invoice's preview (existing pattern). */}
-              {invoices && invoices.length > 0 && (
-                <Command.Group heading={`Invoices · ${invoices.length}`}>
-                  {cap(invoices).map((inv) => {
+              {fInvoices.length > 0 && (
+                <Command.Group heading={`Invoices · ${count(fInvoices, invoices)}`}>
+                  {fInvoices.map((inv) => {
                     const total = inv.amount != null ? rupee(inv.amount, { compact: true }) : "";
                     const meta = [inv.customer_name, total, inv.status].filter(Boolean).join(" · ");
                     return (
@@ -402,9 +397,9 @@ export function CommandPalette({
                   cold, pushing navigation and quick actions off the first screen to
                   offer an action most opens don't want. Two characters is enough to
                   mean "I am looking for a particular customer". */}
-              {activeSubs.length > 0 && query.trim().length >= 2 && (
+              {fSeats.length > 0 && (
                 <Command.Group heading="Add seats">
-                  {cap(activeSubs).map((s) => (
+                  {fSeats.map((s) => (
                     <PaletteItem
                       key={`seats-${s.id}`}
                       icon="plus"
@@ -424,9 +419,9 @@ export function CommandPalette({
               )}
 
               {/* Subscriptions — real, tenant-scoped */}
-              {subscriptions && subscriptions.length > 0 && (
-                <Command.Group heading={`Subscriptions · ${subscriptions.length}`}>
-                  {cap(subscriptions).map((s) => {
+              {fSubs.length > 0 && (
+                <Command.Group heading={`Subscriptions · ${count(fSubs, subscriptions)}`}>
+                  {fSubs.map((s) => {
                     const mrr = s.mrr ? `${rupee(s.mrr, { compact: true })}/mo` : "";
                     const meta = [s.plan, mrr, s.status].filter(Boolean).join(" · ");
                     return (
@@ -445,9 +440,9 @@ export function CommandPalette({
 
               {/* Payments — no customer_name column, so we resolve it from the
                   customers cache to make receipts name-searchable. */}
-              {payments && payments.length > 0 && (
-                <Command.Group heading={`Payments · ${payments.length}`}>
-                  {cap(payments).map((p) => {
+              {fPayments.length > 0 && (
+                <Command.Group heading={`Payments · ${count(fPayments, payments)}`}>
+                  {fPayments.map((p) => {
                     const who = (p.customer_id && customerNameById.get(p.customer_id)) || "Payment";
                     const amount = rupee(p.amount, { compact: true });
                     const meta = [amount, p.method, formatDate(p.received_at), p.reference].filter(Boolean).join(" · ");

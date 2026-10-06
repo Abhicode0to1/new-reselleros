@@ -1,19 +1,17 @@
 "use client";
 /**
- * TrialForm — the vendor trial request ("Anutech Trial"), a card-verified but opt-out flow.
+ * TrialForm — the vendor trial request ("Anutech Trial"). No card (Pardeep, 5 Oct 2026, R-157).
  *
  * Ported faithfully from the design handoff (Anutech Trial.dc.html): two collapsible
  * sections, a sticky request rail, a four-question FAQ, and a confirmation view. Pick an
- * edition, how many mailboxes, whether to migrate; give the contact details; the request
+ * edition and how many mailboxes (always a clean start); give the contact details; the request
  * goes to ResellerOS through /api/enquiry (a lead) AND is handed off by email/WhatsApp.
  *
- * ─── Card gating (the important rule) ───────────────────────────────────────
- * The ₹1 authorisation is a HARD gate ONLY when the page can actually take a card
- * (`window.ANUTECH_RAZORPAY_KEY && window.Razorpay`). The marketing site ships no client
- * key, so the flow stays completable: the button reads "Request the trial — we send a ₹1
- * link", the request records that the ₹1 is to be verified by a link, and the "Powered by
- * Razorpay" badge still shows. Never ship a state that asks for a card the page can't take.
- * If a key is ever injected, this same code upgrades to the gated "Verify the card" mode.
+ * ─── No card ─────────────────────────────────────────────────────────────────
+ * Until 5 Oct this page asked for a ₹1 card check and said the trial "continues at the
+ * published rate unless you cancel", while the buy page and the ad pages said "no card".
+ * Pardeep chose one rule for the whole site: the vendor's reseller trial needs no card,
+ * nothing is charged, and when it ends the customer decides — buy, or it simply ends.
  *
  * ─── Rates ──────────────────────────────────────────────────────────────────
  * Rates ("after the trial") are the live editions the page supplies — the same source the
@@ -26,6 +24,7 @@ import { useSearchParams } from "next/navigation";
 import { LICENCE_EDITIONS, type LicenceEdition } from "@/site/lib/data/catalog";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { BusyPanel } from "@/components/ui/busy-panel";
+import { useTurnstile } from "@/components/shared/turnstile";
 import type { MergedEdition } from "@/site/lib/live-catalog";
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -50,17 +49,11 @@ const noteOf = (n: string, fallback: string) => META[n]?.note ?? fallback;
 const MAIL_TODAY = ["Nothing yet — this is a new setup", "Personal Gmail or Yahoo", "cPanel or hosting mail", "Workspace / M365 from another reseller", "Not sure — please check for us"];
 
 const TRIAL_FAQ = [
-  { q: "What if we do not buy?", a: "The trial simply ends. We hand over any data you created and remove the mailboxes — nothing is charged and no card was taken." },
+  { q: "What if we do not buy?", a: "The trial simply ends. We hand over any data you created and remove the mailboxes — nothing is charged and no card is ever asked for." },
   { q: "Can we add people mid-trial?", a: "Yes, up to the vendor's free cap. Beyond that we tell you the rate first; nothing starts without your approval." },
   { q: "Will our current mail break?", a: "No. Your live mail keeps running on your existing provider until you decide — we only cut over when you say so." },
   { q: "Do we get the same rate afterwards?", a: `Yes, the published rate on the quote, and it stays the same at renewal. GST 18% (HSN ${COMPANY.hsn}) is billed separately.` },
 ];
-
-function cardLiveNow(): boolean {
-  if (typeof window === "undefined") return false;
-  const w = window as unknown as { ANUTECH_RAZORPAY_KEY?: string; Razorpay?: unknown };
-  return !!(w.ANUTECH_RAZORPAY_KEY && w.Razorpay);
-}
 
 export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
   const params = useSearchParams();
@@ -68,36 +61,36 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
 
   const [ed, setEd] = useState("GW Business Starter");
   const [seats, setSeats] = useState(3);
-  const [migrate, setMigrate] = useState(true);
   const [open, setOpen] = useState<"plan" | "detail">("plan");
   const [planDone, setPlanDone] = useState(false);
-  const [cat, setCat] = useState("all");
+  /* Open on the chosen product's own category, not "All editions" — a long catalogue is
+     noise to someone who already picked Google Workspace (Pardeep, 4 Oct 2026). */
+  const [cat, setCat] = useState(() => vendorOf("GW Business Starter"));
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState("");
+  const ts = useTurnstile(); // R-020
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [domain, setDomain] = useState("");
   const [startWhen, setStartWhen] = useState("");
   const [current, setCurrent] = useState(MAIL_TODAY[0]);
   const [touched, setTouched] = useState(false);
-  const [cardInfo, setCardInfo] = useState(false);
-  const [cardOk] = useState(false); // stays false on the marketing site (no client key)
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   /* Honest feedback (owner, 30 Sep 2026). Until then a failed send still showed the
      "request received" screen — the fetch's errors were swallowed on purpose. */
   const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const [formErr, setFormErr] = useState<string | null>(null);
   /** Did our system email the customer a copy? Only then do we say "check your inbox". */
   const [ackSent, setAckSent] = useState(false);
   const [reqNo, setReqNo] = useState("");
   const [reqAt, setReqAt] = useState<Date | null>(null);
   const [delivered, setDelivered] = useState<"email" | "wa" | "">("");
-  const cardLive = cardLiveNow();
 
   /* Home ka Trial button edition + users URL me bhejta hai; draft localStorage me. */
   useEffect(() => {
     const p = params.get("ed") ?? params.get("edition");
-    if (p && LIST.some((e) => e.name === p)) setEd(p);
+    if (p && LIST.some((e) => e.name === p)) { setEd(p); setCat(vendorOf(p)); }
     const s = parseInt(params.get("seats") ?? "", 10);
     if (s > 0) setSeats(Math.min(MAX_IDS, s));
     try {
@@ -149,12 +142,11 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
   const rows: { k: string; v: string }[] = [
     { k: "Edition", v: labelOf(ed) },
     { k: "Email IDs in the trial", v: `${seats} ${seats === 1 ? "ID" : "IDs"}` },
-    { k: "Existing mail", v: migrate ? "Copy it in" : "Clean start" },
+    { k: "Existing mail", v: "Clean start — copied in free when you buy" },
     { k: "Domain", v: domain.trim() ? domain.trim().toLowerCase() : "—" },
     { k: "Mail today", v: current },
     { k: "Rate if you keep it", v: rateAfter },
     { k: "Preferred start", v: startWhen.trim() || "As soon as possible" },
-    { k: "Card check", v: cardOk ? "Verified — ₹1 authorisation, refunded" : "To be verified by a ₹1 link" },
   ];
 
   const requestText = (no: string) =>
@@ -166,28 +158,38 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
       `· Company contact: ${email || "—"} · ${phone || "—"}`,
       "",
       "Please set up the vendor trial on this domain and confirm the trial length and free-mailbox cap in writing.",
-      cardOk
-        ? "Card verified with a ₹1 authorisation (refunded). Continue at the published rate when the trial ends; remind me two days before."
-        : "Please WhatsApp a ₹1 Razorpay link to verify the card, then start the trial. Continue at the published rate when it ends; remind me two days before.",
+      "No card. Remind me two days before the trial ends; I will tell you then whether we buy.",
     ].join("\n");
 
   const activation = [
     { n: "01", t: "Send and receive on your own domain — check it does not land in spam." },
     { n: "02", t: "Add the account on everyone's phone, and on Outlook if your office uses it." },
-    { n: "03", t: migrate ? "Open the copied mail and folders — confirm nothing is missing." : "Share a file or a calendar invite inside the team." },
+    { n: "03", t: "Share a file or a calendar invite inside the team." },
     { n: "04", t: "Run one real meeting and one shared document, the way you actually work." },
   ];
   const steps = [
     { n: "01", t: "We reply on WhatsApp with the vendor's trial length and free-user cap, in writing." },
     { n: "02", t: "We create the mailboxes on your domain and set the DNS records — you do nothing." },
-    { n: "03", t: migrate ? "Existing mail is copied in overnight, at ₹0." : "You get empty mailboxes and logins for the team." },
-    { n: "04", t: "Two days before the trial ends we remind you. Say nothing and it continues at the published rate; one line on WhatsApp cancels it and the ₹1 stays the only charge." },
+    { n: "03", t: "You get empty mailboxes and logins for the team." },
+    { n: "04", t: "Two days before the trial ends we remind you. Want to keep it? Say yes and we send the GST quote at the published rate. Say nothing and the trial simply ends — nothing is charged." },
   ];
 
   async function submit() {
     setTouched(true);
-    if (!filled) { setOpen("detail"); return; }
-    if (cardLive && !cardOk) return;
+    /* Never fail silently: the button can sit far below the field that is wrong (a saved
+       draft with no mobile number looked like a dead button — Pardeep, 4 Oct 2026). Say
+       what is missing next to the button, then take the person to the first bad field. */
+    if (!filled) {
+      setOpen("detail");
+      const names: Record<string, string> = { company: "company", domain: "domain", email: "email", phone: "mobile number" };
+      setFormErr(`Please fill in: ${Object.keys(errs).map((k) => names[k] ?? k).join(", ")}.`);
+      setTimeout(() => {
+        const el = document.querySelector<HTMLInputElement>("[data-trial-bad=\"1\"]");
+        if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus({ preventScroll: true }); }
+      }, 60);
+      return;
+    }
+    setFormErr(null);
     const now = new Date();
     const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     let n = 1;
@@ -196,15 +198,16 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
     setSending(true);
     setSubmitErr(null);
     try {
-      const requirement = `TRIAL: ${labelOf(ed)}, ${seats} mailbox(es) on ${domain.trim().toLowerCase()}, ${migrate ? "migrate existing mail" : "clean start"}, mail today: ${current}${startWhen ? `, preferred start: ${startWhen}` : ""}. Continues at ${rateAfter} after trial. Card check: ${cardOk ? "verified (₹1 auth, refunded)" : "to be verified by a ₹1 link"}. (via anutech.in trial page)`;
+      const requirement = `TRIAL: ${labelOf(ed)}, ${seats} mailbox(es) on ${domain.trim().toLowerCase()}, clean start, mail today: ${current}${startWhen ? `, preferred start: ${startWhen}` : ""}. If they keep it: ${rateAfter}. No card. (via anutech.in trial page)`;
       const res = await fetch("/api/enquiry", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...ts.headers },
         body: JSON.stringify({ fullName: company, companyName: company, email, phone, product: `Trial — ${labelOf(ed)}`, seats, requirement, edition: ed, term: "annual", trial: true }),
       });
       const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; ackSent?: boolean };
       if (!res.ok || !json.ok) {
         setSubmitErr(json.error || "We could not send your trial request. Nothing was saved — please press the button to try again.");
+        ts.reset();
         setSending(false);
         return;
       }
@@ -261,7 +264,7 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
             ))}
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, padding: "7px 0", borderTop: "1px solid var(--border-hairline)" }}>
               <span style={{ color: "var(--text-muted)" }}>Charged during the trial</span>
-              <span style={{ color: GREEN, fontWeight: 600 }}>{cardLive ? "₹1, refunded" : "₹1 on the link"}</span>
+              <span style={{ color: GREEN, fontWeight: 600 }}>₹0 — no card</span>
             </div>
           </div>
           {/* what happens next + handoffs */}
@@ -296,7 +299,7 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
             <span style={mark(planDone)}>{planDone ? "✓" : "1"}</span>
             <span style={{ flex: 1 }}>
               <span style={{ display: "block", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>What to switch on</span>
-              <span style={{ display: "block", fontSize: 13, color: "var(--text-muted)" }}>{labelOf(ed)} · {seats} email ID{seats > 1 ? "s" : ""} · {migrate ? "mail copied in" : "clean start"}</span>
+              <span style={{ display: "block", fontSize: 13, color: "var(--text-muted)" }}>{labelOf(ed)} · {seats} email ID{seats > 1 ? "s" : ""} · clean start</span>
             </span>
             <span aria-hidden style={{ color: P, fontSize: 18 }}>{open === "plan" ? "▲" : "▼"}</span>
           </button>
@@ -337,22 +340,14 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
                   <button onClick={() => setIds(seats + 1)} aria-label="More email IDs" style={{ minHeight: 40, padding: "0 13px", border: "none", background: "#fff", cursor: "pointer", color: "var(--text-secondary)", fontSize: 16 }}>+</button>
                 </span>
               </div>
-              {/* migrate */}
-              <div style={{ marginTop: 18 }}>
-                <div className="mono-label" style={{ color: "var(--text-muted)", marginBottom: 6 }}>SHOULD WE MOVE EXISTING MAIL IN?</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {[{ v: true, l: "Yes — copy it in" }, { v: false, l: "Clean start" }].map((o) => (
-                    <button key={String(o.v)} onClick={() => setMigrate(o.v)} aria-pressed={migrate === o.v}
-                      style={{ flex: 1, cursor: "pointer", fontSize: 13.5, fontWeight: 600, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border-strong)", background: migrate === o.v ? "#0C1116" : "#fff", color: migrate === o.v ? "#fff" : "var(--text-secondary)", fontFamily: "inherit" }}>{o.l}</button>
-                  ))}
-                </div>
-                <p className="meta" style={{ marginTop: 8 }}>{migrate ? "Old mail, folders and contacts are copied overnight, at ₹0." : "Empty mailboxes — nothing is copied from your current provider."}</p>
-              </div>
+              {/* A vendor trial is always a clean start, so there is nothing to ask (Pardeep,
+                  4 Oct 2026). Old mail is copied in free once the customer buys. */}
+              <p className="meta" style={{ marginTop: 18 }}>Trials start with empty mailboxes. When you buy, we copy your old mail, folders and contacts in — free.</p>
               {/* provenance */}
               <div style={{ display: "flex", gap: 10, marginTop: 16, padding: 12, background: "#FBFCFE", border: "1px solid var(--border-hairline)", borderRadius: 10 }}>
                 <span aria-hidden style={{ color: GREEN, fontWeight: 700, flex: "none" }}>✓</span>
                 <span style={{ fontSize: 12, lineHeight: 1.55, color: "var(--text-secondary)", minWidth: 0 }}>
-                  The vendor&apos;s own trial, set up by us on your domain as an authorised reseller — Google Premier Partner since 2014. Length and the free-user cap are the vendor&apos;s; we confirm both in writing before we start. A ₹1 authorisation verifies the card and is refunded the same day; nothing else is charged during the trial, and it continues at the published rate afterwards unless you cancel. Rates shown are India-region list rates — we add nothing on top: GST 18% (HSN {COMPANY.hsn}) is billed separately, the renewal stays at the same rate, and if a vendor changes a rate you get thirty days&apos; written notice.
+                  The vendor&apos;s own trial, set up by us on your domain as an authorised reseller — Google Premier Partner since 2014. Length and the free-user cap are the vendor&apos;s; we confirm both in writing before we start. No card is asked for and nothing is charged during the trial; when it ends you decide whether to buy at the published rate. Rates shown are India-region list rates — we add nothing on top: GST 18% (HSN {COMPANY.hsn}) is billed separately, the renewal stays at the same rate, and if a vendor changes a rate you get thirty days&apos; written notice.
                 </span>
               </div>
               <button onClick={() => { setPlanDone(true); setOpen("detail"); }} className="btn btn-primary" style={{ marginTop: 16 }}>Continue to details →</button>
@@ -363,10 +358,10 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
         {/* Section 2 — Where to set it up */}
         <div style={card}>
           <button onClick={() => setOpen(open === "detail" ? "plan" : "detail")} aria-expanded={open === "detail"} style={secHead(open === "detail")}>
-            <span style={mark(filled && (cardOk || !cardLive))}>{filled && (cardOk || !cardLive) ? "✓" : "2"}</span>
+            <span style={mark(filled)}>{filled ? "✓" : "2"}</span>
             <span style={{ flex: 1 }}>
               <span style={{ display: "block", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Where to set it up</span>
-              <span style={{ display: "block", fontSize: 13, color: "var(--text-muted)" }}>{filled ? `${company} · ${domain.trim().toLowerCase()} · ${cardOk ? "card verified" : cardLive ? "card not verified" : "card by ₹1 link"}` : "Company, domain, email, mobile and the card check"}</span>
+              <span style={{ display: "block", fontSize: 13, color: "var(--text-muted)" }}>{filled ? `${company} · ${domain.trim().toLowerCase()}` : "Company, domain, email and mobile"}</span>
             </span>
             <span aria-hidden style={{ color: P, fontSize: 18 }}>{open === "detail" ? "▲" : "▼"}</span>
           </button>
@@ -386,27 +381,15 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
                   <input type="date" value={startWhen} onChange={(e) => setStartWhen(e.target.value)} style={{ width: "100%", marginTop: 4, minHeight: 44, border: "1.5px solid var(--border-strong)", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit" }} />
                 </label>
               </div>
-              {/* card-check block */}
-              <div style={{ marginTop: 16, background: "#FFF8EC", border: "1px solid #F1E0BE", borderRadius: 10, padding: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <span className="mono" style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#8A5A0B", fontWeight: 600 }}>Card check — ₹1, refunded</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "#8A5A0B", background: "#FBEFD6", border: "1px solid #F1E0BE", borderRadius: 999, padding: "2px 8px" }}>{cardOk ? "Verified" : cardLive ? "Not verified yet" : "By ₹1 link on WhatsApp"}</span>
-                  </span>
-                  <RazorpayMark />
-                </div>
-                <p style={{ fontSize: 12.5, color: "#6B4A18", lineHeight: 1.5, margin: "8px 0 10px" }}>
-                  We verify a card with a ₹1 authorisation that is refunded the same day. <b style={{ color: "#5A3A0E" }}>Nothing else is charged during the trial.</b> When it ends it continues at {rateAfter} unless you cancel — we remind you two days before, and one line on WhatsApp cancels it.
-                </p>
-                <button onClick={() => setCardInfo((s) => !s)} style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "9px 14px", borderRadius: 8, border: "1px solid #E4C98C", background: "#B7791F", color: "#fff", fontFamily: "inherit" }}>{cardLive ? "Verify card — ₹1, refunded" : "How the ₹1 link works"}</button>
-                {cardInfo && !cardLive && <p style={{ fontSize: 12.5, color: "#6B4A18", lineHeight: 1.5, margin: "10px 0 0" }}>Send the request and we WhatsApp you a secure ₹1 Razorpay link — the trial starts once you tap it, and the ₹1 is refunded the same day. No card details are entered on this page.</p>}
-              </div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "14px 0 0" }}><b style={{ color: GREEN }}>No card, nothing charged.</b> When the trial ends you decide — buy at {rateAfter}, or it simply ends.</p>
+              {formErr && !filled && <div role="alert" style={{ background: "#FFF7ED", border: "1px solid #FED7AA", color: "#9A3412", borderRadius: 8, padding: "11px 14px", fontSize: 14, margin: "12px 0" }}>{formErr}</div>}
               {submitErr && <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, margin: "12px 0" }}>{submitErr} If it keeps failing, email <a href={`mailto:${COMPANY.supportEmail}`} style={{ color: "#991B1B", fontWeight: 600 }}>{COMPANY.supportEmail}</a>.</div>}
               <BusyPanel active={sending} title="Sending your trial request" steps={["Sending your details to our team", "Preparing your request reference"]} />
+              {ts.widget}
               <button onClick={submit} disabled={sending} className="btn btn-primary" style={{ width: "100%", marginTop: 16, opacity: sending ? 0.7 : 1 }}>
-                {sending ? "Requesting…" : cardLive ? (cardOk ? "Request the trial" : "Verify the card to continue") : "Request the trial — we send a ₹1 link"}
+                {sending ? "Requesting…" : "Request the free trial"}
               </button>
-              <p className="meta" style={{ textAlign: "center", marginTop: 8 }}>First reply on WhatsApp averages 11 minutes in working hours.</p>
+              <p className="meta" style={{ textAlign: "center", marginTop: 8 }}>A person replies on WhatsApp in working hours.</p>
             </div>
           )}
         </div>
@@ -434,12 +417,12 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
         ))}
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, padding: "8px 0", borderTop: "1px solid var(--border-light)", marginTop: 2 }}>
           <span style={{ fontWeight: 600 }}>Charged during the trial</span>
-          <span style={{ color: GREEN, fontWeight: 700 }}>{cardLive ? "₹1, refunded" : "₹1 on the link"}</span>
+          <span style={{ color: GREEN, fontWeight: 700 }}>₹0 — no card</span>
         </div>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, margin: "6px 0 0" }}>The ₹1 is refunded the same day. After the trial: {rateAfter} unless you cancel, and the renewal rate stays the same.</p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, margin: "6px 0 0" }}>If you keep it after the trial: {rateAfter}, and the renewal rate stays the same. If not, it simply ends.</p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border-hairline)" }}>
-          {["We do the setup — mailboxes, DNS and logins", "Existing mail copied in if you want it", "Continues at the published rate unless you cancel — reminder two days before", "Keep it and the published rate applies — nothing extra"].map((b) => (
+          {["We do the setup — mailboxes, DNS and logins", "Old mail copied in free once you buy", "Reminder two days before it ends — you decide, nothing is automatic", "Keep it and the published rate applies — nothing extra"].map((b) => (
             <span key={b} style={{ display: "flex", gap: 8, fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.45 }}><span aria-hidden style={{ color: GREEN, fontWeight: 700, flex: "none" }}>✓</span><span>{b}</span></span>
           ))}
         </div>
@@ -455,10 +438,11 @@ export function TrialForm({ editions }: { editions?: MergedEdition[] }) {
           <p className="meta" style={{ marginTop: 8 }}>If any of it does not work the way you need, tell us during the trial — that is what it is for.</p>
         </div>
 
-        {submitErr && <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, margin: "12px 0" }}>{submitErr} If it keeps failing, email <a href={`mailto:${COMPANY.supportEmail}`} style={{ color: "#991B1B", fontWeight: 600 }}>{COMPANY.supportEmail}</a>.</div>}
+        {formErr && !filled && <div role="alert" style={{ background: "#FFF7ED", border: "1px solid #FED7AA", color: "#9A3412", borderRadius: 8, padding: "11px 14px", fontSize: 14, margin: "12px 0" }}>{formErr}</div>}
+              {submitErr && <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, margin: "12px 0" }}>{submitErr} If it keeps failing, email <a href={`mailto:${COMPANY.supportEmail}`} style={{ color: "#991B1B", fontWeight: 600 }}>{COMPANY.supportEmail}</a>.</div>}
         <BusyPanel active={sending} title="Sending your trial request" steps={["Sending your details to our team", "Preparing your request reference"]} />
         <button onClick={submit} disabled={sending} className="btn btn-primary" style={{ width: "100%", marginTop: 14, opacity: sending ? 0.7 : 1 }}>
-          {sending ? "Requesting…" : cardLive ? (cardOk ? "Request the trial" : "Verify the card to continue") : "Request the trial — we send a ₹1 link"}
+          {sending ? "Requesting…" : "Request the free trial"}
         </button>
         <p className="meta" style={{ textAlign: "center", marginTop: 8 }}>Would rather see the price first? <a href={orderHref} style={{ color: P, fontWeight: 600 }}>Build a quote</a> instead.</p>
       </div>
@@ -470,18 +454,9 @@ function TField({ label, value, set, err, kind = "text", mono }: { label: string
   const bad = !!err;
   return (
     <label style={{ fontSize: 13, color: "var(--text-secondary)" }}>{label}
-      <input type={kind} value={value} onChange={(e) => set(e.target.value)} style={{ width: "100%", marginTop: 4, minHeight: 44, border: `1.5px solid ${bad ? "#C2410C" : "var(--border-strong)"}`, borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: mono ? "var(--font-mono), monospace" : "inherit" }} />
+      <input type={kind} value={value} onChange={(e) => set(e.target.value)} data-trial-bad={bad ? "1" : undefined} aria-invalid={bad || undefined} style={{ width: "100%", marginTop: 4, minHeight: 44, border: `1.5px solid ${bad ? "#C2410C" : "var(--border-strong)"}`, borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: mono ? "var(--font-mono), monospace" : "inherit" }} />
       {bad && <span style={{ display: "block", fontSize: 11.5, color: "#C2410C", marginTop: 3 }}>{err}</span>}
     </label>
   );
 }
 
-function RazorpayMark() {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-muted)" }}>
-      Powered by
-      <svg width="12" height="12" viewBox="0 0 40 40" aria-hidden style={{ display: "block" }}><path d="M23 3 L31 3 L17 37 L9 37 Z" fill="#3395FF" /><path d="M15 13 L25 13 L20 30 L13 30 Z" fill="#0A1F44" /></svg>
-      <b style={{ color: "#0C64E8", fontWeight: 700 }}>Razorpay</b>
-    </span>
-  );
-}

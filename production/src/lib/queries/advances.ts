@@ -181,3 +181,46 @@ export function useSettleAdvance() {
     onError: (err) => toast.error("Could not settle", { description: (err as Error).message }),
   });
 }
+
+/** Fix an advance entered by mistake: name, purpose, and (while open, no top-up) amount and date. */
+export function useUpdateAdvance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { advance_id: string; employee_name: string; amount: number; date: string; purpose: string | null }) => {
+      const supabase = createClient();
+      const { error } = await supabase.rpc("update_employee_advance", {
+        p_advance_id: input.advance_id,
+        p_name: input.employee_name,
+        p_amount: Math.round(input.amount),
+        p_date: input.date,
+        p_note: input.purpose ?? undefined,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      refresh(qc);
+      toast.success("Advance updated");
+    },
+    onError: (err) => toast.error("Could not update the advance", { description: (err as Error).message }),
+  });
+}
+
+/** Remove an advance made by mistake — with its expenses only when the person says so. */
+export function useDeleteAdvance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { advance_id: string; delete_expenses: boolean }) => {
+      const supabase = createClient();
+      const { error } = await supabase.rpc("delete_employee_advance", {
+        p_advance_id: input.advance_id,
+        p_delete_expenses: input.delete_expenses,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      refresh(qc);
+      toast.success("Advance deleted", { description: "Its petty-cash entries were removed too." });
+    },
+    onError: (err) => toast.error("Could not delete the advance", { description: (err as Error).message }),
+  });
+}

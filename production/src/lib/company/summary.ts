@@ -22,6 +22,7 @@
  */
 import { istMonth, istToday, monthBounds, toIstDate, istDayStartUtc } from "@/lib/dates/ist";
 import { invoiceBucket, type OverdueInvoice } from "@/lib/invoices/overdue";
+import { invoiceBalance, invoiceInFocus } from "@/lib/invoices/kpis";
 import { folderCounts, folderMrr, type FolderRow } from "@/lib/subscriptions/folders";
 import { captureChannel } from "@/lib/leads/capture-channel";
 
@@ -84,7 +85,8 @@ export interface CountValue { count: number; value: number }
 export interface InvoiceMoney {
   /** Real invoices (not draft / void / cancelled) dated this IST month, at their stored total. */
   invoicedThisMonth: CountValue;
-  /** Invoices still owed: the Pending and Overdue tabs on /invoices, at net payable. */
+  /** Invoices still owed, at what is still owed — the /invoices Outstanding tile's set
+   *  (lib/invoices/kpis.ts#invoiceInFocus "unpaid"), so the row and its list agree. */
   outstanding: CountValue;
   /** The Overdue tab's count on /invoices — invoiceBucket, the function the tab uses. */
   overdueCount: number;
@@ -108,9 +110,12 @@ export function invoiceMoney(invoices: readonly MoneyInvoice[], now: Date = new 
     }
     const bucket = invoiceBucket(inv, today);
     if (bucket === "overdue") out.overdueCount++;
-    if (bucket === "pending" || bucket === "overdue") {
+    /* R-118 (2 Oct 2026): this summed the full bill (net_payable ?? amount) without taking
+       off receipts, so a half-paid ₹1L invoice showed ₹1L "still owed" here and ₹50K on
+       /invoices. Now the same balance, and the same set, as the Outstanding tile. */
+    if (invoiceInFocus(inv, "unpaid", now)) {
       out.outstanding.count++;
-      out.outstanding.value += inv.net_payable ?? inv.amount;
+      out.outstanding.value += invoiceBalance(inv);
     }
   }
   return out;

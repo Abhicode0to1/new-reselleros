@@ -180,3 +180,10 @@ export const HOSTING_FAQS_V2: readonly { q: string; a: string }[] = [
   { q: "Do you offer a money-back guarantee?", a: "Yes — a 30-day money-back guarantee on yearly plans, on top of the free trial. Refunds follow our published refund policy." },
   { q: "Can I upgrade or downgrade my plan later?", a: "Any time, from the client area, and support can do it for you. Because all three plans run on the same platform, changing plan does not mean rebuilding or moving the website." },
 ];
+
+/**
+ * "From ₹…/mo" wherever hosting is advertised (home card, menu, catalogue copy). Until
+ * 2 Oct 2026 those said ₹159 from an old table while /hosting sold Starter at ₹49.99 — two
+ * prices for one plan. Derived here so they cannot drift again.
+ */
+export const HOSTING_FROM_MO: string = `₹${Math.min(...HOSTING_TIERS.map((t) => t.yearlyMo))}`;

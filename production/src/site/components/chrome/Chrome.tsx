@@ -9,11 +9,13 @@ import Image from "next/image";
 import Link from "@/site/components/ui/SiteLink";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { COMPANY, WHATSAPP_URL, CLIENT_AREA_URL } from "@/site/lib/config";
+import { COMPANY, WHATSAPP_URL, WHATSAPP_READY, CLIENT_AREA_URL } from "@/site/lib/config";
 
 export function UtilityBar() {
   const pathname = usePathname();
   const onDomains = pathname.startsWith("/domains");
+  /* The home leads with custom software (R-155); "free migration" is an email promise. */
+  const onHome = pathname === "/";
   return (
     <div style={{ background: "var(--dark)", color: "#C3CBD6", fontSize: 13, padding: "9px 0" }}>
       <div className="wrap" style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
@@ -21,6 +23,8 @@ export function UtilityBar() {
           /* The domains page leads with the offer — the ₹0 lever is the whole page's
              thesis, so the utility bar states it first (offer text in warm accent). */
           <span><span style={{ color: "#FFC9A8" }}>Domain ₹0 with any 1-year hosting plan</span> · GST invoice on every order</span>
+        ) : onHome ? (
+          <span>Custom software &amp; office automation · Google Premier Partner since 2014</span>
         ) : (
           <span>Free migration on every plan · GST invoice on every order</span>
         )}
@@ -41,6 +45,7 @@ const CRUMBS: Record<string, string> = {
   "/hosting": "cPanel web hosting",
   "/email": "Business email & productivity",
   "/email/compare-editions": "Compare editions",
+  "/google-workspace/pricing": "Google Workspace pricing",
   "/ssl": "SSL & security",
   "/login": "Client login",
   "/terms": "Terms of service",
@@ -80,6 +85,10 @@ export function Breadcrumb() {
 }
 
 export function CtaBand() {
+  /* The home ends with its own custom-software call band (R-155); this one is the
+     licence quote ask, right for every other page. */
+  const pathname = usePathname();
+  if (pathname === "/") return null;
   return (
     <section style={{ background: "var(--dark)", color: "#fff", padding: "56px 0" }}>
       <div className="wrap" style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
@@ -92,9 +101,12 @@ export function CtaBand() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <a href={WHATSAPP_URL} target="_blank" rel="noopener" className="btn btn-outline" style={{ background: "transparent", color: "#fff", borderColor: "#39434e" }}>
-            WhatsApp us
-          </a>
+          {/* R-078: only with the real number configured; the placeholder sent people nowhere. */}
+          {WHATSAPP_READY && (
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener" className="btn btn-outline" style={{ background: "transparent", color: "#fff", borderColor: "#39434e" }}>
+              WhatsApp us
+            </a>
+          )}
           <Link href="/quote" className="btn btn-primary">Get a quote</Link>
         </div>
       </div>
@@ -105,7 +117,7 @@ export function CtaBand() {
 const FOOTER_COLS = [
   { title: "DOMAINS", links: [["Search a domain", "/domains"], ["Rate card", "/domains#rates"], ["Transfer in", "/domains"], ["All prices", "/rates"]] },
   { title: "HOSTING", links: [["Shared hosting", "/hosting"], ["Full specification", "/hosting#specs"], ["Client area", CLIENT_AREA_URL], ["System status", "/status"]] },
-  { title: "EMAIL & SECURITY", links: [["Compare editions", "/email/compare-editions"], ["Business email", "/email"], ["Google Workspace", "/quote"], ["Microsoft 365", "/quote"], ["SSL certificates", "/ssl"]] },
+  { title: "EMAIL & SECURITY", links: [["Compare editions", "/email/compare-editions"], ["Business email", "/email"], ["Google Workspace pricing", "/google-workspace/pricing"], ["Microsoft 365", "/quote"], ["SSL certificates", "/ssl"]] },
   { title: "RESELLEROS", links: [["What it is", "/reselleros"], ["Modules", "/reselleros#modules"], ["Interactive demo", "/reselleros"], ["Pricing — free in beta", "/reselleros#pricing"]] },
   { title: "COMPANY", links: [["About Anutech", "/about"], ["Reseller program", "/reseller"], ["Why us", "/why-us"], ["Support", "/contact"], ["Get a quote", "/quote"], ["Client login", "/login"], ["Terms", "/terms-and-conditions"], ["Privacy", "/privacy-policy"], ["Refunds", "/refund"]] },
 ] as const;
@@ -117,8 +129,7 @@ export function Footer() {
         <div style={{ display: "grid", gridTemplateColumns: "1.5fr repeat(5, 1fr)", gap: 28 }} className="footer-grid">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <Image src="/anutech-digital-logo.png" alt="" width={30} height={30} style={{ objectFit: "contain" }} />
-              <span style={{ fontSize: 16, fontWeight: 700 }}>Anutech Digital</span>
+              <Image src="/lp/anutech-logo.png" alt="ANUTECH Digital Pvt Ltd" width={108} height={36} style={{ objectFit: "contain", height: 36, width: "auto" }} />
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--text-secondary)", maxWidth: 260, margin: "0 0 14px" }}>
               Anutech Digital Pvt Ltd, Rohini, Delhi. Google Premier Partner since 2014. Maker of ResellerOS.
@@ -157,12 +168,16 @@ export function Footer() {
 }
 
 export function WhatsAppButton() {
+  /* R-078 (4 Oct 2026): the floating button linked to the placeholder 919800000000 on every
+     page, and sat over the Google Ads landing page price. Hidden until the real number is set
+     in site/lib/config.ts (WHATSAPP_NUMBER), which flips WHATSAPP_READY. */
+  if (!WHATSAPP_READY) return null;
   return (
     <a
       href={WHATSAPP_URL}
       target="_blank"
       rel="noopener"
-      aria-label="WhatsApp us — average first reply 11 minutes"
+      aria-label="WhatsApp us"
       style={{
         position: "fixed", right: 22, bottom: 22, zIndex: 90,
         display: "inline-flex", alignItems: "center", gap: 9,
@@ -175,7 +190,6 @@ export function WhatsAppButton() {
     >
       <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: "var(--bar-ok)" }} />
       WhatsApp us
-      <span className="mono" style={{ fontSize: 11, color: "#9AA5B1" }}>~11 MIN</span>
     </a>
   );
 }

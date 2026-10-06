@@ -5,6 +5,8 @@
  * <KPI label="MRR" value={420000} unit="₹" trend="+12%" trendKind="up" />
  * <KPI label="High-risk renewals" value={3} trend="₹8.5L ARR at risk" trendKind="down" icon="alert" />
  */
+import Link from "next/link";
+import type { Route } from "next";
 import { Icon } from "@/components/ui/icon";
 import { cn, rupee, num } from "@/lib/utils";
 
@@ -32,6 +34,11 @@ interface KPIProps {
   accent?: "emerald" | "amber" | "rose" | "ink";
   /** Click handler — makes the tile interactive */
   onClick?: () => void;
+  /**
+   * R-118: the list that holds exactly the records this number counts. Renders a real link
+   * (middle-click / new tab work), and wins over onClick.
+   */
+  href?: string;
 }
 
 export function KPI({
@@ -48,6 +55,7 @@ export function KPI({
   className,
   accent = "ink",
   onClick,
+  href,
 }: KPIProps) {
   const valueColor = {
     emerald: "text-emerald",
@@ -73,16 +81,14 @@ export function KPI({
   const defaultTrendIcon = trendKind === "up" ? "trending_up" : trendKind === "down" ? "trending_down" : undefined;
   const effectiveTrendIcon = trendIcon ?? defaultTrendIcon;
 
-  return (
-    <Component
-      onClick={onClick}
-      className={cn(
-        "block w-full text-left p-4 bg-paper border border-hairline rounded-lg",
-        "transition-shadow",
-        onClick && "hover:shadow-md hover:border-hairline-strong cursor-pointer focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2",
-        className
-      )}
-    >
+  const tileClass = cn(
+    "block w-full text-left p-4 bg-paper border border-hairline rounded-lg",
+    "transition-shadow",
+    (onClick || href) && "hover:shadow-md hover:border-hairline-strong cursor-pointer focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2",
+    className,
+  );
+  const body = (
+    <>
       {/* Label row */}
       <div className="flex items-center gap-2 text-xs text-ink-3 mb-2">
         {icon && <Icon name={icon} size={13} />}
@@ -106,6 +112,11 @@ export function KPI({
           <span>{trend}</span>
         </div>
       )}
-    </Component>
+    </>
   );
+
+  if (href) {
+    return <Link href={href as Route} className={tileClass}>{body}</Link>;
+  }
+  return <Component onClick={onClick} className={tileClass}>{body}</Component>;
 }

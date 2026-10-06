@@ -130,12 +130,15 @@ export function useAllContacts() {
       const employeesData = employeesRes.data ?? [];
 
       const fromLeads: UnifiedContact[] = leadsData
-        .filter((l) => !l.is_junk && (l.contact_name || l.contact_email || l.contact_phone))
+        /* R-135 (3 Oct 2026): a lead saved with only a company name ("demo", Won) was hidden
+           from the book — Customers and Vendors already fell back to the company name, Leads
+           did not. Same rule now: the company stands in for a missing person's name. */
+        .filter((l) => !l.is_junk && (l.contact_name || l.contact_email || l.contact_phone || l.company))
         .map((l) => ({
           id:        `lead:${l.id}`,
           source:    "lead" as const,
           refId:     l.id,
-          name:      l.contact_name,
+          name:      l.contact_name || l.company,
           email:     l.contact_email,
           phone:     l.contact_phone,
           company:   l.company,

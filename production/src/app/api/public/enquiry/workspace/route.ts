@@ -35,6 +35,7 @@
  */
 import { addDaysISO, istToday } from "@/lib/dates/ist";
 import { NextResponse, type NextRequest } from "next/server";
+import { turnstileRefusal } from "@/lib/security/turnstile-guard";
 import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -82,11 +83,23 @@ const enquirySchema = z.object({
   state:       z.string().max(60).optional(),
   /** A free-trial request from the site's trial form: no owner alert (owner, 30 Sep 2026). */
   trial:       z.boolean().optional(),
+  /** R-157: the visitor took the "30+ users, ₹1,650 first year" Starter offer (ad page). */
+  offer:       z.enum(["starter-30"]).optional(),
 });
+
+/** The page the form was sent from, for the lead note ("/lp/google-workspace-1"), else null. */
+function pagePath(body: unknown): string | null {
+  const raw = (body as { pageUrl?: unknown } | null)?.pageUrl;
+  if (typeof raw !== "string" || !raw) return null;
+  try { return new URL(raw, "https://anutech.in").pathname.slice(0, 120); } catch { return null; }
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    /* R-020: a bot is refused here; a no-op until TURNSTILE_SECRET_KEY is set. */
+    const botRefusal = await turnstileRefusal(request.headers, body);
+    if (botRefusal) return botRefusal;
     const parsed = enquirySchema.safeParse(body);
 
     if (!parsed.success) {
@@ -96,7 +109,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { fullName, companyName, email, phone, seats, tierId, billing, message, stateCode, state, trial } = parsed.data;
+    const { fullName, companyName, email, phone, seats, tierId, billing, message, stateCode, state, trial, offer } = parsed.data;
 
     const admin = createAdminClient();
 
@@ -128,8 +141,12 @@ export async function POST(request: NextRequest) {
        banega usi ka sach. */
     const value     = chosen.subtotal;
 
+    /* R-157: say where it really came from (landing pages, /trial and /quote all post here),
+       and what was asked — a trial or the first-year offer are not a plain price request. */
     const leadNotes = [
-      `Submitted via /buy/workspace`,
+      `Submitted via ${pagePath(body) ?? "the website"}`,
+      trial ? "Asked for the free 14-day trial — set the trial up, do not send a price first." : null,
+      offer === "starter-30" ? "Asked for the 30+ users first-year offer (₹1,650/user, new account) — needs Google's approval before it is quoted." : null,
       `Billing preference: ${billing}`,
       message ? `Message: ${message}` : null,
     ].filter(Boolean).join("\n");
@@ -144,8 +161,8 @@ export async function POST(request: NextRequest) {
       plan:          planLabel,
       seats,
       value,
-      stage:         "new",
-      source:        "buy-workspace",
+      stage:         trial ? "trial" : "new",
+      source:        trial ? "website-trial" : "buy-workspace",
       // Migration 0232 — inbound attribution. Nulls when nothing was captured.
       ...captureFromRequest(request, body as Record<string, unknown>),
       notes:         leadNotes,
@@ -302,7 +319,13 @@ export async function POST(request: NextRequest) {
         .filter((a): a is string => !!a)
         .map((a) => a.trim().toLowerCase());
 
-      if (wantFlex && !usingFlex) {
+      if (trial) {
+        /* R-157: someone who asked for a free trial was emailed a full-price quotation. */
+        holdReason = "this is a free-trial request — set the trial up first; send the price when they decide to buy";
+      } else if (offer === "starter-30") {
+        /* The offer price needs Google's approval per account, so the list-price draft must not go out as the answer. */
+        holdReason = "the visitor asked for the 30+ users first-year offer — get Google's approval, then reprice the draft at the offer rate";
+      } else if (wantFlex && !usingFlex) {
         /* The one hold that remains: flex was asked for and the catalogue has no flexible
            price for this tier — the draft on file is ANNUAL-priced, so a person must
            reprice it. Sending it unattended would put a commitment the visitor declined

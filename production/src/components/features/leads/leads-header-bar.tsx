@@ -12,9 +12,11 @@ export interface LeadsHeaderBarProps {
   /** /deals gets its own title — it holds only real deals (quote → won / lost). */
   isDealsPage?: boolean;
   setAddOpen: (open: boolean) => void;
+  /** Opens the 4-field Quick add (R-099). Leads page only — /deals adds deals, not raw leads. */
+  setQuickOpen?: (open: boolean) => void;
 }
 
-export function LeadsHeaderBar({ salesTab, isDealsPage = false, setAddOpen }: LeadsHeaderBarProps) {
+export function LeadsHeaderBar({ salesTab, isDealsPage = false, setAddOpen, setQuickOpen }: LeadsHeaderBarProps) {
   return (
     <>
       {/* Top App Bar — sticky, so the primary action never scrolls away.
@@ -60,7 +62,15 @@ export function LeadsHeaderBar({ salesTab, isDealsPage = false, setAddOpen }: Le
             )}
           </div>
 
-          {/* Primary action — top-right, and sticky with this bar. */}
+          {/* Primary action — top-right, and sticky with this bar. Quick add sits beside it
+              (Pardeep, 2 Oct 2026: the phone-is-enough form should be on this page, not only
+              behind the top-bar panel and Ctrl+K). */}
+          <div className="flex shrink-0 items-center gap-2">
+          {!isDealsPage && setQuickOpen && (
+            <Button size="sm" icon="zap" onClick={() => setQuickOpen(true)}>
+              Quick add
+            </Button>
+          )}
           <Button
             variant="primary"
             icon="plus"
@@ -70,6 +80,7 @@ export function LeadsHeaderBar({ salesTab, isDealsPage = false, setAddOpen }: Le
           >
             {salesTab === "raw" ? "Add lead" : "Add deal"}
           </Button>
+          </div>
         </div>
 
 

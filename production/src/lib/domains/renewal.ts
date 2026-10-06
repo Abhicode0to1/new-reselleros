@@ -27,6 +27,7 @@ import { grossAmount } from "@/lib/quotes/amounts";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { rcConfigured, rcTldPricing } from "@/lib/resellerclub";
 import { splitDomain } from "@/lib/domains/live-lookup";
+import { domainLineYears, isDomainPurchaseLine } from "@/lib/provisioning/products";
 import { istToday, toIstDate, utcDateISO } from "@/lib/dates/ist";
 
 type SupabaseAdmin = SupabaseClient<Database>;
@@ -59,33 +60,38 @@ export function expiryEpochSeconds(expiresAt: string | null | undefined): number
 
 export interface DomainSubscriptionRow {
   domain: string;
-  /** ₹ per month for MRR reporting: what was paid for the year ÷ 12. 0 for a bundled domain. */
+  /** ₹ per month for MRR reporting: what was paid for the term ÷ its months. 0 for a bundled domain. */
   mrr: number;
+  /** R-156: the registration term paid for. The first renewal falls due this many years out. */
+  years?: number;
 }
 
 /**
  * The domains a paid quote bought, each becoming one yearly subscription. Read from
  * the quote's lines, which name their domain since 24 Sep 2026 (`line.domain`).
  */
-export function domainSubscriptionsToCreate(lineItems: unknown): DomainSubscriptionRow[] {
+export function domainSubscriptionsToCreate(lineItems: unknown, domainItemIds?: ReadonlySet<string>): DomainSubscriptionRow[] {
   if (!Array.isArray(lineItems)) return [];
   const out: DomainSubscriptionRow[] = [];
   const seen = new Set<string>();
   for (const l of lineItems) {
-    if (!l || typeof l !== "object") continue;
-    // A hosting line names the domain its account sits on, not a domain bought (R-032).
-    if (typeof (l as { hostingPlan?: unknown }).hostingPlan === "string") continue;
+    /* Only a domain BOUGHT: a hosting line names the domain its account sits on (R-032), and
+       a Workspace line the domain its seats run on (3 Oct 2026) — neither is a domain sale. */
+    if (!isDomainPurchaseLine(l, domainItemIds)) continue;
     const line = l as { domain?: unknown; rate?: unknown; qty?: unknown };
     const domain = typeof line.domain === "string" ? line.domain.trim().toLowerCase() : "";
     if (!domain || seen.has(domain) || !splitDomain(domain)) continue;
     seen.add(domain);
-    const yearly = Math.max(0, Number(line.rate) || 0) * Math.max(1, Number(line.qty) || 1);
-    out.push({ domain, mrr: Math.round(yearly / 12) });
+    /* line.rate is the whole term's price since R-156 (a 3-year line carries 3 years), so
+       MRR spreads it over the term's months, not over twelve. */
+    const years = domainLineYears(l);
+    const paid = Math.max(0, Number(line.rate) || 0) * Math.max(1, Number(line.qty) || 1);
+    out.push({ domain, mrr: Math.round(paid / (12 * years)), years });
   }
   return out;
 }
 
-/** The subscription row for a newly bought domain: one year from today, renewing yearly. */
+/** The subscription row for a newly bought domain: due when its paid term ends, then renewing yearly. */
 export function domainSubscriptionInsert(input: {
   tenantId: string;
   customerId: string;
@@ -95,7 +101,7 @@ export function domainSubscriptionInsert(input: {
 }): Database["public"]["Tables"]["subscriptions"]["Insert"] {
   const start = new Date(`${input.today}T00:00:00Z`);
   const renewal = new Date(start);
-  renewal.setUTCFullYear(renewal.getUTCFullYear() + 1);
+  renewal.setUTCFullYear(renewal.getUTCFullYear() + Math.max(1, Math.min(10, input.row.years ?? 1)));
   return {
     tenant_id: input.tenantId,
     customer_id: input.customerId,

@@ -6,6 +6,7 @@ const V = (id: string, name: string): VendorRow => ({
   id, tenant_id: "t1", name, gstin: null, pan: null, contact_name: null, contact_email: null,
   contact_phone: null, default_category: null, address: null, city: null, state: null,
   pincode: null, udyam: null, msme_category: null, notes: null, created_at: "", updated_at: "",
+  bank_account_name: null, bank_account_no: null, bank_ifsc: null, upi_id: null,
 });
 
 describe("rollupVendors", () => {

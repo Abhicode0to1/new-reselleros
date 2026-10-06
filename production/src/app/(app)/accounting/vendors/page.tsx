@@ -39,6 +39,7 @@ import { VENDOR_BILL_CATEGORIES } from "@/lib/queries/vendor-bills";
 import { rupee, formatDate, GST_STATE_BY_CODE, gstStateFromGstin, foreignAmount, formatForeignAmount } from "@/lib/utils";
 import { newestFirst } from "@/lib/sort/newest-first";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
+import { IFSC_RE, ACCOUNT_RE, UPI_RE, cleanAccountNo, cleanIfsc } from "@/lib/payables/payment-run";
 import { panFromGstin, isPan, deducteeTypeFromPan, DEDUCTEE_LABEL } from "@/lib/accounting/tds-deductor";
 import { UDYAM_RE } from "@/lib/accounting/msme";
 import { toast } from "sonner";
@@ -332,6 +333,14 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
   const [udyam, setUdyam] = React.useState(vendor?.udyam ?? "");
   const [msmeCategory, setMsmeCategory] = React.useState<"micro" | "small" | "medium" | "">(vendor?.msme_category ?? "");
   const udyamBad = !!udyam.trim() && !UDYAM_RE.test(udyam.trim().toUpperCase());
+  /* Bank details (R-163): payment runs write the bank's bulk file from these. */
+  const [bankName, setBankName] = React.useState(vendor?.bank_account_name ?? "");
+  const [bankNo, setBankNo] = React.useState(vendor?.bank_account_no ?? "");
+  const [bankIfsc, setBankIfsc] = React.useState(vendor?.bank_ifsc ?? "");
+  const [upiId, setUpiId] = React.useState(vendor?.upi_id ?? "");
+  const bankNoBad = !!bankNo.trim() && !ACCOUNT_RE.test(cleanAccountNo(bankNo));
+  const ifscBad = !!bankIfsc.trim() && !IFSC_RE.test(cleanIfsc(bankIfsc));
+  const upiBad = !!upiId.trim() && !UPI_RE.test(upiId.trim());
   const [notes, setNotes] = React.useState(() => {
     if (!vendor?.notes) return "";
     return vendor.notes.replace(/\[Supplied Products: .*?\]/, "").trim();
@@ -369,6 +378,12 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
       });
       return;
     }
+    if (bankNoBad || ifscBad || upiBad || (!!bankNo.trim() !== !!bankIfsc.trim())) {
+      toast.error("Bank details are not complete", {
+        description: bankNo.trim() && !bankIfsc.trim() ? "Add the IFSC with the account number." : !bankNo.trim() && bankIfsc.trim() ? "Add the account number with the IFSC." : "Check the account number, IFSC or UPI ID.",
+      });
+      return;
+    }
     try {
       const prodTagStr = selectedProducts.length > 0 ? `[Supplied Products: ${selectedProducts.join(", ")}]` : "";
       const cleanNotes = notes.trim();
@@ -383,6 +398,7 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
         /* Category Udyam ke bina nahi (DB bhi yahi kehta hai). */
         msmeCategory: udyam.trim() && msmeCategory ? msmeCategory : null,
         notes: finalNotes || null,
+        bank: { accountName: bankName || null, accountNo: bankNo || null, ifsc: bankIfsc || null, upiId: upiId || null },
       });
       onClose();
     } catch { /* hook toasts */ }
@@ -428,6 +444,25 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
             </FormField>
           </div>
           <GstinVerifyCard gstin={gstin} noPersist onFillForm={fillFromGst} />
+
+          {/* Bank details — used by Payment runs to write the bank's bulk-upload file. */}
+          <div className="space-y-2 p-3 border border-hairline rounded-xl">
+            <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Bank details (for payment runs)</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <FormField htmlFor="vendors-bank-name" label="Account holder name">
+                <Input id="vendors-bank-name" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="As on the cheque" />
+              </FormField>
+              <FormField htmlFor="vendors-bank-no" label="Account number" hint={bankNoBad ? "6–18 digits" : undefined}>
+                <Input id="vendors-bank-no" value={bankNo} onChange={(e) => setBankNo(e.target.value)} inputMode="numeric" autoComplete="off" placeholder="e.g. 50200012345678" className="font-mono" />
+              </FormField>
+              <FormField htmlFor="vendors-bank-ifsc" label="IFSC" hint={ifscBad ? "11 characters, 5th is 0 — e.g. HDFC0001234" : undefined}>
+                <Input id="vendors-bank-ifsc" value={bankIfsc} onChange={(e) => setBankIfsc(e.target.value.toUpperCase())} maxLength={11} placeholder="HDFC0001234" className="font-mono uppercase" />
+              </FormField>
+              <FormField htmlFor="vendors-upi" label="UPI ID (if no account)" hint={upiBad ? "e.g. name@okhdfcbank" : undefined}>
+                <Input id="vendors-upi" value={upiId} onChange={(e) => setUpiId(e.target.value.trim())} placeholder="name@okhdfcbank" />
+              </FormField>
+            </div>
+          </div>
 
           {/* Products & Services Supplied Selection */}
           <div className="space-y-1.5 p-3 bg-paper-2/60 border border-hairline rounded-xl">

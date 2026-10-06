@@ -12,11 +12,13 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { CUSTOMER_VIEWS } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
-import { useProjectReceivablesByCustomer, useProjectSales } from "@/lib/queries/projects";
+import { useProjectReceivablesByCustomer, useProjectSales, useReceivedThisFyByCustomer } from "@/lib/queries/projects";
 import { customerPortfolioStatus, countsAsNoBusiness, projectValue, type ProjectLike } from "@/lib/customers/portfolio-status";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useOutstandingReceivables } from "@/lib/queries/payments";
@@ -51,13 +53,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { rupee, cn, cleanDisplayName, phoneSuffixOf } from "@/lib/utils";
+import { missingInvoiceState } from "@/lib/gst/gstin-state";
 
 // Saved-view segments (Zoho-style) — compact filters over already-loaded data
 // (receivables + unused credit + subscriptions).
 /* R-005: `projects` joined this in Sep 2026. A reseller who also sells custom software
    had those customers reading as dead accounts, because every filter here asked only
    about subscriptions. */
-type ViewCtx = { amount: number; credit: number; hasSub: boolean; projects: readonly ProjectLike[] };
+type ViewCtx = { amount: number; credit: number; hasSub: boolean; projects: readonly ProjectLike[]; received: number; noState: boolean };
 const VIEW_DEFS: { id: string; label: string; test: (x: ViewCtx) => boolean }[] = [
   { id: "all",        label: "All",              test: () => true },
   { id: "unpaid",     label: "Has receivables",  test: (x) => x.amount > 0 },
@@ -67,6 +70,11 @@ const VIEW_DEFS: { id: string; label: string; test: (x: ViewCtx) => boolean }[] 
      `countsAsNoBusiness` is the tested rule, shared with the row pill. */
   { id: "nosub",      label: "No business",      test: (x) => countsAsNoBusiness({ hasActiveSub: x.hasSub, projects: x.projects }) },
   { id: "credit",     label: "Has credit",       test: (x) => x.credit > 0 },
+  /* R-118: the "Received (this FY)" figure's own customers — the tile had no list to open. */
+  { id: "received",   label: "Paid this FY",     test: (x) => x.received > 0 },
+  /* R-166: tax invoices refuse these ("no state on record") — 17 live customers on 6 Oct.
+     Same rule as generate_invoice (missingInvoiceState). Editing in a state clears it. */
+  { id: "nostate",    label: "State missing",    test: (x) => x.noState },
 ];
 
 // Columns tuned for a reseller: who they are (name + who-to-call folded in) ·
@@ -79,7 +87,7 @@ const CUST_COL_WIDTHS = ["3%", "27%", "13%", "12%", "13%", "16%", "12%", "4%"];
 
 /* "recent" is the DEFAULT — see lib/sort/newest-first.ts. The record you just created
    must be the first thing you see, on every table. */
-type SortKey = "recent" | "name" | "mrr" | "receivables" | "credits";
+type SortKey = "recent" | "name" | "mrr" | "receivables" | "credits" | "received";
 
 // Stable per-customer avatar colour so the list is scannable by shape/colour.
 const AVATAR_COLORS = ["amber", "indigo", "slate", "emerald", "ink", "muted"] as const;
@@ -118,6 +126,8 @@ export default function CustomersPage() {
   const { data: outstanding } = useOutstandingReceivables();
   const { data: creditsByCustomer = {} } = useOpenCreditsByCustomer();
   const { data: projRecv = {} } = useProjectReceivablesByCustomer();
+  /* R-005: money actually received this FY — payments + project payments, TDS included. */
+  const { data: receivedBy = {} } = useReceivedThisFyByCustomer();
   /* R-005. Already fetched for the Project Sales page, so this is a cache hit in
      practice rather than a new round trip. */
   const { data: allProjects } = useProjectSales();
@@ -187,7 +197,7 @@ export default function CustomersPage() {
   const clearPicked = () => setPickedIds(new Set());
 
   const [helpOpen, setHelpOpen] = React.useState(false);
-  const [view, setView] = React.useState("all");
+  const [view, setView] = useUrlChoice<string>("view", CUSTOMER_VIEWS, "all"); // R-118
   // Archived (is_active=false) customers are hidden by default; this toggle
   // swaps the whole list to show ONLY archived ones (Zoho-style status filter).
   const [showArchived, setShowArchived] = React.useState(false);
@@ -231,11 +241,11 @@ export default function CustomersPage() {
     const m: Record<string, number> = Object.fromEntries(VIEW_DEFS.map((v) => [v.id, 0]));
     for (const c of customersByWorkspace) {
       const out = outstandingByCustomer.get(c.id);
-      const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS };
+      const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS, received: receivedBy[c.id]?.total ?? 0, noState: missingInvoiceState(c) };
       for (const v of VIEW_DEFS) if (v.test(ctx)) m[v.id]++;
     }
     return m;
-  }, [customersByWorkspace, outstandingByCustomer, creditsByCustomer, subsByCustomer, projectsByCustomer, NO_PROJECTS]);
+  }, [customersByWorkspace, outstandingByCustomer, creditsByCustomer, subsByCustomer, projectsByCustomer, NO_PROJECTS, receivedBy]);
 
   /* Who serves which customers, so the search box below can find a customer by the
      person rather than only by the company. One fetch, shared with Subscriptions
@@ -248,7 +258,7 @@ export default function CustomersPage() {
     // Active by default; the Archived toggle swaps to show only inactive ones.
     if ((c.is_active === false) !== showArchived) return false;
     const out = outstandingByCustomer.get(c.id);
-    const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS };
+    const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS, received: receivedBy[c.id]?.total ?? 0, noState: missingInvoiceState(c) };
     if (!activeView.test(ctx)) return false;
     if (!search.trim()) return true;
     const s = search.toLowerCase().trim();
@@ -276,8 +286,9 @@ export default function CustomersPage() {
     if (key === "mrr") return subsByCustomer.get(c.id)?.mrr ?? 0;
     if (key === "receivables") return outstandingByCustomer.get(c.id)?.amount ?? 0;
     if (key === "credits") return creditsByCustomer[c.id] ?? 0;
+    if (key === "received") return receivedBy[c.id]?.total ?? 0;
     return (c.display_name || c.name).toLowerCase();
-  }, [subsByCustomer, outstandingByCustomer, creditsByCustomer]);
+  }, [subsByCustomer, outstandingByCustomer, creditsByCustomer, receivedBy]);
 
   const sorted = React.useMemo(() => {
     /* The default. Kept out of `sortVal` because that returns a number-or-string for a
@@ -440,6 +451,7 @@ export default function CustomersPage() {
   const totalMRR = customersByWorkspace.reduce((sum, c) => sum + (subsByCustomer.get(c.id)?.mrr ?? 0), 0);
   const totalARR = totalMRR * 12;
   const totalReceivables = customersByWorkspace.reduce((sum, c) => sum + (outstandingByCustomer.get(c.id)?.amount ?? 0), 0);
+  const totalReceived = customersByWorkspace.reduce((sum, c) => sum + (receivedBy[c.id]?.total ?? 0), 0);
 
   /* Contract value of WON project work across the portfolio (R-005). */
   const totalProjectValue = React.useMemo(
@@ -449,9 +461,17 @@ export default function CustomersPage() {
 
   const stats: React.ComponentProps<typeof StatStrip>["items"] = [];
   if (!isLoading && customers) {
-    stats.push({ label: "Customers", value: total });
-    if (totalMRR > 0) stats.push({ label: "Monthly revenue", value: rupee(totalMRR, { compact: true }) });
-    if (totalARR > 0) stats.push({ label: "Yearly revenue", value: rupee(totalARR, { compact: true }) });
+    stats.push({ label: "Customers", value: total, onClick: () => setView("all"), active: view === "all" });
+    /* R-005: these are subscription MRR / ARR only. Named "Monthly / Yearly revenue" they
+       read as total income — a customer who paid ₹11.8L for a project showed ₹0 in all of them. */
+    /* R-118: subsByCustomer holds ACTIVE subscriptions only, and "With subscriptions" tests
+       exactly that map — so these two open the customers whose MRR they add up. */
+    stats.push({ label: "Recurring monthly (subscriptions)", value: rupee(totalMRR, { compact: true }),
+      onClick: () => setView("subscribed"), active: view === "subscribed" });
+    stats.push({ label: "Recurring yearly (subscriptions)", value: rupee(totalARR, { compact: true }),
+      onClick: () => setView("subscribed") });
+    stats.push({ label: "Received (this FY)", value: rupee(totalReceived, { compact: true }), tone: "emerald",
+      onClick: () => setView("received"), active: view === "received" });
     /* R-005. Kept OUT of Monthly/Yearly revenue on purpose — those are recurring
        figures, and a one-off build is not recurring. Folding a ₹10.8L ERP into "Yearly
        revenue" would make the next year's forecast wrong by the whole amount. Won
@@ -548,27 +568,27 @@ export default function CustomersPage() {
 
           {kpiOpen && (
             <div className="p-3 border-t border-hairline bg-paper">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total Customers</p>
-                  <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{total}</p>
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Monthly Revenue</p>
-                  <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalMRR, { compact: true })}</p>
-                </div>
-                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Yearly Revenue</p>
-                  <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(totalARR, { compact: true })}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setView("unpaid")}
-                  className="bg-paper-2/40 border border-hairline hover:border-rose/60 transition-colors rounded-lg p-3 text-left cursor-pointer"
-                >
-                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">To Collect (Unpaid)</p>
-                  <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{rupee(totalReceivables, { compact: true })}</p>
-                </button>
+              {/* Built from `stats` (R-005). A redesign hardcoded four tiles here and the
+                  "Project value" tile added to `stats` silently stopped showing. */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                {stats.map((t) => {
+                  const tone = t.tone === "rose" ? "text-rose-600" : t.tone === "emerald" ? "text-emerald" : "text-ink";
+                  const body = (
+                    <>
+                      <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">{t.label}</p>
+                      <p className={cn("font-serif text-lg font-bold tabular-nums mt-0.5", tone)}>{t.value}</p>
+                    </>
+                  );
+                  return t.onClick ? (
+                    <button key={t.label} type="button" onClick={t.onClick}
+                      className={cn("bg-paper-2/40 border rounded-lg p-3 text-left cursor-pointer transition-colors",
+                        t.active ? "border-amber" : "border-hairline hover:border-amber/60")}>
+                      {body}
+                    </button>
+                  ) : (
+                    <div key={t.label} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">{body}</div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -577,7 +597,7 @@ export default function CustomersPage() {
 
       {/* Sticky Segment chips + search */}
       {!isLoading && customers && customers.length > 0 && !selectedId && (
-        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-2.5">
+        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-2.5">
           <div className="flex justify-between items-center gap-3 flex-wrap sm:flex-nowrap">
             <div className="w-full sm:w-64 shrink-0">
               <Input
@@ -760,6 +780,8 @@ export default function CustomersPage() {
                             ? null
                             : <Badge kind={m.kind} size="sm" dot={m.dot}>{m.label}</Badge>;
                         })()}
+                        {/* R-166: same warning as the desktop Place of supply cell. */}
+                        {missingInvoiceState(c) && <Badge kind="warning" size="sm">State missing</Badge>}
                       </div>
                       <p className="text-2xs text-ink-3 truncate mt-0.5">
                         {customerSubline(c) || "—"}
@@ -773,6 +795,9 @@ export default function CustomersPage() {
                     <span className="text-ink-3">
                       To collect <b className={receivable > 0 ? "text-rose" : "text-ink-2"}>{rupee(receivable)}</b>
                       {receivable > 0 && days > 0 && <span className={days > 45 ? "text-rose" : "text-ink-3"}> · {days}d overdue</span>}
+                      {(receivedBy[c.id]?.total ?? 0) > 0 && (
+                        <span> · Received <b className="text-emerald">{rupee(receivedBy[c.id]!.total, { compact: true })}</b></span>
+                      )}
                     </span>
                     <div className="flex items-center gap-2">
                       {c.contact_phone && (
@@ -845,6 +870,7 @@ export default function CustomersPage() {
                     <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
                     <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Place of supply</th>
                     <SortHead label="Monthly"         sortKey="mrr"         sort={sort} onSort={toggleSort} align="right" />
+                    <SortHead label="Received (FY)"   sortKey="received"    sort={sort} onSort={toggleSort} align="right" />
                     <SortHead label="To collect"      sortKey="receivables" sort={sort} onSort={toggleSort} align="right" />
                     <SortHead label="Unused credits"  sortKey="credits"     sort={sort} onSort={toggleSort} align="right" />
                     <th className="px-2 py-2.5"><span className="sr-only">Actions</span></th>
@@ -912,11 +938,24 @@ export default function CustomersPage() {
                         <td className="px-3 py-2.5">
                           <Badge kind={st.kind} size="sm" dot={st.dot}>{st.label}</Badge>
                         </td>
-                        <td className="px-3 py-2.5 text-sm text-ink-2 truncate">{c.state || <span className="text-ink-3">N/A</span>}</td>
+                        <td className="px-3 py-2.5 text-sm text-ink-2 truncate">{missingInvoiceState(c)
+                          ? <Badge kind="warning" size="sm" title="Tax invoice will not issue until a state is chosen — Edit the customer">{c.state ? `${c.state} · no code` : "State missing"}</Badge>
+                          : (c.state || <span className="text-ink-3">N/A</span>)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums">
                           {mrr > 0
                             ? <span className="text-sm font-medium text-ink">{rupee(mrr, { compact: true })}<span className="text-2xs text-ink-3">/mo</span></span>
                             : <span className="text-sm text-ink-3">{rupee(0)}</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">
+                          {(receivedBy[c.id]?.total ?? 0) > 0 ? (
+                            <span
+                              className="text-sm font-medium text-emerald"
+                              title={receivedBy[c.id]!.tds > 0 ? `of which TDS ${rupee(receivedBy[c.id]!.tds)}` : undefined}
+                            >
+                              {rupee(receivedBy[c.id]!.total)}
+                              {receivedBy[c.id]!.tds > 0 && <span className="block text-2xs text-ink-3 font-normal">incl. TDS {rupee(receivedBy[c.id]!.tds)}</span>}
+                            </span>
+                          ) : <span className="text-sm text-ink-3">{rupee(0)}</span>}
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">
                           {receivable > 0 ? (

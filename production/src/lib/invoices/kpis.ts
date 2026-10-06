@@ -35,28 +35,48 @@ export function invoiceBalance(inv: KpiInvoice): number {
   return Math.max(0, (inv.net_payable ?? inv.amount) - (inv.paid_amount ?? 0));
 }
 
+/**
+ * R-118: the exact set behind each money tile, so a click on the tile lists the same invoices
+ * the tile added up. "" = no focus. The tiles below are computed WITH these predicates, so
+ * the number and the list cannot drift apart.
+ */
+export const INVOICE_FOCI = ["", "unpaid", "paid-month"] as const;
+export type InvoiceFocus = (typeof INVOICE_FOCI)[number];
+export const INVOICE_FOCUS_LABEL: Record<Exclude<InvoiceFocus, "">, string> = {
+  "unpaid": "Outstanding — still owed (pending, partial and overdue)",
+  "paid-month": "Paid this month — fully paid in this IST month",
+};
+
+export function invoiceInFocus(inv: KpiInvoice, focus: InvoiceFocus, now: Date = new Date()): boolean {
+  if (focus === "") return true;
+  if (focus === "unpaid") return invoiceBalance(inv) > 0;
+  return inv.status === "paid" && !!inv.paid_date && inv.paid_date.slice(0, 7) === istMonth(now);
+}
+
 export interface InvoiceKpis {
   outstanding: number;
   overdueTotal: number;
   /** Invoices fully paid this IST month, by `paid_date`, at their full value. */
   paidThisMonth: number;
   paidThisMonthCount: number;
+  /** Invoices with something still owed — the Outstanding tile's count. */
+  outstandingCount: number;
 }
 
 export function invoiceKpis(invoices: KpiInvoice[], now: Date = new Date()): InvoiceKpis {
   const today = istToday(now);
-  const month = istMonth(now);
-  let outstanding = 0, overdueTotal = 0, paidThisMonth = 0, paidThisMonthCount = 0;
+  let outstanding = 0, overdueTotal = 0, paidThisMonth = 0, paidThisMonthCount = 0, outstandingCount = 0;
   for (const inv of invoices) {
     const bal = invoiceBalance(inv);
     outstanding += bal;
+    if (invoiceInFocus(inv, "unpaid", now)) outstandingCount += 1;
     if (invoiceIsOverdue(inv, today)) overdueTotal += bal;
-    if (inv.status === "paid" && inv.paid_date && inv.paid_date.slice(0, 7) === month) {
+    if (invoiceInFocus(inv, "paid-month", now)) {
       paidThisMonth += inv.amount;
       paidThisMonthCount += 1;
     }
   }
-  return { outstanding, overdueTotal, paidThisMonth, paidThisMonthCount };
+  return { outstanding, overdueTotal, paidThisMonth, paidThisMonthCount, outstandingCount };
 }
 
 /** The ids of the status chips on /invoices, in display order. Every invoice lands in

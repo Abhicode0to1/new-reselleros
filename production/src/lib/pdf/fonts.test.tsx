@@ -130,3 +130,16 @@ describe("ASLI SABOOT — bane hue PDF ke bytes", () => {
     expect(b.length).toBeGreaterThan(15_000);
   }, 60_000);
 });
+
+describe("italic text pura document nahi girata (6 Oct 2026)", () => {
+  /* Staging: invoice ke line items khaali aaye to "No line items." wali italic row chhapi,
+     aur "Could not resolve font for ResellerSans, fontStyle italic" se PURA PDF 500 ho gaya.
+     Ye wahi raasta hai — khaali lineItems = emptyRow, jo italic hai. */
+  it("khaali line items wala quote bhi PDF banta hai", async () => {
+    const { renderToBuffer } = await import("@react-pdf/renderer");
+    const b = await renderToBuffer(
+      <QuotePDF {...base} lineItems={[]} /> as unknown as Parameters<typeof renderToBuffer>[0],
+    );
+    expect(b.subarray(0, 5).toString()).toBe("%PDF-");
+  }, 60_000);
+});

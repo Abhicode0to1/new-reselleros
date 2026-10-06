@@ -145,7 +145,7 @@ const DEFAULT_CATALOG: CatalogEntry[] = [
     },
   },
   {
-    id: "GW-STD", name: "Google Workspace Standard", vendor: "google", kind: "main",
+    id: "GW-STD", name: "Google Workspace Business Standard", vendor: "google", kind: "main",
     msrp: 736, wholesale: 620,
     prices: {
       monthly: { msrp: 920, wholesale: 780 },
@@ -153,7 +153,7 @@ const DEFAULT_CATALOG: CatalogEntry[] = [
     },
   },
   {
-    id: "GW-PLS", name: "Google Workspace Plus", vendor: "google", kind: "main",
+    id: "GW-PLS", name: "Google Workspace Business Plus", vendor: "google", kind: "main",
     msrp: 1380, wholesale: 1150,
     prices: {
       monthly: { msrp: 1725, wholesale: 1450 },

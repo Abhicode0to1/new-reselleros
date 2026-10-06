@@ -24,12 +24,14 @@ export type WorkspaceTierId = "starter" | "standard" | "plus" | "enterprise";
 
 /**
  * Last-resort ₹/user/month — used only on catalog-miss. Kept in sync with the
- * real Google India prices the customer pays (Standard = 864, the current 20%-off
- * price of the ₹1080 list). Source of truth is still the catalog `items.msrp`.
+ * live catalogue (annual): Starter 270, Standard 1,080, Plus 1,380. R-157 (5 Oct 2026):
+ * Standard was 864 — an old 20%-off promo price that no longer exists, so a catalogue miss
+ * would have charged 20% less than every page shows. Enterprise has no list price; online
+ * checkout refuses it (quote only) and the enquiry route never auto-quotes it.
  */
 export const TIER_FALLBACK_MONTHLY: Record<WorkspaceTierId, number> = {
   starter:    270,
-  standard:   864,
+  standard:   1080,
   plus:       1380,
   enterprise: 2400,
 };

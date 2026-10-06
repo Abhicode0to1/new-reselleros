@@ -3,10 +3,22 @@ import Link from "@/site/components/ui/SiteLink";
 import { EditionTabs } from "@/site/components/email/EditionTabs";
 import { SectionHead, Reveal } from "@/site/components/ui/bits";
 import { PICK_GUIDES } from "@/site/lib/data/catalog";
+import { fetchLiveWorkspace, mergeEditions } from "@/site/lib/live-catalog";
 
 export const metadata: Metadata = { title: "Compare editions — GW, M365, Zoho" };
 
-export default function CompareEditionsPage() {
+/* Live prices, re-read every 10 minutes — the same figures /email and checkout use. */
+export const revalidate = 600;
+
+export default async function CompareEditionsPage() {
+  const editions = mergeEditions(await fetchLiveWorkspace());
+  const rate = (name: string) => {
+    const e = editions.find((x) => x.name === name);
+    return e ? `₹${Math.round(e.annual).toLocaleString("en-IN")}/mo` : "—";
+  };
+  const prices = {
+    "Google Workspace": [rate("GW Business Starter"), rate("GW Business Standard"), rate("GW Business Plus")] as const,
+  };
   return (
     <>
       <section className="section rise">
@@ -20,7 +32,7 @@ export default function CompareEditionsPage() {
               recommendation for six common situations underneath.
             </p>
           </div>
-          <EditionTabs />
+          <EditionTabs prices={prices} />
         </div>
       </section>
 
@@ -43,7 +55,7 @@ export default function CompareEditionsPage() {
             ))}
           </div>
           <div style={{ display: "flex", gap: 12, marginTop: 30 }}>
-            <Link href="/email#calculator" className="btn btn-primary">Price it in the calculator</Link>
+            <Link href="/email#products" className="btn btn-primary">Price it in the calculator</Link>
             <Link href="/quote" className="btn btn-outline">Get a quote instead</Link>
           </div>
         </div>

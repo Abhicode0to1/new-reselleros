@@ -30,7 +30,7 @@ import {
 import { useAskText } from "@/components/providers/confirm-provider";
 import { cn } from "@/lib/utils";
 import {
-  sortRows, nextSort, toggleAllIds, toggleId, loadViews, saveView, deleteView, isViewActive,
+  sortRows, nextSort, toggleAllIds, toggleId, loadViews, saveView, deleteView, isViewActive, pagedCount,
   type SortState, type SortValue, type SavedView, type ViewStorage,
 } from "@/lib/table/data-table";
 
@@ -85,6 +85,13 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   /** Shown instead of the list when `rows` is empty. */
   empty?: React.ReactNode;
+  /**
+   * R-024: render this many rows, then "Load more". Sort and filters still run over every
+   * row (counts and totals stay exact); only the painting is paged. Omit to show all.
+   */
+  pageSize?: number;
+  /** A row that must be on screen (a deep link like ?open=INV-…) — the page grows to it. */
+  revealId?: string | null;
 }
 
 const SHOW_TABLE = { md: "hidden md:block", lg: "hidden lg:block", xl: "hidden xl:block" } as const;
@@ -96,7 +103,7 @@ function browserStorage(): ViewStorage | null {
 
 export function DataTable<T>({
   rows, columns, getRowId, totalCount, noun, selected, onSelectedChange, toolbar, views,
-  defaultSort = null, cardsBelow = "md", mobileCard, renderRow, onRowClick, empty,
+  defaultSort = null, cardsBelow = "md", mobileCard, renderRow, onRowClick, empty, pageSize, revealId,
 }: DataTableProps<T>) {
   const [sort, setSort] = React.useState<SortState | null>(defaultSort);
   const selectable = !!selected && !!onSelectedChange;
@@ -107,7 +114,22 @@ export function DataTable<T>({
     return sortRows(rows, col?.sortValue, sort.dir);
   }, [rows, columns, sort]);
 
-  const ids = React.useMemo(() => sorted.map(getRowId), [sorted, getRowId]);
+  /* Paging (R-024). A new filter or sort starts again at one page. */
+  const [limit, setLimit] = React.useState(pageSize ?? Infinity);
+  React.useEffect(() => { setLimit(pageSize ?? Infinity); }, [rows, sort, pageSize]);
+  const revealIndex = React.useMemo(
+    () => (revealId ? sorted.findIndex((r) => getRowId(r) === revealId) : -1),
+    [sorted, revealId, getRowId],
+  );
+  const shown = React.useMemo(
+    () => (pageSize ? sorted.slice(0, pagedCount(sorted.length, limit, revealIndex)) : sorted),
+    [sorted, pageSize, limit, revealIndex],
+  );
+  const hidden = sorted.length - shown.length;
+
+  /* Select-all covers the rows ON SCREEN — a tick that silently selected rows nobody can
+     see is how a bulk action goes wrong (same rule as the Customers list). */
+  const ids = React.useMemo(() => shown.map(getRowId), [shown, getRowId]);
   const allChecked = selectable && ids.length > 0 && ids.every((id) => selected!.has(id));
 
   const ctxFor = (row: T) => {
@@ -123,7 +145,7 @@ export function DataTable<T>({
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="text-xs text-ink-3">
-          Showing {rows.length}{totalCount !== undefined ? ` of ${totalCount}` : ""} {label}
+          Showing {shown.length}{hidden > 0 ? ` of ${rows.length}` : totalCount !== undefined ? ` of ${totalCount}` : ""} {label}
           {sort && (
             <button type="button" className="ml-2 text-amber-ink hover:underline" onClick={() => setSort(defaultSort)}>
               Clear sort
@@ -150,7 +172,7 @@ export function DataTable<T>({
                 Select all
               </li>
             )}
-            {sorted.map((row) => {
+            {shown.map((row) => {
               const { id, checked, toggle } = ctxFor(row);
               return (
                 <li key={id} className={cn(selectable && "flex items-start gap-2")}>
@@ -208,7 +230,7 @@ export function DataTable<T>({
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((row) => {
+                {shown.map((row) => {
                   const { id, checked, toggle } = ctxFor(row);
                   const checkboxCell = selectable ? (
                     <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
@@ -234,6 +256,15 @@ export function DataTable<T>({
               </tbody>
             </table>
           </Card>
+
+          {hidden > 0 && (
+            <div className="mt-3 flex flex-col items-center gap-1">
+              <Button onClick={() => setLimit((l) => (Number.isFinite(l) ? l : 0) + (pageSize ?? 50))}>
+                Load {Math.min(hidden, pageSize ?? 50)} more
+              </Button>
+              <span className="text-2xs text-ink-3">{hidden} more {label} below</span>
+            </div>
+          )}
         </>
       )}
     </div>

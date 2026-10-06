@@ -172,6 +172,30 @@ describe("retrying a transient failure", () => {
     expect(spy).toHaveBeenCalledTimes(2);
   });
 
+  it("asks the opt-in fallback model once when the main one is overloaded twice", async () => {
+    const urls: string[] = [];
+    const spy = vi.fn(async (url: string) => {
+      urls.push(url);
+      return url.includes("lite") ? ok('{"message":"from lite"}') : fail(503);
+    });
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson({ ...ARGS, fallbackModel: "gemini-lite-x" })).resolves.toEqual({ message: "from lite" });
+    expect(spy).toHaveBeenCalledTimes(3);
+    expect(urls[2]).toContain("models/gemini-lite-x:");
+  });
+
+  it("does not use the fallback for a non-overload failure, nor retry the fallback itself", async () => {
+    const spy500 = vi.fn(async () => fail(500));
+    vi.stubGlobal("fetch", spy500);
+    await expect(geminiJson({ ...ARGS, fallbackModel: "gemini-lite-x" })).resolves.toBeNull();
+    expect(spy500).toHaveBeenCalledTimes(2);
+
+    const spy503 = vi.fn(async () => fail(503));
+    vi.stubGlobal("fetch", spy503);
+    await expect(geminiJson({ ...ARGS, fallbackModel: "gemini-lite-x" })).resolves.toBeNull();
+    expect(spy503).toHaveBeenCalledTimes(3);           // main, retry, fallback — never a loop
+  });
+
   it("counts a retried call as ONE breaker failure, not two", async () => {
     /* THE BUG MY OWN CHANGE INTRODUCED, caught by the existing "resets the failure count"
        test before it shipped. Recording a failure on the way past AND on the retry made a

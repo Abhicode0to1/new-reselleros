@@ -8,8 +8,9 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { authjsMiddlewareSession } from "@/server/auth/middleware-session";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { allowedRoutesForRole, ROLE_HOME, type UserRole } from "@/lib/nav";
+import { isRouteAllowed, ROLE_HOME, type UserRole } from "@/lib/nav";
 import { rateLimitShared, clientIp, publicApiLimit } from "@/lib/security/rate-limit";
 
 // Routes that require authentication (the entire app shell).
@@ -17,7 +18,12 @@ import { rateLimitShared, clientIp, publicApiLimit } from "@/lib/security/rate-l
 // prefix must be added here for the auth gate + role guard to fire.
 const PROTECTED_PREFIXES = [
   "/dashboard",
+  "/learn",           // Apprentice Academy — the apprentice's own area (R-149)
+  "/academy",         // Apprentice Academy — staff side (R-149)
   "/today",           // S29 ranked inbox across every queue
+  "/ux-insights",     // UX observer findings (3 Oct 2026)
+  "/ui-insights",     // UI agent design scores (3 Oct 2026)
+  "/ai-entry",
   "/leads",
   "/deals",
   "/tasks",
@@ -146,7 +152,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const { response, user, role, canViewDeals } = await updateSession(request);
+  /* AUTH_PROVIDER=authjs: the session is Auth.js's (src/server/auth); same answers, same gates. */
+  const { response, user, role, canViewDeals, needsMfa } = process.env.AUTH_PROVIDER === "authjs"
+    ? await authjsMiddlewareSession(request)
+    : await updateSession(request);
   const isAuthed = !!user;
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   const isAuthPage = AUTH_PREFIXES.some((p) => pathname.startsWith(p));
@@ -170,6 +179,36 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  /* R-048 part 2: two-factor on, code not given yet → every app page (and the login/signup
+     bounce below, which would otherwise loop) goes to /mfa first. /mfa itself is neither
+     protected nor an auth page, so it never redirects to itself. */
+  if (isAuthed && needsMfa && (isProtected || isAuthPage)) {
+    const url = request.nextUrl.clone();
+    const target = isProtected ? pathname + request.nextUrl.search : "";
+    url.search = "";
+    url.pathname = "/mfa";
+    if (target) url.searchParams.set("next", target);
+    return NextResponse.redirect(url);
+  }
+
+  /* Apprentice Academy (R-149): an apprentice may use /learn and the academy API, nothing
+     else. The database already hides every company table from them (they have no
+     public.users row, so current_tenant_id() is null); this keeps them off staff pages and
+     off every other API route too, so no admin-client route can be reached by one. */
+  if (isAuthed && role === "apprentice") {
+    const apiOk = pathname.startsWith("/api/academy/") || pathname.startsWith("/api/auth/");
+    if (pathname.startsWith("/api/") && !apiOk) {
+      return NextResponse.json({ error: "Not available for apprentice accounts." }, { status: 403 });
+    }
+    if (isAuthPage || (isProtected && !pathname.startsWith("/learn"))) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/learn";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
   // Logged in → redirect away from auth pages, sending each role to its
   // own home page (sales lands on /leads, others on /dashboard).
   if (isAuthed && isAuthPage) {
@@ -184,10 +223,7 @@ export async function middleware(request: NextRequest) {
   // Owners + managers get the full app — no gate applied to them.
   if (isAuthed && isProtected && role && role !== "owner" && role !== "manager") {
     const userRole = role as UserRole;
-    const allowed = allowedRoutesForRole(userRole, { canViewDeals });
-    const isAllowedPath = allowed.some(
-      (a) => pathname === a || pathname.startsWith(a + "/"),
-    );
+    const isAllowedPath = isRouteAllowed(userRole, pathname, { canViewDeals });
     if (!isAllowedPath) {
       const url = request.nextUrl.clone();
       url.pathname = ROLE_HOME[userRole];
@@ -200,6 +236,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  /* Node.js, not Edge (5 Oct 2026): with the VM gone, the role lookup below runs through the
+     in-process data gateway (Prisma), which needs Node. Stable in Next 15.5. */
+  runtime: "nodejs",
   // Run on everything except static assets + Next internals
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",

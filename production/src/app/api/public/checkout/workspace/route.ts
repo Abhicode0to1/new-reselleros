@@ -26,6 +26,8 @@ import { addDaysISO, istToday } from "@/lib/dates/ist";
 import { NextResponse, type NextRequest } from "next/server";
 import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
+import { resolveStateCode, stateCodeFromName } from "@/lib/gst/gstin-state";
+import { GST_STATE_BY_CODE, isValidGstin } from "@/lib/utils";
 import Razorpay from "razorpay";
 import { createAdminClient } from "@/lib/supabase/server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
@@ -35,6 +37,8 @@ import { ownerPaymentAlertAllowed, storefrontVoice } from "@/lib/email/storefron
 import { buyPageTenantIdOrEmpty, simulatedPaymentAllowed } from "@/lib/checkout/live-guards";
 import { issueInvoiceForOnlinePayment } from "@/lib/checkout/online-invoice.server";
 import { publicDbError } from "@/app/api/public/_lib/db-error";
+import { customerSetupSteps, leadOwnerNextSteps } from "@/lib/email/workspace-onboarding";
+import { loadLeadOwner } from "@/lib/email/lead-owner.server";
 
 /* R-079: the hard-coded dev tenant only off production; "" (fails closed) when unset there. */
 const BUY_PAGE_TENANT_ID = buyPageTenantIdOrEmpty();
@@ -61,6 +65,8 @@ const checkoutSchema = z.object({
   domain:      z.string().min(3).max(120),
   tierId:      z.enum(["starter", "standard", "plus", "enterprise"]),
   gstin:       z.string().optional(),
+  /** R-173: GST place of supply ("07" or a state name). Required unless a valid GSTIN gives it. */
+  stateCode:   z.string().max(60).optional(),
   /** Optional coupon code. Validated + redeemed server-side via the
    *  redeem_coupon RPC AFTER the quote row exists, so the redemption row
    *  carries the quote_id linkage for the audit log. */
@@ -78,11 +84,12 @@ const checkoutSchema = z.object({
 // never charge a different price than enquiry/quote (audit fix #10).
 // (The enquiry route shares src/lib/pricing/workspace.ts; this in-file copy is
 // kept catalog-aligned — TODO: adopt the shared module here too for full DRY.)
+// R-157: Standard was 864 (an expired 20%-off promo). Enterprise is not sold online at all —
+// see the refusal in POST — so it has no fallback price here.
 const TIER_FALLBACK_MONTHLY: Record<string, number> = {
   starter:    270,
-  standard:   864,
+  standard:   1080,
   plus:       1380,
-  enterprise: 2400,
 };
 
 const TIER_DISPLAY_NAME: Record<string, string> = {
@@ -199,6 +206,38 @@ export async function POST(request: NextRequest) {
       );
     }
     const { fullName, companyName, email, phone, seats, domain, tierId, gstin, simulate, couponCode } = parsed.data;
+
+    /* ── The buyer's place of supply (R-173, 6 Oct 2026) ─────────────────────
+       record_payment copies the lead's state_code / state / gstin onto the customer it creates,
+       and generate_invoice refuses a customer with no state_code. This route never wrote one, so
+       every Workspace bought here without a GSTIN produced a customer whose GST invoice could not
+       be issued. Same precedence as the cart checkout (R-079/R-091): an entered state wins, a
+       checksum-valid GSTIN is the fallback, nothing is guessed — and it is asked for BEFORE
+       anything is saved or charged. Only a valid GSTIN is stored (it prints on the invoice). */
+    const cleanGstin = (gstin ?? "").trim().toUpperCase();
+    const validGstin = cleanGstin && isValidGstin(cleanGstin) ? cleanGstin : null;
+    const buyerStateCode = resolveStateCode({ stateCode: stateCodeFromName(parsed.data.stateCode), gstin: validGstin });
+    if (!buyerStateCode) {
+      return NextResponse.json(
+        {
+          error: "Please choose your state. It decides whether your GST invoice shows CGST + SGST or IGST, " +
+                 "and the invoice cannot be issued without it. Nothing was charged.",
+          needState: true,
+        },
+        { status: 400 },
+      );
+    }
+    const buyerState = GST_STATE_BY_CODE[buyerStateCode] ?? null;
+
+    /* R-157: Enterprise has no list price — it is quoted, never charged online (a catalogue
+       miss used to price it at an invented ₹2,400). Business plans stop at 300 users, Google's
+       own limit; above that the customer needs Enterprise, which is a quote too. */
+    if (tierId === "enterprise") {
+      return NextResponse.json({ error: "Enterprise is priced on a quote, not bought online. Nothing was charged. Please use \"Get a quote\"." }, { status: 400 });
+    }
+    if (seats > 300) {
+      return NextResponse.json({ error: "Google Workspace Business plans go up to 300 users. Nothing was charged. For more, ask for an Enterprise quote." }, { status: 400 });
+    }
 
     // ── Resolve Razorpay credentials ─────────────────────────────────────
     // Precedence: per-tenant `tenant_secrets` (Settings → Integrations)
@@ -351,6 +390,10 @@ export async function POST(request: NextRequest) {
       ...captureFromRequest(request, body as Record<string, unknown>),
       domain:        cleanDomain,        // structured — flows lead→quote→subscription
       notes:         leadNotes,
+      // R-173: copied to the customer by record_payment; generate_invoice needs state_code.
+      state_code:    buyerStateCode,
+      state:         buyerState,
+      gstin:         validGstin,
     });
     if (leadErr) {
       console.error("[checkout/workspace] lead insert failed:", leadErr);
@@ -495,6 +538,11 @@ export async function POST(request: NextRequest) {
       }
       const voice = storefrontVoice(BUY_PAGE_TENANT_ID);
       const customerReplyTo = voice ? voice.replyTo : owner.ok ? owner.to : null;
+      /* R-120 parity: a test buy sends what a real one sends (webhook) — setup steps to the
+         customer, next steps to the lead owner — so the flow can be checked before go-live. */
+      const leadOwner = await loadLeadOwner(admin, BUY_PAGE_TENANT_ID, leadId);
+      const simBase = new URL(request.url).origin;
+      const sellerPerson = (owner.ok ? owner.ownerName : "") || ownerTenant?.name?.trim() || "Your reseller";
       await Promise.allSettled([
         // Customer copy
         customerReplyTo && sendEmail({
@@ -519,8 +567,23 @@ ORDER SUMMARY
   Domain      ${cleanDomain}
   Total       ${amountFmt} (incl 18% GST)
 
-${voice ? voice.signOff : `— ${(owner.ok ? owner.ownerName : "") || ownerTenant?.name?.trim() || "Your reseller"}`}
+${customerSetupSteps({ domain: cleanDomain, seats, tierName: `Google Workspace ${tierName}`, contactName: leadOwner?.name ?? (voice ? "our team" : sellerPerson) })}
+
+${voice ? voice.signOff : `— ${sellerPerson}`}
    (Simulated email — system test only)`,
+        }),
+        // Lead owner — the employee this order was dealt to (R-111), same as the webhook
+        leadOwner && leadOwner.email.toLowerCase() !== (owner.ok ? owner.to.toLowerCase() : "") && sendEmail({
+          to:      leadOwner.email,
+          from:    FROM_EMAIL,
+          kind:    "buy_page_checkout_sim_lead_owner",
+          route:   { tenantId: BUY_PAGE_TENANT_ID },
+          subject: `[TEST] New paid order for you · ${companyName} · ${tierName} × ${seats}`,
+          text: `THIS IS A TEST — no real payment.\n\n` + leadOwnerNextSteps({
+            domain: cleanDomain, seats, tierName: `Google Workspace ${tierName}`, contactName: leadOwner.name,
+            contactPhone: phone, orderId: quoteId, company: companyName, customerName: fullName,
+            customerEmail: email, amount: amountFmt, appBase: simBase, quoteId, leadId,
+          }),
         }),
         // Owner alert — flagged clearly as test (switched off on a developer machine only)
         owner.ok && ownerPaymentAlertAllowed() && sendEmail({

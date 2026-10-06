@@ -10,6 +10,7 @@ import { attachPrimaryContact } from "@/lib/contacts/attach";
 import { requireTenantId } from "@/lib/queries/require-tenant";
 import type { Customer, Database } from "@/lib/supabase/database.types";
 import { fetchAllRows } from "@/lib/ops/fetch-all";
+import { withStateCode } from "@/lib/gst/gstin-state";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
@@ -98,7 +99,8 @@ export function useCreateCustomer() {
 
       const { data, error } = await supabase
         .from("customers")
-        .insert({ ...input, tenant_id: tenantId })
+        // withStateCode: a hand-picked state must reach state_code, or generate_invoice refuses.
+        .insert(withStateCode({ ...input, tenant_id: tenantId }))
         .select()
         .single();
 
@@ -174,7 +176,7 @@ export function useUpdateCustomer() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("customers")
-        .update(patch)
+        .update(withStateCode(patch))
         .eq("id", id)
         .select()
         .single();

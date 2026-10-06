@@ -10,6 +10,8 @@
  */
 "use client";
 
+import { fyBounds } from "@/lib/dates/ist";
+import { receivedThisFy, type ReceivedFacts } from "@/lib/customers/received-this-fy";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -920,5 +922,44 @@ export function useUpdateProjectDetails() {
       toast.success("Project updated");
     },
     onError: (e) => toastError(e),
+  });
+}
+
+/**
+ * Money received from each customer this financial year — payments + project payments,
+ * TDS included and counted apart (R-005; rule in lib/customers/received-this-fy.ts).
+ */
+export function useReceivedThisFyByCustomer() {
+  return useQuery({
+    queryKey: ["received_this_fy_by_customer", fyBounds().start],
+    queryFn: async (): Promise<Record<string, ReceivedFacts>> => {
+      const supabase = createClient();
+      const fy = fyBounds();
+      /* A day either side in UTC so an IST boundary payment is fetched; the pure rule
+         then dates it in IST and keeps only what falls inside the FY. */
+      const fromTs = `${Number(fy.start.slice(0, 4))}-03-31T00:00:00Z`;
+      const [{ data: pays, error: e1 }, { data: projects, error: e2 }, { data: pps, error: e3 }] = await Promise.all([
+        supabase.from("payments").select("customer_id, quote_id, amount, status, received_at")
+          .eq("status", "received").gte("received_at", fromTs),
+        supabase.from("project_sales").select("id, customer_id"),
+        supabase.from("project_payments").select("project_id, amount, method, received_at")
+          .gte("received_at", fy.start).lte("received_at", fy.end),
+      ]);
+      if (e1 || e2 || e3) throw (e1 ?? e2 ?? e3);
+      const quoteIds = Array.from(new Set((pays ?? []).filter((p) => !p.customer_id && p.quote_id).map((p) => p.quote_id as string)));
+      const quoteCustomer = new Map<string, string | null>();
+      if (quoteIds.length) {
+        const { data: qs } = await supabase.from("quotes").select("id, customer_id").in("id", quoteIds);
+        for (const q of qs ?? []) quoteCustomer.set(q.id, q.customer_id ?? null);
+      }
+      return receivedThisFy({
+        payments: pays ?? [],
+        quoteCustomer,
+        projectPayments: pps ?? [],
+        projectCustomer: new Map((projects ?? []).map((p) => [p.id as string, (p.customer_id as string | null) ?? null])),
+        fy,
+      });
+    },
+    staleTime: 30_000,
   });
 }

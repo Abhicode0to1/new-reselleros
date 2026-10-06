@@ -29,7 +29,8 @@ import {
   type PublicChatReply,
 } from "@/lib/ai/public-sales-chat";
 import { loadAutonomyPolicy, logAiAction } from "@/lib/ai/autonomy.server";
-import { createClient as createBareClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBareClient } from "@/lib/supabase/bare";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveAutonomy } from "@/lib/ai/autonomy";
 
 const BUY_PAGE_TENANT_ID =
@@ -130,6 +131,10 @@ export async function POST(request: NextRequest) {
     temperature: 0.4,
     timeoutMs: 20_000,
     label: "public/agent-chat",
+    /* A visitor is waiting: when the main model is overloaded twice, ask the lighter one
+       instead of answering "could not reply" (4 Oct 2026 — gemini-flash-lite-latest
+       measured 200 against the live API that day). */
+    fallbackModel: process.env.GEMINI_FALLBACK_MODEL?.trim() || "gemini-flash-lite-latest",
   });
 
   if (!raw) return NextResponse.json(fallbackReply() satisfies PublicChatReply);

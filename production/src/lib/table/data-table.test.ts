@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  sortRows, nextSort, toggleAllIds, toggleId,
+  sortRows, nextSort, toggleAllIds, toggleId, pagedCount,
   loadViews, saveView, deleteView, isViewActive, viewsKey, MAX_VIEWS,
   type ViewStorage,
 } from "./data-table";
@@ -113,5 +113,18 @@ describe("saved views", () => {
     expect(isViewActive(v, { view: "all", tab: "paid" }, { id: "amount", dir: "asc" })).toBe(true);
     expect(isViewActive(v, { view: "all", tab: "paid" }, null)).toBe(false);
     expect(isViewActive(v, { view: "all", tab: "overdue" }, { id: "amount", dir: "asc" })).toBe(false);
+  });
+});
+
+describe("pagedCount (R-024)", () => {
+  it("shows the page size, never more than there are", () => {
+    expect(pagedCount(312, 50)).toBe(50);
+    expect(pagedCount(12, 50)).toBe(12);
+    expect(pagedCount(0, 50)).toBe(0);
+  });
+  it("a deep-linked row beyond the page is brought on screen", () => {
+    expect(pagedCount(312, 50, 120)).toBe(121);
+    expect(pagedCount(312, 50, 10)).toBe(50);   // already visible: unchanged
+    expect(pagedCount(312, 150, 120)).toBe(150); // never shrinks what was loaded
   });
 });

@@ -48,7 +48,7 @@ const ROLE_TONE: Record<Role, "success" | "info" | "muted" | "warning"> = {
   billing: "success", accountant: "warning", delivery: "info", support: "muted",
 };
 
-interface Member { id: string; full_name: string | null; email: string | null; role: Role; initials: string | null; color: string | null; is_active: boolean | null; can_view_deals: boolean | null; manager_id: string | null; }
+interface Member { id: string; full_name: string | null; email: string | null; role: Role; initials: string | null; color: string | null; is_active: boolean | null; can_view_deals: boolean | null; manager_id: string | null; gets_new_leads: boolean | null; }
 interface Invite { id: string; email: string; role: Role; created_at: string; }
 
 export default function TeamPage() {
@@ -66,7 +66,7 @@ export default function TeamPage() {
         /* manager_id is safe to name here: it is LIVE in production, verified 18 Aug 2026.
            Naming a column that does not exist makes PostgREST reject the whole request
            (PGRST201) — the failure that once left the sidebar reading "Loading…" for ever. */
-        .select("id, full_name, email, role, initials, color, is_active, can_view_deals, manager_id")
+        .select("id, full_name, email, role, initials, color, is_active, can_view_deals, manager_id, gets_new_leads")
         .order("created_at", { ascending: true });
       if (error) throw error;
       return (data ?? []) as Member[];
@@ -99,7 +99,7 @@ export default function TeamPage() {
   });
 
   const updateMember = useMutation({
-    mutationFn: async (input: { id: string; patch: { role?: Role; can_view_deals?: boolean; manager_id?: string | null } }) => {
+    mutationFn: async (input: { id: string; patch: { role?: Role; can_view_deals?: boolean; manager_id?: string | null; gets_new_leads?: boolean } }) => {
       const supabase = createClient();
       const { error } = await supabase.from("users").update(input.patch).eq("id", input.id);
       if (error) throw error;
@@ -187,6 +187,7 @@ export default function TeamPage() {
                 <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Role</th>
                 {isOwner && <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Reports to</th>}
                 {isOwner && <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Deals access</th>}
+                {isOwner && <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3" title="New website, WhatsApp and IndiaMART leads are shared in turn between the ticked people">New leads</th>}
                 <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Status</th>
                 {isOwner && <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Password</th>}
               </tr>
@@ -248,6 +249,11 @@ export default function TeamPage() {
                       ) : (
                         <span className="text-2xs text-ink-3">—</span>
                       )}
+                    </td>
+                  )}
+                  {isOwner && (
+                    <td className="p-3">
+                      <NewLeadsToggle member={m} onChange={(on) => updateMember.mutate({ id: m.id, patch: { gets_new_leads: on } })} />
                     </td>
                   )}
                   <td className="p-3"><Badge kind={m.is_active === false ? "muted" : "success"} dot>{m.is_active === false ? "Inactive" : "Active"}</Badge></td>
@@ -338,6 +344,9 @@ export default function TeamPage() {
                 )}
                 {isOwner && (m.role === "owner" || m.role === "sales_senior") && (
                   <span className="text-2xs text-emerald">Full deals access</span>
+                )}
+                {isOwner && (
+                  <NewLeadsToggle member={m} onChange={(on) => updateMember.mutate({ id: m.id, patch: { gets_new_leads: on } })} />
                 )}
               </div>
               {isOwner && (
@@ -495,5 +504,30 @@ function InviteDialog({ open, onOpenChange, onInvited }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * R-111: is this person in the pool new unowned leads are dealt to, in turn?
+ * The dealing itself is a database trigger (20261002120000_lead_auto_assign.sql), so every
+ * intake path is covered. An inactive person is skipped there, so the tick is hidden here,
+ * and so is it for roles that do not sell — an accountant dealt a website enquiry is a lead
+ * nobody chases.
+ */
+const LEAD_ROLES: readonly string[] = ["owner", "manager", "sales", "sales_senior"];
+function NewLeadsToggle({ member, onChange }: { member: Member; onChange: (on: boolean) => void }) {
+  if (member.is_active === false || !LEAD_ROLES.includes(member.role)) {
+    return <span className="text-2xs text-ink-3">—</span>;
+  }
+  return (
+    <label className="inline-flex items-center gap-1.5 text-xs text-ink-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={Boolean(member.gets_new_leads)}
+        onChange={(e) => onChange(e.target.checked)}
+        className="rounded border-hairline"
+      />
+      Gets new leads
+    </label>
   );
 }

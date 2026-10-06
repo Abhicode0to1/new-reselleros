@@ -7,21 +7,21 @@ import {
 } from "./workspace";
 
 // Catalog row shaped like the real `items` rows for the buy-page tenant.
-// Standard's effective India price is ₹864/user/mo (current 20%-off of ₹1080 list).
+// Standard's India list price is ₹1,080/user/mo annual (R-157: the old ₹864 was an expired 20%-off promo).
 const standardRow: CatalogPriceRow = {
   id: "gw-std", name: "Google Workspace Standard",
-  msrp: 864, wholesale: 620,
-  prices: { annual: { msrp: 864, wholesale: 620 } },
+  msrp: 1080, wholesale: 620,
+  prices: { annual: { msrp: 1080, wholesale: 620 } },
 };
 
 describe("buildWorkspaceLines — catalog is the single source of truth", () => {
-  it("prices Standard from the catalog (₹864/user/mo)", () => {
+  it("prices Standard from the catalog (₹1080/user/mo)", () => {
     const r = buildWorkspaceLines(standardRow, "standard", 10);
-    expect(r.monthlyMsrp).toBe(864);
+    expect(r.monthlyMsrp).toBe(1080);
     expect(r.items).toHaveLength(1);
-    expect(r.items[0].rate).toBe(864 * 12);            // ₹10,368/seat/year
-    expect(r.subtotal).toBe(864 * 12 * 10);            // ₹1,03,680 ex-GST
-    expect(r.amount).toBe(Math.round(103680 * 1.18));  // ₹1,22,342 incl 18% GST
+    expect(r.items[0].rate).toBe(1080 * 12);            // ₹12,960/seat/year
+    expect(r.subtotal).toBe(1080 * 12 * 10);            // ₹1,29,600 ex-GST
+    expect(r.amount).toBe(Math.round(129600 * 1.18));  // ₹1,52,928 incl 18% GST
   });
 
   it("PARITY: catalog-miss fallback equals the catalog price (no buy-vs-quote divergence)", () => {
@@ -29,7 +29,7 @@ describe("buildWorkspaceLines — catalog is the single source of truth", () => 
     // Now the fallback tracks the catalog, so a missing row prices identically.
     const fromCatalog  = buildWorkspaceLines(standardRow, "standard", 25);
     const fromFallback = buildWorkspaceLines(null, "standard", 25);
-    expect(fromFallback.monthlyMsrp).toBe(TIER_FALLBACK_MONTHLY.standard); // 864
+    expect(fromFallback.monthlyMsrp).toBe(TIER_FALLBACK_MONTHLY.standard); // 1080
     expect(fromFallback.amount).toBe(fromCatalog.amount);
   });
 
@@ -37,7 +37,7 @@ describe("buildWorkspaceLines — catalog is the single source of truth", () => 
     // Promotions (e.g. Google's 20% off) are reflected in the catalog price
     // and/or the coupon/site-promo system, not a hardcoded per-seat split.
     const r = buildWorkspaceLines(standardRow, "standard", 30);
-    expect(r.subtotal).toBe(864 * 12 * 30);
+    expect(r.subtotal).toBe(1080 * 12 * 30);
     expect(r.items).toHaveLength(1);
   });
 

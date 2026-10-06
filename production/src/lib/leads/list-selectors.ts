@@ -178,6 +178,18 @@ export function searchLeads<T extends LeadListRow>(workspaceLeads: readonly T[],
  * What the LIST shows: the folder chips are the filter. The chip counts and the list BOTH
  * call inSalesFolder(), so a chip can never advertise a number the list contradicts.
  */
+/**
+ * The folder a view actually needs. The "All" folder means OPEN deals (listCut below, and the
+ * same cut in list_leads()/lead_counts()), so "Won this month" under "All" was won AND open —
+ * always empty. Found 2 Oct 2026 (R-118) when the dashboard's "Won this month · 4 deals" tile
+ * opened /deals?view=won-mtd onto "No wins this month yet". (The View menu does not list
+ * won-mtd, so before the tile nothing reached it from the UI.)
+ * Won-this-month therefore cuts inside the Won folder.
+ */
+export function folderForView(folder: SalesFolder | "all", smartView: SmartView): SalesFolder | "all" {
+  return folder === "all" && smartView === "won-mtd" ? "won" : folder;
+}
+
 export function listCut<T extends LeadListRow>(
   searched: readonly T[], folder: SalesFolder | "all", smartView: SmartView, todayISO: string,
 ): T[] {

@@ -85,8 +85,10 @@ export interface LicenceEdition {
 
 /** The email-page licence calculator's six editions. */
 export const LICENCE_EDITIONS: readonly LicenceEdition[] = [
-  { name: "GW Business Starter", note: "30 GB per user", annual: 136, monthly: 160 },
-  { name: "GW Business Standard", note: "2 TB per user, recordings", annual: 736, monthly: 865 },
+  /* R-157 (5 Oct 2026): GW fallbacks brought to the current list (they were Google's old
+     ₹136 / ₹736). Used only when the live catalogue cannot be read. */
+  { name: "GW Business Starter", note: "30 GB per user", annual: 270, monthly: 325 },
+  { name: "GW Business Standard", note: "2 TB per user, recordings", annual: 1080, monthly: 1300 },
   { name: "GW Business Plus", note: "5 TB, Vault, eDiscovery", annual: 1380, monthly: 1620 },
   { name: "M365 Business Basic", note: "Web Office, 50 GB mail", annual: 145, monthly: 175 },
   { name: "M365 Business Standard", note: "Desktop Office, 1 TB", annual: 770, monthly: 900 },
@@ -124,7 +126,7 @@ export const EDITION_MATRICES: Readonly<Record<string, EditionMatrix>> = {
     cols: ["BUSINESS STARTER", "BUSINESS STANDARD", "BUSINESS PLUS"],
     note: "Google caps Business editions at 300 users. Above that it is Enterprise — talk to us.",
     rows: [
-      ["Price per seat, annual", "₹136/mo", "₹736/mo", "₹1,380/mo"],
+      ["Price per seat, annual", "₹270/mo", "₹1,080/mo", "₹1,380/mo"],
       ["Storage per user", "30 GB", "2 TB", "5 TB"],
       ["Custom email on your domain", "Yes", "Yes", "Yes"],
       ["Meet participants", "100", "150", "500"],

@@ -115,7 +115,7 @@ export function AgentChat() {
       setFailed(true);
       setMsgs((cur) => [
         ...cur,
-        { role: "assistant", text: "Abhi jawab nahi de paya — WhatsApp par ek insaan ~11 minute me jawab deta hai, ya Get a quote page se turant priced estimate le lijiye." },
+        { role: "assistant", text: "Abhi jawab nahi de paya — WhatsApp par ek insaan working hours me jawab deta hai, ya Get a quote page se turant priced estimate le lijiye." },
       ]);
     } finally {
       setBusy(false);

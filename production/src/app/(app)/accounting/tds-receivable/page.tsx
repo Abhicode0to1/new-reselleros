@@ -15,6 +15,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { TDS_TABS } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
@@ -57,7 +59,8 @@ const STATUS_COLOR: Record<TdsStatus, "rose" | "emerald" | "amber" | "slate" | "
 export default function TdsReceivablePage() {
   const currentFY = fiscalYearFromDate(istToday());
   const [fy, setFy] = React.useState<string>(currentFY);
-  const [activeTab, setActiveTab] = React.useState<TdsStatus | "all">("all");
+  /* R-118: in the URL so each KPI (and a link) opens its own entries. */
+  const [activeTab, setActiveTab] = useUrlChoice<TdsStatus | "all" | "claimable">("tab", TDS_TABS, "all");
   const [selected, setSelected]   = React.useState<TdsReceivable | null>(null);
 
   const summaryQ = useTdsSummary(fy);
@@ -121,24 +124,28 @@ export default function TdsReceivablePage() {
           value={summary ? rupee(summary.totalAmount) : "—"}
           hint={summary ? `${summary.totalCount} entries` : ""}
           big
+          onClick={() => setActiveTab("all")}
         />
         <KPI
           label="Pending certificate"
           value={summary ? rupee(summary.byStatus.pending_cert.amount) : "—"}
           hint={summary ? `${summary.byStatus.pending_cert.count} chase items` : ""}
           tone="rose"
+          onClick={() => setActiveTab("pending_cert")}
         />
         <KPI
           label="Ready to claim in ITR"
           value={summary ? rupee(summary.claimableAmount) : "—"}
           hint="Cert + 26AS verified"
           tone="emerald"
+          onClick={() => setActiveTab("claimable")}
         />
         <KPI
           label="Already claimed"
           value={summary ? rupee(summary.byStatus.claimed.amount) : "—"}
           hint={summary ? `${summary.byStatus.claimed.count} filed` : ""}
           tone="indigo"
+          onClick={() => setActiveTab("claimed")}
         />
       </div>
 
@@ -177,6 +184,13 @@ export default function TdsReceivablePage() {
           count={summary?.totalCount ?? 0}
           onClick={() => setActiveTab("all")}
         />
+        {/* The "Ready to claim in ITR" tile's set — two statuses, so a chip of its own. */}
+        <TabButton
+          label="Ready to claim"
+          active={activeTab === "claimable"}
+          count={(summary?.byStatus.cert_received.count ?? 0) + (summary?.byStatus.verified_26as.count ?? 0)}
+          onClick={() => setActiveTab("claimable")}
+        />
         {TDS_STATUSES.map((s) => (
           <TabButton
             key={s}
@@ -192,7 +206,9 @@ export default function TdsReceivablePage() {
       {/* Active tab description */}
       {activeTab !== "all" && (
         <div className="text-xs text-ink-3 mb-4 italic">
-          {TDS_STATUS_DESCRIPTION[activeTab]}
+          {activeTab === "claimable"
+            ? "Certificate received or verified in 26AS — this TDS can go into the ITR."
+            : TDS_STATUS_DESCRIPTION[activeTab]}
         </div>
       )}
 
@@ -205,7 +221,7 @@ export default function TdsReceivablePage() {
         <Card className="py-2">
           <EmptyState
             icon="receipt"
-            title={activeTab === "all" ? "No TDS entries yet" : `No entries in "${TDS_STATUS_LABEL[activeTab as TdsStatus]}"`}
+            title={activeTab === "all" ? "No TDS entries yet" : `No entries in "${activeTab === "claimable" ? "Ready to claim" : TDS_STATUS_LABEL[activeTab as TdsStatus]}"`}
             body={activeTab === "all"
               ? "TDS entries will appear here when customers deduct tax on payments. Wait for Phase 2 (Record Payment integration) — or add manually for past invoices."
               : "Switch to a different tab or fiscal year."}
@@ -350,26 +366,33 @@ function TabButton({
 }
 
 function KPI({
-  label, value, hint, tone, big,
+  label, value, hint, tone, big, onClick,
 }: {
   label: string;
   value: string;
   hint?: string;
   tone?: "emerald" | "rose" | "amber" | "indigo";
   big?: boolean;
+  /** R-118: opens the entries this figure adds up. */
+  onClick?: () => void;
 }) {
   const colorClass = tone === "emerald" ? "text-emerald"
                    : tone === "rose"    ? "text-rose"
                    : tone === "amber"   ? "text-amber-ink"
                    : tone === "indigo"  ? "text-indigo"
                    : "text-ink";
-  return (
-    <Card className="p-3 md:p-4">
+  const body = (<>
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>
       {hint && <div className="text-xs text-ink-3 mt-1">{hint}</div>}
-    </Card>
+</>);
+  if (!onClick) return <Card className="p-3 md:p-4">{body}</Card>;
+  return (
+    <button type="button" onClick={onClick}
+      className="text-left rounded-lg border border-hairline bg-paper p-3 md:p-4 transition-colors hover:border-amber/60">
+      {body}
+    </button>
   );
 }

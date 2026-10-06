@@ -15,19 +15,25 @@
 import type { Quote } from "@/lib/supabase/database.types";
 
 /**
- * Payment states where the money is IN and nothing is owed on this document.
+ * Is the money IN, so nothing is owed on this document?
  *
- * `partial` is deliberately absent: part of the balance is genuinely still due,
- * so the validity window and the payment terms are still the truth for it.
+ * `received` — yes. `partial` — no: part of the balance is genuinely still due, so the
+ * validity window and the payment terms are still the truth for it.
  *
- * `invoiced` is present because a tax invoice was raised against money that
- * arrived — "Net 7 days from acceptance" is exactly as wrong there as it is on a
- * `received` quote, even though the customer's statutory document is the invoice.
+ * `invoiced` — ONLY when the payments recorded cover the quote. R-159 (5 Oct 2026, Hitesh,
+ * Excel Technologies): "I converted a Quote into Invoice without payment. Why is it showing
+ * quote paid?" generate_invoice sets payment_status = 'invoiced' whether or not money came
+ * (invoicing before payment is allowed — "Invoice now (before payment)"), and this function
+ * read 'invoiced' as settled, so an unpaid quote showed a ticked "Paid" step and downloaded
+ * as "Paid order" without its payment terms. `payment_amount` is what record_payment writes
+ * as the total received; generate_invoice never touches it. ₹1 of rounding is tolerated.
  */
-const SETTLED: ReadonlySet<string> = new Set(["received", "invoiced"]);
-
-export function quoteIsPaid(q: Pick<Quote, "payment_status">): boolean {
-  return Boolean(q.payment_status && SETTLED.has(q.payment_status));
+export function quoteIsPaid(q: Pick<Quote, "payment_status"> & Partial<Pick<Quote, "payment_amount" | "amount">>): boolean {
+  if (q.payment_status === "received") return true;
+  if (q.payment_status !== "invoiced") return false;
+  const total = Number(q.amount ?? 0);
+  const received = Number(q.payment_amount ?? 0);
+  return total > 0 && received >= total - 1;
 }
 
 /**

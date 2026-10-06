@@ -58,14 +58,38 @@ steps:
   - id: gate
     name: node:20
     dir: production
+    # 2 Oct 2026 go-live: the gate died with "JavaScript heap out of memory" — Node's default
+    # ~2 GB heap is too small for tsc over this app now. The machine has 8 GB (E2_HIGHCPU_8);
+    # let Node use 6. Same checks, nothing skipped.
+    env:
+      - NODE_OPTIONS=--max-old-space-size=6144
     entrypoint: bash
     args:
       - -c
-      - npm ci --no-audit --no-fund && npx tsc --noEmit && npx vitest run
+      - npm ci --no-audit --no-fund && npx prisma generate && npx tsc --noEmit && npx vitest run
+
+  # 0b. DEPS CACHE (5 Oct 2026, Pardeep: "cache kar do"). The note on --cache-from below was
+  #     right: it never worked because nothing was pulled. Now the deps stage (npm ci, ~43s +
+  #     COPY ~29s) has its own tag, pulled here and rebuilt from cache when package-lock.json
+  #     is unchanged. Every step tolerates a miss: no tag yet, or a failed pull, just means a
+  #     normal full build — this can never stop a deploy.
+  #     Beside the gate (5 Oct 2026 trial on E2_HIGHCPU_32, 32 GB): with the memory there, the
+  #     image no longer waits ~4 min for the tests. The gate still blocks the deploy — `push`
+  #     below has no waitFor, so it waits for EVERY earlier step, the gate included.
+  - id: deps-pull
+    waitFor: ['-']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args: [-c, 'docker pull $_IMAGE:deps || echo "no deps cache yet — full build"']
+  - id: deps
+    waitFor: [deps-pull]
+    name: gcr.io/cloud-builders/docker
+    dir: production
+    args: [build, --target=deps, --cache-from=$_IMAGE:deps, --tag=$_IMAGE:deps, .]
 
   # 1. Build the image, exactly as deploy.sh does today.
   - id: build
-    waitFor: [gate]
+    waitFor: [deps]
     name: gcr.io/cloud-builders/docker
     dir: production
     args:
@@ -85,6 +109,10 @@ steps:
       - --build-arg=NEXT_PUBLIC_SUPABASE_ANON_KEY=$_SUPABASE_ANON_KEY
       - --build-arg=NEXT_PUBLIC_APP_URL=$_APP_URL
       - --build-arg=NEXT_PUBLIC_APP_ENV=$_APP_ENV
+      # R-161 no-VM switches (browser half). "" = off = the VM path, which is what production
+      # gets until its own switch-over; the staging trigger sets 1 / authjs.
+      - --build-arg=NEXT_PUBLIC_DATA_GATEWAY=$_DATA_GATEWAY
+      - --build-arg=NEXT_PUBLIC_AUTH_PROVIDER=$_AUTH_PROVIDER
       # ⚠️ YE FLAG LAGI HUI HAI PAR KABHI CHALI NAHI. 29 Aug 2026 par naapa: ek build ke
       # poore log me **ek bhi `CACHED` line nahi** — har layer har baar naye sire se banti
       # hai. Yahan pehle likha tha "Reuse the previous image's layers so a typical build is
@@ -93,6 +121,9 @@ steps:
       # Wajah Cloud Build ka jaana-maana jaal hai: `--cache-from` tab hi chalta hai jab wo
       # image pehle `docker pull` ki gayi ho, aur har build ek KHAALI machine par shuru hota
       # hai. Yahan koi pull step hai hi nahi.
+      #
+      # (5 Oct 2026: AB THEEK — step 0b pull karta hai aur deps stage ka apna tag hai. Neeche
+      # ka paragraph us waqt ka faisla hai, record ke liye.)
       #
       # Jaan-boojhkar theek NAHI kiya gaya. Faayda sirf `npm ci` (43s) aur
       # `COPY --from=deps` (29s) tak hai — 431s me se 72s, aur wo bhi tab jab
@@ -104,6 +135,8 @@ steps:
       # Flag isliye chhodi hai ki wo nuksaan nahi karti, aur jis din pull step judega us din
       # kaam karne lagegi.
       - --cache-from=$_IMAGE:latest
+      # The deps layers just built (or restored) in step 0b — this is what makes the cache real.
+      - --cache-from=$_IMAGE:deps
       - .
 
   - id: push
@@ -127,10 +160,10 @@ steps:
       - --timeout=600
       # Cold starts (WC-ci, 30 Sep 2026): keep one instance warm and give each new instance
       # extra CPU while it boots. COST: roughly one small always-on instance (billed while
-      # idle) — Pardeep approves this at deploy time. Note a staging trigger that reuses this
-      # file gets the same warm instance; drop these two lines there if that is unwanted.
-      - --min-instances=1
-      - --cpu-boost
+      # idle) — Pardeep approves this at deploy time. The staging trigger (R-106) sets
+      # _MIN_INSTANCES=0 and _CPU_BOOST=no-cpu-boost so an unused staging costs nothing.
+      - --min-instances=$_MIN_INSTANCES
+      - --$_CPU_BOOST
       - --quiet
     # NOTE: no --set-env-vars here, deliberately. That flag REPLACES the whole set, and this
     # service carries eleven — including SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET and
@@ -146,12 +179,20 @@ substitutions:
   _SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9udHBucWpveXNqZ3Jsc3VrZWNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjc1NjcsImV4cCI6MjA5NDg0MzU2N30.tulYYDQSzq7IpEQCFbP7qjsSUxg4c-0ku5uO80-TKXI
   _APP_URL: https://reselleros.anutech.in
   _APP_ENV: ""
-  # The same Artifact Registry path the current revision already runs from.
+  # R-161: off by default (production keeps the VM until its own switch-over).
+  _DATA_GATEWAY: ""
+  _AUTH_PROVIDER: ""
+  _MIN_INSTANCES: "1"
+  _CPU_BOOST: cpu-boost
+  # The same Artifact Registry path the current revision already runs from. The staging
+  # trigger MUST override this (…/resellersos-staging): `images:` below also pushes :latest,
+  # and a shared path would let a staging build overwrite production's latest tag.
   _IMAGE: asia-south1-docker.pkg.dev/resellsubsos-prod/cloud-run-source-deploy/resellersos
 
 images:
   - $_IMAGE:$SHORT_SHA
   - $_IMAGE:latest
+  - $_IMAGE:deps
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -182,6 +223,12 @@ options:
   #
   # Isliye wapas 8 par. Agar kabhi phir se badhane ka mann ho, to pehle ye tabel padhna —
   # aur ek nahi, dono taraf ke KAI build naapna, warna jawab shor hi milega.
-  machineType: E2_HIGHCPU_8
+  #
+  # 5 Oct 2026 — DOOSRA TRIAL, alag sawaal: 32 core se `next build` tez nahi hota (upar), par
+  # 32 GB memory gate aur image ko SAATH chalne deti hai (~4 min) aur 8 GB wala SIGKILL band
+  # karti hai. Pardeep ne aazmaane ko kaha. Kai build naapo; fayda na dikhe to wapas
+  # E2_HIGHCPU_8 aur build/deps-pull ka waitFor [gate] par.
+  machineType: E2_HIGHCPU_32
 
-timeout: 1800s
+# 2 Oct 2026: the first full go-live build (562 commits) hit 1800s inside `next build`.
+timeout: 3600s

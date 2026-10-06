@@ -31,7 +31,8 @@ describe("productKeyFor — the TLD → ResellerClub product-key ladder", () => 
 describe("extractTldPrice — the numbers that reach the public site", () => {
   it("register/renew/transfer are the 1-year amounts, rounded to whole rupees", () => {
     const p = extractTldPrice("in", PRICING);
-    expect(p).toEqual({ tld: ".in", register: 799, renew: 899, transfer: 799, currency: "INR" });
+    // registerTotals: the "2" block is a per-year rate, so two years total 2 × 1500.
+    expect(p).toEqual({ tld: ".in", register: 799, registerTotals: { "1": 799, "2": 3000 }, renew: 899, transfer: 799, currency: "INR" });
   });
   it("a product with no price blocks yields nulls, not zeros or inventions", () => {
     const p = extractTldPrice("xyz", PRICING);

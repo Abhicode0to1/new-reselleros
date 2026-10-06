@@ -186,8 +186,10 @@ export function LeadsSmartViews({
   }
 
   const activeDef = [...views, ...cleanup].find((v) => v.id === active);
-  // Fallback covers "won-mtd", which the page can set but this menu doesn't list.
-  const activeLabel = activeDef?.label ?? "Custom view";
+  /* Views the page can be opened on (a dashboard tile, R-118) but this menu does not list
+     say what they are — "Custom view" over four won deals told the owner nothing. */
+  const UNLISTED: Partial<Record<SmartView, string>> = { "won-mtd": "Won this month" };
+  const activeLabel = activeDef?.label ?? UNLISTED[active] ?? "Custom view";
   /* A folder in force is what the list is showing, so it is what the trigger says.
      Otherwise the control reads "All open" over a list of six Quote Sent leads. */
   const activeFolderRow = folders.find((f) => f.id === activeFolder);

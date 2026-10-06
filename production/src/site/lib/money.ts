@@ -41,15 +41,22 @@ export interface CartLine {
    */
   domain?: string;
   /**
-   * Domain lines only: years to register for (lib/checkout/domain-years.ts). Absent = 1. The
-   * cart shows the 1-year price × years; the checkout charges the live price for that tenure.
+   * Domain lines only (R-156): the registration term picked, 1–10 (absent → 1), the total
+   * price of each offered term as the search showed it, and whether the line was added as
+   * the ₹0 domain bundled with yearly hosting (first year free, later years charged).
+   * Display only — the checkout re-prices the term from the registry.
    */
   years?: number;
+  yearPrices?: Record<string, number>;
+  bundleFree?: boolean;
 }
 
-/** What one cart row costs: unit price × quantity × years (a domain bought for several years). */
-export function lineTotal(l: Pick<CartLine, "unitPrice" | "qty" | "years">): number {
-  return l.unitPrice * l.qty * Math.max(1, l.years ?? 1);
+/** A domain line's price for a term: the term's total, less the free first year when bundled. */
+export function domainTermPrice(yearPrices: Record<string, number> | undefined, years: number, bundleFree?: boolean): number | null {
+  const total = yearPrices?.[String(years)];
+  if (total === undefined) return null;
+  if (!bundleFree) return total;
+  return Math.max(0, total - (yearPrices?.["1"] ?? 0));
 }
 
 /** The two launch coupons from the handoff. Percent off the gross, before GST. */
@@ -72,7 +79,7 @@ export interface CartTotals {
 }
 
 export function cartTotals(lines: readonly CartLine[], couponCode: string): CartTotals {
-  const gross = lines.reduce((n, l) => n + lineTotal(l), 0);
+  const gross = lines.reduce((n, l) => n + l.unitPrice * l.qty, 0);
   const discountRate = COUPONS[couponCode.trim().toUpperCase()] ?? 0;
   const discount = gross * discountRate;
   const subtotal = gross - discount;
@@ -84,7 +91,7 @@ export function cartTotals(lines: readonly CartLine[], couponCode: string): Cart
     subtotal,
     gst,
     payable: subtotal + gst,
-    recurring: lines.filter((l) => l.cycle === "monthly").reduce((n, l) => n + lineTotal(l), 0),
+    recurring: lines.filter((l) => l.cycle === "monthly").reduce((n, l) => n + l.unitPrice * l.qty, 0),
   };
 }
 

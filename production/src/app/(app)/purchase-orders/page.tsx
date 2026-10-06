@@ -14,6 +14,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { PO_TABS } from "@/lib/navigation/drilldown";
 import { usePurchaseOrders, usePurchaseOrderSummaries, type PurchaseOrderSummary } from "@/lib/queries/purchase-orders";
 import { useSubscriptions }  from "@/lib/queries/subscriptions";
 import PlaceOrderDialog      from "@/components/features/purchase-orders/place-order-dialog";
@@ -48,7 +50,7 @@ export default function PurchaseOrdersPage() {
     for (const s of summaries ?? []) map.set(s.purchase_order_id, s);
     return map;
   }, [summaries]);
-  const [tab,    setTab]    = React.useState("open");
+  const [tab,    setTab]    = useUrlChoice<string>("tab", PO_TABS, "open"); // R-118
   const [vendor, setVendor] = React.useState("all");
   const [search, setSearch] = React.useState("");
   const [selected, setSelected] = React.useState<PurchaseOrderRow | null>(null);
@@ -133,9 +135,9 @@ export default function PurchaseOrdersPage() {
       {/* KPIs */}
       {!isLoading && pos && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <KPI label="Pending to place"   value={draftCount}                trend={rupee(pendingValue, { compact: true }) + " value"} trendKind="down" trendIcon="alert" />
-          <KPI label="Placed (in flight)" value={rupee(placedValue, { compact: true })} trend={`${counts.placed} POs`} icon="rupee" />
-          <KPI label="Provisioned seats"  value={provisionedSeats}          trend={`${counts.provisioned} POs`} trendKind="up" />
+          <KPI label="Pending to place"   value={draftCount}                trend={rupee(pendingValue, { compact: true }) + " value"} trendKind="down" trendIcon="alert" onClick={() => setTab("draft")} />
+          <KPI label="Placed (in flight)" value={rupee(placedValue, { compact: true })} trend={`${counts.placed} POs`} icon="rupee" onClick={() => setTab("placed")} />
+          <KPI label="Provisioned seats"  value={provisionedSeats}          trend={`${counts.provisioned} POs`} trendKind="up" onClick={() => setTab("provisioned")} />
           <KPI label="Sold vs procured"   value={reconGap === 0 ? "✓ matched" : `${reconGap} short`} trend={`${reconciledCount} POs reconciled with bills`} trendKind={reconGap === 0 ? "up" : "down"} icon={reconGap === 0 ? "check_circle" : "alert"} />
         </div>
       )}

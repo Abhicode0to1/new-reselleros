@@ -12,6 +12,7 @@
 "use client";
 
 import * as React from "react";
+import { drillHref } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PortalDock } from "@/components/shared/portal-dock";
@@ -120,7 +121,7 @@ export default function DashboardPage() {
   const { data: currentUser }   = useCurrentUser();
   /* Getting-started ke "Load your price list" kadam ke liye — khali catalogue
      naye tenant ka pehla deadend tha (audit B2). */
-  const { data: catalogItems }  = useItems();
+  const { data: catalogItems, isSuccess: catalogLoaded }  = useItems();
 
   // Draggable-card order per column (persisted). Starts at the default order;
   // snaps to the saved order after mount (avoids hydration mismatch).
@@ -156,7 +157,11 @@ export default function DashboardPage() {
   const newToday        = dashLeads?.newToday ?? 0;
   const totalCustomers  = customers?.length ?? 0;
   const acceptedQuotes  = (quotes ?? []).filter((q) => q.status === "accepted");
-  const acceptedValue   = acceptedQuotes.reduce((s, q) => s + (q.amount ?? 0), 0);
+  /* R-118: "ready to invoice" = accepted and not yet invoiced — the same rule as the Quotes
+     "Accepted" tab this row opens, so the count and the list agree. acceptedQuotes (all of
+     them) still feeds "won this month" below. */
+  const readyToInvoice  = acceptedQuotes.filter((q) => q.payment_status !== "invoiced");
+  const acceptedValue   = readyToInvoice.reduce((s, q) => s + (q.amount ?? 0), 0);
   const draftQuotes     = (quotes ?? []).filter((q) => q.status === "draft").length;
 
   // "Closed THIS MONTH" — must actually be this month, not all-time (that was a
@@ -224,37 +229,37 @@ export default function DashboardPage() {
       icon: "alert", tone: "rose",
       title: `${overdueTaskCount} overdue task${overdueTaskCount === 1 ? "" : "s"}`,
       note: "Clear these first — every snooze pushes the deal further.",
-      action: "Open", cta: "/tasks",
+      action: "Open", cta: drillHref("tasksOverdue"),
     },
     todayTaskCount > 0 && {
       icon: "clock", tone: "amber",
       title: `${todayTaskCount} task${todayTaskCount === 1 ? "" : "s"} due today`,
       note: "Follow-ups, calls, emails on your queue.",
-      action: "Open", cta: "/tasks",
+      action: "Open", cta: drillHref("tasksToday"),
     },
     urgentRenewals.length > 0 && {
       icon: "refresh", tone: "rose",
       title: `${urgentRenewals.length} renewal${urgentRenewals.length === 1 ? "" : "s"} in next 7 days`,
       note: `${rupee(urgentRenewals.reduce((s, r) => s + (r.sub.mrr ?? 0) * 12, 0), { compact: true })} ARR · call or send the quote`,
-      action: "Open", cta: "/renewals",
+      action: "Open", cta: drillHref("renewalsUrgent"),
     },
     activeCount > 0 && {
       icon: "target", tone: "indigo",
       title: `${activeCount} active leads in pipeline`,
       note: `${rupee(totalPipeline, { compact: true })} pipeline value`,
-      action: "View", cta: "/leads",
+      action: "View", cta: drillHref("leadsActive"),
     },
     draftQuotes > 0 && {
       icon: "file", tone: "amber",
       title: `${draftQuotes} draft quote${draftQuotes === 1 ? "" : "s"} to finalize`,
       note: "Not yet sent to customers",
-      action: "Open", cta: "/quotes",
+      action: "Open", cta: drillHref("quotesDraft"),
     },
-    acceptedQuotes.length > 0 && {
+    readyToInvoice.length > 0 && {
       icon: "check_circle", tone: "emerald",
-      title: `${acceptedQuotes.length} accepted quote${acceptedQuotes.length === 1 ? "" : "s"}`,
+      title: `${readyToInvoice.length} accepted quote${readyToInvoice.length === 1 ? "" : "s"}`,
       note: `${rupee(acceptedValue, { compact: true })} ready to invoice`,
-      action: "Process", cta: "/quotes",
+      action: "Process", cta: drillHref("quotesAccepted"),
     },
     totalCustomers === 0 && {
       icon: "users", tone: "amber",
@@ -267,7 +272,7 @@ export default function DashboardPage() {
       title: `${newToday} new lead${newToday === 1 ? "" : "s"} today`,
       note: newToday > 0 ? "Worth focusing on early" : "Quiet day",
       action: "View",
-      cta: "/leads",
+      cta: drillHref("leadsToday"),
     },
   ].filter(Boolean) as Array<{ icon: string; tone: string; title: string; note: string; action: string; cta: string }>;
 
@@ -436,11 +441,11 @@ export default function DashboardPage() {
           )}
           {overdueFollowups > 0 && (
             <ChaseRow icon="phone" tone="rose" title={`${overdueFollowups} follow-up${overdueFollowups === 1 ? "" : "s"} overdue`}
-              note="Call / message before the deal cools" onClick={() => router.push("/leads" as any)} />
+              note="Call / message before the deal cools" onClick={() => router.push(drillHref("leadsFollowUpDue") as any)} />
           )}
           {overdueTaskCount > 0 && (
             <ChaseRow icon="alert" tone="rose" title={`${overdueTaskCount} task${overdueTaskCount === 1 ? "" : "s"} overdue`}
-              note="Clear these first" onClick={() => router.push("/tasks" as any)} />
+              note="Clear these first" onClick={() => router.push(drillHref("tasksOverdue") as any)} />
           )}
         </div>
       </Card>
@@ -583,11 +588,18 @@ export default function DashboardPage() {
           {/* Re-run setup — only when wizard was completed once. Wizard
               entry is hidden from sidebar after completion, so this
               keeps it reachable for a re-run / re-tour. */}
-          {currentUser?.tenantSetupCompletedAt && (
-            <Button asChild variant="ghost" icon="rocket">
+          {/* Held invisibly while the user loads, so its late arrival cannot re-wrap this row
+              and push the whole page down 48px (R-134). */}
+          {(!currentUser || currentUser.tenantSetupCompletedAt) && (
+            <Button asChild variant="ghost" icon="rocket" className={currentUser ? undefined : "invisible"}>
               <Link href={"/setup" as any}>Re-run setup</Link>
             </Button>
           )}
+          {/* The R-099 4-field lead form (a phone is enough) — opened by /leads?action=quick-add,
+              the same door the topbar Quick actions and Ctrl+K use. */}
+          <Button asChild icon="plus">
+            <Link href={"/leads?action=quick-add" as any}>Quick add lead</Link>
+          </Button>
           <Button asChild variant="primary" icon="plus">
             <Link href={"/quotes/new" as any}>Quick add quote</Link>
           </Button>
@@ -637,6 +649,7 @@ export default function DashboardPage() {
            checksum) so there is one rule, in one place — a `hasGstin` computed at this call
            site would be a second, looser definition of "GST is set up". */
         gstin={currentUser?.tenantGstin ?? null}
+        ready={Boolean(currentUser) && catalogLoaded && customersQ.isSuccess && quotesQ.isSuccess && subscriptionsQ.isSuccess}
       />
 
       {/* Priority Action Hub for actionable alerts */}
@@ -659,6 +672,9 @@ export default function DashboardPage() {
           trendKind="up"
           trendIcon="check"
           icon="check_circle"
+          /* Deals roles: exactly the won deals. Quote-based roles have no list of "accepted
+             this month", so no link rather than a link to the wrong set. */
+          href={dealStrip ? drillHref("dealsWonMonth") : undefined}
         />
         <KPI
           label="Pipeline"
@@ -667,6 +683,7 @@ export default function DashboardPage() {
           trendKind="up"
           trendIcon="trending_up"
           icon="target"
+          href={dealStrip ? drillHref("dealsOpen") : drillHref("leadsActive")}
         />
         <KPI
           label="Monthly revenue"
@@ -680,17 +697,19 @@ export default function DashboardPage() {
           trendKind={activeMRR > 0 ? "up" : "neutral"}
           trendIcon={activeMRR > 0 ? "trending_up" : undefined}
           icon="rupee"
+          href={drillHref("subsActive")}
         />
       </div>
       <StatStrip
         className="mb-6"
         items={[
-          { label: "Customers", value: totalCustomers },
-          { label: "Drafts to send", value: draftQuotes },
+          { label: "Customers", value: totalCustomers, href: "/customers" },
+          { label: "Drafts to send", value: draftQuotes, href: drillHref("quotesDraft") },
           {
             label: "Renewals · 30d",
             value: enrichedRenewals.length,
             tone: urgentRenewals.length > 0 ? "rose" : undefined,
+            href: drillHref("subsExpiring"),
           },
         ]}
       />

@@ -16,6 +16,9 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { AGING_BUCKETS } from "@/lib/navigation/drilldown";
+import { invoiceBalance } from "@/lib/invoices/kpis";
 import { useQuery } from "@tanstack/react-query";
 
 import { Card } from "@/components/ui/card";
@@ -70,7 +73,7 @@ function useAging() {
       // are excluded.
       const { data: invoices, error: invErr } = await supabase
         .from("invoices")
-        .select("id, customer_id, customer_name, amount, net_payable, status, invoice_date, due_date")
+        .select("id, customer_id, customer_name, amount, net_payable, paid_amount, status, invoice_date, due_date")
         .in("status", ["pending", "overdue"]);
       if (invErr) throw invErr;
 
@@ -93,7 +96,10 @@ function useAging() {
       const grouped = new Map<string, CustomerAgingRow>();
 
       for (const inv of invoices ?? []) {
-        const owed = inv.net_payable ?? inv.amount ?? 0;
+        /* What is still owed — net of advances AND of receipts since. Until 2 Oct 2026 this
+           was net_payable ?? amount, so a half-paid invoice aged at its full value here
+           while /invoices showed the balance (lib/invoices/kpis.ts#invoiceBalance). */
+        const owed = invoiceBalance({ ...inv, amount: inv.amount ?? 0 });
         if (owed <= 0) continue;
 
         const days     = daysBetween(inv.invoice_date, today);
@@ -164,7 +170,10 @@ export default function AgingPage() {
   // never a hardcoded one (this is multi-tenant; another reseller must not send
   // messages branded with someone else's company).
   const bizName = me?.tenantName ?? "us";
-  const rows   = data?.rows   ?? [];
+  const allRows = data?.rows  ?? [];
+  /* R-118: a bucket tile opens the customers with money in that bucket. */
+  const [bucket, setBucket] = useUrlChoice<"" | "current" | "b30" | "b60" | "over90">("bucket", AGING_BUCKETS, "");
+  const rows   = bucket ? allRows.filter((r) => r.buckets[bucket] > 0) : allRows;
   const totals = data?.totals ?? { current: 0, b30: 0, b60: 0, b90: 0, over90: 0, total: 0 };
 
   const overdueRupees = totals.b30 + totals.b60 + totals.b90 + totals.over90;
@@ -184,11 +193,11 @@ export default function AgingPage() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6">
-        <KPI label="Total outstanding" value={rupee(totals.total)} tone={totals.total > 0 ? "rose" : undefined} big />
-        <KPI label="Current (0–30 days)" value={rupee(totals.current)} />
-        <KPI label="31–60 days"          value={rupee(totals.b30)}     tone={totals.b30 > 0 ? "amber" : undefined} />
-        <KPI label="61–90 days"          value={rupee(totals.b60)}     tone={totals.b60 > 0 ? "amber" : undefined} />
-        <KPI label="90+ days"            value={rupee(totals.over90)}  tone={totals.over90 > 0 ? "rose" : undefined} />
+        <KPI label="Total outstanding" value={rupee(totals.total)} tone={totals.total > 0 ? "rose" : undefined} big onClick={() => setBucket("")} active={bucket === ""} />
+        <KPI label="Current (0–30 days)" value={rupee(totals.current)} onClick={() => setBucket("current")} active={bucket === "current"} />
+        <KPI label="31–60 days"          value={rupee(totals.b30)}     tone={totals.b30 > 0 ? "amber" : undefined} onClick={() => setBucket("b30")} active={bucket === "b30"} />
+        <KPI label="61–90 days"          value={rupee(totals.b60)}     tone={totals.b60 > 0 ? "amber" : undefined} onClick={() => setBucket("b60")} active={bucket === "b60"} />
+        <KPI label="90+ days"            value={rupee(totals.over90)}  tone={totals.over90 > 0 ? "rose" : undefined} onClick={() => setBucket("over90")} active={bucket === "over90"} />
       </div>
 
       {totals.total > 0 && overdueRupees > 0 && (
@@ -376,23 +385,31 @@ function Mini({ label, value, tone }: { label: string; value: number; tone?: "am
 }
 
 function KPI({
-  label, value, tone, big,
+  label, value, tone, big, onClick, active,
 }: {
   label: string;
   value: string;
   tone?: "emerald" | "rose" | "amber";
   big?: boolean;
+  /** R-118: show only the customers with money in this bucket. */
+  onClick?: () => void;
+  active?: boolean;
 }) {
   const colorClass = tone === "emerald" ? "text-emerald"
                    : tone === "rose"    ? "text-rose"
                    : tone === "amber"   ? "text-amber-ink"
                    : "text-ink";
-  return (
-    <Card className="p-3 md:p-4">
+  const body = (<>
       <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>
-    </Card>
+</>);
+  if (!onClick) return <Card className="p-3 md:p-4">{body}</Card>;
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active ?? undefined}
+      className={`text-left rounded-lg border bg-paper p-3 md:p-4 transition-colors hover:border-amber/60 ${active ? "border-amber" : "border-hairline"}`}>
+      {body}
+    </button>
   );
 }

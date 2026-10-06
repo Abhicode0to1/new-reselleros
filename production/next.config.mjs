@@ -50,6 +50,21 @@ const nextConfig = {
      and the flag only produced a "not needed anymore" warning. The Sentry side-effect import in
      lib/supabase/server.ts stays as the belt-and-braces init path. */
   typedRoutes: true,
+  /* 2 Oct 2026 go-live: `next build`'s own "Linting and checking validity of types" ran past
+     the 30-minute Cloud Build limit, and lint is the part with a separate home — CI runs
+     `next lint` on every push (.github/workflows/ci.yml) and the local gate runs it too.
+     Type checking stays ON here: it is what catches typedRoutes, which plain tsc does not. */
+  eslint: { ignoreDuringBuilds: true },
+  /* 5 Oct 2026: two Cloud Build runs died with SIGKILL inside `next build` on the 8 GB
+     E2_HIGHCPU_8 machine (once in the morning, once after R-161 added `prisma generate`).
+     The main process may take 6 GB (NODE_HEAP_MB) and Next starts cpus-1 = 7 worker
+     processes beside it for page generation, each with its own heap — together past 8 GB.
+     A bigger machine was measured on 29 Aug (cloudbuild.yaml): ~11% faster, 4x the price.
+     So: fewer workers and webpack's own memory savings instead; same machine, same cost. */
+  experimental: {
+    cpus: 3,
+    webpackMemoryOptimizations: true,
+  },
   images: {
     /* Deep study 27 Sep 2026: next 14.2.35 carries an unauthenticated RCE advisory in the
        Image Optimization API (AVIF path). Until the Next 15/16 upgrade lands, serve images
@@ -88,6 +103,10 @@ const nextConfig = {
        in"). Keep *.supabase.co too so a rollback to hosted Supabase still works. */
     const supaUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "");
     let supaConnect = "https://*.supabase.co wss://*.supabase.co";
+    /* img-src allows any https: image. The LOCAL stack serves storage (logos) over
+       http://127.0.0.1:54321, which that blocks — the logo uploaded fine and showed as a
+       broken image (2 Oct 2026). Added only when Supabase itself is on http. */
+    let supaImg = "";
     try {
       if (supaUrl) {
         const u = new URL(supaUrl);
@@ -103,6 +122,7 @@ const nextConfig = {
         const scheme = isHttp ? "http" : "https";
         const wsScheme = isHttp ? "ws" : "wss";
         supaConnect = `${scheme}://${u.host} ${wsScheme}://${u.host} ${supaConnect}`;
+        if (isHttp) supaImg = ` http://${u.host}`;
       }
     } catch {
       /* malformed env → fall back to the wildcard above */
@@ -128,12 +148,14 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com",
+              /* Google Ads conversion tag (R-139, 4 Oct 2026): loaded only after a landing-page form is
+                 sent, and only when GOOGLE_ADS_SEND_TO is set (site/lib/google-ads.ts). */
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://challenges.cloudflare.com https://www.googletagmanager.com https://www.googleadservices.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' data: blob: https:",
+              `img-src 'self' data: blob: https:${supaImg}`,
               "font-src 'self' data: https://fonts.gstatic.com",
-              `connect-src 'self' ${supaConnect} https://api.razorpay.com https://lumberjack.razorpay.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io`,
-              "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
+              `connect-src 'self' ${supaConnect} https://api.razorpay.com https://lumberjack.razorpay.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://googleads.g.doubleclick.net`,
+              "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://challenges.cloudflare.com https://td.doubleclick.net https://www.googletagmanager.com",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",

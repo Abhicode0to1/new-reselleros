@@ -24,8 +24,11 @@ insert into public.tenants (id, name, email, state_code) values
 insert into auth.users (id, email) values
   ('d1700000-0000-0000-0000-0000000000a2', 's17-user-a@example.test'),
   ('d1700000-0000-0000-0000-0000000000c2', 's17-orphan@example.test');
-insert into public.users (id, tenant_id, email) values
-  ('d1700000-0000-0000-0000-0000000000a2', 'd1700000-0000-0000-0000-0000000000a1', 's17-user-a@example.in');
+-- The reader is the OWNER (R-138, 3 Oct 2026): since role hardening (20260930175000) only
+-- owner / manager / accountant may read salary_payments, and this file checks the arithmetic,
+-- not who may see it. A default-role user read salary_payable as 0 and failed here.
+insert into public.users (id, tenant_id, email, role) values
+  ('d1700000-0000-0000-0000-0000000000a2', 'd1700000-0000-0000-0000-0000000000a1', 's17-user-a@example.in', 'owner');
 
 insert into public.customers (id, tenant_id, name) values
   ('d1700000-0000-0000-0000-00000000c001', 'd1700000-0000-0000-0000-0000000000a1', 'S17 Customer One'),

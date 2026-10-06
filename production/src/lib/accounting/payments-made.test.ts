@@ -1,8 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { groupOf, summarisePaidOut, type PaidOutLine } from "./payments-made";
+import { groupOf, summarisePaidOut, paymentEditHref, type PaidOutLine } from "./payments-made";
 
 const L = (over: Partial<PaidOutLine> & { id: string; amount: number; txn_date: string }): PaidOutLine => ({
-  payee: "x", what: "y", reference: null, account: "HDFC", group: "vendors", matched_to_type: "expense", matched_to_id: null, description: null, ...over,
+  payee: "x", what: "y", reference: null, account: "HDFC", group: "vendors", matched_to_type: "expense", matched_to_id: null, description: null,
+  bank_account_id: "acc1", ...over,
+});
+
+describe("clicking a payment opens its record (2 Oct 2026)", () => {
+  it("expense and customer refund open their own edit forms", () => {
+    expect(paymentEditHref({ id: "t1", matched_to_type: "expense", matched_to_id: "EXP-9", bank_account_id: "acc1" })).toBe("/accounting/expenses?edit=EXP-9");
+    expect(paymentEditHref({ id: "t2", matched_to_type: "payment", matched_to_id: "P-1", bank_account_id: "acc1" })).toBe("/payments?edit=P-1");
+  });
+  it("everything else — and an unreconciled line — opens the bank line on the banking screen", () => {
+    for (const t of ["salary", "vendor_bill", "statutory", "prepaid", "manual", null]) {
+      expect(paymentEditHref({ id: "t3", matched_to_type: t, matched_to_id: t ? "X" : null, bank_account_id: "acc1" })).toBe("/accounting/banking/acc1?focus=t3");
+    }
+  });
 });
 
 describe("payments made", () => {

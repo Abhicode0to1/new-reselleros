@@ -110,6 +110,16 @@ export function supportSkuId(id: SupportTierId, cycle: "monthly" | "yearly"): st
 }
 
 /**
+ * A support plan is our own service, not something bought from a vendor — so ₹0 cost on
+ * its line is the true cost, not a missing one (2 Oct 2026: the quote builder called
+ * "Standard Support" a plan with "no catalogue row" and its margin "unknown").
+ */
+export function isSupportSkuId(id: string | null | undefined): boolean {
+  /* SUP-<TIER>-… tenant plans and SUP-<product id>-MO/YR product-wise add-ons. */
+  return !!id && id.startsWith("SUP-");
+}
+
+/**
  * Find a tenant's catalogue row for a tier and cycle.
  *
  * The seeded ids carry the tenant on the end (`SUP-STANDARD-YR-fbb976f1…`) so two
@@ -216,8 +226,14 @@ export function slaState(dueAtISO: string, nowISO: string, tier: SupportTier): S
 export function tierFromPlanName(plan: string | null | undefined): SupportTierId {
   const p = (plan ?? "").toLowerCase();
   if (!p) return "free";
+  if (p.includes("free support")) return "free";
   if (p.includes("enterprise")) return "enterprise";
   if (p.includes("standard"))   return "standard";
+  /* Product-wise support add-ons (2 Oct 2026) are named "<product> Support", e.g.
+     "Google Workspace Business Starter Support", and are sold at the Standard tier.
+     Without this, a paid "…Starter Support" read as Free because "standard" is not
+     in its name. Only a name ENDING in "support" counts, so a licence never does. */
+  if (/\bsupport( \((monthly|yearly)\))?$/.test(p)) return "standard";
   return "free";
 }
 

@@ -12,6 +12,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./database.types";
+import { gatewayEnabled, gatewayFetch } from "@/server/postgrest/fetch";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
@@ -37,6 +38,10 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
+      // DATA_GATEWAY=1: the role lookup below goes to the in-process gateway, not the VM.
+      ...(gatewayEnabled()
+        ? { global: { fetch: gatewayFetch(process.env.NEXT_PUBLIC_SUPABASE_URL!, { allowService: false }) } }
+        : {}),
     },
   );
 
@@ -51,7 +56,13 @@ export async function updateSession(request: NextRequest) {
   // lookup; cost ≈ 1 ms. Cached at the Supabase edge anyway.
   let role: string | null = null;
   let canViewDeals = false;
+  /* R-048 part 2: this session signed in with a password but has not passed the account's
+     authenticator code yet (verified TOTP factor → nextLevel aal2, session still aal1).
+     Read from the session JWT + the user's factors; no extra network call. */
+  let needsMfa = false;
   if (user) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    needsMfa = aal?.nextLevel === "aal2" && aal?.currentLevel !== "aal2";
     const { data: me } = await supabase
       .from("users")
       .select("role, can_view_deals")
@@ -59,7 +70,17 @@ export async function updateSession(request: NextRequest) {
       .maybeSingle();
     role = (me?.role as string | null) ?? null;
     canViewDeals = Boolean(me?.can_view_deals);
+    /* Apprentice Academy (R-149): an apprentice is not a staff (public.users) row — they are
+       academy_apprentices.user_id. RLS lets them read only their own row. */
+    if (!me) {
+      const { data: appr } = await supabase
+        .from("academy_apprentices")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (appr) role = "apprentice";
+    }
   }
 
-  return { response, user, role, canViewDeals };
+  return { response, user, role, canViewDeals, needsMfa };
 }

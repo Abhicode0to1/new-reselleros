@@ -58,6 +58,27 @@ export interface FeedbackListFilter {
  * three cosmetic ones from this morning. `nullsLast` matters: an untriaged row has no
  * score yet and must not sort as if it were a zero.
  */
+/**
+ * How many reports sit in each status — for the tab counts (5 Oct 2026). "Run AI Auto-Fix"
+ * moves a report from Open to Queued for agent, and with a count only on the open tab the
+ * three queued reports looked like they had vanished. Same query-key prefix as the list, so
+ * every mutation that refreshes the list refreshes these too.
+ */
+export function useFeedbackCounts() {
+  return useQuery({
+    queryKey: ["feedback", "counts"],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.from("feedback").select("status").limit(5000);
+      if (error) throw error;
+      const out: Record<string, number> = { all: 0 };
+      for (const r of data ?? []) { out[r.status] = (out[r.status] ?? 0) + 1; out.all += 1; }
+      return out;
+    },
+    staleTime: 15_000,
+  });
+}
+
 export function useFeedbackList(filter: FeedbackListFilter = {}) {
   return useQuery({
     queryKey: ["feedback", filter.status ?? "all", filter.type ?? "all"],
@@ -133,6 +154,10 @@ export interface SubmitFeedbackInput {
   reporterName: string | null;
   reporterEmail: string | null;
   screenshots: { name: string; dataUrl: string }[];
+  /** R-158: "ai-chat" when the in-app AI Help drafted it after a chat; default "form". */
+  filedVia?: "form" | "ai-chat";
+  /** ai-chat only: two or three lines on the chat it came out of. */
+  aiChatSummary?: string | null;
 }
 
 export interface SubmitFeedbackResult {
@@ -179,9 +204,14 @@ export function useSubmitFeedback() {
         reported_by: input.reporterId,
         reporter_name: input.reporterName,
         reporter_email: input.reporterEmail,
+        filed_via: input.filedVia ?? "form",
+        ai_chat_summary: input.filedVia === "ai-chat" ? (input.aiChatSummary ?? null)?.slice(0, 1000) ?? null : null,
       });
       // Fatal on purpose. The old code logged this and thanked the reporter anyway.
-      if (error) throw error;
+      /* As an Error with the real message (5 Oct 2026): a PostgrestError is a plain object, so
+         both callers' `err instanceof Error` fell through to "Could not submit the report." —
+         on staging that hid "Could not find the 'filed_via' column … in the schema cache". */
+      if (error) throw new Error(`Report not saved: ${error.message}${error.code ? ` (${error.code})` : ""}`);
 
       const failedUploads: string[] = [];
       let uploaded = 0;

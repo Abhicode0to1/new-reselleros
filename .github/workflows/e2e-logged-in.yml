@@ -1,0 +1,207 @@
+name: E2E (logged-in)
+
+# ─── WHAT THIS IS (R-058) ────────────────────────────────────────────────────
+# R-053 added eleven specs that log in as a real user and walk a money workflow —
+# add-seats, renewal, dunning, credit note + refund, input GST, GSTR-1, books,
+# payroll. They have never run anywhere but a laptop. Until they run here, nothing
+# machine-checks lead → quote → pay → invoice.
+#
+# ─── WHY A SEPARATE FILE AND NOT A JOB IN ci.yml ─────────────────────────────
+# Two concrete reasons, not tidiness:
+#   1. scripts/check-config-drift.mjs reads ci.yml and takes the FIRST
+#      NEXT_PUBLIC_SUPABASE_URL it finds, comparing it against the Dockerfile. This
+#      workflow's URL comes from a secret and points at the TEST site, so putting it
+#      in ci.yml would either break that check or teach it to ignore a real drift.
+#   2. This one needs secrets and a live site. ci.yml must stay runnable on a fork
+#      and on a branch nobody has configured.
+#
+# ─── IT FAILS WHEN IT CANNOT TEST. THAT IS THE FEATURE ───────────────────────
+# Every logged-in spec calls test.skip() when its role password is missing, and
+# Playwright reports skips as a green run — "8 passed, 70 skipped" looks like a tick.
+# e2e/suite-health.spec.ts exists to make that impossible locally, and the preflight
+# below does the same thing here, earlier and with the variable names spelled out.
+#
+# So until the secrets are added this workflow is RED, deliberately. A skipped or
+# green-but-empty run is the outcome this whole file exists to prevent. If the noise
+# is unwanted before then, DISABLE the workflow in the Actions tab — do not make it
+# pass quietly.
+#
+# ─── SECRETS AND VARIABLES A HUMAN MUST ADD (no AI can, and none should) ─────
+#   vars.E2E_BASE_URL                      the test site, e.g. https://reseller<os>-test-….run.app
+#   secrets.E2E_SUPABASE_URL               the test site's Supabase (data plane) URL
+#   secrets.E2E_SUPABASE_ANON_KEY          its anon key
+#   secrets.E2E_SUPABASE_SERVICE_ROLE_KEY  seed only — creates the four users
+#   secrets.E2E_OWNER_PASSWORD             ┐
+#   secrets.E2E_MANAGER_PASSWORD           │ no defaults anywhere, by design
+#   secrets.E2E_SALES_PASSWORD             │ (e2e/fixtures/e2e-roles.mjs)
+#   secrets.E2E_ACCOUNTANT_PASSWORD        ┘
+#   secrets.E2E_CRON_SECRET                optional — without it W8's dunning dry-run
+#                                          is reported "not-checked" and W8 still runs
+#
+# Production can never be the target: e2e/fixtures/e2e-roles.mjs carries a hard-coded
+# deny list and the preflight below calls it rather than keeping a second copy.
+
+on:
+  push:
+    branches: [main, deploy, manager-pardeep, billing-abhishek, website-pawan, accounts-hitesh]
+  schedule:
+    # 02:30 UTC = 08:00 IST — the report is waiting before anyone starts work.
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+# ONE run at a time across the whole repo, not one per branch. Every run seeds and
+# writes into the SAME test company; two branches running together would have their
+# invoices and credit notes interleaved, and the failure would look like a flaky test
+# rather than two runs standing on each other. In-progress runs are NOT cancelled —
+# a half-finished run leaves its documents behind either way, so letting it end is
+# cheaper to read than killing it.
+concurrency:
+  group: e2e-logged-in
+  cancel-in-progress: false
+
+jobs:
+  e2e-logged-in:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: production/package-lock.json
+
+      # ── Preflight: say what is missing BEFORE anything looks green ──────────
+      # Names only, never values. Runs before `npm ci` so a misconfigured repo gets
+      # its answer in seconds instead of after a three-minute install.
+      - name: Preflight — required configuration
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+          E2E_MANAGER_PASSWORD: ${{ secrets.E2E_MANAGER_PASSWORD }}
+          E2E_SALES_PASSWORD: ${{ secrets.E2E_SALES_PASSWORD }}
+          E2E_ACCOUNTANT_PASSWORD: ${{ secrets.E2E_ACCOUNTANT_PASSWORD }}
+        run: |
+          node --input-type=module -e '
+            const { E2E_ROLES, missingEnvFor, productionHostReason } =
+              await import("./e2e/fixtures/e2e-roles.mjs");
+
+            const missing = [];
+            if (!process.env.E2E_BASE_URL) missing.push("vars.E2E_BASE_URL");
+            if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("secrets.E2E_SUPABASE_SERVICE_ROLE_KEY");
+            // The role passwords and the Supabase pair, from the same helper the specs
+            // and the seed use — so this list can never disagree with what they need.
+            // The two Supabase names are mapped because the secret is called
+            // E2E_SUPABASE_* here (it points at the TEST site) while the code reads it
+            // as NEXT_PUBLIC_SUPABASE_*; printing the code name would send somebody to
+            // create a secret that this workflow never looks at.
+            const SECRET_NAME = {
+              NEXT_PUBLIC_SUPABASE_URL:      "secrets.E2E_SUPABASE_URL",
+              NEXT_PUBLIC_SUPABASE_ANON_KEY: "secrets.E2E_SUPABASE_ANON_KEY",
+            };
+            for (const name of missingEnvFor(E2E_ROLES)) missing.push(SECRET_NAME[name] ?? `secrets.${name}`);
+
+            if (missing.length) {
+              console.error("\nThis workflow cannot test anything yet. Missing:\n" +
+                missing.map((m) => "  · " + m).join("\n") +
+                "\n\nAdd them under Settings → Secrets and variables → Actions." +
+                "\nNames only are printed here; no value is ever logged." +
+                "\nWithout them every logged-in spec SKIPS and the run would report green." +
+                "\nSee production/e2e/README.md, \"Logged-in E2E\".\n");
+              process.exit(1);
+            }
+
+            // Production is refused by the repo deny list, not by a copy of it here.
+            for (const [label, value] of [["vars.E2E_BASE_URL", process.env.E2E_BASE_URL],
+                                          ["secrets.E2E_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL]]) {
+              const reason = productionHostReason(value);
+              if (reason) {
+                console.error(`\nREFUSING: ${label} points at production — ${reason}.` +
+                  "\nThis suite creates invoices, credit notes and salary runs, and resets user passwords.\n");
+                process.exit(1);
+              }
+            }
+            console.log("Preflight OK — configuration present and the target is not production.");
+          '
+
+      - run: npm ci
+
+      # suite-health.spec.ts asserts that production/.env.test EXISTS, because on a
+      # laptop its absence is the usual reason the suite is secretly empty. In CI the
+      # values come from secrets, so the file is written here to satisfy the same
+      # check. It is gitignored and lives only on the runner.
+      - name: Write .env.test from secrets
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+          E2E_MANAGER_PASSWORD: ${{ secrets.E2E_MANAGER_PASSWORD }}
+          E2E_SALES_PASSWORD: ${{ secrets.E2E_SALES_PASSWORD }}
+          E2E_ACCOUNTANT_PASSWORD: ${{ secrets.E2E_ACCOUNTANT_PASSWORD }}
+          E2E_CRON_SECRET: ${{ secrets.E2E_CRON_SECRET }}
+        # Written through the environment, never interpolated into the script body:
+        # a `${{ secrets.X }}` pasted inline would end up in the run log on any shell
+        # trace, and `set -x` is one debugging commit away.
+        run: |
+          umask 077
+          {
+            printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n'      "$NEXT_PUBLIC_SUPABASE_URL"
+            printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+            printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n'     "$SUPABASE_SERVICE_ROLE_KEY"
+            printf 'E2E_OWNER_PASSWORD=%s\n'            "$E2E_OWNER_PASSWORD"
+            printf 'E2E_MANAGER_PASSWORD=%s\n'          "$E2E_MANAGER_PASSWORD"
+            printf 'E2E_SALES_PASSWORD=%s\n'            "$E2E_SALES_PASSWORD"
+            printf 'E2E_ACCOUNTANT_PASSWORD=%s\n'       "$E2E_ACCOUNTANT_PASSWORD"
+            printf 'E2E_CRON_SECRET=%s\n'               "$E2E_CRON_SECRET"
+          } > .env.test
+          echo "wrote .env.test ($(wc -l < .env.test) lines, values not shown)"
+
+      - name: Install Chromium
+        # Only the browser the wNN specs use — the mobile project ignores them
+        # (playwright.config.ts testIgnore), so the other engines are download time
+        # spent on tests that will not run.
+        run: npx playwright install --with-deps chromium
+
+      - name: Seed the E2E test company
+        env:
+          E2E_ALLOW_SEED: "1"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+          E2E_MANAGER_PASSWORD: ${{ secrets.E2E_MANAGER_PASSWORD }}
+          E2E_SALES_PASSWORD: ${{ secrets.E2E_SALES_PASSWORD }}
+          E2E_ACCOUNTANT_PASSWORD: ${{ secrets.E2E_ACCOUNTANT_PASSWORD }}
+        run: node e2e/fixtures/seed-e2e-tenant.mjs
+
+      - name: Run the logged-in workflows
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+          E2E_MANAGER_PASSWORD: ${{ secrets.E2E_MANAGER_PASSWORD }}
+          E2E_SALES_PASSWORD: ${{ secrets.E2E_SALES_PASSWORD }}
+          E2E_ACCOUNTANT_PASSWORD: ${{ secrets.E2E_ACCOUNTANT_PASSWORD }}
+          E2E_CRON_SECRET: ${{ secrets.E2E_CRON_SECRET }}
+        # suite-health runs WITH them, not after: it is the test that fails if the
+        # others were allowed to skip, so it has to be in the same invocation.
+        # --workers=1 because every spec shares one test company; parallel workers
+        # would create documents inside each other's assertions.
+        run: npx playwright test e2e/w0 e2e/w1 e2e/suite-health.spec.ts --project=chromium --workers=1
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: production/playwright-report
+          retention-days: 14

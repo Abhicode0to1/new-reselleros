@@ -29,9 +29,10 @@ import { MarginPill, computeMargin } from "@/components/features/margin-pill";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { AddLineItemDialog } from "@/components/features/quotes/add-line-item-dialog";
 import { BulkDomainsDialog } from "@/components/features/quotes/bulk-domains-dialog";
+import { domainLineYears, isDomainPurchaseLine } from "@/lib/provisioning/products";
 import { ViewDomainsDialog } from "@/components/features/quotes/view-domains-dialog";
 import { matchLeadToCustomer, matchNote } from "@/lib/quotes/match-customer";
-import { SUPPORT_TIERS, findSupportSku } from "@/lib/support/tiers";
+import { SUPPORT_TIERS, findSupportSku, isSupportSkuId } from "@/lib/support/tiers";
 import { QuotePreviewDialog } from "@/components/features/quotes/quote-preview-dialog";
 import { useCustomers } from "@/lib/queries/customers";
 import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
@@ -49,6 +50,10 @@ import { shortcutText } from "@/lib/keyboard/shortcuts";
 import { COUNTRIES } from "@/lib/gst/countries";
 import { BILLING_CURRENCIES, isForeignCurrency, formatForeign } from "@/lib/currency";
 import { addOrMergeLine } from "@/lib/quotes/line-items";
+import { lineFromCatalog, catalogYearlyPrice } from "@/lib/quotes/catalog-line";
+import { headlinePrice } from "@/lib/catalog/headline-price";
+import { suggestPlanProducts, productSupportSku, supplyStateMissing } from "@/lib/quotes/quote-assist";
+import { stateCodeFromGstin } from "@/lib/gst/gstin-state";
 import { rupee, formatDate, GST_STATE_BY_CODE } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { QuoteLineItem, LineCommitment, BillingCycle, Item } from "@/lib/supabase/database.types";
@@ -58,6 +63,11 @@ import {
 import { slabPricing, nextSlabUpsell } from "@/lib/quotes/volume-tiers";
 import { SolutionPackagePicker } from "@/components/features/quotes/solution-package-picker";
 import { SupportPlanPicker } from "@/components/features/quotes/support-plan-picker";
+
+/** R-156: show the term picker on a domain REGISTRATION line — by its name too, so it is there
+ *  before the domain is typed (isDomainPurchaseLine needs the name filled in). */
+const isRegistrationLine = (l: QuoteLineItem) =>
+  !l.bulk && (isDomainPurchaseLine(l) || /\b(domain|registration)\b/i.test(l.name ?? ""));
 
 // Quote IDs are allocated at SAVE time via the central document-numbering RPC
 // (see migration 0004_document_series.sql) — this guarantees sequential per-tenant
@@ -186,6 +196,8 @@ export function QuoteBuilder() {
   const [leadContact, setLeadContact] = React.useState(leadContactInit);
   const [leadPhone,   setLeadPhone]   = React.useState(leadPhoneInit);
   const [leadEmail,   setLeadEmail]   = React.useState(leadEmailInit);
+  /* Lead contact shows as one summary card; Edit opens the fields (2 Oct 2026). */
+  const [editProspect, setEditProspect] = React.useState(false);
   // Prospect place-of-supply (state) + optional GSTIN — drives CGST/SGST vs
   // IGST for a prospect quote (no customer record exists yet). Persisted back
   // to the lead on save so it flows to the customer on conversion.
@@ -385,13 +397,26 @@ export function QuoteBuilder() {
       if (usdMode && usdPricingBasis === "international" && usd && usd.msrp > 0) {
         annualRate = Math.round(usd.msrp * 12 * fx);
         annualCost = Math.round(usd.wholesale * 12 * fx);
+      } else if (headlinePrice(it).unit === "yr") {
+        /* A yearly-total plan (support "(Yearly)", msrp 0). msrp × 12 here re-priced it
+           to ₹0 the moment this effect re-ran (2 Oct 2026). */
+        const p = catalogYearlyPrice(it);
+        annualRate = p.rate;
+        annualCost = p.cost;
       } else {
         const commitment = l.commitment ?? "annual_yearly";
         const tier = it.prices?.[commitment === "monthly" ? "monthly" : "annual"];
         annualRate = (tier?.msrp ?? it.msrp) * 12;
         annualCost = (tier?.wholesale ?? it.wholesale) * 12;
       }
-      return l.rate === annualRate && l.cost === annualCost ? l : { ...l, rate: annualRate, cost: annualCost };
+      /* Keep the line's discount: a package (or a rep) priced it below list, and a
+         currency switch must move the list price, not erase the discount (2 Oct 2026). */
+      const listBefore = l.list_rate ?? l.rate;
+      const ratio = listBefore > 0 && l.rate < listBefore ? l.rate / listBefore : 1;
+      const rate = Math.round(annualRate * ratio);
+      return l.rate === rate && l.cost === annualCost && (l.list_rate ?? l.rate) === annualRate
+        ? l
+        : { ...l, rate, list_rate: annualRate, cost: annualCost };
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currency, exchangeRate, catalog, usdPricingBasis]);
@@ -640,7 +665,9 @@ export function QuoteBuilder() {
   // picked customer's state. Drives CGST+SGST (intra) vs IGST (inter).
   const buyerStateCode = isLeadMode
     ? (leadStateCode || null)
-    : (customerId ? (customer?.state_code ?? null) : (prospectStateCode || null));
+    /* A customer's GSTIN proves their state — 36 of 41 GSTIN customers had no
+       state_code on file, so the GSTIN prefix is the fallback (2 Oct 2026). */
+    : (customerId ? (customer?.state_code || stateCodeFromGstin(customer?.gstin) || null) : (prospectStateCode || null));
   const interState = isInterStateSupply(buyerStateCode, currentUser?.tenantStateCode, { customerGstin: customerId ? customer?.gstin : null, sellerGstin: currentUser?.tenantGstin });
 
   // Selling gross = the (negotiated) rate × qty. This is the actual revenue and
@@ -652,8 +679,14 @@ export function QuoteBuilder() {
   const totalCost         = lineItems.reduce((s, it) => s + it.qty * it.cost, 0);
   /* Lines that are actually being SOLD but whose cost nobody knows. A ₹0 line is
      excluded — a free line legitimately costs nothing, and flagging it would train
-     people to dismiss the banner. */
-  const costlessLines     = lineItems.filter((it) => it.cost <= 0 && it.rate > 0);
+     people to dismiss the banner. A support plan is excluded too: it is our own
+     service, so ₹0 is its real cost. */
+  const costUnknown       = (it: { cost: number; rate: number; item_id?: string | null }) =>
+    it.cost <= 0 && it.rate > 0 && !isSupportSkuId(it.item_id);
+  const costlessLines     = lineItems.filter(costUnknown);
+  /* One-tap product chips for an empty quote, from the lead's interest. */
+  const planChips         = suggestPlanProducts(catalog, leadPlan);
+  const chipSeats         = leadSeats && parseInt(leadSeats, 10) > 0 ? parseInt(leadSeats, 10) : null;
   // Customer discount is DERIVED, not applied: it's the gap between the LIST
   // price (list_rate) and what we're actually charging (rate). The rate is
   // already the discounted price, so taxable = subtotal (no further deduction —
@@ -812,6 +845,10 @@ export function QuoteBuilder() {
   const updateDomain = (id: string, d: string) => {
     setLineItems((s) => s.map((l) => (l.id === id ? { ...l, domain: d || null } : l)));
   };
+  /** R-156: a domain registration line's term. The register cron registers for exactly this. */
+  const updateYears = (id: string, years: number) => {
+    setLineItems((s) => s.map((l) => (l.id === id ? { ...l, years: years > 1 ? years : undefined } : l)));
+  };
   /** What the customer may change on the public page. See LineAdjustControls. */
   const updateAdjustable = (id: string, patch: Partial<QuoteLineItem>) => {
     setLineItems((s) => s.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -879,6 +916,15 @@ export function QuoteBuilder() {
     }
     if (lineItems.length === 0) {
       toast.error("Add at least one line item");
+      return;
+    }
+    /* GST guard (2 Oct 2026). With no place of supply the quote assumes CGST+SGST; a
+       draft may wait for the state, a quote that goes to the customer may not. Only for a
+       lead or typed prospect, where the state field is on this screen; an existing
+       customer without one keeps the amber note (their record is fixed on /customers). */
+    if (status === "sent" && !customerId && supplyStateMissing({ isExport, buyerStateCode })) {
+      toast.error("Pick the customer's state first — it decides CGST+SGST or IGST");
+      document.getElementById(isLeadMode ? "leadState" : "state")?.focus();
       return;
     }
 
@@ -1170,6 +1216,21 @@ export function QuoteBuilder() {
                 </div>
               </div>
 
+              {/* The lead already carries who this is — show it as one card, open the
+                  fields only to change them (2 Oct 2026: the form pushed the line items
+                  below the fold on every lead quote). */}
+              {!editProspect && leadCompany.trim() && (leadEmail.trim() || leadPhone.trim()) ? (
+                <div className="flex items-start justify-between gap-3 rounded-md border border-hairline bg-paper-2/40 px-3 py-2.5">
+                  <div className="min-w-0 text-sm">
+                    <div className="font-medium text-ink truncate">{leadCompany}</div>
+                    <div className="text-2xs text-ink-3 mt-0.5 break-words">
+                      {[leadContact, leadPhone, leadEmail].filter((v) => v && v.trim()).join(" · ")}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditProspect(true)}>Edit</Button>
+                </div>
+              ) : (
+              <>
               <FormField label="Company" htmlFor="leadCompany">
                 <Input
                   id="leadCompany"
@@ -1210,6 +1271,8 @@ export function QuoteBuilder() {
                   placeholder="e.g. contact@company.com"
                 />
               </FormField>
+              </>
+              )}
 
               {/* Place of supply — drives correct GST for the prospect quote.
                   Without it we'd assume intra-state (CGST+SGST) for everyone. */}
@@ -1233,7 +1296,13 @@ export function QuoteBuilder() {
                   <Input
                     id="leadGstin"
                     value={leadGstin}
-                    onChange={(e) => setLeadGstin(e.target.value.toUpperCase())}
+                    onChange={(e) => {
+                      const g = e.target.value.toUpperCase();
+                      setLeadGstin(g);
+                      /* A valid GSTIN proves the state — fill it if nobody has. */
+                      const fromGstin = stateCodeFromGstin(g);
+                      if (fromGstin && !leadStateCode) setLeadStateCode(fromGstin);
+                    }}
                     className="font-mono"
                     placeholder="e.g. 27AABCE9876D1Z3"
                   />
@@ -1581,10 +1650,39 @@ export function QuoteBuilder() {
               </svg>
             </div>
             <div className="font-serif text-lg mb-1">No line items yet</div>
-            <p className="text-sm text-ink-3 mb-4">Add products from your catalog or enter custom items.</p>
-            <Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>
-              Add first item
-            </Button>
+            {planChips.length > 0 ? (
+              <>
+                {/* One tap per product the lead is interested in — the rep used to open
+                    the catalogue and search for what the lead already said (2 Oct 2026). */}
+                <p className="text-sm text-ink-3 mb-3">
+                  {leadPlan ? <>Interested in <b className="text-ink">{leadPlan}</b>. </> : null}
+                  Tap a plan to add it{chipSeats ? ` with ${chipSeats} seats` : ""}.
+                </p>
+                <div className="flex flex-wrap justify-center gap-2 mb-4">
+                  {planChips.map((it) => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => addLine(lineFromCatalog(it, { qty: chipSeats ?? undefined }))}
+                      className="inline-flex flex-col items-start rounded-lg border border-hairline bg-paper px-3 py-2 text-left hover:border-amber hover:bg-amber-soft/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                    >
+                      <span className="text-sm font-medium text-ink">{it.name}</span>
+                      <span className="text-2xs text-ink-3 tabular-nums">{rupee(catalogYearlyPrice(it).rate)}/seat/yr</span>
+                    </button>
+                  ))}
+                </div>
+                <Button variant="default" icon="plus" onClick={() => setAddOpen(true)}>
+                  Something else
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-ink-3 mb-4">Add products from your catalog or enter custom items.</p>
+                <Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>
+                  Add first item
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -1640,7 +1738,7 @@ export function QuoteBuilder() {
                         className="mt-0.5 w-full px-2 py-1.5 text-sm tabular-nums border border-hairline rounded bg-paper focus:outline-none focus:ring-2 focus:ring-amber focus:border-amber"
                       />
                     </label>
-                    <label className="block">
+                    <label className="block col-span-2">
                       <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Commit</span>
                       <select
                         value={commitType}
@@ -1651,6 +1749,18 @@ export function QuoteBuilder() {
                         <option value="annual">Annual (1-yr)</option>
                       </select>
                     </label>
+                  </div>
+                  <LineBandNote line={line} catalog={catalog} />
+                  <LineSupportToggle line={line} catalog={catalog} lineItems={lineItems} onAdd={addLine} />
+                  {/* The rest is set once and rarely touched — folded so qty, rate and amount
+                      lead the card (2 Oct 2026). */}
+                  <details className="group rounded-md border border-hairline/70 px-2.5 py-1.5">
+                    <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-2xs text-ink-3">
+                      <span>More · starts {line.start_date ? formatDate(line.start_date) : "on payment"} · {isSupportSkuId(line.item_id) ? "own service" : costUnknown(line) ? "margin unknown" : `margin ${lineMargin.marginPct}%`}</span>
+                      <Icon name="chevron_down" size={12} className="transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
                     <label className="block">
                       <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Starts</span>
                       <input
@@ -1670,7 +1780,20 @@ export function QuoteBuilder() {
                         />
                       </label>
                     )}
-                  </div>
+                    {isRegistrationLine(line) && (
+                      <label className="block col-span-2">
+                        <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Register for</span>
+                        <select
+                          value={domainLineYears(line)}
+                          onChange={(e) => updateYears(line.id, Number(e.target.value))}
+                          className="mt-0.5 w-full px-2 py-1.5 text-sm border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-amber focus:border-amber"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((y) => <option key={y} value={y}>{y} year{y === 1 ? "" : "s"}</option>)}
+                        </select>
+                        {domainLineYears(line) > 1 && <span className="text-2xs text-ink-3">Rate = the price for all {domainLineYears(line)} years</span>}
+                      </label>
+                    )}
+                    </div>
                   <div className="text-2xs text-ink-3 inline-flex items-center gap-1 flex-wrap">
                     <span>Cost {isUsdBill ? "$" : "₹"}</span>
                     <input
@@ -1684,13 +1807,14 @@ export function QuoteBuilder() {
                         cost-unknown banner above for why. */}
                     <span>
                       /seat{unitLabel} ·{" "}
-                      {line.cost <= 0 && line.rate > 0
+                      {costUnknown(line)
                         ? <span className="font-semibold text-amber-ink">Margin unknown</span>
                         : <>Margin {lineMargin.marginPct}%</>}
                     </span>
                   </div>
-                  <LineBandNote line={line} catalog={catalog} />
                   <LineAdjustControls line={line} onChange={(p) => updateAdjustable(line.id, p)} />
+                    </div>
+                  </details>
                   <div className="flex items-center justify-between border-t border-hairline pt-2">
                     <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Amount</span>
                     <span className="font-medium text-sm tabular-nums">{fmtDispC(dispAmt(line.rate, line.qty, line.discount_pct ?? 0))}{billingN > 1 ? " /yr" : ""}</span>
@@ -1768,12 +1892,13 @@ export function QuoteBuilder() {
                         />
                         <span>
                           /seat{unitLabel} ·{" "}
-                          {line.cost <= 0 && line.rate > 0
+                          {costUnknown(line)
                             ? <span className="font-semibold text-amber-ink">Margin unknown</span>
                             : <>Margin {lineMargin.marginPct}%</>}
                         </span>
                       </div>
                       <LineBandNote line={line} catalog={catalog} />
+                      <LineSupportToggle line={line} catalog={catalog} lineItems={lineItems} onAdd={addLine} />
                   <LineAdjustControls line={line} onChange={(p) => updateAdjustable(line.id, p)} />
                       {/* Discounting is quote-level only (see totals sidebar). Any
                           per-line discount stored on legacy/imported quotes is still
@@ -1821,6 +1946,20 @@ export function QuoteBuilder() {
                               title="Domain this subscription is set up on — optional"
                               className="text-2xs px-1.5 py-0.5 w-36 border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
                             />
+                          </div>
+                        )}
+                        {isRegistrationLine(line) && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Register for</span>
+                            <select
+                              aria-label={`Registration years for ${line.name}`}
+                              value={domainLineYears(line)}
+                              onChange={(e) => updateYears(line.id, Number(e.target.value))}
+                              title={domainLineYears(line) > 1 ? `Rate = the price for all ${domainLineYears(line)} years` : "Registration term"}
+                              className="text-2xs px-1.5 py-0.5 border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
+                            >
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((y) => <option key={y} value={y}>{y} yr{y === 1 ? "" : "s"}</option>)}
+                            </select>
                           </div>
                         )}
                       </div>
@@ -2206,12 +2345,15 @@ export function QuoteBuilder() {
         )}
       </Card>
 
-      {/* Bottom action row — all 3 send-shaped buttons save the quote first
+      {/* Bottom action row. On phones it sticks ABOVE the fixed bottom tab bar (56px + safe
+          area): at bottom-0 the tab bar covered "Create invoice", so an invoice could not be
+          made on a phone at all (found on staging, 6 Oct 2026).
+          All 3 send-shaped buttons save the quote first
           (status='sent') and then signal the detail page to open the right
           dialog via a ?send= query param. "Duplicate" stays placeholder
           until we wire a real duplicate flow. */}
       {lineItems.length > 0 && (
-        <div className="order-last sticky bottom-0 z-20 -mx-4 -mb-4 flex items-center justify-between gap-3 flex-wrap border-t border-hairline bg-paper px-4 py-3 shadow-[0_-6px_16px_-10px_rgba(0,0,0,0.25)] md:-mx-6 md:-mb-6 md:px-6 lg:-mx-8 lg:-mb-8 lg:px-8">
+        <div className="order-last sticky bottom-[calc(56px+env(safe-area-inset-bottom))] md:bottom-0 z-20-mx-4 -mb-4 flex items-center justify-between gap-3 flex-wrap border-t border-hairline bg-paper px-4 py-3 shadow-[0_-6px_16px_-10px_rgba(0,0,0,0.25)] md:-mx-6 md:-mb-6 md:px-6 lg:-mx-8 lg:-mb-8 lg:px-8">
           <div className="flex items-baseline gap-2">
             <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">
               {!showPerInvoice && billingN === 1 ? "Total payable now" : "Total"}
@@ -2321,8 +2463,11 @@ export function QuoteBuilder() {
                 .filter((id): id is string => !!id)),
           );
           const line = lineItems.find((l) => l.item_id && supportSkuIds.has(l.item_id));
-
-          return (
+          /* With product-wise support in the catalogue (each licence line offers its own
+             "+ Add support"), the three company-wide plan cards are a second road to the
+             same thing — fold them away unless one is already on the quote. */
+          const hasProductSupport = catalog.some((c) => isSupportSkuId(c.id) && !supportSkuIds.has(c.id));
+          const picker = (
             <SupportPlanPicker
               items={catalog}
               onAdd={addLine}
@@ -2333,6 +2478,19 @@ export function QuoteBuilder() {
               } : null}
               onRemove={line ? () => removeLine(line.id) : undefined}
             />
+          );
+          if (!hasProductSupport || line) return picker;
+          return (
+            <details className="group">
+              <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-sm">
+                <span>
+                  <span className="font-semibold text-ink">Company-wide support plans</span>
+                  <span className="block text-2xs text-ink-3">Support for one product is on each licence line: “Add support”.</span>
+                </span>
+                <Icon name="chevron_down" size={14} className="text-ink-3 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-3">{picker}</div>
+            </details>
           );
         })()}
       </Card>
@@ -2503,5 +2661,34 @@ function TotalRow({ label, value, tone }: { label: string; value: string; tone?:
         tone === "rose" && "text-rose"
       )}>{value}</span>
     </div>
+  );
+}
+
+/**
+ * "+ <product> Support" under a licence line (2 Oct 2026, Pardeep: support add-ons are
+ * per product — "Google Workspace Business Starter Support"). Offers the product's own
+ * support add-on on the line's cycle; once it is on the quote, says so instead.
+ */
+function LineSupportToggle({ line, catalog, lineItems, onAdd }: {
+  line: QuoteLineItem; catalog: Item[]; lineItems: QuoteLineItem[]; onAdd: (l: QuoteLineItem) => void;
+}) {
+  if (!line.item_id || isSupportSkuId(line.item_id)) return null;
+  const cycle = line.commitment === "monthly" ? "monthly" : "yearly";
+  const sku = productSupportSku(catalog, line.item_id, cycle);
+  if (!sku) return null;
+  const onQuote = lineItems.some((l) => l.item_id === sku.id
+    || l.item_id === productSupportSku(catalog, line.item_id, cycle === "yearly" ? "monthly" : "yearly")?.id);
+  if (onQuote) {
+    return <div className="mt-1 text-2xs text-emerald">✓ Support added</div>;
+  }
+  const price = catalogYearlyPrice(sku).rate;
+  return (
+    <button
+      type="button"
+      onClick={() => onAdd(lineFromCatalog(sku))}
+      className="mt-1 inline-flex items-center gap-1 rounded-md border border-dashed border-amber/60 px-2 py-0.5 text-2xs font-medium text-amber-ink hover:bg-amber-soft/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+    >
+      <Icon name="plus" size={11} /> Add support · {rupee(price)}/yr
+    </button>
   );
 }

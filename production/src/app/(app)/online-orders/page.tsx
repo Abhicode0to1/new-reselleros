@@ -10,6 +10,9 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { ORDER_FOCI, ORDER_FOCUS_LABEL, orderInFocus, type OrderFocus } from "@/lib/online-orders/focus";
+import { FocusBanner } from "@/components/shared/focus-banner";
 import { toast } from "sonner";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -555,6 +558,9 @@ function leadToOrder(l: LeadRow): Order {
 
 export default function OnlineOrdersPage() {
   const [tab, setTab]       = React.useState("all");
+  /* R-118: each KPI's own orders (lib/online-orders/focus.ts) — "" = none. */
+  const [focus, setFocus]   = useUrlChoice<OrderFocus>("focus", ORDER_FOCI, "");
+  const focusOn = (f: OrderFocus) => { setTab("all"); setFocus(f); };
   const [search, setSearch] = React.useState("");
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [orders, setOrders]   = React.useState<Order[]>([]);
@@ -603,6 +609,7 @@ export default function OnlineOrdersPage() {
     if (tab === "paid"   && !o.paid)              return false;
     if (tab === "trial"  && o.type !== "trial")   return false;
     if (tab === "issues" && o.status !== "issue") return false;
+    if (focus && !orderInFocus(o, focus)) return false;
     if (search) {
       const q = search.toLowerCase();
       if (
@@ -618,18 +625,14 @@ export default function OnlineOrdersPage() {
 
   // KPI stats — all derived from the live `orders` state (real DB rows
   // merged with the seed demo data at top of the file).
-  const todayStr   = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-  const today      = orders.filter((o) => o.createdAt.includes(todayStr)).length;
-  const provis     = orders.filter((o) => o.status === "provisioning").length;
-  const issues     = orders.filter((o) => o.status === "issue").length;
-  const trialEx    = orders.filter(
-    (o) => o.type === "trial" && o.status === "trial-converting",
-  ).length;
+  const today      = orders.filter((o) => orderInFocus(o, "today")).length;
+  const provis     = orders.filter((o) => orderInFocus(o, "provisioning")).length;
+  const issues     = orders.filter((o) => orderInFocus(o, "issue")).length;
+  const trialEx    = orders.filter((o) => orderInFocus(o, "converting")).length;
   /* Only money actually received — a cart order awaiting payment is not revenue. */
-  const monthKey   = new Date().toISOString().slice(0, 7);
   const awaiting   = orders.filter((o) => o.status === "awaiting-payment");
   const converting = orders.filter((o) => o.status === "trial-converting");
-  const revenueMtd = orders.filter((o) => o.paid && (o.createdIso ?? "").slice(0, 7) === monthKey).reduce(
+  const revenueMtd = orders.filter((o) => orderInFocus(o, "revenue-month")).reduce(
     (s, o) => s + (o.total ?? 0),
     0,
   );
@@ -714,6 +717,7 @@ export default function OnlineOrdersPage() {
           trend="Since midnight"
           trendKind="neutral"
           icon="inbox"
+          onClick={() => focusOn("today")}
         />
         <KPI
           label="Provisioning"
@@ -721,6 +725,7 @@ export default function OnlineOrdersPage() {
           trend="Paid, being set up"
           trendKind="neutral"
           icon="refresh"
+          onClick={() => focusOn("provisioning")}
         />
         <KPI
           label="Issues"
@@ -728,13 +733,15 @@ export default function OnlineOrdersPage() {
           trend={issues > 0 ? "Needs attention" : "None"}
           trendKind={issues > 0 ? "down" : "neutral"}
           icon="alert"
+          onClick={() => focusOn("issue")}
         />
         <KPI
           label="Trials expiring"
           value={trialEx}
-          trend="In next 3 days"
+          trend="Trial ending, converting to paid"
           trendKind="neutral"
           icon="clock"
+          onClick={() => focusOn("converting")}
         />
         <KPI
           label="Revenue MTD"
@@ -742,6 +749,7 @@ export default function OnlineOrdersPage() {
           trend="Paid this month"
           trendKind="neutral"
           icon="rupee"
+          onClick={() => focusOn("revenue-month")}
         />
       </div>
 
@@ -749,10 +757,13 @@ export default function OnlineOrdersPage() {
       <Card className="overflow-hidden">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-5 py-3">
+          {focus && (
+            <FocusBanner label={ORDER_FOCUS_LABEL[focus]} count={filtered.length} onClear={() => setFocus("")} />
+          )}
           <TabBar
             items={tabItems}
             value={tab}
-            onChange={setTab}
+            onChange={(t) => { setFocus(""); setTab(t); }}
           />
           <div className="flex-1" />
           <div className="relative w-72">

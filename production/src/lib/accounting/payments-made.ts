@@ -43,6 +43,23 @@ export interface PaidOutLine {
   matched_to_type: string | null;
   matched_to_id: string | null;
   description: string | null;
+  /** The bank account the line sits in — the banking screen opens a line by account + id. */
+  bank_account_id: string;
+}
+
+/**
+ * Where clicking a payment takes you — its record, in an editable form (2 Oct 2026, Pardeep:
+ * "kisi bhi payment transaction ke click par isko editable form me le jaye").
+ *
+ * expense → the expense form; customer refund → the payment form. Everything else — vendor
+ * bills, salaries, statutory, prepaid, commissions, hand-booked lines, and lines not yet
+ * reconciled — opens the bank line itself on the banking screen, which is where a booked line
+ * is un-reconciled and re-booked (a reconciled salary cannot be edited in place, by design).
+ */
+export function paymentEditHref(l: Pick<PaidOutLine, "id" | "matched_to_type" | "matched_to_id" | "bank_account_id">): string {
+  if (l.matched_to_id && l.matched_to_type === "expense") return `/accounting/expenses?edit=${encodeURIComponent(l.matched_to_id)}`;
+  if (l.matched_to_id && l.matched_to_type === "payment") return `/payments?edit=${encodeURIComponent(l.matched_to_id)}`;
+  return `/accounting/banking/${encodeURIComponent(l.bank_account_id)}?focus=${encodeURIComponent(l.id)}`;
 }
 
 export interface PaidOutSummary {

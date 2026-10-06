@@ -16,6 +16,8 @@
 "use client";
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { RENEWAL_BUCKETS } from "@/lib/navigation/drilldown";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
@@ -572,7 +574,7 @@ export default function RenewalsPage() {
   const { data: me } = useCurrentUser();
   const qc = useQueryClient();
   const router = useRouter();
-  const [bucketTab, setBucketTab] = React.useState("urgent");
+  const [bucketTab, setBucketTab] = useUrlChoice<string>("bucket", RENEWAL_BUCKETS, "urgent"); // R-118
   const [bulkSending, setBulkSending] = React.useState(false);
   const [kpiOpen, setKpiOpen] = React.useState(true);
   const graceDays = me?.tenantGracePeriodDays ?? 0;
@@ -807,22 +809,22 @@ export default function RenewalsPage() {
         {kpiOpen && (
           <div className="p-3 border-t border-hairline space-y-3 bg-paper">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+              <button type="button" onClick={() => setBucketTab("urgent")} aria-pressed={bucketTab === "urgent"} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                 <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Urgent (≤7d)</p>
                 <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{urgent.length} <span className="text-xs text-ink-3 font-normal">({rupee(urgentMrr, { compact: true })} MRR)</span></p>
-              </div>
-              <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+              </button>
+              <button type="button" onClick={() => setBucketTab("upcoming")} aria-pressed={bucketTab === "upcoming"} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                 <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Upcoming (30d)</p>
                 <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{upcoming.length} <span className="text-xs text-ink-3 font-normal">({rupee(upcomingMrr, { compact: true })} MRR)</span></p>
-              </div>
-              <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+              </button>
+              <button type="button" onClick={() => setBucketTab("future")} aria-pressed={bucketTab === "future"} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                 <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Future (31–90d)</p>
                 <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{future.length} <span className="text-xs text-ink-3 font-normal">({rupee(futureMrr, { compact: true })} MRR)</span></p>
-              </div>
-              <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+              </button>
+              <button type="button" onClick={() => setBucketTab("risk")} aria-pressed={bucketTab === "risk"} className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer">
                 <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">High Risk ARR</p>
                 <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{rupee(highRiskArr, { compact: true })} <span className="text-xs text-ink-3 font-normal">({highRiskSubs.length} subs)</span></p>
-              </div>
+              </button>
             </div>
 
             {/* ── Renewal revenue forecast — agle 6 mahine (audit B7) ── */}
@@ -894,6 +896,8 @@ export default function RenewalsPage() {
               { id: "urgent",   label: "Urgent · ≤7d",      count: urgent.length   || undefined },
               { id: "upcoming", label: "Upcoming · 30d",    count: upcoming.length || undefined },
               { id: "future",   label: "Future · 31–90d",   count: future.length   || undefined },
+              /* R-118: the High Risk ARR tile's own set — it had no list to open. */
+              { id: "risk",     label: "High risk · 90d",   count: highRiskSubs.length || undefined },
             ] satisfies TabBarItem[]}
           />
         </div>
@@ -914,6 +918,12 @@ export default function RenewalsPage() {
             title="Future · 31–90 days"
             subtitle="Drip campaign + value-prop content"
             rows={future} graceDays={graceDays} />
+        )}
+        {bucketTab === "risk" && (
+          <RenewalBucket embedded kind="rose"
+            title="High risk · next 90 days"
+            subtitle="Renewals the risk score marks high — talk to these customers first"
+            rows={highRiskSubs} graceDays={graceDays} />
         )}
       </Card>
 

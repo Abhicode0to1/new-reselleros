@@ -1,7 +1,13 @@
 "use client";
 
 /**
- * HomeV2 — the email-first home ("Anutech Home v2" handoff, 5 Sep 2026),
+ * HomeV2 — the email-first page ("Anutech Home v2" handoff, 5 Sep 2026). Since 5 Oct 2026
+ * (R-155) it is the Business Email category page at /email, not the home: the home is
+ * about the whole company (HomeCompany). On /email it drops the "rest of the catalogue"
+ * and ResellerOS bands (the home carries those) and adds Anutech Mail, the ₹79 mailbox
+ * the header promises.
+ *
+ * Originally the email-first home,
  * rebuilt to the handoff's HIGH-FIDELITY design (Pardeep: the zip's home design
  * is much better). Two questions in order — which suite, then which edition —
  * ending in Buy / Start trial / Get a quote.
@@ -24,18 +30,23 @@ import { useEffect, useState } from "react";
 import Link from "@/site/components/ui/SiteLink";
 import { LICENCE_EDITIONS, EDITION_MATRICES, type LicenceEdition } from "@/site/lib/data/catalog";
 import type { MergedEdition } from "@/site/lib/live-catalog";
-import { TRUST, REVIEWS } from "@/site/lib/data/copy";
+import { TRUST } from "@/site/lib/data/copy";
+import { editionDelta } from "@/site/lib/edition-delta";
+import { buyWorkspaceHref } from "@/lib/checkout/buy-link";
+import { HOSTING_FROM_MO } from "@/site/lib/data/hosting-landing-v2";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { HOME_FAQS } from "@/site/lib/data/home-faqs";
+import { MAIL_OPTIONS } from "@/site/lib/data/copy";
+import { MAIL_RATES } from "@/site/lib/data/catalog";
 
 /* Design tokens — the handoff's exact palette. */
-const C = {
+export const C = {
   ink: "#0C1116", ink2: "#2A333D", body: "#4A5560", sec: "#5C6672", faint: "#8A939E",
   blue: "#1668E3", blueDk: "#0A47A0", green: "#0F7B4F", greenT: "#EEF7F0", greenT2: "#E7F4ED",
   surf: "#fff", surfT: "#FBFCFE", sectT: "#F7FAFD", strip: "#F5F7FB", stripBd: "#E6EAF0",
   border: "#D6DCE4", borderL: "#E0E5EC", hair: "#EEF1F5", strong: "#C6CED8", tableHead: "#EEF2F8",
 };
-const MONO = "var(--font-mono), 'IBM Plex Mono', monospace";
+export const MONO = "var(--font-mono), 'IBM Plex Mono', monospace";
 const BTN_PRIMARY = "linear-gradient(180deg, #1668E3, #0A47A0)";
 const SH_CARD = "0 12px 30px -26px rgba(12,17,22,.3)";
 const SH_GREEN = "0 20px 46px -30px rgba(15,123,79,.55)";
@@ -73,6 +84,9 @@ const DESC: Record<string, string> = {
 };
 const ZOHO_FEATURES = ["Custom email on your domain", "Mail, Writer, Sheet, Show, Calendar", "30 GB per user", "IMAP, POP and mobile apps", "Migration done by us, free"];
 
+/** A monthly per-user rate as rupees per user per day, GST included (the hero cards' rule). */
+const perDayOf = (monthly: number) => Math.round((monthly * 1.18 * 12) / 365);
+
 /** ALL "Yes"/valued features for an edition (no cap — the card shows a few and
  *  a "See all N features" toggle reveals the rest). */
 function featuresFor(v: Vendor, i: number): string[] {
@@ -107,9 +121,9 @@ const CROSS_ROWS: readonly { label: string; gw: string; ms: string; zoho: string
  *  real pages. `gst` is "+ GST 18%" or "No charge" per the design. `icon` keys a
  *  simple line-art glyph that fills a tinted 16:9 band (consistent across all
  *  four — no half-empty photo slots). */
-const CATALOGUE_V2: readonly { name: string; href: string; from: string; unit: string; gst: string; body: string; tags: string[]; cta: string; icon: "globe" | "server" | "lock" | "tag"; img?: string }[] = [
+export const CATALOGUE_V2: readonly { name: string; href: string; from: string; unit: string; gst: string; body: string; tags: string[]; cta: string; icon: "globe" | "server" | "lock" | "tag"; img?: string }[] = [
   { name: "Domains", href: "/domains", from: "₹249", unit: "from · first year", gst: "+ GST 18%", body: "500+ extensions, register and renew price on one row.", tags: ["500+ TLDS", "FREE DNS", "WHOIS PRIVACY"], cta: "See domain rates", icon: "globe", img: "/domain-search.jpg" },
-  { name: "Web hosting", href: "/hosting", from: "₹159", unit: "from · /mo, billed yearly", gst: "+ GST 18%", body: "cPanel and LiteSpeed on NVMe, Mumbai and Bengaluru.", tags: ["CPANEL", "LITESPEED", "99.9% SLA"], cta: "See hosting plans", icon: "server", img: "/cat-hosting.png" },
+  { name: "Web hosting", href: "/hosting", from: HOSTING_FROM_MO, unit: "from · /mo, billed yearly", gst: "+ GST 18%", body: "cPanel and LiteSpeed on NVMe, Mumbai and Bengaluru.", tags: ["CPANEL", "LITESPEED", "99.9% SLA"], cta: "See hosting plans", icon: "server", img: "/cat-hosting.png" },
   { name: "SSL & security", href: "/ssl", from: "₹0", unit: "free DV", gst: "No charge", body: "Free DV on every hosted site; wildcard and OV when needed.", tags: ["DV", "OV", "WILDCARD"], cta: "See SSL options", icon: "lock", img: "/cat-ssl.jpg" },
   { name: "Reseller program", href: "/reseller", from: "₹0", unit: "to join", gst: "No charge", body: "Published wholesale rates. No slabs, no advance deposit.", tags: ["NO DEPOSIT", "ONE RATE", "WHITE LABEL"], cta: "See the rate card", icon: "tag", img: "/cat-reseller.png" },
 ];
@@ -133,7 +147,8 @@ const wrap = (extra?: React.CSSProperties): React.CSSProperties => ({ maxWidth: 
 const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: C.blue };
 const monoNum = (extra?: React.CSSProperties): React.CSSProperties => ({ fontFamily: MONO, fontVariantNumeric: "tabular-nums", ...extra });
 
-export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
+export function HomeV2({ editions, page = "email" }: { editions?: MergedEdition[]; page?: "email" | "home" } = {}) {
+  const onEmail = page === "email";
   const [vendorKey, setVendorKey] = useState<VendorKey>("gw");
   const [billing, setBilling] = useState<Billing>("annual");
   const [seats, setSeats] = useState(1);
@@ -283,49 +298,64 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
               const rate = rateOf(e);
               const pop = e.name === vendor.popular;
               const feats = featuresFor(vendor, i);
+              const lowerName = i > 0 ? (LABEL[vendorEditions[i - 1].name] ?? vendorEditions[i - 1].name) : null;
+              const shown = i > 0 ? editionDelta(featuresFor(vendor, i - 1), feats) : feats;
               const total = annual ? `${inr(e.annual * 12 * seats)}/yr` : `${inr(e.monthly * seats)}/mo`;
-              const buyHref = WA(`Hi Anutech — I'd like to buy ${vendor.name} ${LABEL[e.name] ?? e.name} for ${seats} user${seats > 1 ? "s" : ""} (${annual ? "annual" : "monthly"}). Please send the payment link.`);
+              /* R-120: Google editions go to the Razorpay checkout; M365 / Zoho have no online
+                 buy yet and keep the WhatsApp request. */
+              /* R-157: online payment is yearly only (the checkout writes an annual commitment), so
+                 with Monthly picked the card offers a monthly quote instead of a Buy that would charge
+                 a year. The quote link carries edition, users and term so nothing is typed twice. */
+              const quoteHref = `/quote?ed=${encodeURIComponent(e.name)}&seats=${seats}&term=${annual ? "annual" : "monthly"}`;
+              const onlinePay = buyWorkspaceHref(e.name, seats);
+              const payHref = annual ? onlinePay : null;
+              const buyHref = payHref ?? (onlinePay ? quoteHref : null) ?? WA(`Hi Anutech — I'd like to buy ${vendor.name} ${LABEL[e.name] ?? e.name} for ${seats} user${seats > 1 ? "s" : ""} (${annual ? "annual" : "monthly"}). Please send the payment link.`);
               return (
-                <div key={e.name} style={{ display: "flex", flexDirection: "column", minHeight: 352, padding: 18, border: `1px solid ${pop ? C.green : C.border}`, borderRadius: 12, background: pop ? C.greenT : C.surf, boxShadow: pop ? SH_GREEN : SH_CARD }}>
-                  {/* head — sticks below the strip while scrolling a long card */}
-                  <div style={{ position: "sticky", top: 130, zIndex: 5, margin: "-18px -18px 10px", padding: "9px 18px 8px", background: pop ? C.greenT : C.surfT, backdropFilter: "blur(4px)", borderBottom: `1px solid ${C.hair}`, borderRadius: "12px 12px 0 0" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.02em", color: C.ink }}>{LABEL[e.name] ?? e.name}</span>
-                        {pop && <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase", color: C.green, background: "#fff", border: `1px solid ${C.green}`, padding: "2px 5px", borderRadius: 999 }}>Popular</span>}
-                      </span>
-                      <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                        <span style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                          <span style={monoNum({ fontSize: 19, fontWeight: 500, letterSpacing: "-0.03em", color: C.ink })}>{inr(rate)}</span>
-                          <span style={{ fontSize: 10.5, color: C.sec }}>/user/mo</span>
-                        </span>
-                        <span style={{ fontSize: 10, lineHeight: 1.3, color: C.sec, textAlign: "right", marginTop: 1 }}>{total} · {seats} user{seats > 1 ? "s" : ""} + GST</span>
-                      </span>
-                    </div>
+                <div key={e.name} style={{ position: "relative", display: "flex", flexDirection: "column", padding: 20, border: `1px solid ${pop ? C.green : C.border}`, borderRadius: 12, background: pop ? C.greenT : C.surf, boxShadow: pop ? SH_GREEN : SH_CARD }}>
+                  {/* Card order (2 Oct 2026): who it is for → the price, big → what N users cost →
+                      one primary action that says where it goes → what this edition ADDS over the
+                      one below (editionDelta), so the eye finds what the extra rupees buy. */}
+                  {pop && (
+                    <span style={{ position: "absolute", top: -10, left: 20, fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#fff", background: C.green, padding: "3px 8px", borderRadius: 999 }}>Most teams pick this</span>
+                  )}
+                  <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", color: C.ink }}>{LABEL[e.name] ?? e.name}</div>
+                  <p style={{ fontSize: 12.5, lineHeight: 1.45, color: C.sec, margin: "4px 0 14px", minHeight: 36 }}>{DESC[e.name] ?? e.note}</p>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                    <span style={monoNum({ fontSize: 30, fontWeight: 600, letterSpacing: "-0.04em", color: C.ink })}>{inr(rate)}</span>
+                    <span style={{ fontSize: 12, color: C.sec }}>/user/mo + GST</span>
                   </div>
-                  {/* top buy */}
-                  <a href={buyHref} target="_blank" rel="noopener" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13.5, fontWeight: 600, padding: "11px 8px", borderRadius: 8, background: BTN_PRIMARY, color: "#fff", border: "none", marginBottom: 12, boxShadow: SH_BTN, textDecoration: "none" }}>
-                    <CartIcon /> Buy now
+                  <div style={{ fontSize: 12, color: C.sec, marginTop: 4 }}>≈ {inr(perDayOf(rate))} per user a day, GST included</div>
+                  <div style={{ fontSize: 12.5, color: C.ink2, marginTop: 8, padding: "7px 10px", background: pop ? "#fff" : C.sectT, borderRadius: 8 }}>
+                    <b style={{ fontWeight: 600 }}>{total}</b> for {seats} user{seats > 1 ? "s" : ""} + GST
+                  </div>
+                  <a href={buyHref} {...(payHref || onlinePay ? {} : { target: "_blank", rel: "noopener" })} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 600, padding: "11px 8px", borderRadius: 8, background: BTN_PRIMARY, color: "#fff", border: "none", marginTop: 14, boxShadow: SH_BTN, textDecoration: "none" }}>
+                    {payHref || !onlinePay ? <><CartIcon /> Buy now</> : "Get a monthly quote"}
                   </a>
-                  <p style={{ fontSize: 12.5, lineHeight: 1.45, color: C.sec, margin: "0 0 12px", minHeight: 36 }}>{DESC[e.name] ?? e.note}</p>
+                  <p style={{ fontSize: 11, color: C.sec, textAlign: "center", margin: "6px 0 0" }}>
+                    {payHref ? "Pay online · billed yearly · GST invoice in ₹" : onlinePay ? "Monthly (flexible) is quoted · online payment is yearly" : "Opens WhatsApp · we send the payment link · GST invoice in ₹"}
+                  </p>
+                  <div style={{ height: 1, background: C.hair, margin: "16px 0 12px" }} />
+                  {lowerName && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.ink, marginBottom: 8 }}>Everything in {lowerName}, plus:</div>
+                  )}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-                    {(expanded[e.name] ? feats : feats.slice(0, 4)).map((f) => (
+                    {(expanded[e.name] ? shown : shown.slice(0, 5)).map((f) => (
                       <span key={f} style={{ display: "flex", gap: 9, fontSize: 12.5, lineHeight: 1.4, color: C.ink2 }}>
                         <svg aria-hidden viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none", marginTop: 1 }}><path d="M20 6 9 17l-5-5" /></svg>
                         <span>{f}</span>
                       </span>
                     ))}
-                    {feats.length > 4 && (
+                    {shown.length > 5 && (
                       <button onClick={() => setExpanded((x) => ({ ...x, [e.name]: !x[e.name] }))} aria-expanded={!!expanded[e.name]}
                         style={{ alignSelf: "flex-start", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: C.blue, background: "none", border: "none", padding: "2px 0", cursor: "pointer" }}>
-                        {expanded[e.name] ? "Show fewer" : `See all ${feats.length} features`}
+                        {expanded[e.name] ? "Show fewer" : `See all ${shown.length}`}
                       </button>
                     )}
                   </div>
-                  {/* trial / quote */}
-                  <div style={{ display: "flex", gap: 7, marginTop: "auto", paddingTop: 14 }}>
-                    <Link href={`/trial?ed=${encodeURIComponent(e.name)}&seats=${seats}`} style={{ flex: 1, textAlign: "center", fontSize: 12.5, fontWeight: 600, padding: "9px 6px", borderRadius: 8, background: C.surf, color: C.ink, border: `1px solid ${C.strong}`, textDecoration: "none" }}>Trial</Link>
-                    <Link href="/quote" style={{ flex: 1, textAlign: "center", fontSize: 12.5, fontWeight: 600, padding: "9px 6px", borderRadius: 8, background: C.surf, color: C.ink, border: `1px solid ${C.border}` }}>Quote</Link>
+                  {/* secondary actions as links — one primary button per card */}
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: "auto", paddingTop: 16, fontSize: 12.5, fontWeight: 600 }}>
+                    <Link href={`/trial?ed=${encodeURIComponent(e.name)}&seats=${seats}`} style={{ color: C.blue, textDecoration: "none" }}>Try free →</Link>
+                    <Link href={quoteHref as never} style={{ color: C.blue, textDecoration: "none" }}>Get a written quote →</Link>
                   </div>
                 </div>
               );
@@ -478,7 +508,35 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
         </div>
       </section>
 
-      {/* ── CATALOGUE — the rest of what we sell ───────────────────────────── */}
+      {/* ── ANUTECH MAIL — the simple mailbox (email page only) ───────────── */}
+      {onEmail && (() => {
+        const am = MAIL_OPTIONS.find((m) => m.name === "Anutech Mail");
+        if (!am) return null;
+        return (
+          <section id="anutech-mail" style={{ background: C.sectT, borderTop: `1px solid ${C.hair}` }}>
+            <div style={wrap({ padding: "40px 48px", display: "grid", gridTemplateColumns: mob ? "1fr" : "1.2fr 1fr", gap: mob ? 18 : 40, alignItems: "center" })}>
+              <div>
+                <div style={{ ...eyebrow, marginBottom: 10 }}>Only need mail?</div>
+                <h2 style={{ fontSize: mob ? 25 : 28, fontWeight: 700, letterSpacing: "-0.03em", color: C.ink, margin: "0 0 8px", textWrap: "balance" as const }}>Anutech Mail — a plain mailbox on your domain</h2>
+                <p style={{ fontSize: 15, lineHeight: 1.55, color: C.body, margin: 0, maxWidth: 560 }}>No Docs or Meet, just reliable email hosted in India. Right for teams that live in Outlook or their phone and need nothing else.</p>
+              </div>
+              <div style={{ background: C.surf, border: `1px solid ${C.borderL}`, borderRadius: 12, padding: "18px 20px", boxShadow: SH_CARD }}>
+                <span style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                  <span style={monoNum({ fontSize: 26, fontWeight: 500, letterSpacing: "-0.03em", color: C.ink })}>{inr(MAIL_RATES["Anutech Mail"] ?? 79)}</span>
+                  <span style={{ fontSize: 12, color: C.sec }}>/mailbox/mo + GST</span>
+                </span>
+                <ul style={{ listStyle: "none", margin: "10px 0 14px", padding: 0, display: "grid", gap: 5 }}>
+                  {am.lines.map((l) => <li key={l} style={{ fontSize: 13.5, color: C.ink2 }}><span style={{ color: C.green, fontWeight: 700 }}>✓</span> {l}</li>)}
+                </ul>
+                <Link href="/quote" style={{ display: "inline-block", background: BTN_PRIMARY, color: "#fff", borderRadius: 8, padding: "10px 18px", fontSize: 14, fontWeight: 600, textDecoration: "none", boxShadow: SH_BTN }}>Get a mailbox quote →</Link>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* ── CATALOGUE — the rest of what we sell (old home only) ──────────── */}
+      {!onEmail && (
       <section id="catalogue" style={{ background: C.sectT, borderTop: `1px solid ${C.hair}`, scrollMarginTop: 80 }}>
         <div style={wrap({ padding: "44px 48px 48px" })}>
           <div style={eyebrow}>The rest of the catalogue</div>
@@ -511,25 +569,19 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
           </div>
         </div>
       </section>
+      )}
 
       {/* ── TRUST ──────────────────────────────────────────────────────────── */}
       <section style={{ background: C.sectT, borderTop: `1px solid ${C.borderL}` }}>
         <div style={wrap({ padding: "44px 48px" })}>
-          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>
+          {/* 2 Oct 2026: the three "Google review" cards below this were sample text (the names
+              are the app's test fixtures), not reviews anyone wrote — removed until real ones,
+              linked to their source, replace them. */}
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4,1fr)", gap: 16 }}>
             {TRUST.map((f) => (
               <div key={f.label} style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: ("primary" in f && f.primary) ? C.blue : C.ink }}>{f.value}</div>
                 <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: C.sec, marginTop: 4 }}>{f.label}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(3,1fr)", gap: 16 }}>
-            {REVIEWS.filter((r, i, a) => a.findIndex((x) => x.name === r.name) === i).map((r) => (
-              <div key={r.name} style={{ background: C.surf, border: `1px solid ${C.borderL}`, borderRadius: 12, padding: 20, boxShadow: SH_CARD }}>
-                <div aria-label={`${r.stars.split("★").length - 1} star review`} style={{ color: "#B7791F", letterSpacing: 2, marginBottom: 10 }}>{r.stars}</div>
-                <p style={{ fontSize: 15, lineHeight: 1.55, margin: "0 0 14px", color: C.ink2 }}>&ldquo;{r.quote}&rdquo;</p>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{r.name}</div>
-                <div style={{ fontSize: 13, color: C.sec }}>{r.role}</div>
               </div>
             ))}
           </div>
@@ -554,7 +606,8 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
         })}
       </section>
 
-      {/* ── RESELLEROS ─────────────────────────────────────────────────────── */}
+      {/* ── RESELLEROS (old home only — the new home has its own) ─────────── */}
+      {!onEmail && (
       <section style={{ background: "#FFF6F0", borderTop: "1px solid #F5D9C6" }}>
         <div style={wrap({ padding: "40px 48px" })}>
           <div style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: "#C2410C", marginBottom: 10 }}>For resellers</div>
@@ -566,13 +619,14 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 }
 
 /** A designed graphic band for catalogue cards with no photo — richer than a
  *  lone icon, in the same flat-illustration spirit as the domains image. */
-function CatScene({ kind }: { kind: string }) {
+export function CatScene({ kind }: { kind: string }) {
   const blue = "#1668E3", soft = "#B9D0F5", fill = "#DCE8FB";
   if (kind === "lock") {
     return (

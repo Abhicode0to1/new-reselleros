@@ -18,6 +18,7 @@ import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { BusyPanel } from "@/components/ui/busy-panel";
 import { Icon } from "@/components/ui/icon";
+import { useTurnstile } from "@/components/shared/turnstile";
 import { cn } from "@/lib/utils";
 
 const schema = z.object({
@@ -54,6 +55,7 @@ export function EnquiryClient({
   const [embed, setEmbed]     = React.useState(false);
   const [done, setDone]       = React.useState(false);
   const [serverError, setErr] = React.useState<string | null>(null);
+  const ts = useTurnstile(); // R-020
 
   React.useEffect(() => {
     setEmbed(new URLSearchParams(window.location.search).get("embed") === "1");
@@ -70,11 +72,12 @@ export function EnquiryClient({
     try {
       const res = await fetch("/api/public/enquiry/general", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...ts.headers },
         body:    JSON.stringify(data),
       });
       const json = await res.json();
       if (!res.ok) {
+        ts.reset();
         setErr(json.error ?? "Something went wrong. Please try again.");
         return;
       }
@@ -212,6 +215,7 @@ export function EnquiryClient({
                 )}
 
                 <BusyPanel active={isSubmitting} title="Sending your enquiry" steps={["Sending your details to our team", "Emailing you a copy"]} />
+                {ts.widget}
                 <Button type="submit" variant="primary" className="w-full" loading={isSubmitting}>
                   Send enquiry
                 </Button>

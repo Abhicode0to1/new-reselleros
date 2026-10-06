@@ -75,3 +75,12 @@ describe("catalogCostCoverage — averages only what it actually knows", () => {
     expect(c.priced[0].name).toBe("Starter");
   });
 });
+
+describe("support plans are our own service (2 Oct 2026)", () => {
+  it("are neither priced nor 'no cost price'", () => {
+    const c = catalogCostCoverage([{ wholesale: 0, margin_pct: 0, vendor: "support" }, { wholesale: 100, margin_pct: 20, vendor: "google" }]);
+    expect(c.unpriced).toHaveLength(0);
+    expect(c.priced).toHaveLength(1);
+    expect(c.avgMarginPct).toBe(20);
+  });
+});

@@ -23,6 +23,8 @@ export interface DomainResult {
   currency: string;
   years: number;
   priceKnown: boolean;
+  /** R-156: total ₹ per offered term ("1", "2", "3", "5"); see lib/domains/live-lookup. */
+  prices?: Record<string, number>;
 }
 
 export type SearchOutcome =

@@ -12,6 +12,8 @@
  * button (e.g. "Receivables due" → filter to who owes). Backwards compatible:
  * stats without `onClick` render exactly as before.
  */
+import Link from "next/link";
+import type { Route } from "next";
 import { cn } from "@/lib/utils";
 
 export type Stat = {
@@ -22,6 +24,8 @@ export type Stat = {
   onClick?: () => void;
   /** Marks a clickable stat as the currently-active filter. */
   active?: boolean;
+  /** R-118: link to the list holding exactly these records (wins over onClick). */
+  href?: string;
 };
 
 function toneClass(tone: Stat["tone"]) {
@@ -37,6 +41,19 @@ export function StatStrip({ items, className }: { items: Stat[]; className?: str
       {items.map((it, i) => {
         const label = <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{it.label}</span>;
         const value = <span className={cn("text-base font-semibold tabular-nums", toneClass(it.tone))}>{it.value}</span>;
+        if (it.href) {
+          return (
+            <Link
+              key={i}
+              href={it.href as Route}
+              className="flex items-baseline gap-1.5 rounded px-1 -mx-1 transition-colors hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+              title={`Open ${it.label}`}
+            >
+              {label}
+              {value}
+            </Link>
+          );
+        }
         if (it.onClick) {
           return (
             <button

@@ -65,6 +65,13 @@ export type CustomerPricingMap = Record<string, ProductPricing | undefined>;
 export interface RcTldPrice {
   tld: string;               // ".in"
   register: number | null;   // 1-year, whole ₹
+  /**
+   * R-156: TOTAL ₹ to register for N years, keyed by N ("1".."10"), for every term the
+   * price list carries. ResellerClub's period-keyed block is a PER-YEAR rate for that
+   * term, so the total is rate × N. Terms the list does not carry are absent — never
+   * extrapolated from the 1-year price.
+   */
+  registerTotals: Record<string, number>;
   renew: number | null;
   transfer: number | null;
   currency: string;
@@ -97,6 +104,20 @@ function oneYear(block: PriceBlock | undefined): number | null {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
 }
 
+/** Every term in a period-keyed block as a whole-₹ TOTAL (per-year rate × years). Exported for tests. */
+export function periodTotals(block: PriceBlock | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!block) return out;
+  for (const [k, v] of Object.entries(block)) {
+    const years = Number(k);
+    const rate = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
+    if (!Number.isInteger(years) || years < 1 || years > 10) continue;
+    if (!Number.isFinite(rate) || rate <= 0) continue;
+    out[String(years)] = Math.round(rate * years);
+  }
+  return out;
+}
+
 /** Extract register/renew/transfer for one TLD from the big map. Exported for tests. */
 export function extractTldPrice(tld: string, pricing: CustomerPricingMap): RcTldPrice {
   const clean = tld.replace(/^\.+/, "").toLowerCase();
@@ -105,6 +126,7 @@ export function extractTldPrice(tld: string, pricing: CustomerPricingMap): RcTld
   return {
     tld: `.${clean}`,
     register: oneYear(p?.addnewdomain),
+    registerTotals: periodTotals(p?.addnewdomain),
     renew: oneYear(p?.renewdomain),
     transfer: oneYear(p?.transferdomain),
     currency: "INR",

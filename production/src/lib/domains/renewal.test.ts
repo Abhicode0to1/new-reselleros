@@ -37,14 +37,22 @@ describe("at the sale: one yearly subscription per paid domain", () => {
       { name: "Starter hosting (billed yearly)", rate: 600, qty: 1, hostingPlan: "starter" },
       { name: "dup", domain: "acme.in", rate: 749, qty: 1 },
     ]);
-    expect(rows).toEqual([{ domain: "acme.in", mrr: 62 }]);
+    expect(rows).toEqual([{ domain: "acme.in", mrr: 62, years: 1 }]);
   });
   it("a domain free with yearly hosting still gets its subscription (mrr 0; the renewal is priced live, not from this)", () => {
-    expect(domainSubscriptionsToCreate([{ domain: "free.in", rate: 0, qty: 1 }])).toEqual([{ domain: "free.in", mrr: 0 }]);
+    expect(domainSubscriptionsToCreate([{ name: "Domain free.in", domain: "free.in", rate: 0, qty: 1 }])).toEqual([{ domain: "free.in", mrr: 0, years: 1 }]);
   });
   it("the row: vendor domain, 12 months, renewing a year out, NOT tied to the sale's quote", () => {
     const ins = domainSubscriptionInsert({ tenantId: "T", customerId: "C", customerName: "Acme", row: { domain: "acme.in", mrr: 62 }, today: "2026-09-25" });
     expect(ins).toMatchObject({ vendor: "domain", domain: "acme.in", term_months: 12, start_date: "2026-09-25", renewal_date: "2027-09-25", status: "active", quote_id: null, seats: 1 });
+  });
+  /* R-156: a 3-year registration is paid for 3 years — its first renewal is 3 years out,
+     and the money is spread over 36 months, not 12 (which would triple the MRR). */
+  it("a 3-year domain renews 3 years out, MRR over 36 months", () => {
+    const rows = domainSubscriptionsToCreate([{ name: "Domain long.in — registration, 3 years", domain: "long.in", rate: 2700, qty: 1, years: 3 }]);
+    expect(rows).toEqual([{ domain: "long.in", mrr: 75, years: 3 }]);
+    const ins = domainSubscriptionInsert({ tenantId: "T", customerId: "C", customerName: "Acme", row: rows[0], today: "2026-10-05" });
+    expect(ins).toMatchObject({ renewal_date: "2029-10-05", term_months: 12, mrr: 75 });
   });
 });
 

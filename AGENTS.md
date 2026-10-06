@@ -106,13 +106,10 @@ local-only switches, all ignored on the live site:
 - `NO_OWNER_PAYMENT_ALERT_LOCAL=1` here (5 Oct 2026, Pawan: owner alerts "only on my machine" off):
   `ownerPaymentAlertAllowed()` in `lib/email/storefront-voice.ts` skips the "payment received" email to
   the owner for local test payments; ignored on any deployed server, so live sales always reach the owner.
-- `NEXT_PUBLIC_MULTI_YEAR_DOMAINS_LOCAL=1` here shows the domain **years picker** (1/2/3/5/10) in the
-  cart before it is live (5 Oct 2026). Built, switched off: `MULTI_YEAR_DOMAINS_READY` in
-  `lib/checkout/domain-years.ts`. Turn it on only when (1) the live lookup gives a per-year price per
-  tenure (`pricePerYearByTenure`, Abhishek), (2) the queued registration carries the years (R-031), and
-  (3) the domain subscription renews N years out (`lib/domains/renewal.ts`). Until (1), a line above
-  1 year is refused with a reason — never charged at the 1-year price × N. With yearly hosting only the
-  domain's first year is free.
+- Multi-year domains are Pardeep's R-156 (merged from `staging`, 6 Oct 2026): the cart's "Register for"
+  picker uses the registry's per-term totals, the checkout re-prices the term, the queue carries `years`
+  (R-031) and the subscription renews N years out. Pawan's earlier switched-off picker (`domain-years.ts`)
+  was removed in the merge as a duplicate.
 - `node scripts/local-cron.mjs` runs `/api/cron/provision-hosting` every minute (localhost only), as
   Cloud Scheduler does on the live site every 15 min, 9–21 IST.
 The worker now tells DMS the real `paymentMode` instead of always "live". Measured end to end on

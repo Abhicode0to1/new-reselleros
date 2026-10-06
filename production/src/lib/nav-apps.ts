@@ -32,7 +32,7 @@ export interface NavAppDef {
 }
 
 /** Always shown above the switcher, for the roles that can see them. */
-export const PINNED_ITEM_IDS = ["today", "dashboard"] as const;
+export const PINNED_ITEM_IDS = ["today", "dashboard", "ai-entry"] as const;
 
 export const NAV_APPS: NavAppDef[] = [
   {

@@ -84,8 +84,13 @@ try {
   const migDir = join(ROOT, "supabase", "migrations");
   const files = readdirSync(migDir).filter((f) => f.endsWith(".sql")).sort();
   for (const f of files) {
+    const sql = readFileSync(join(migDir, f), "utf8");
+    // storage.* is owned by supabase_storage_admin; those migrations `set local role` to it.
+    // Production runs them as postgres (a member there); locally postgres is NOT a member,
+    // so — as the migrations' own headers say — they run as supabase_admin here. Same SQL.
+    const user = /^\s*set\s+(local\s+)?role\s+supabase_storage_admin\b/im.test(sql) ? "supabase_admin" : "postgres";
     try {
-      psql("postgres", DB, ["-f", "-"], readFileSync(join(migDir, f), "utf8"));
+      psql(user, DB, ["-f", "-"], sql);
     } catch (e) {
       throw new Error(`migration ${f} failed on a fresh baseline:\n${String(e.stderr ?? e.message).slice(0, 800)}`);
     }

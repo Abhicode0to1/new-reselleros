@@ -20,6 +20,7 @@ import { useSearchParams } from "next/navigation";
 import { QUOTE_PRODUCTS, QUOTE_CATEGORIES, QUOTE_TLDS, type QuoteProduct } from "@/site/lib/data/quote-catalog";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { BusyPanel } from "@/components/ui/busy-panel";
+import { useTurnstile } from "@/components/shared/turnstile";
 import type { MergedEdition } from "@/site/lib/live-catalog";
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -48,6 +49,7 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
   const [tldQuery, setTldQuery] = useState("");
   // contact
   const [company, setCompany] = useState("");
+  const ts = useTurnstile(); // R-020
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -74,7 +76,12 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
     const seats = Math.max(1, Math.min(300, parseInt(params.get("seats") ?? "", 10) || 0));
     const t = params.get("term");
     const next: Record<string, number> = {};
-    if (ed && byName.has(ed)) next[ed] = seats || 1;
+    if (ed && byName.has(ed)) {
+      next[ed] = seats || 1;
+      /* Open on that product's category, not "All plans" (Pardeep, 4 Oct 2026). */
+      const v = byName.get(ed)?.vendor;
+      if (v) setCat(v);
+    }
     if (Object.keys(next).length) setLines(next);
     if (t === "annual" || t === "monthly") setTerm(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,11 +155,13 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
       const requirement = quoteText().replace(/\n/g, " · ") + (mailToday ? ` · mail today: ${mailToday}` : "") + (note ? ` · note: ${note}` : "") + " (via anutech.in quote page)";
       const res = await fetch("/api/enquiry", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...ts.headers },
         body: JSON.stringify({
           fullName: name, companyName: company, email, phone,
           product: selected.length === 1 ? selected[0].label : `Multi-line quote (${selected.length} items)`,
-          seats: selected.reduce((s, p) => s + lines[p.name], 0),
+          /* R-157: the licence's own user count. Summing every line (domains, hosting, SSL too)
+             priced the automatic Workspace quote for users nobody asked for. */
+          seats: primary ? lines[primary.name] : selected.reduce((s, p) => s + lines[p.name], 0),
           requirement,
           edition: primary?.name, term,
         }),
@@ -162,6 +171,7 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
       setTeamHasIt(true); setTeamErr(""); setAckSent(data.ackSent === true);
       setQuoteNo(no); setQuoteAt(now); setSubmitState("done");
     } catch (e) {
+      ts.reset();
       // The quote is still valid to hand off manually — shown, and marked NOT received.
       setTeamHasIt(false);
       setTeamErr(e instanceof Error ? e.message : "We could not reach our server.");
@@ -325,6 +335,7 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
               title="Preparing your quotation"
               steps={["Sending your requirement to our sales team", "Preparing the quotation with today's prices"]}
             />
+            {ts.widget}
             <button onClick={generate} disabled={submitState === "sending"} className="btn btn-primary" style={{ width: "100%", marginTop: 14, opacity: submitState === "sending" ? 0.7 : 1 }}>
               {submitState === "sending" ? "Generating…" : "Generate quotation"}
             </button>

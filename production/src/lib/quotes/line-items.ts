@@ -65,5 +65,6 @@ export function addOrMergeLine(lines: QuoteLineItem[], line: QuoteLineItem): Add
  * reach this dialog, so they are not a case here.
  */
 export function catalogDefaultQty(vendor: string | null | undefined): number {
-  return vendor === "hosting" ? 1 : 10;
+  /* A support plan is one per company, not per seat (2 Oct 2026). */
+  return vendor === "hosting" || vendor === "support" ? 1 : 10;
 }

@@ -106,14 +106,64 @@ interface TabBarProps {
   className?: string;
 }
 
+/**
+ * When the tabs do not fit, the bar becomes ONE dropdown (2 Oct 2026, Pardeep: "dropdown me
+ * dikhao saare tabs ko, overflow ho rahe hai"). It measures, rather than switching at a
+ * breakpoint: three short tabs fit on a phone and stay tabs; seven long ones on a laptop
+ * side pane become a dropdown. A hidden copy of the row gives the natural width; the bar
+ * re-checks on every resize. First paint (and jsdom) is the tab row.
+ */
+function useTabsOverflow(deps: unknown) {
+  const wrapRef = React.useRef<HTMLDivElement | null>(null);
+  const measureRef = React.useRef<HTMLDivElement | null>(null);
+  const [overflow, setOverflow] = React.useState(false);
+  React.useLayoutEffect(() => {
+    const wrap = wrapRef.current, measure = measureRef.current;
+    if (!wrap || !measure || typeof ResizeObserver === "undefined") return;
+    const check = () => setOverflow(wrap.clientWidth > 0 && measure.scrollWidth > wrap.clientWidth + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [deps]);
+  return { wrapRef, measureRef, overflow };
+}
+
 function TabBar({ value, onChange, items, className }: TabBarProps) {
+  const sig = items.map((i) => `${i.id}:${i.label}:${i.count ?? ""}`).join("|");
+  const { wrapRef, measureRef, overflow } = useTabsOverflow(sig);
   return (
+    <div ref={wrapRef} className={cn("relative w-full", className)}>
+      {/* Natural width of the row, never seen — only measured. */}
+      <div ref={measureRef} aria-hidden className="invisible pointer-events-none absolute left-0 top-0 h-0 overflow-hidden inline-flex gap-1 whitespace-nowrap">
+        {items.map((item) => (
+          <span key={item.id} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium">
+            {item.dot && <span className="w-1.5 h-1.5" />}
+            <span>{item.label}</span>
+            {item.count !== undefined && <span className="ml-0.5 text-xs px-1.5 py-0.5">{item.count}</span>}
+          </span>
+        ))}
+      </div>
+      {overflow ? (
+        <label className="flex items-center gap-2 border-b border-hairline pb-2 text-sm">
+          <span className="text-ink-3">Show</span>
+          <select
+            aria-label="View"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="flex-1 min-w-0 rounded-md border border-hairline bg-paper px-2.5 py-1.5 text-sm font-medium text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+          >
+            {items.map((item) => (
+              <option key={item.id} value={item.id} disabled={item.disabled}>
+                {item.label}{item.count !== undefined ? ` (${item.count})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
     <div
       role="tablist"
-      className={cn(
-        "inline-flex items-center gap-1 border-b border-hairline w-full overflow-x-auto",
-        className
-      )}
+      className="inline-flex items-center gap-1 border-b border-hairline w-full overflow-x-auto"
     >
       {items.map((item) => {
         const active = value === item.id;
@@ -161,6 +211,8 @@ function TabBar({ value, onChange, items, className }: TabBarProps) {
           </button>
         );
       })}
+    </div>
+      )}
     </div>
   );
 }

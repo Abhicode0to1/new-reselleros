@@ -32,6 +32,7 @@ import { formatDate } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import {
   useFeedbackList,
+  useFeedbackCounts,
   usePlatformFeedbackList,
   useTriageFeedback,
   useDispatchFeedback,
@@ -153,11 +154,13 @@ function FeedbackCard({ row, userId }: { row: FeedbackWithShots; userId: string 
 
       await dispatch.mutateAsync({ id: row.id, userId });
 
-      toast.success("Directive queued and copied.", {
+      /* Says where the report went: it leaves the Open tab, and on 5 Oct three reports
+         "vanished" for the person who pressed it. */
+      toast.success("Moved to Queued for agent — directive copied.", {
         description: copied
-          ? "Paste it into Claude Code to start the fix. Nothing has changed in the code yet — this app cannot edit the repository."
-          : "Open the report below to copy the directive. Nothing has changed in the code yet.",
-        duration: 9_000,
+          ? "Not fixed yet: paste it into Claude Code to make the fix. The report waits in the Queued for agent tab."
+          : "Not fixed yet: open it in the Queued for agent tab to copy the directive for Claude Code.",
+        duration: 10_000,
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not queue this report.");
@@ -215,6 +218,7 @@ function FeedbackCard({ row, userId }: { row: FeedbackWithShots; userId: string 
             <span className="font-mono">{row.route_pattern ?? row.page_path ?? "screen unknown"}</span>
             <span className="text-ink-4">·</span>
             <span>{row.reporter_name ?? "Unknown reporter"}</span>
+            {row.filed_via === "ai-chat" && <Badge kind="info" size="sm">🤖 AI-drafted after chat</Badge>}
             <span className="text-ink-4">·</span>
             <span>{formatDate(row.created_at)}</span>
             {row.screenshots.length > 0 && (
@@ -276,7 +280,10 @@ function FeedbackCard({ row, userId }: { row: FeedbackWithShots; userId: string 
       {open && (
         <div className="pt-3 border-t border-hairline space-y-4">
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-ink-3 mb-1.5">What the reporter wrote</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-ink-3 mb-1.5">{row.filed_via === "ai-chat" ? "What the AI wrote (after the chat), filed by the reporter" : "What the reporter wrote"}</h4>
+            {row.filed_via === "ai-chat" && row.ai_chat_summary && (
+              <p className="text-xs text-ink-2 mb-1.5"><b>Chat:</b> {row.ai_chat_summary}</p>
+            )}
             <pre className="text-xs text-ink whitespace-pre-wrap font-mono bg-paper-2 border border-hairline rounded-md p-3 max-h-56 overflow-y-auto">
               {row.body}
             </pre>
@@ -349,6 +356,7 @@ export default function AdminFeedbackPage() {
 
   const filter = tab === "all" ? {} : { status: tab as FeedbackStatus };
   const { data, isLoading, error } = useFeedbackList(filter);
+  const { data: counts } = useFeedbackCounts();
 
   /* ── Every workspace, for the platform owner ───────────────────────────────
      A tester with his own tenant filed a bug on 22 Aug and nobody could read it:
@@ -423,7 +431,7 @@ export default function AdminFeedbackPage() {
         onChange={setTab}
         items={STATUS_TABS.map((t) => ({
           ...t,
-          count: t.id === tab ? rows.length : undefined,
+          count: t.id === tab ? rows.length : counts?.[t.id],
         }))}
       />
 
@@ -543,6 +551,7 @@ function PlatformFeedbackList({
             <p className="mt-1 text-[12px] text-ink-2 leading-snug">{r.body}</p>
             <p className="mt-1 text-2xs text-ink-3">
               {r.reporter_name ?? "someone"} &middot; {r.reporter_email ?? "no email"}
+              {r.filed_via === "ai-chat" ? " · 🤖 AI-drafted after chat" : ""}
               {r.page_path ? ` · ${r.page_path}` : ""} &middot; {new Date(r.created_at).toLocaleString("en-IN")}
             </p>
             {r.screenshots.length > 0 && (

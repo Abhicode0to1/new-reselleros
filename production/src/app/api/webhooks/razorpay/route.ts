@@ -33,7 +33,7 @@ import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, testPaymentProvisioningAllowed, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
-import { provisioningProducts } from "@/lib/provisioning/products";
+import { provisioningProducts, productAmountPaid } from "@/lib/provisioning/products";
 import { domainRegistrationEnabled, hostingProvisioningEnabled } from "@/lib/provisioning/domain-registration";
 import {
   DOMAIN_RENEWAL_PLAN,
@@ -52,10 +52,11 @@ import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
 import { safeDbMessage, logDbError } from "@/lib/errors/db-error";
+import { customerSetupSteps, leadOwnerNextSteps } from "@/lib/email/workspace-onboarding";
+import { loadLeadOwner } from "@/lib/email/lead-owner.server";
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
-const APP_URL        = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 
 /*
  * There is deliberately NO fallback recipient here any more.
@@ -169,7 +170,56 @@ async function vendorForQuote(
   return vendorFromPlan(plan);
 }
 
+/**
+ * The quote's catalogue items that are domains (3 Oct 2026). A line linked to one of these
+ * is a domain sale; a line linked to any other item (a Workspace plan) only NAMES a domain,
+ * and must not be registered or given a domain subscription. See isDomainPurchaseLine.
+ */
+async function domainItemIdsForQuote(
+  db: ReturnType<typeof createAdminClient>,
+  lineItems: unknown,
+): Promise<Set<string>> {
+  const ids = Array.isArray(lineItems)
+    ? lineItems
+        .map((l) => (l && typeof l === "object" ? (l as { item_id?: unknown }).item_id : null))
+        .filter((v): v is string => typeof v === "string" && v.length > 0)
+    : [];
+  if (ids.length === 0) return new Set();
+  const { data } = await db.from("items").select("id, vendor").in("id", ids);
+  return new Set(
+    (data ?? []).filter((r) => (r as { vendor?: string | null }).vendor === "domain").map((r) => (r as { id: string }).id),
+  );
+}
+
 /** Verify Razorpay's HMAC SHA256 signature header against a given secret. */
+/**
+ * S24 (2 Oct 2026): which tenant's records may a VERIFIED event act on?
+ *
+ * Verified with a tenant's OWN secret (the ?tenant= URL we hand out) → only that tenant.
+ * Verified with the GLOBAL env secret → only a tenant that has NO secret of its own: the
+ * env keys are the checkout fallback for exactly those tenants (api/public/checkout).
+ *
+ * Before this, a global-secret event — no ?tenant=, or a ?tenant= whose tenant has no
+ * secret, which silently fell back to the global one — skipped the cross-check entirely,
+ * so one signing key could settle any tenant's quote or mandate.
+ */
+function makeTenantGate(
+  admin: ReturnType<typeof createAdminClient>,
+  tenantParam: string | null,
+  verifiedWithOwnSecret: boolean,
+) {
+  return async (recordTenant: string): Promise<boolean> => {
+    if (verifiedWithOwnSecret) return recordTenant === tenantParam;
+    if (tenantParam && recordTenant !== tenantParam) return false;
+    const { data: ts } = await admin
+      .from("tenant_secrets")
+      .select("razorpay_webhook_secret")
+      .eq("tenant_id", recordTenant)
+      .maybeSingle();
+    return !decryptTenantSecrets(ts)?.razorpay_webhook_secret;
+  };
+}
+
 function verifySignature(rawBody: string, signature: string | null, secret: string): boolean {
   if (!secret || !signature) return false;
   const expected = crypto
@@ -196,6 +246,7 @@ export async function POST(request: NextRequest) {
   // stored webhook secret. Fall back to a global env secret for legacy setups.
   const tenantParam = request.nextUrl.searchParams.get("tenant");
   let signingSecret = WEBHOOK_SECRET;
+  let verifiedWithOwnSecret = false;
   let keyIdForMode: string | null = null;
   if (tenantParam) {
     const { data: ts } = await admin
@@ -206,7 +257,7 @@ export async function POST(request: NextRequest) {
     // Decrypt before use — an envelope string would never match the HMAC and the
     // failure would look like Razorpay sending bad signatures.
     const tsPlain = decryptTenantSecrets(ts);
-    if (tsPlain?.razorpay_webhook_secret) signingSecret = tsPlain.razorpay_webhook_secret;
+    if (tsPlain?.razorpay_webhook_secret) { signingSecret = tsPlain.razorpay_webhook_secret; verifiedWithOwnSecret = true; }
     /* The KEY, not a stored mode column. Razorpay encodes live-vs-test in the key prefix and a
        separate column can drift from the key it describes — razorpay-readiness.ts says so. */
     keyIdForMode = tsPlain?.razorpay_key_id ?? null;
@@ -216,6 +267,8 @@ export async function POST(request: NextRequest) {
     console.error("[webhooks/razorpay] signature verification FAILED", { tenant: tenantParam ?? "(none)", hadSecret: Boolean(signingSecret) });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
+
+  const mayActOn = makeTenantGate(admin, tenantParam, verifiedWithOwnSecret);
 
   let body: RazorpayWebhookBody;
   try {
@@ -233,13 +286,13 @@ export async function POST(request: NextRequest) {
      already been verified against THIS tenant's secret above; nothing downstream of
      that check can be forged. See lib/payments/mandate.ts. */
   if (event.startsWith("subscription.")) {
-    return handleMandateEvent(admin, event, rawBody, tenantParam);
+    return handleMandateEvent(admin, event, rawBody, tenantParam, mayActOn);
   }
 
   /* R-079: a failed payment is no longer only a log line — the lead gets a note and the
      buyer gets a link back to the SAME quote. Nothing is charged again from here. */
   if (event === "payment.failed") {
-    return handlePaymentFailed(admin, body, tenantParam, new URL(request.url).origin);
+    return handlePaymentFailed(admin, body, tenantParam, new URL(request.url).origin, mayActOn);
   }
 
   // Only act on payment-success events — ignore authorized / etc.
@@ -278,7 +331,8 @@ export async function POST(request: NextRequest) {
 
   // Defense: the quote must belong to the tenant whose secret verified this
   // event (prevents a valid-for-tenant-A signature acting on tenant-B's quote).
-  if (tenantParam && quote.tenant_id !== tenantParam) {
+  // S24: checked for EVERY event now, including ones verified by the global secret.
+  if (!(await mayActOn(quote.tenant_id))) {
     console.error("[webhooks/razorpay] tenant mismatch", { tenantParam, quoteTenant: quote.tenant_id });
     return NextResponse.json({ error: "Tenant mismatch" }, { status: 403 });
   }
@@ -340,7 +394,7 @@ export async function POST(request: NextRequest) {
     .eq("renewal_quote_id", quote.id)
     .maybeSingle();
 
-  const { error: rpcErr } = await admin.rpc("record_payment", {
+  const { data: recorded, error: rpcErr } = await admin.rpc("record_payment", {
     p_quote_id:  quote.id,
     p_amount:    paymentAmount,
     p_method:    paymentMethod,
@@ -358,6 +412,17 @@ export async function POST(request: NextRequest) {
       { error: safeDbMessage(rpcErr, "Payment processing failed") },
       { status: 500 },
     );
+  }
+
+  /* S24: the checks above are read-then-act, so two deliveries of one payment arriving
+     together (Razorpay sends payment.captured AND order.paid, and retries) both pass them.
+     record_payment is the serialising point — it locks the quote row and, for a payment id
+     it already holds, answers already_recorded instead of writing again. Exactly one
+     delivery gets past this line; the other stops before the invoice, provisioning and
+     every email below. */
+  if ((recorded as { already_recorded?: boolean } | null)?.already_recorded) {
+    console.log("[webhooks/razorpay] concurrent duplicate stopped at record_payment:", paymentRef, "on", receipt);
+    return NextResponse.json({ received: true, alreadyProcessed: true });
   }
 
   /* ── THE GST TAX INVOICE (R-079) ─────────────────────────────────────────
@@ -394,6 +459,7 @@ export async function POST(request: NextRequest) {
   /* Resolved from the catalogue, not from the plan's wording — a hosting tier is
      named "Starter" and says nothing about hosting. See vendorForQuote. */
   const provisioningVendor = await vendorForQuote(admin, quote.line_items, quote.plan);
+  const domainItemIds = await domainItemIdsForQuote(admin, quote.line_items);
   const provisioningDomain = (notes.domain as string | undefined)?.trim() || null;
 
   /* One request per PRODUCT (24 Sep 2026). A cart can buy a domain and a hosting
@@ -425,6 +491,7 @@ export async function POST(request: NextRequest) {
         vendor: provisioningVendor,
         domain: provisioningDomain,
         seats: Number(quote.seats ?? 0),
+        domainItemIds,
       });
 
   for (const product of products) {
@@ -473,10 +540,15 @@ export async function POST(request: NextRequest) {
         // Renewal rows carry their plan marker; the new-sale workers skip them. A hosting
         // account in a several-plan order carries ITS plan, not the quote's first (R-032).
         plan:        renewalPlan ?? product.plan ?? quote.plan ?? null,
-        amountPaid:  paymentAmount,
+        /* R-033: this product's own share of the payment, not the whole order — the
+           engine's spend check (paid ≥ cost) reads it per row. A renewal is one product
+           and its quote is that renewal, so its share is the whole payment. */
+        amountPaid:  isRenewal ? paymentAmount : productAmountPaid(product, quote.line_items, paymentAmount, domainItemIds),
         paymentMode: razorpayMode(keyIdForMode),
         blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
         note:        provisioning.reason,
+        // R-031: a new domain sale carries its paid term; a renewal is one year (renew-domains).
+        years:       isRenewal ? 1 : product.years,
       });
       console.log(`[webhooks/razorpay] provisioning ${queued} for ${quote.id} ${product.vendor}${product.domain ? ` ${product.domain}` : ""} — ${provisioning.reason}`);
     } else {
@@ -491,7 +563,7 @@ export async function POST(request: NextRequest) {
      subscription per (quote, domain) and would drop it when hosting shares the name.
      Best-effort and logged: the payment is already recorded. */
   if (!isRenewal) {
-    const toCreate = domainSubscriptionsToCreate(quote.line_items);
+    const toCreate = domainSubscriptionsToCreate(quote.line_items, domainItemIds);
     if (toCreate.length) {
       const { data: paidQuote } = await admin
         .from("quotes").select("customer_id").eq("id", quote.id).eq("tenant_id", quote.tenant_id).maybeSingle();
@@ -559,6 +631,7 @@ export async function POST(request: NextRequest) {
      public origin for us, needs no configuration, and stays right even though
      this service answers on more than one hostname (L18). */
   const publicBase = new URL(request.url).origin;
+  const leadOwner = await loadLeadOwner(admin, quote.tenant_id, quote.lead_id);
   const invoiceUrl = paidQuote?.invoice_id
     ? pdfDownloadUrl(publicBase, "invoice", String(paidQuote.invoice_id), quote.tenant_id)
     : null;
@@ -567,7 +640,8 @@ export async function POST(request: NextRequest) {
     : `Your GST tax invoice will reach you by email shortly.`;
   const whatNext = isHostingOrder
     ? `WHAT HAPPENS NEXT\n  • Your hosting account is being set up now\n  • You'll get a separate email with your control-panel login\n  • Moving from another host? Reply and we'll migrate you free`
-    : `WHAT HAPPENS NEXT\n  Within 4 hours  — ${contactWho} will contact you to verify the domain\n  Within 24 hours — Your team is live on Google Workspace\n  Day 7           — Health-check call to make sure everything's working`;
+    /* R-120: the whole setup, step by step — who does what, with the exact DNS values. */
+    : customerSetupSteps({ domain, seats, tierName, contactName: leadOwner?.name ?? contactWho, contactPhone: sellerPhone });
   const productDesc = isHostingOrder ? tierName : `${seats} users of ${tierName}`;
 
   await Promise.allSettled([
@@ -625,13 +699,31 @@ ACTION REQUIRED
   3. Provision ${seats} licenses on ${domain || "the customer's domain"}
   4. Send admin credentials to ${customerEmail}
 
-Open in app: ${APP_URL}/customers
-Open quote:  ${APP_URL}/quotes/${quote.id}`,
+Open in app: ${publicBase}/customers
+Open quote:  ${publicBase}/quotes/${quote.id}${leadOwner
+  ? `\n\nLead owner: ${leadOwner.name} — they have the next-step list too.`
+  : `\n\nNobody owns this lead — tick "Gets new leads" on the Team page so orders are dealt to someone.`}`,
+    }),
+
+    /* R-120: the employee who owns the lead (R-111 deals new leads round-robin) gets the
+       order and the next steps — not only the tenant inbox. Skipped when that person IS the
+       tenant inbox, so nobody gets the same order twice. */
+    leadOwner && !isHostingOrder && leadOwner.email.toLowerCase() !== (owner.ok ? owner.to.toLowerCase() : "") && sendEmail({
+      to:      leadOwner.email,
+      from:    FROM_EMAIL,
+      kind:    "razorpay_payment_lead_owner",
+      route:   { tenantId: quote.tenant_id },
+      subject: `New paid order for you · ${quote.customer_name} · ${tierName} × ${seats}`,
+      text: leadOwnerNextSteps({
+        domain, seats, tierName, contactName: leadOwner.name, contactPhone: notes.phone ?? "",
+        orderId: quote.id, company: quote.customer_name ?? "", customerName, customerEmail,
+        amount: amountFmt, appBase: publicBase, quoteId: quote.id, leadId: quote.lead_id,
+      }),
     }),
   ]).then((results) => {
     results.forEach((r, i) => {
       if (r.status === "rejected") {
-        console.error(`[webhooks/razorpay] email ${i === 0 ? "customer" : "Pardeep"} failed:`, r.reason);
+        console.error(`[webhooks/razorpay] email ${["customer", "owner", "lead owner"][i] ?? i} failed:`, r.reason);
       }
     });
   });
@@ -664,6 +756,7 @@ async function handlePaymentFailed(
   body: RazorpayWebhookBody,
   tenantParam: string | null,
   publicBase: string,
+  mayActOn: (tenantId: string) => Promise<boolean>,
 ): Promise<NextResponse> {
   const payment = body.payload.payment?.entity;
   if (!payment?.id) {
@@ -693,7 +786,7 @@ async function handlePaymentFailed(
     console.warn(`[webhooks/razorpay] payment.failed ${payment.id}: no quote for order ${payment.order_id ?? "(none)"}`);
     return NextResponse.json({ received: true, ignored: "payment.failed (unknown order)" });
   }
-  if (tenantParam && quote.tenant_id !== tenantParam) {
+  if (!(await mayActOn(quote.tenant_id))) {
     console.error("[webhooks/razorpay] payment.failed tenant mismatch", { tenantParam, quoteTenant: quote.tenant_id });
     return NextResponse.json({ error: "Tenant mismatch" }, { status: 403 });
   }
@@ -801,6 +894,7 @@ async function handleMandateEvent(
   event: string,
   rawBody: string,
   tenantParam: string | null,
+  mayActOn: (tenantId: string) => Promise<boolean>,
 ): Promise<NextResponse> {
   let entity: { id?: string; status?: string; end_at?: number; plan_id?: string } | undefined;
   let planAmountPaise: number | undefined;
@@ -836,7 +930,7 @@ async function handleMandateEvent(
 
   /* Same defence the payment path uses: a signature valid for tenant A must not act
      on tenant B's mandate. */
-  if (tenantParam && mandate.tenant_id !== tenantParam) {
+  if (!(await mayActOn(mandate.tenant_id))) {
     console.error("[webhooks/razorpay] mandate tenant mismatch", { tenantParam, mandateTenant: mandate.tenant_id });
     return NextResponse.json({ error: "Tenant mismatch" }, { status: 403 });
   }

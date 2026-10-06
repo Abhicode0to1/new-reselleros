@@ -46,8 +46,14 @@ interface Step {
 }
 
 export function GettingStartedCard({
-  setupDone, hasCustomer, hasCatalog, hasQuote, hasSale, workspaceName, gstin,
+  setupDone, hasCustomer, hasCatalog, hasQuote, hasSale, workspaceName, gstin, ready = true,
 }: {
+  /**
+   * False while any of the facts above is still loading. Until then the card renders nothing:
+   * judged on half-loaded data it showed every step open for a second and then vanished,
+   * the largest layout shift on the Dashboard (R-134, 3 Oct 2026).
+   */
+  ready?:       boolean;
   setupDone:    boolean;
   hasCustomer:  boolean;
   /**
@@ -64,6 +70,7 @@ export function GettingStartedCard({
   gstin?:       string | null;
 }) {
   const gstDone = isValidGstin((gstin ?? "").trim());
+  if (!ready) return null;
 
   const steps: Step[] = [
     { id: "org",      label: "Add your organisation",              hint: "Legal name, address and state — these print on every document.", href: "/setup",     cta: "Set up",       done: setupDone },

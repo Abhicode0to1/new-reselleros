@@ -20,6 +20,8 @@
 
 
 import * as React from "react";
+import { useUrlChoice } from "@/lib/hooks/use-url-choice";
+import { LEAD_VIEWS } from "@/lib/navigation/drilldown";
 import { useTeamTree } from "@/lib/queries/team-tree";
 import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -46,7 +48,7 @@ import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { DEAL_STAGES, filterStagesFor } from "@/lib/leads/stage-meta";
 import { boardServerTotals, everythingCountForPage, folderShownOnPage, scopeFiltersForPage, stageShownOnPage } from "@/lib/leads/page-scope";
 import {
-  boardCut, inWorkspace, listCut, searchLeads, type SortCol,
+  boardCut, folderForView, inWorkspace, listCut, searchLeads, type SortCol,
 } from "@/lib/leads/list-selectors";
 import { toastError } from "@/lib/errors/toast-error";
 import { LeadListView } from "@/components/features/leads/lead-list-view";
@@ -115,7 +117,8 @@ function LeadsPageInner() {
   // chip in <LeadsSmartViews/> sets this. It travels to the server with the
   // other filters (`listFilters` below) — list_leads() and lead_counts() apply it.
   /* Opens on every lead (won and lost included) — see the "All leads" view. */
-  const [smartView, setSmartView] = React.useState<SmartView>("everything");
+  /* R-118: the view can come from the URL (?view=won-mtd) so a dashboard tile opens exactly its rows. */
+  const [smartView, setSmartView] = useUrlChoice<SmartView>("view", LEAD_VIEWS, "everything");
   // Collapsible "Lead intelligence" banner — remembers the choice so it doesn't
   // eat board space every visit.
   const [tipsOpen, setTipsOpen] = React.useState(true);
@@ -376,7 +379,7 @@ function LeadsPageInner() {
     priorities: priorityFilter,
     owners: ownerFilter,
     smart_view: smartView,
-    folder,
+    folder: folderForView(folder, smartView),
     /* The default "wait" order (lib/leads/waiting.ts) is worked out by the server, so the
        lead that has waited longest is on page 1 even if it arrived months ago. */
     sort: sortBy === "wait" ? "wait" : "created",
@@ -433,7 +436,8 @@ function LeadsPageInner() {
        `won` — so the Won column read 0 cards three inches below a chip saying 🏆 Won 2.
        Won is also the board's DROP TARGET. So the board's base is every non-junk, non-lost
        lead; picking a folder hands control back to the list cut (list-selectors#boardCut). */
-    return boardCut(searched, listCut(searched, folder, smartView, folderToday), folder, smartView);
+    const cutFolder = folderForView(folder, smartView);
+    return boardCut(searched, listCut(searched, cutFolder, smartView, folderToday), cutFolder, smartView);
   }, [isList, isDealsPage, boardQ.data, teamIds, search, stageFilter, priorityFilter, ownerFilter, smartView, currentUser, folder, folderToday]);
 
   /** The rows the current view is showing — what `filtered` was. */
@@ -520,7 +524,7 @@ function LeadsPageInner() {
     <div className="h-[calc(100vh-3.5rem-4rem)] md:h-[calc(100vh-3.5rem)] max-w-[1800px] mx-auto p-3 sm:p-4 flex flex-col overflow-hidden min-w-0">
       {/* The sticky title bar, and why its offsets and this wrapper's height are what they
           are — see leads-header-bar.tsx. */}
-      <LeadsHeaderBar salesTab={salesTab} isDealsPage={isDealsPage} setAddOpen={setAddOpen} />
+      <LeadsHeaderBar salesTab={salesTab} isDealsPage={isDealsPage} setAddOpen={setAddOpen} setQuickOpen={setQuickOpen} />
 
 
       {/* Expanded Intelligence Drawer */}

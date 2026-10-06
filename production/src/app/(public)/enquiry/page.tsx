@@ -11,6 +11,13 @@
  *
  * Server-side we resolve the reseller's real business name from the `tenants`
  * table so the form is branded correctly (no hardcoded company name).
+ *
+ * R-028 (5 Oct 2026): the page timed out (20 s) in the QA check. Measured: the FIRST request
+ * after the service sat idle took 8–11 s on staging and the test service, the next one
+ * 0.1–0.8 s — a cold instance plus an uncapped database read on every request. The read is
+ * now capped at 3 s (a slow database shows the form with a generic name instead of hanging
+ * the page) and kept for 10 minutes per instance, so only the first visitor of an instance
+ * pays for it. The cold start itself is the service's min-instances setting, not this page.
  */
 import { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -26,17 +33,32 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-async function fetchBrand(): Promise<{ name: string; phone: string | null; logoUrl: string | null }> {
+type Brand = { name: string; phone: string | null; logoUrl: string | null };
+const FALLBACK: Brand = { name: "Us", phone: null, logoUrl: null };
+const BRAND_TTL_MS = 10 * 60 * 1000;
+const BRAND_TIMEOUT_MS = 3_000;
+let brandCache: { brand: Brand; at: number } | null = null;
+
+async function fetchBrand(): Promise<Brand> {
+  if (brandCache && Date.now() - brandCache.at < BRAND_TTL_MS) return brandCache.brand;
   try {
     const admin = createAdminClient();
-    const { data } = await admin
+    const { data, error } = await admin
       .from("tenants")
       .select("name, phone, logo_url")
       .eq("id", BUY_PAGE_TENANT_ID)
+      .abortSignal(AbortSignal.timeout(BRAND_TIMEOUT_MS))
       .maybeSingle();
-    return { name: data?.name ?? "Us", phone: data?.phone ?? null, logoUrl: data?.logo_url ?? null };
+    if (error || !data) {
+      // Not cached: a failed or timed-out read is retried by the next visitor.
+      if (error) console.warn("[enquiry] brand read failed, showing the generic form:", error.message);
+      return FALLBACK;
+    }
+    const brand: Brand = { name: data.name ?? "Us", phone: data.phone ?? null, logoUrl: data.logo_url ?? null };
+    brandCache = { brand, at: Date.now() };
+    return brand;
   } catch {
-    return { name: "Us", phone: null, logoUrl: null };
+    return FALLBACK;
   }
 }
 

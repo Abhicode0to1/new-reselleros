@@ -6,7 +6,7 @@ import { fetchLiveWorkspace, mergeEditions } from "@/site/lib/live-catalog";
 export const metadata: Metadata = {
   title: "Start a free trial",
   description:
-    "Try Google Workspace, Microsoft 365 or Zoho on your own domain — mailboxes set up by us, a ₹1 card check refunded the same day, and it continues at the published rate only if you keep it.",
+    "Try Google Workspace, Microsoft 365 or Zoho on your own domain — mailboxes set up by us, no card and nothing charged during the trial — keep it only if you want it.",
 };
 
 export const revalidate = 600;
@@ -25,8 +25,8 @@ export default async function TrialPage() {
           <h1 className="h1-page" style={{ marginBottom: 16 }}>Try it on your own domain — before you pay for it.</h1>
           <p className="body-lg" style={{ margin: 0 }}>
             Pick a suite, tell us how many mailboxes, and we set the vendor&apos;s own trial up on your
-            domain — DNS and all. A ₹1 card check is refunded the same day; nothing else is charged during
-            the trial, and it continues at the published rate only if you keep it.
+            domain — DNS and all. No card, nothing charged during the trial; when it ends you decide
+            whether to buy at the published rate.
           </p>
         </div>
         <Suspense fallback={null}>

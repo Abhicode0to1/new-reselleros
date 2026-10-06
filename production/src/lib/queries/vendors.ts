@@ -193,6 +193,14 @@ export async function ensureVendor(input: { name: string; gstin?: string | null;
   return created?.id ?? null;
 }
 
+/** The DB's bank-detail checks (R-163), in words a person can act on. */
+function bankMessage(m: string): string {
+  if (m.includes("vendors_bank_ifsc_format")) return "IFSC looks wrong — 11 characters, 5th is zero (e.g. HDFC0001234).";
+  if (m.includes("vendors_bank_account_no_format")) return "Account number should be 6–18 digits.";
+  if (m.includes("vendors_upi_id_format")) return "UPI ID looks wrong (e.g. name@okhdfcbank).";
+  return m;
+}
+
 export function useUpsertVendor() {
   const qc = useQueryClient();
   return useMutation({
@@ -205,6 +213,8 @@ export function useUpsertVendor() {
       /** MSME (S33). `undefined` = mat chhuo — sirf jo form ye field dikhata hai wahi bheje. */
       udyam?: string | null;
       msmeCategory?: "micro" | "small" | "medium" | null;
+      /** Bank details for payment runs (R-163). `undefined` = mat chhuo, same as MSME. */
+      bank?: { accountName: string | null; accountNo: string | null; ifsc: string | null; upiId: string | null };
     }) => {
       const supabase = createClient();
       const { data: authData } = await supabase.auth.getUser();
@@ -229,13 +239,19 @@ export function useUpsertVendor() {
         /* Jo caller ye fields nahi bhejta (quick-add, bill se bana vendor) wo MSME data mita na de. */
         ...(input.udyam !== undefined ? { udyam: input.udyam?.trim().toUpperCase() || null } : {}),
         ...(input.msmeCategory !== undefined ? { msme_category: input.msmeCategory } : {}),
+        ...(input.bank !== undefined ? {
+          bank_account_name: input.bank.accountName?.trim() || null,
+          bank_account_no:   input.bank.accountNo?.replace(/[\s-]/g, "") || null,
+          bank_ifsc:         input.bank.ifsc?.trim().toUpperCase() || null,
+          upi_id:            input.bank.upiId?.trim() || null,
+        } : {}),
       };
       if (input.id) {
         const { error } = await supabase.from("vendors").update(row).eq("id", input.id);
-        if (error) throw new Error(error.message);
+        if (error) throw new Error(bankMessage(error.message));
       } else {
         const { error } = await supabase.from("vendors").insert({ ...row, tenant_id: me.tenant_id });
-        if (error) throw new Error(error.message.includes("vendors_tenant_name_uniq") ? "A vendor with this name already exists." : error.message);
+        if (error) throw new Error(error.message.includes("vendors_tenant_name_uniq") ? "A vendor with this name already exists." : bankMessage(error.message));
       }
     },
     onSuccess: () => {

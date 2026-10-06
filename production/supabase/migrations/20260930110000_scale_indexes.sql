@@ -46,7 +46,22 @@
 --     select indexrelid::regclass from pg_index where not indisvalid;   -- expect 0 rows
 -- ============================================================================
 
-create extension if not exists pg_trgm with schema extensions;
+-- Not every database HAS an `extensions` schema: hosted Supabase does, the Cloud SQL
+-- production database does not ("schema extensions does not exist" — found by the 2 Oct 2026
+-- go-live rehearsal on a clone of production). Use it where it exists, the default schema
+-- where it does not, and touch nothing where pg_trgm is already installed. The trigram block
+-- below already reads the schema from the catalog, so either placement works.
+do $$
+begin
+  if not exists (select 1 from pg_extension where extname = 'pg_trgm') then
+    if exists (select 1 from pg_namespace where nspname = 'extensions') then
+      create extension pg_trgm with schema extensions;
+    else
+      create extension pg_trgm;
+    end if;
+  end if;
+end
+$$;
 
 -- ─── lead_activities ────────────────────────────────────────────────────────
 create index if not exists lead_activities_tenant_kind_time_idx
