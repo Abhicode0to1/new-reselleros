@@ -114,6 +114,20 @@ describe("searchLeads — the page's old `searched` memo", () => {
     expect(ids(searchLeads(rows, { ...base, search: "zEnItH" }))).toEqual(ids(rows.slice(0, 5)));
   });
 
+  it("ignores leading/trailing spaces, so a pasted or autocompleted term still matches", () => {
+    const a = mk({ company: "Rohit Tech Pvt Ltd" });
+    const b = mk({ company: "Other Co" });
+    expect(ids(searchLeads([a, b], { ...base, search: "Rohit Tech Pvt Ltd " }))).toEqual([a.id]);
+    expect(ids(searchLeads([a, b], { ...base, search: "  rohit" }))).toEqual([a.id]);
+  });
+
+  it("every word must match, but each may match a different field (name + company)", () => {
+    const a = mk({ company: "Rohit Tech Pvt Ltd", contact_name: "Anil Verma" });
+    const b = mk({ company: "Rohit Tech Pvt Ltd", contact_name: "Sunita Rao" });
+    expect(ids(searchLeads([a, b], { ...base, search: "anil rohit" }))).toEqual([a.id]);
+    expect(ids(searchLeads([a, b], { ...base, search: "anil sunita" }))).toEqual([]);
+  });
+
   it("a whitespace-only search is no search", () => {
     const rows = [mk(), mk()];
     expect(searchLeads(rows, { ...base, search: "   " })).toHaveLength(2);

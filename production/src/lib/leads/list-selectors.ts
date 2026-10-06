@@ -73,6 +73,25 @@ export interface SearchInput {
 }
 
 /**
+ * Text search over company / contact name / email / phone / plan (not notes). The query is
+ * trimmed and split into words; EVERY word must appear somewhere across those fields, each
+ * possibly in a different one. The old rule ran the raw string against each field on its own,
+ * so "Rohit Tech " (trailing space from paste/autocomplete) or "anil rohit" (contact +
+ * company) matched nothing. Blank query matches everything.
+ */
+export function leadMatchesSearch(
+  l: Pick<Lead, "company" | "contact_name" | "contact_email" | "contact_phone" | "plan">, search: string,
+): boolean {
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const hay = [l.company, l.contact_name, l.contact_email, l.contact_phone, l.plan]
+    .filter((v): v is string => typeof v === "string")
+    .join("\n")
+    .toLowerCase();
+  return words.every((w) => hay.includes(w));
+}
+
+/**
  * Search + filter + smart view — applied BEFORE the folder cut so each view respects them.
  * This is the page's old `searched` memo.
  */
@@ -87,17 +106,7 @@ export function searchLeads(workspaceLeads: readonly Lead[], input: SearchInput)
     ? list.filter((l) => l.is_junk || looksLikeJunk(l).suspect)
     : list.filter((l) => !l.is_junk);
   // 1. Text search across company / contact name / email / phone / plan
-  if (search.trim()) {
-    const s = search.toLowerCase();
-    list = list.filter(
-      (l) =>
-        l.company.toLowerCase().includes(s) ||
-        (l.contact_name?.toLowerCase().includes(s) ?? false) ||
-        (l.contact_email?.toLowerCase().includes(s) ?? false) ||
-        (l.contact_phone?.toLowerCase().includes(s) ?? false) ||
-        (l.plan?.toLowerCase().includes(s) ?? false)
-    );
-  }
+  list = list.filter((l) => leadMatchesSearch(l, search));
   // 2. Stage filter (any-of). Empty array = no constraint.
   if (stageFilter.length > 0) {
     list = list.filter((l) => stageFilter.includes(l.stage));

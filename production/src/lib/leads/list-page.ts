@@ -17,6 +17,7 @@
  * switch-over can happen view by view without a silent behaviour change.
  */
 import type { Lead } from "@/lib/supabase/database.types";
+import { leadMatchesSearch } from "./list-selectors";
 
 /**
  * The columns list_leads() returns — must equal the migration's select list (checked by
@@ -80,21 +81,17 @@ export function toListLeadsFilters(input: LeadListFilters): LeadListFilters {
 /**
  * The server rule, in TypeScript, for a row that is already in memory — the parity oracle
  * the tests hold both sides to. Mirrors the migration's WHERE clause key by key.
+ *
+ * KNOWN DRIFT (6 Oct 2026): `search` now uses the page's word-wise rule (leadMatchesSearch),
+ * but migration 20260928200000's WHERE still does a raw per-field ILIKE, so the SQL treats
+ * "rohit tech " as one untrimmed phrase. No page calls list_leads() yet; before one does, a
+ * new migration must bring the SQL to the same rule (and list_rpcs.test.sql with it).
  */
 export function matchesListLeadsFilters(l: LeadListRow, f: LeadListFilters): boolean {
   const junk = f.junk ?? "exclude";
   if (junk === "exclude" && l.is_junk) return false;
   if (junk === "only" && !l.is_junk) return false;
-  if (f.search !== undefined && f.search.trim() !== "") {
-    const s = f.search.toLowerCase();
-    const hit =
-      l.company.toLowerCase().includes(s) ||
-      (l.contact_name?.toLowerCase().includes(s) ?? false) ||
-      (l.contact_email?.toLowerCase().includes(s) ?? false) ||
-      (l.contact_phone?.toLowerCase().includes(s) ?? false) ||
-      (l.plan?.toLowerCase().includes(s) ?? false);
-    if (!hit) return false;
-  }
+  if (f.search !== undefined && !leadMatchesSearch(l, f.search)) return false;
   if (f.stages && f.stages.length > 0 && !f.stages.includes(l.stage)) return false;
   if (f.priorities && f.priorities.length > 0 && !f.priorities.includes(l.priority as "low" | "medium" | "high")) return false;
   if (f.owner_ids && l.owner_id && !f.owner_ids.includes(l.owner_id)) return false;
