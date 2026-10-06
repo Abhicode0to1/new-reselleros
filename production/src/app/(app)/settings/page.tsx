@@ -15,6 +15,7 @@
 "use client";
 
 import * as React from "react";
+import { stateCodeFromName } from "@/lib/gst/gstin-state";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -196,7 +197,8 @@ function CompanyTab() {
       contact_name: values.contact_name?.trim() || null,
       gstin:        values.gstin?.trim()        || null,
       state:        values.state?.trim()        || null,
-      state_code:   values.state_code?.trim()   || null,
+      // R-165: a typed state counts too (GSTIN verify was the only way in), else invoices refuse.
+      state_code:   values.state_code?.trim()   || stateCodeFromName(values.state) || null,
       email:        values.email?.trim()        || me?.tenantEmail || "",  // keep existing if blanked — email is NOT NULL on tenants
       phone:        values.phone?.trim()        || null,
       address:      values.address?.trim()      || null,

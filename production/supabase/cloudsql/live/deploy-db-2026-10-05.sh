@@ -81,6 +81,10 @@ say "3b. Grant what the RLS policies already allow (cloudsql/09) — fixed a 403
 gcloud storage cp "$HERE/cloudsql/09-grant-what-policies-allow.sql" "$B/09-grant.sql" --project="$P" -q >/dev/null
 gcloud sql import sql "$I" "$B/09-grant.sql" --database="$DB" --user=resellersos_migration --project="$P" --quiet
 
+say "3c. service_role may run the functions RLS policies call (cloudsql/10) — R-165"
+gcloud storage cp "$HERE/cloudsql/10-service-role-policy-functions.sql" "$B/10-grants.sql" --project="$P" -q >/dev/null
+gcloud sql import sql "$I" "$B/10-grants.sql" --database="$DB" --user=resellersos_migration --project="$P" --quiet
+
 say "4. Tell PostgREST about the new columns (schema reload)"
 gcloud storage cp "$TMP/reload.sql" "$B/reload.sql" --project="$P" -q >/dev/null
 gcloud sql import sql "$I" "$B/reload.sql" --database="$DB" --user=resellersos_migration --project="$P" --quiet
