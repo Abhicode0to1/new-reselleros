@@ -33,6 +33,7 @@ import {
   liveEmail, checkEmail, liveDomain, checkDomain,
 } from "@/lib/forms/poka-yoke";
 import { COUNTRIES } from "@/lib/gst/countries";
+import { GST_STATE_OPTIONS } from "@/lib/gst/gstin-state";
 import { useCustomerForm } from "./use-customer-form";
 import { ScanCardPanel } from "./scan-card-panel";
 import type { Customer } from "@/lib/supabase/database.types";
@@ -193,9 +194,25 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
                   )}
                   {foreignStates.map((st) => <option key={st} value={st}>{st}</option>)}
                 </select>
+              ) : isForeign ? (
+                <Input id="state" placeholder="e.g. California" {...register("state")} />
               ) : (
-                <Input id="state" placeholder={isForeign ? "e.g. California" : "Auto-filled from GSTIN"} {...register("state")} />
+                /* R-173: the GST state list for India — a typed name that maps to no GST state
+                   left the customer un-invoiceable. Required unless the GSTIN supplies it. */
+                <select
+                  id="state"
+                  aria-invalid={!!errors.state}
+                  className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                  {...register("state")}
+                >
+                  <option value="">Select state…</option>
+                  {watch("state") && !GST_STATE_OPTIONS.some((o) => o.name.toLowerCase() === watch("state")!.toLowerCase()) && (
+                    <option value={watch("state")!}>{watch("state")} (not a GST state — pick one)</option>
+                  )}
+                  {GST_STATE_OPTIONS.map((o) => <option key={o.code} value={o.name}>{o.name}</option>)}
+                </select>
               )}
+              {errors.state?.message && <p className="mt-1 text-xs text-rose">{String(errors.state.message)}</p>}
             </FormField>
             <FormField label={isForeign ? "Postal / ZIP code" : "PIN code"} htmlFor="pin_code">
               <Input

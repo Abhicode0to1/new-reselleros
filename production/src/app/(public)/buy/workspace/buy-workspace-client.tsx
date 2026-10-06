@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { GST_STATE_BY_CODE } from "@/lib/utils";
+import { GST_STATE_OPTIONS, stateCodeFromGstin } from "@/lib/gst/gstin-state";
 import type { SitePromoRow, SitePromoBannerStyle } from "@/lib/supabase/database.types";
 import { thanksUrl } from "./thanks/thanks-url";
 import { BusyPanel } from "@/components/ui/busy-panel";
@@ -2710,6 +2711,12 @@ const buyNowSchema = z.object({
   tierId:      z.string(),
   gstin:       z.string().optional(),
   couponCode:  z.string().optional(),
+  stateCode:   z.string().optional(),
+}).superRefine((v, ctx) => {
+  /* R-173: the GST invoice needs a place of supply; a valid GSTIN carries one. */
+  if (!v.stateCode && !stateCodeFromGstin(v.gstin)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["stateCode"], message: "Select your state — the GST invoice needs it" });
+  }
 });
 type BuyNowForm = z.infer<typeof buyNowSchema>;
 
@@ -3349,6 +3356,24 @@ function BuyNowDialog({
               <p className="text-3xs text-ink-3 mt-1">
                 Add your GSTIN to claim input tax credit. Skip if not GST-registered.
               </p>
+            </FormField>
+
+            {/* R-173 (6 Oct 2026): this form had no state at all, so every buyer without a
+                GSTIN became a customer whose GST invoice was refused ("no state on record").
+                Required unless a valid GSTIN gives the state. */}
+            <FormField label="Your state (for the GST invoice)" required htmlFor="buy-state">
+              <select
+                id="buy-state"
+                aria-invalid={!!errors.stateCode}
+                {...register("stateCode")}
+                className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+              >
+                <option value="">Select your state</option>
+                {GST_STATE_OPTIONS.map((o) => (
+                  <option key={o.code} value={o.code}>{o.name}</option>
+                ))}
+              </select>
+              {errors.stateCode?.message && <p className="text-xs text-rose mt-1">{errors.stateCode.message}</p>}
             </FormField>
 
             <BusyPanel active={isSubmitting} title="Preparing your secure payment" steps={["Re-checking the price on our server", "Creating your order", "Opening the Razorpay payment window"]} />

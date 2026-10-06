@@ -40,6 +40,7 @@ import {
 } from "@/lib/subscriptions/import-dedupe";
 import { mapHeader, monthlyRateFrom, periodMonths } from "@/lib/export/subscription-portable";
 import { attachPrimaryContact } from "@/lib/contacts/attach";
+import { withStateCode } from "@/lib/gst/gstin-state";
 import { cn, rupee, formatDate } from "@/lib/utils";
 
 interface ParsedSub {
@@ -178,17 +179,20 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
         const name = r.file_customer_name || r.domain || r.customer_number || "Unnamed customer";
         const { data: created, error: custErr } = await supabase
           .from("customers")
-          .insert({
+          // R-173: withStateCode turns the file's state (or a valid GSTIN) into state_code —
+          // without it these customers could never be invoiced ("no state on record").
+          .insert(withStateCode({
             tenant_id: me.tenantId,
             name,
             domain: r.domain ?? null,
             gstin: r.customer_gstin ?? null,
             state: r.customer_state ?? null,
+            state_code: null as string | null,
             customer_number: r.customer_number || null,
             contact_name: r.contact_name ?? null,
             contact_email: r.contact_email ?? null,
             contact_phone: r.contact_phone ?? null,
-          } as never)
+          }) as never)
           .select("id")
           .single();
         if (custErr || !created?.id) {

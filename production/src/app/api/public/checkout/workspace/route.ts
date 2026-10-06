@@ -26,6 +26,8 @@ import { addDaysISO, istToday } from "@/lib/dates/ist";
 import { NextResponse, type NextRequest } from "next/server";
 import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
+import { resolveStateCode, stateCodeFromName } from "@/lib/gst/gstin-state";
+import { GST_STATE_BY_CODE, isValidGstin } from "@/lib/utils";
 import Razorpay from "razorpay";
 import { createAdminClient } from "@/lib/supabase/server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
@@ -62,6 +64,8 @@ const checkoutSchema = z.object({
   domain:      z.string().min(3).max(120),
   tierId:      z.enum(["starter", "standard", "plus", "enterprise"]),
   gstin:       z.string().optional(),
+  /** R-173: GST place of supply ("07" or a state name). Required unless a valid GSTIN gives it. */
+  stateCode:   z.string().max(60).optional(),
   /** Optional coupon code. Validated + redeemed server-side via the
    *  redeem_coupon RPC AFTER the quote row exists, so the redemption row
    *  carries the quote_id linkage for the audit log. */
@@ -201,6 +205,28 @@ export async function POST(request: NextRequest) {
       );
     }
     const { fullName, companyName, email, phone, seats, domain, tierId, gstin, simulate, couponCode } = parsed.data;
+
+    /* ── The buyer's place of supply (R-173, 6 Oct 2026) ─────────────────────
+       record_payment copies the lead's state_code / state / gstin onto the customer it creates,
+       and generate_invoice refuses a customer with no state_code. This route never wrote one, so
+       every Workspace bought here without a GSTIN produced a customer whose GST invoice could not
+       be issued. Same precedence as the cart checkout (R-079/R-091): an entered state wins, a
+       checksum-valid GSTIN is the fallback, nothing is guessed — and it is asked for BEFORE
+       anything is saved or charged. Only a valid GSTIN is stored (it prints on the invoice). */
+    const cleanGstin = (gstin ?? "").trim().toUpperCase();
+    const validGstin = cleanGstin && isValidGstin(cleanGstin) ? cleanGstin : null;
+    const buyerStateCode = resolveStateCode({ stateCode: stateCodeFromName(parsed.data.stateCode), gstin: validGstin });
+    if (!buyerStateCode) {
+      return NextResponse.json(
+        {
+          error: "Please choose your state. It decides whether your GST invoice shows CGST + SGST or IGST, " +
+                 "and the invoice cannot be issued without it. Nothing was charged.",
+          needState: true,
+        },
+        { status: 400 },
+      );
+    }
+    const buyerState = GST_STATE_BY_CODE[buyerStateCode] ?? null;
 
     /* R-157: Enterprise has no list price — it is quoted, never charged online (a catalogue
        miss used to price it at an invented ₹2,400). Business plans stop at 300 users, Google's
@@ -363,6 +389,10 @@ export async function POST(request: NextRequest) {
       ...captureFromRequest(request, body as Record<string, unknown>),
       domain:        cleanDomain,        // structured — flows lead→quote→subscription
       notes:         leadNotes,
+      // R-173: copied to the customer by record_payment; generate_invoice needs state_code.
+      state_code:    buyerStateCode,
+      state:         buyerState,
+      gstin:         validGstin,
     });
     if (leadErr) {
       console.error("[checkout/workspace] lead insert failed:", leadErr);

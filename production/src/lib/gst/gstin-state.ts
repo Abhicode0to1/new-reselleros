@@ -160,3 +160,29 @@ export function missingInvoiceState(c: { state_code?: string | null; country?: s
   if (country && !["in", "ind", "india"].includes(country)) return false;
   return !(c.state_code ?? "").trim();
 }
+
+/** The GST states a person can pick, A–Z (R-173). 97/99 are tax-system codes, not places. */
+export const GST_STATE_OPTIONS: { code: string; name: string }[] = Object.entries(GST_STATE_BY_CODE)
+  .filter(([code]) => Number(code) < 97)
+  .map(([code, name]) => ({ code, name }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+/**
+ * Why this customer cannot be saved yet, or null (R-173, 6 Oct 2026).
+ *
+ * Every Indian customer needs a place of supply: a tax invoice is refused without it
+ * (generate_invoice — "no state on record"), GSTIN or not. Live had 17 customers in that state.
+ * It is satisfied by a state code already on the row, a valid GSTIN, or a state NAME that maps to
+ * a GST state — the same order withStateCode() uses to fill state_code on save. Foreign customers
+ * have no Indian place of supply and are never asked.
+ */
+export function stateRequiredMessage(row: {
+  state?: string | null; state_code?: string | null; gstin?: string | null; country?: string | null;
+}): string | null {
+  const country = (row.country ?? "").trim().toLowerCase();
+  if (country && !["in", "ind", "india"].includes(country)) return null;
+  if ((row.state_code ?? "").trim() || stateCodeFromGstin(row.gstin) || stateCodeFromName(row.state)) return null;
+  return (row.state ?? "").trim()
+    ? `"${String(row.state).trim()}" is not a GST state name — pick the state from the list. The GST invoice needs it.`
+    : "Choose the state — the GST invoice cannot be made without it (it decides CGST + SGST or IGST).";
+}
