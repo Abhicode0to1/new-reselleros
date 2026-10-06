@@ -41,6 +41,7 @@ import {
 } from "@/lib/forms/poka-yoke";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import { COUNTRIES } from "@/lib/gst/countries";
+import { GST_STATE_OPTIONS } from "@/lib/gst/gstin-state";
 import { useCustomerForm } from "./use-customer-form";
 import { ScanCardPanel } from "./scan-card-panel";
 import { GroupFormDialog } from "./group-form-dialog";
@@ -195,7 +196,9 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
 
   // Company / GSTIN / email errors live in the always-visible essentials block,
   // so they need no tab dot. Only the tabbed secondary fields do.
-  const addressHasError = !!errors.pin_code;
+  const addressHasError = !!errors.pin_code || !!errors.state;
+  /* R-173: a missing state blocks Save — open the tab it lives on so the reason is in view. */
+  React.useEffect(() => { if (errors.state) setTab("address"); }, [errors.state]);
   const contactsHasError = !!errors.contact_persons;
 
   const saveButton = (
@@ -546,7 +549,7 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
           <Row
             label={isForeign ? "State / Province" : "Registered state"}
             htmlFor="state"
-            hint={isForeign ? undefined : "Place of supply — auto-derived from the GSTIN."}
+            hint={isForeign ? undefined : "Place of supply — needed for every GST invoice. Filled from the GSTIN when there is one."}
           >
             {foreignStates ? (
               <select id="state" className={selectClass} {...register("state")}>
@@ -556,8 +559,21 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
                 )}
                 {foreignStates.map((st) => <option key={st} value={st}>{st}</option>)}
               </select>
+            ) : isForeign ? (
+              <Input id="state" placeholder="State / province" {...register("state")} />
             ) : (
-              <Input id="state" placeholder="Auto-filled from GSTIN" {...register("state")} />
+              /* R-173: India gets the GST state list, not free text — "New Delhi" or "Orissa"
+                 typed by hand never mapped to a state code, and the invoice then refused. */
+              <>
+                <select id="state" className={selectClass} aria-invalid={!!errors.state} {...register("state")}>
+                  <option value="">Select state…</option>
+                  {watch("state") && !GST_STATE_OPTIONS.some((o) => o.name.toLowerCase() === watch("state")!.toLowerCase()) && (
+                    <option value={watch("state")!}>{watch("state")} (not a GST state — pick one)</option>
+                  )}
+                  {GST_STATE_OPTIONS.map((o) => <option key={o.code} value={o.name}>{o.name}</option>)}
+                </select>
+                {errors.state?.message && <p className="mt-1 text-xs text-rose">{String(errors.state.message)}</p>}
+              </>
             )}
           </Row>
 

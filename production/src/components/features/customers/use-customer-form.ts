@@ -24,6 +24,7 @@ import { useCreateCustomer, useUpdateCustomer } from "@/lib/queries/customers";
 import { validateGstin, gstStateFromGstin } from "@/lib/utils";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { getStatesForCountry } from "@/lib/gst/states-by-country";
+import { stateRequiredMessage } from "@/lib/gst/gstin-state";
 import type { GstinVerification, Customer } from "@/lib/supabase/database.types";
 
 // Schema — GSTIN optional but checksum-validated when present. State code stays
@@ -93,6 +94,10 @@ export const customerSchema = z.object({
   if (pin && !foreign && !/^\d{6}$/.test(pin)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["pin_code"], message: "6-digit PIN (or blank)" });
   }
+  /* R-173 (6 Oct 2026): an Indian customer with no place of supply cannot be invoiced at all
+     (live had 17). GSTIN or not, the state is required; a valid GSTIN supplies it by itself. */
+  const stateMsg = stateRequiredMessage(data);
+  if (stateMsg) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["state"], message: stateMsg });
   // A business needs a company name; an individual needs at least a person /
   // display name (no company). Enforced here so the shared `name` field can be
   // optional for individuals.
@@ -359,6 +364,10 @@ export function useCustomerForm({ customer, onSaved, open = true }: UseCustomerF
     countryReg,
     onCountryChange,
     onSubmit,
-    submit: handleSubmit(onSubmit),
+    /* The state field sits on the Address tab, which may be closed — say what is missing
+       instead of a Save button that silently does nothing (R-173). */
+    submit: handleSubmit(onSubmit, (errs) => {
+      if (errs.state?.message) toast.error("State is missing", { description: String(errs.state.message) });
+    }),
   };
 }
