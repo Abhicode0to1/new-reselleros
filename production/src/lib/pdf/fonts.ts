@@ -120,8 +120,12 @@ let done = false;
 
 /** The one place the flags move, so the two paths cannot set them differently. */
 function adopt(regular: string, bold: string): void {
-  Font.register({ family: FAMILY, src: regular });
-  Font.register({ family: FAMILY_BOLD, src: bold });
+  /* Italic maps to the upright file (there is no Noto Sans Italic in public/fonts). Without
+     it, any `fontStyle: "italic"` text threw "Could not resolve font for ResellerSans,
+     fontStyle italic" and the WHOLE document failed to render — staging, 6 Oct 2026, the
+     invoice PDF's "No description recorded" row. Upright text beats no PDF. */
+  Font.register({ family: FAMILY, fonts: [{ src: regular }, { src: regular, fontStyle: "italic" }] });
+  Font.register({ family: FAMILY_BOLD, fonts: [{ src: bold }, { src: bold, fontStyle: "italic" }] });
 
   PDF_FONT_HAS_RUPEE = true;
   PDF_FONT = FAMILY;
