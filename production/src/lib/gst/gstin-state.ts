@@ -117,3 +117,31 @@ export function stateCodeFromName(input: string | null | undefined): string | nu
   }
   return null;
 }
+
+/**
+ * Fill a customer row's `state_code` from what the form holds, before it is saved (6 Oct 2026).
+ *
+ * WHY: the customer form only set `state_code` from a VERIFIED GSTIN. A customer with no GSTIN
+ * (unregistered business, individual) whose state was picked or typed by hand saved
+ * `state = "Delhi"` and `state_code = NULL` — and `generate_invoice` reads only `state_code`,
+ * so that customer could never be invoiced: "has no state on record", while the customer page
+ * plainly showed Delhi. Found on staging creating the first test invoice.
+ *
+ * Order, same as `resolveStateCode`: a code already on the row wins (it came from a GSTIN or a
+ * human), then a valid GSTIN, then the state NAME — only when it matches a GST state exactly.
+ * Foreign customers get nothing (no Indian place of supply). Rows that do not touch state or
+ * GSTIN pass through untouched, so a partial update never clears a code.
+ */
+export function withStateCode<T extends {
+  state?: string | null;
+  state_code?: string | null;
+  gstin?: string | null;
+  country?: string | null;
+}>(row: T): T {
+  if (row.state_code?.trim()) return row;
+  if (row.state === undefined && row.gstin === undefined) return row;
+  const country = (row.country ?? "").trim().toLowerCase();
+  if (country && !["in", "ind", "india"].includes(country)) return row;
+  const code = stateCodeFromGstin(row.gstin) ?? stateCodeFromName(row.state);
+  return code ? { ...row, state_code: code } : row;
+}
