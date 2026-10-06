@@ -145,3 +145,18 @@ export function withStateCode<T extends {
   const code = stateCodeFromGstin(row.gstin) ?? stateCodeFromName(row.state);
   return code ? { ...row, state_code: code } : row;
 }
+
+/**
+ * True when a customer's tax invoice will be REFUSED for want of a state (R-166, 6 Oct 2026).
+ *
+ * Mirrors generate_invoice exactly: it reads `customers.state_code` only, and refuses an Indian
+ * customer whose code is empty ("has no state on record"). Foreign customers have no Indian
+ * place of supply and are never refused for it. A typed state name or a GSTIN does not count
+ * here — until it reaches state_code (withStateCode does that on the next save), the invoice
+ * still stops, and that is what this filter is for. Live, 6 Oct: 17 such customers.
+ */
+export function missingInvoiceState(c: { state_code?: string | null; country?: string | null }): boolean {
+  const country = (c.country ?? "").trim().toLowerCase();
+  if (country && !["in", "ind", "india"].includes(country)) return false;
+  return !(c.state_code ?? "").trim();
+}

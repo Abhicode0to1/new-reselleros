@@ -53,13 +53,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { rupee, cn, cleanDisplayName, phoneSuffixOf } from "@/lib/utils";
+import { missingInvoiceState } from "@/lib/gst/gstin-state";
 
 // Saved-view segments (Zoho-style) — compact filters over already-loaded data
 // (receivables + unused credit + subscriptions).
 /* R-005: `projects` joined this in Sep 2026. A reseller who also sells custom software
    had those customers reading as dead accounts, because every filter here asked only
    about subscriptions. */
-type ViewCtx = { amount: number; credit: number; hasSub: boolean; projects: readonly ProjectLike[]; received: number };
+type ViewCtx = { amount: number; credit: number; hasSub: boolean; projects: readonly ProjectLike[]; received: number; noState: boolean };
 const VIEW_DEFS: { id: string; label: string; test: (x: ViewCtx) => boolean }[] = [
   { id: "all",        label: "All",              test: () => true },
   { id: "unpaid",     label: "Has receivables",  test: (x) => x.amount > 0 },
@@ -71,6 +72,9 @@ const VIEW_DEFS: { id: string; label: string; test: (x: ViewCtx) => boolean }[] 
   { id: "credit",     label: "Has credit",       test: (x) => x.credit > 0 },
   /* R-118: the "Received (this FY)" figure's own customers — the tile had no list to open. */
   { id: "received",   label: "Paid this FY",     test: (x) => x.received > 0 },
+  /* R-166: tax invoices refuse these ("no state on record") — 17 live customers on 6 Oct.
+     Same rule as generate_invoice (missingInvoiceState). Editing in a state clears it. */
+  { id: "nostate",    label: "State missing",    test: (x) => x.noState },
 ];
 
 // Columns tuned for a reseller: who they are (name + who-to-call folded in) ·
@@ -237,7 +241,7 @@ export default function CustomersPage() {
     const m: Record<string, number> = Object.fromEntries(VIEW_DEFS.map((v) => [v.id, 0]));
     for (const c of customersByWorkspace) {
       const out = outstandingByCustomer.get(c.id);
-      const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS, received: receivedBy[c.id]?.total ?? 0 };
+      const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS, received: receivedBy[c.id]?.total ?? 0, noState: missingInvoiceState(c) };
       for (const v of VIEW_DEFS) if (v.test(ctx)) m[v.id]++;
     }
     return m;
@@ -254,7 +258,7 @@ export default function CustomersPage() {
     // Active by default; the Archived toggle swaps to show only inactive ones.
     if ((c.is_active === false) !== showArchived) return false;
     const out = outstandingByCustomer.get(c.id);
-    const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS, received: receivedBy[c.id]?.total ?? 0 };
+    const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id), projects: projectsByCustomer.get(c.id) ?? NO_PROJECTS, received: receivedBy[c.id]?.total ?? 0, noState: missingInvoiceState(c) };
     if (!activeView.test(ctx)) return false;
     if (!search.trim()) return true;
     const s = search.toLowerCase().trim();
@@ -932,7 +936,9 @@ export default function CustomersPage() {
                         <td className="px-3 py-2.5">
                           <Badge kind={st.kind} size="sm" dot={st.dot}>{st.label}</Badge>
                         </td>
-                        <td className="px-3 py-2.5 text-sm text-ink-2 truncate">{c.state || <span className="text-ink-3">N/A</span>}</td>
+                        <td className="px-3 py-2.5 text-sm text-ink-2 truncate">{missingInvoiceState(c)
+                          ? <Badge kind="warning" size="sm" title="Tax invoice will not issue until a state is chosen — Edit the customer">{c.state ? `${c.state} · no code` : "State missing"}</Badge>
+                          : (c.state || <span className="text-ink-3">N/A</span>)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums">
                           {mrr > 0
                             ? <span className="text-sm font-medium text-ink">{rupee(mrr, { compact: true })}<span className="text-2xs text-ink-3">/mo</span></span>
