@@ -542,9 +542,21 @@ export default function EnquiriesPage() {
                   action={isEmptySearch(parsed)
                     ? (folder !== "inbox"
                         ? <Button size="sm" variant="ghost" onClick={() => setFolder("inbox")}>Go to Inbox</Button>
-                        : undefined)
+                        : <Button size="sm" asChild><Link href={"/leads" as Route}>Add a lead manually</Link></Button>)
                     : <Button size="sm" variant="ghost" onClick={() => setQuery("")}>Clear search</Button>}
+                  secondary={isEmptySearch(parsed) && folder === "inbox"
+                    ? <Button size="sm" variant="ghost" asChild><Link href={"/settings" as Route}>Set up email in Settings</Link></Button>
+                    : undefined}
                 />
+                {/* First-run guidance: only on a truly empty Inbox with no search. §24 —
+                    an empty screen says how mail gets here and where to fix it. */}
+                {isEmptySearch(parsed) && folder === "inbox" && (
+                  <p data-testid="enquiries-empty-guidance" className="mx-auto mt-2 max-w-md text-center text-xs leading-relaxed text-ink-3">
+                    Enquiries arrive here when a customer emails your sales address or fills in your
+                    buy-page form. Use the folder list (Starred, Snoozed, Converted Leads, Sent,
+                    Done) to sort them once they do.
+                  </p>
+                )}
                 {olderMail}
               </div>
             ) : (
